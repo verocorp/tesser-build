@@ -25,5 +25,5 @@ class WidgetActions(ts.Actions):
 
     def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:
         name = domain.Name(quote_request.name)
-        saved = self._widget_repository.save(MapToSaveRequest(name))
-        return MapToQuoteResponse(saved)
+        save_response = self._widget_repository.save(MapToSaveRequest(name))
+        return MapToQuoteResponse(save_response)

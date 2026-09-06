@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
-import beta.application.beta_service as beta_service
+import beta.application as application
 import beta.application.ports as ports
 import beta.client as client
 
@@ -17,6 +17,6 @@ class FakeKeyRepository(ports.KeyRepository):
 class TestBetaService:
 
     def test_check_reports_what_the_repository_holds(self) -> None:
-        application_beta_service = beta_service.BetaService(FakeKeyRepository())
-        checked = application_beta_service.check(client.CheckRequest(key="k"))
-        assert checked.held == "yes"
+        beta_service = application.BetaService(FakeKeyRepository())
+        check_response = beta_service.check(client.CheckRequest(key="k"))
+        assert check_response.held == "yes"

@@ -9,15 +9,15 @@ import tessercheck.domain as domain
 
 def test_rules_md_is_current() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = repositories.FilesystemRulebookSources().read(
+    read_rulebook_response = repositories.FilesystemRulebookSources().read(
         ports.ReadRulebookRequest(tree=str(root))
     )
     rendered = str(
         domain.Rulebook(
             domain.RulebookSpec(
-                read.checks_text,
-                tuple((module.name, module.text) for module in read.test_modules),
-                read.contracts_text,
+                read_rulebook_response.checks_text,
+                tuple((module.name, module.text) for module in read_rulebook_response.test_modules),
+                read_rulebook_response.contracts_text,
             )
         )
     )
@@ -30,14 +30,14 @@ def test_rules_md_is_current() -> None:
 
 def test_every_applies_to_row_is_reached_by_a_violation() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = repositories.FilesystemRulebookSources().read(
+    read_rulebook_response = repositories.FilesystemRulebookSources().read(
         ports.ReadRulebookRequest(tree=str(root))
     )
     domain.Rulebook(
         domain.RulebookSpec(
-            read.checks_text,
-            tuple((module.name, module.text) for module in read.test_modules),
-            read.contracts_text,
+            read_rulebook_response.checks_text,
+            tuple((module.name, module.text) for module in read_rulebook_response.test_modules),
+            read_rulebook_response.contracts_text,
             True,
         )
     )
@@ -45,15 +45,15 @@ def test_every_applies_to_row_is_reached_by_a_violation() -> None:
 
 def test_every_rule_has_a_fixture() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = repositories.FilesystemRulebookSources().read(
+    read_rulebook_response = repositories.FilesystemRulebookSources().read(
         ports.ReadRulebookRequest(tree=str(root))
     )
     rendered = str(
         domain.Rulebook(
             domain.RulebookSpec(
-                read.checks_text,
-                tuple((module.name, module.text) for module in read.test_modules),
-                read.contracts_text,
+                read_rulebook_response.checks_text,
+                tuple((module.name, module.text) for module in read_rulebook_response.test_modules),
+                read_rulebook_response.contracts_text,
             )
         )
     )
@@ -67,12 +67,12 @@ def test_every_rule_has_a_fixture() -> None:
 
 def test_every_violation_site_yields_a_rulebook_row() -> None:
     root = pathlib.Path(__file__).resolve().parents[2]
-    read = repositories.FilesystemRulebookSources().read(
+    read_rulebook_response = repositories.FilesystemRulebookSources().read(
         ports.ReadRulebookRequest(tree=str(root))
     )
     sites = [
         node
-        for node in ast.walk(ast.parse(read.checks_text))
+        for node in ast.walk(ast.parse(read_rulebook_response.checks_text))
         if isinstance(node, ast.Call)
         and (
             (isinstance(node.func, ast.Name) and node.func.id == "Violation")
@@ -82,9 +82,9 @@ def test_every_violation_site_yields_a_rulebook_row() -> None:
     rendered = str(
         domain.Rulebook(
             domain.RulebookSpec(
-                read.checks_text,
-                tuple((module.name, module.text) for module in read.test_modules),
-                read.contracts_text,
+                read_rulebook_response.checks_text,
+                tuple((module.name, module.text) for module in read_rulebook_response.test_modules),
+                read_rulebook_response.contracts_text,
             )
         )
     )

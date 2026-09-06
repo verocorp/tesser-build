@@ -20,5 +20,5 @@ class BetaService(ts.ApplicationService):
 
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         key = domain.Key(check_request.key)
-        answer = self._key_repository.has(MapToHasKeyRequest(key))
-        return client.CheckResponse(held=answer.held.value)
+        has_key_response = self._key_repository.has(MapToHasKeyRequest(key))
+        return client.CheckResponse(held=has_key_response.held.value)

@@ -13,10 +13,10 @@ def test_every_tesser_allowlist_entry_is_earned_by_the_shipped_distribution() ->
     for key, kind in sorted(manifest.items()):
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
-        read = filesystem_source_reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
-        if read.exports != (domain.TESSER,):
+        read_sources_response = filesystem_source_reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
+        if read_sources_response.exports != (domain.TESSER,):
             continue
-        names = [source.name for source in read.sources]
+        names = [source.name for source in read_sources_response.sources]
         members = frozenset(
             name.split(".")[1]
             for name in names
@@ -30,7 +30,7 @@ def test_every_tesser_allowlist_entry_is_earned_by_the_shipped_distribution() ->
         )
         heads = frozenset(
             imported.split(".")[0]
-            for source in read.sources
+            for source in read_sources_response.sources
             if source.name.split(".")[0] == domain.TESSER
             for line in source.text.splitlines()
             for imported in (

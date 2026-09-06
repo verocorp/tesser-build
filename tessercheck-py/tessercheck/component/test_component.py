@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import tessercheck.component.component as component
+import tessercheck.component as component
 
 
 def test_a_config_constructs_from_its_spec() -> None:

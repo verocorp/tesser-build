@@ -5,7 +5,7 @@ import typing
 
 import tesser.testing as ts
 
-import alpha.application.orchestrators.widget_flow as widget_flow
+import alpha.application.orchestrators as orchestrators
 import alpha.application.ports as ports
 
 
@@ -32,7 +32,7 @@ class FakeQuoting(ports.Quoting):
 class TestWidgetFlow:
 
     def test_the_flow_answers_what_the_action_quoted(self) -> None:
-        ran = widget_flow.WidgetFlow(FakeJobContext(), FakeQuoting()).run(
+        flow_response = orchestrators.WidgetFlow(FakeJobContext(), FakeQuoting()).run(
             ports.QuoteRequest(name="a")
         )
-        assert ran.name == "a"
+        assert flow_response.name == "a"

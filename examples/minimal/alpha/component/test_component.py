@@ -4,7 +4,7 @@ import tesser.testing as ts
 
 import alpha.application.ports as ports
 import alpha.client as client
-import alpha.component.component as component
+import alpha.component as component
 
 
 @ts.fake
@@ -26,5 +26,5 @@ class TestAlpha:
 
     def test_the_wired_client_adds_a_widget(self) -> None:
         alpha = component.Alpha(component.Config(component.Spec(storage="memory")), FakeBetaCheck())
-        added = alpha.client.add(client.AddRequest(name="a", part="p"))
-        assert added.name == "a"
+        add_response = alpha.client.add(client.AddRequest(name="a", part="p"))
+        assert add_response.name == "a"

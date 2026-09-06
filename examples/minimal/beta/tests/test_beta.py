@@ -8,5 +8,5 @@ class TestBetaContext:
 
     def test_an_unknown_key_is_not_held(self) -> None:
         beta = component.Beta(component.Config(component.Spec(key="k")))
-        checked = beta.client.check(client.CheckRequest(key="x"))
-        assert checked.held == "no"
+        check_response = beta.client.check(client.CheckRequest(key="x"))
+        assert check_response.held == "no"

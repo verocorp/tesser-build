@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import beta.client as client
-import beta.component.component as component
+import beta.component as component
 
 
 class TestConfig:
@@ -16,5 +16,5 @@ class TestBeta:
 
     def test_the_wired_client_checks_the_configured_key(self) -> None:
         beta = component.Beta(component.Config(component.Spec(key="k")))
-        checked = beta.client.check(client.CheckRequest(key="k"))
-        assert checked.held == "yes"
+        check_response = beta.client.check(client.CheckRequest(key="k"))
+        assert check_response.held == "yes"

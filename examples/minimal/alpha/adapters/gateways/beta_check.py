@@ -20,5 +20,5 @@ class BetaCheckGateway(ts.Gateway):
         self._beta_client = beta_client
 
     def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
-        answer = self._beta_client.check(client.CheckRequest(key=check_request.name))
-        return MapToCheckResponse(answer)
+        check_response = self._beta_client.check(client.CheckRequest(key=check_request.name))
+        return MapToCheckResponse(check_response)

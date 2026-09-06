@@ -36,8 +36,8 @@ def conforming_tree(root: pathlib.Path) -> None:
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n"
         "class Thing(ts.AggregateRoot):\n"
-        "    def __init__(self, thing_spec: ThingSpec) -> None:\n"
-        "        self.text = thing_spec.text\n",
+        "    def __init__(self, spec: ThingSpec) -> None:\n"
+        "        self.text = spec.text\n",
     )
     write_module(
         root,

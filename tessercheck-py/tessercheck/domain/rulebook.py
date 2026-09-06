@@ -128,8 +128,6 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "an orchestrator": "orchestrator `__init__`",
     "a context": "context `__init__`",
     "a context tests": "context tests `__init__`",
-    "a protocol": "protocol package `__init__`",
-    "a srv or app": "srv / app `__init__`",
     "ImportEdge.form_violations": "direction-legal context import (role modules and their __init__, srv/app, test modules)",
     "application client": "application client module",
     "a client method": "client protocol method",
@@ -172,7 +170,6 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.role_package_import_violations": "every module, in every module kind",
     "Module.alias_violations": "every module, in every module kind",
     "Module.naming_violations": "every function, in every module kind",
-    "Module.shell_class_name_violations": "srv / app / protocol module",
     "Module.app_violations": "app module",
     "Module.srv_violations": "srv module",
     "Module.protocol_violations": "protocol module",
@@ -228,15 +225,15 @@ class RuleRow(ts.ValueObject):
     _shapes: tuple[checks.Text, ...]
     _linenos: tuple[checks.Line, ...]
 
-    def __init__(self, rule_row_spec: RuleRowSpec) -> None:
-        object.__setattr__(self, "_clause", checks.Text(rule_row_spec.clause))
-        object.__setattr__(self, "_code", checks.Code(rule_row_spec.code))
-        object.__setattr__(self, "_applies_to", checks.Text(rule_row_spec.applies_to))
+    def __init__(self, spec: RuleRowSpec) -> None:
+        object.__setattr__(self, "_clause", checks.Text(spec.clause))
+        object.__setattr__(self, "_code", checks.Code(spec.code))
+        object.__setattr__(self, "_applies_to", checks.Text(spec.applies_to))
         object.__setattr__(
-            self, "_shapes", tuple(checks.Text(shape) for shape in rule_row_spec.shapes)
+            self, "_shapes", tuple(checks.Text(shape) for shape in spec.shapes)
         )
         object.__setattr__(
-            self, "_linenos", tuple(checks.Line(line) for line in rule_row_spec.linenos)
+            self, "_linenos", tuple(checks.Line(line) for line in spec.linenos)
         )
 
     def clause(self) -> checks.Text:
@@ -274,7 +271,7 @@ class Rulebook(ts.ValueObject):
 
     _value: str
 
-    def __init__(self, rulebook_spec: RulebookSpec) -> None:
+    def __init__(self, spec: RulebookSpec) -> None:
         subjects: set[str] = set()
         def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
             if call.keywords or len(call.args) != 1:
@@ -299,9 +296,9 @@ class Rulebook(ts.ValueObject):
                 return None
             return bound
 
-        tree = ast.parse(rulebook_spec.checks_text)
+        tree = ast.parse(spec.checks_text)
         assertions: list[tuple[str, tuple[str, ...]]] = []
-        for _, module_text in rulebook_spec.test_modules:
+        for _, module_text in spec.test_modules:
             module_tree = ast.parse(module_text)
             for fn in module_tree.body:
                 if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("test_"):
@@ -617,7 +614,7 @@ class Rulebook(ts.ValueObject):
             "|---|---|",
         ]
         contract_id = None
-        for contract_line in rulebook_spec.contracts_text.splitlines():
+        for contract_line in spec.contracts_text.splitlines():
             header = re.match(r"\[importlinter:contract:(.+)\]", contract_line.strip())
             if header:
                 contract_id = header.group(1)
@@ -633,7 +630,7 @@ class Rulebook(ts.ValueObject):
             "architecture violation-injection test).",
             "",
         ]
-        if rulebook_spec.total:
+        if spec.total:
             dead = tuple(sorted(key for key in APPLIES_TO if key not in subjects))
             if dead:
                 raise RuntimeError(

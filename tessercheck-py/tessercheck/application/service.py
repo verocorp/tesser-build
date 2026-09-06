@@ -72,19 +72,19 @@ class TessercheckService(ts.ApplicationService):
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         tree_root = domain.TreeRoot(check_request.tree)
         tree = str(tree_root)
-        read = self._source_reader.sources(ports.ReadSourcesRequest(tree=tree))
-        return MapToCheckResponse(read)
+        read_sources_response = self._source_reader.sources(ports.ReadSourcesRequest(tree=tree))
+        return MapToCheckResponse(read_sources_response)
 
     def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
         tree_root = domain.TreeRoot(rulebook_request.tree)
         tree = str(tree_root)
-        read = self._rulebook_sources.read(ports.ReadRulebookRequest(tree=tree))
-        modules = tuple((module.name, module.text) for module in read.test_modules)
+        read_rulebook_response = self._rulebook_sources.read(ports.ReadRulebookRequest(tree=tree))
+        modules = tuple((module.name, module.text) for module in read_rulebook_response.test_modules)
         rulebook = domain.Rulebook(
             domain.RulebookSpec(
-                checks_text=read.checks_text,
+                checks_text=read_rulebook_response.checks_text,
                 test_modules=modules,
-                contracts_text=read.contracts_text,
+                contracts_text=read_rulebook_response.contracts_text,
             )
         )
         rendered = str(rulebook)

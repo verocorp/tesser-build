@@ -8,7 +8,7 @@ import pathlib
 import pytest
 import tesser.testing as ts
 
-import tessercheck.domain.checks as checks
+import tessercheck.domain as domain
 
 
 @ts.helper
@@ -28,8 +28,8 @@ def _spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Thing(ts.AggregateRoot):\n"
-            "    def __init__(self, thing_spec: ThingSpec) -> None:\n"
-            "        self.text = thing_spec.text\n",
+            "    def __init__(self, spec: ThingSpec) -> None:\n"
+            "        self.text = spec.text\n",
             False,
         ),
         (
@@ -69,8 +69,8 @@ def _spec(
             False,
         ),
     ),
-) -> checks.CodebaseSpec:
-    return checks.CodebaseSpec(
+) -> domain.CodebaseSpec:
+    return domain.CodebaseSpec(
         sources=base + sources,
         declared=declared,
         nested=(),
@@ -84,7 +84,7 @@ def _spec(
 
 def test_a_kind_table_names_one_block_per_symbol() -> None:
     with pytest.raises(ValueError, match="one block per symbol"):
-        checks.KindTable(checks.KindTableSpec((
+        domain.KindTable(domain.KindTableSpec((
             ("shop.domain.thing", "Thing", "aggregate"),
             ("shop.domain.thing", "Thing", "spec"),
         )))
@@ -186,7 +186,7 @@ def test_placement_is_the_single_routing_decision() -> None:
         ("kernel.conftest", False, "conftest"),
     )
     for name, is_package, expected in table:
-        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
+        got = str(domain.Placement(domain.PlacementSpec(name, is_package, tuple(sorted(contexts)))))
         assert got == expected, (
             f"Placement({name!r}, is_package={is_package}) = {got!r}, expected {expected!r}"
         )
@@ -198,16 +198,16 @@ def test_placement_is_the_single_routing_decision() -> None:
         ("shells.test_base", False, "test"),
     )
     for name, is_package, expected in exported:
-        got = str(checks.Placement(checks.PlacementSpec(name, is_package, tuple(sorted(contexts)), "shells")))
+        got = str(domain.Placement(domain.PlacementSpec(name, is_package, tuple(sorted(contexts)), "shells")))
         assert got == expected, (
             f"Placement({name!r}, is_package={is_package}, export='shells') = {got!r}, "
             f"expected {expected!r}"
         )
-    assert str(checks.Placement(checks.PlacementSpec("shells.thing", False, tuple(sorted(contexts))))) == "root", (
+    assert str(domain.Placement(domain.PlacementSpec("shells.thing", False, tuple(sorted(contexts))))) == "root", (
         "an undeclared export directory must classify as it always did"
     )
     placement_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Placement.__init__))
+        textwrap.dedent(inspect.getsource(domain.Placement.__init__))
     )
     locate = next(
         node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
@@ -229,7 +229,7 @@ def test_placement_is_the_single_routing_decision() -> None:
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
     placement_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Placement.__init__))
+        textwrap.dedent(inspect.getsource(domain.Placement.__init__))
     )
     locate = next(
         node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
@@ -242,7 +242,7 @@ def test_every_location_token_has_a_dispatch_arm() -> None:
         if isinstance(value, ast.Constant) and isinstance(value.value, str)
     )
     dispatch_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(checks.Codebase.violations))
+        textwrap.dedent(inspect.getsource(domain.Codebase.violations))
     )
     dispatch = next(
         node for node in dispatch_tree.body if isinstance(node, ast.FunctionDef)
@@ -269,14 +269,14 @@ def test_every_location_token_has_a_dispatch_arm() -> None:
 def test_a_conforming_spec_is_clean() -> None:
     assert tuple(
                f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-               for v in checks.Codebase(_spec()).violations()
+               for v in domain.Codebase(_spec()).violations()
            ) == ()
 
 
 def test_placement_totality_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "plain/domain/thing.py",
                 "plain.domain.thing",
@@ -325,7 +325,7 @@ def test_placement_totality_is_flagged() -> None:
 def test_a_final_constant_passes_and_a_declared_function_is_still_a_module_function() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("shop/domain2.py", "shop.domain2", "", False),
             (
                 "plain/domain/thing.py",
@@ -357,7 +357,7 @@ def test_a_final_constant_passes_and_a_declared_function_is_still_a_module_funct
 def test_homeless_modules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("loose.py", "loose", "def anything() -> None:\n    return None\n", False),
             (
                 "stray/util.py",
@@ -380,7 +380,7 @@ def test_homeless_modules_are_flagged() -> None:
 def test_non_context_module_and_nonempty_init_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/util.py",
                 "shop.util",
@@ -401,7 +401,7 @@ def test_non_context_module_and_nonempty_init_are_flagged() -> None:
 def test_a_role_must_be_a_package() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "flat/domain.py",
                 "flat.domain",
@@ -435,7 +435,7 @@ def test_a_role_must_be_a_package() -> None:
 def test_a_role_may_be_a_package() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "deep/domain/__init__.py",
                 "deep.domain",
@@ -495,7 +495,7 @@ def test_a_role_may_be_a_package() -> None:
 def test_wiring_is_a_role() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "two/client/client.py",
                 "two.client.client",
@@ -545,7 +545,7 @@ def test_wiring_is_a_role() -> None:
 def test_tests_package_totality_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("tests/__init__.py", "tests", "X = 1\n", True),
             (
                 "tests/util.py",
@@ -579,7 +579,7 @@ def test_tests_package_totality_is_flagged() -> None:
 def test_a_context_main_is_a_stray_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/__main__.py",
                 "shop.__main__",
@@ -599,7 +599,7 @@ def test_a_context_main_is_a_stray_module() -> None:
 def test_protocol_module_totality_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "protocol/box.py",
                 "protocol.box",
@@ -702,7 +702,7 @@ def test_protocol_module_totality_is_flagged() -> None:
 def test_protocol_module_tesser_import_is_exactly_once_as_ts() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "protocol/loud.py",
                 "protocol.loud",
@@ -758,7 +758,7 @@ def test_protocol_module_tesser_import_is_exactly_once_as_ts() -> None:
 def test_only_the_top_level_protocol_package_holds_protocol_modules() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("protocol/__init__.py", "protocol", "", True),
             ("protocol/box.py", "protocol.box", "import tesser.srv as ts\n", False),
             (
@@ -778,31 +778,32 @@ def test_only_the_top_level_protocol_package_holds_protocol_modules() -> None:
     assert any("wire belongs to no governed package" in f for f in findings)
 
 
-def test_a_protocol_init_is_empty() -> None:
+def test_a_protocol_init_is_an_export_list() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("protocol/__init__.py", "protocol", "LIMIT = 3\n", True),
             ("protocol/box.py", "protocol.box", "import tesser.srv as ts\n", False),
         ))).violations()
                )
     assert any(
-        "protocol __init__ declares code; a protocol __init__ is empty" in f
+        "protocol __init__ declares code; a role __init__ only re-exports from its "
+        "own role" in f
         for f in findings
     )
 
 
 def test_every_declared_block_has_a_name_and_a_home() -> None:
-    blocks = set(checks.TESSER_BASE_BLOCKS.values())
-    assert set(checks.KIND_NAME) == blocks
-    assert set(checks.KIND_ROLE) == blocks - checks.SRV_KINDS - checks.APP_KINDS
-    assert not (checks.APP_KINDS & set(checks.KIND_ROLE))
+    blocks = set(domain.TESSER_BASE_BLOCKS.values())
+    assert set(domain.KIND_NAME) == blocks
+    assert set(domain.KIND_ROLE) == blocks - domain.SRV_KINDS - domain.APP_KINDS
+    assert not (domain.APP_KINDS & set(domain.KIND_ROLE))
 
 
 def test_mapper_shape_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(base=(), sources=(
+                   for v in domain.Codebase(_spec(base=(), sources=(
             (
                 "shop/client/client.py",
                 "shop.client.client",
@@ -1006,7 +1007,7 @@ def test_mapper_shape_rules_are_flagged() -> None:
 def test_a_mapper_never_returns_before_it_initializes_its_target() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/early.py",
                 "shop.application.early",
@@ -1040,7 +1041,7 @@ def test_a_mapper_never_returns_before_it_initializes_its_target() -> None:
 def test_a_return_inside_a_nested_scope_is_not_the_mappers_own_return() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/nestedfn.py",
                 "shop.application.nestedfn",
@@ -1069,7 +1070,7 @@ def test_a_return_inside_a_nested_scope_is_not_the_mappers_own_return() -> None:
 def test_a_conformant_mapper_passes_every_shape_rule() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(base=(), sources=(
+                   for v in domain.Codebase(_spec(base=(), sources=(
             (
                 "shop/client/client.py",
                 "shop.client.client",
@@ -1127,7 +1128,7 @@ def test_a_conformant_mapper_passes_every_shape_rule() -> None:
 def test_a_mapper_lives_only_in_the_application_role() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/mapping.py",
                 "shop.application.mapping",
@@ -1165,7 +1166,7 @@ def test_a_mapper_lives_only_in_the_application_role() -> None:
 
 def test_every_kind_row_names_a_real_tesser_export() -> None:
     root = pathlib.Path(__file__).resolve().parents[3] / "tesser-py"
-    rows = list(checks.TESSER_BASE_BLOCKS) + list(checks.TESSER_DECORATORS)
+    rows = list(domain.TESSER_BASE_BLOCKS) + list(domain.TESSER_DECORATORS)
     for package, name in rows:
         exports = (root / package.replace(".", "/") / "__init__.py").read_text()
         assert f" {name} as {name}" in exports
@@ -1174,7 +1175,7 @@ def test_every_kind_row_names_a_real_tesser_export() -> None:
 def test_primitive_parameter_and_return_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/bad.py",
                 "shop.bad",
@@ -1200,7 +1201,7 @@ def test_primitive_parameter_and_return_are_flagged() -> None:
 def test_arity_and_missing_annotations_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/bad.py",
                 "shop.bad",
@@ -1235,7 +1236,7 @@ def test_arity_and_missing_annotations_are_flagged() -> None:
 def test_aggregate_constructor_violations_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/badroots.py",
                 "shop.badroots",
@@ -1274,7 +1275,7 @@ def test_aggregate_constructor_violations_are_flagged() -> None:
 def test_computing_in_an_argument_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/client/client.py",
                 "shop.client.client",
@@ -1310,7 +1311,7 @@ def test_computing_in_an_argument_is_flagged() -> None:
 def test_a_mapper_is_read_as_the_spec_it_constructs() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/service.py",
                 "shop.application.service",
@@ -1351,7 +1352,7 @@ def test_a_mapper_is_read_as_the_spec_it_constructs() -> None:
 def test_a_raw_request_value_reaching_a_port_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/provenance.py",
                 "shop.provenance",
@@ -1384,7 +1385,7 @@ def test_a_raw_request_value_reaching_a_port_is_flagged() -> None:
 def test_a_straight_accessor_local_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/naming.py",
                 "shop.naming",
@@ -1413,7 +1414,7 @@ def test_a_straight_accessor_local_is_flagged() -> None:
 def test_provenance_is_reported_before_the_rest_of_a_body() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/leading.py",
                 "shop.leading",
@@ -1444,7 +1445,7 @@ def test_provenance_is_reported_before_the_rest_of_a_body() -> None:
 def test_every_second_match_is_reported_before_the_subjects() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/deciding.py",
                 "shop.deciding",
@@ -1480,7 +1481,7 @@ def test_every_second_match_is_reported_before_the_subjects() -> None:
 def test_a_role_module_reports_its_loose_code_before_its_adapter_kind() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/repositories/__init__.py",
                 "shop.adapters.repositories",
@@ -1518,7 +1519,7 @@ def test_a_role_module_reports_its_loose_code_before_its_adapter_kind() -> None:
 def test_a_spec_reports_its_body_in_source_order() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/odd.py",
                 "shop.domain.odd",
@@ -1544,7 +1545,7 @@ def test_a_spec_reports_its_body_in_source_order() -> None:
 def test_a_port_method_reports_its_shape_after_its_signature() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -1575,7 +1576,7 @@ def test_a_port_method_reports_its_shape_after_its_signature() -> None:
 def test_an_orchestrator_reports_its_dependencies_before_its_job_contexts() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/orchestrators/leading.py",
                 "shop.application.orchestrators.leading",
@@ -1599,7 +1600,7 @@ def test_an_orchestrator_reports_its_dependencies_before_its_job_contexts() -> N
 def test_an_application_client_reports_each_class_before_the_count() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/client/pair.py",
                 "shop.application.client.pair",
@@ -1629,7 +1630,7 @@ def test_an_application_client_reports_each_class_before_the_count() -> None:
 def test_service_body_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/busy.py",
                 "shop.busy",
@@ -1678,7 +1679,7 @@ def test_service_body_rules_are_flagged() -> None:
 def test_service_delegation_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/helped.py",
                 "shop.helped",
@@ -1712,7 +1713,7 @@ def test_service_delegation_is_flagged() -> None:
 def test_an_elif_chain_is_read_as_two_branches() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/chained.py",
                 "shop.chained",
@@ -1739,7 +1740,7 @@ def test_an_elif_chain_is_read_as_two_branches() -> None:
 def test_indirect_subclass_still_classifies() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/derived.py",
                 "shop.derived",
@@ -1762,7 +1763,7 @@ def test_indirect_subclass_still_classifies() -> None:
 def test_service_dependencies_must_be_ports() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/extra.py",
                 "shop.extra",
@@ -1787,7 +1788,7 @@ def test_service_dependencies_must_be_ports() -> None:
 def test_client_method_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/extra2.py",
                 "shop.extra2",
@@ -1815,7 +1816,7 @@ def test_client_method_rules_are_flagged() -> None:
 def test_records_never_carry_domain_objects() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/extra3.py",
                 "shop.extra3",
@@ -1844,7 +1845,7 @@ def test_records_never_carry_domain_objects() -> None:
 def test_a_record_names_the_first_domain_object_its_annotation_walks() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/money.py",
                 "shop.domain.money",
@@ -1882,7 +1883,7 @@ def test_a_record_names_the_first_domain_object_its_annotation_walks() -> None:
 def test_an_annotated_self_carries_its_domain_object_into_the_signature() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/repositories/selfish.py",
                 "shop.adapters.repositories.selfish",
@@ -1903,7 +1904,7 @@ def test_an_annotated_self_carries_its_domain_object_into_the_signature() -> Non
 def test_domain_field_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/extra4.py",
                 "shop.extra4",
@@ -2024,7 +2025,7 @@ def test_domain_field_rules_are_flagged() -> None:
 def test_construction_containers_discriminate_specs_from_value_objects() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/carton.py",
                 "shop.domain.carton",
@@ -2102,29 +2103,29 @@ def test_construction_containers_discriminate_specs_from_value_objects() -> None
 
 def test_edge_records_reject_an_empty_target() -> None:
     with pytest.raises(ValueError):
-        checks.ImportEdge(checks.ImportEdgeSpec("", 1, False, False))
+        domain.ImportEdge(domain.ImportEdgeSpec("", 1, False, False))
     with pytest.raises(ValueError):
-        checks.TesserImport(checks.TesserImportSpec("", 1, False, False))
+        domain.TesserImport(domain.TesserImportSpec("", 1, False, False))
 
 
 def test_a_spec_reference_is_a_symbol_with_a_shape() -> None:
     with pytest.raises(ValueError):
-        checks.SpecShape("some")
+        domain.SpecShape("some")
     with pytest.raises(ValueError):
-        checks.Symbol(checks.SymbolSpec("", "MoneySpec"))
+        domain.Symbol(domain.SymbolSpec("", "MoneySpec"))
     with pytest.raises(ValueError):
-        checks.Symbol(checks.SymbolSpec("shop.domain.money", ""))
-    assert str(checks.SpecShape("one")) == "one"
-    assert checks.SpecShape("many") == checks.SPEC_MANY
-    assert checks.SpecShape("one") != checks.SPEC_MANY
-    spec_ref = checks.SpecRef(checks.SpecRefSpec(checks.SymbolSpec("shop.domain.money", "MoneySpec"), "one"))
-    assert spec_ref.shape() == checks.SPEC_ONE
-    assert spec_ref.many().shape() == checks.SPEC_MANY
+        domain.Symbol(domain.SymbolSpec("shop.domain.money", ""))
+    assert str(domain.SpecShape("one")) == "one"
+    assert domain.SpecShape("many") == domain.SPEC_MANY
+    assert domain.SpecShape("one") != domain.SPEC_MANY
+    spec_ref = domain.SpecRef(domain.SpecRefSpec(domain.SymbolSpec("shop.domain.money", "MoneySpec"), "one"))
+    assert spec_ref.shape() == domain.SPEC_ONE
+    assert spec_ref.many().shape() == domain.SPEC_MANY
     assert spec_ref.many().one() == spec_ref
     assert spec_ref.many().symbol() == spec_ref.symbol()
     assert spec_ref.many() != spec_ref
-    same = checks.Symbol(checks.SymbolSpec("shop.domain.money", "MoneySpec"))
-    other = checks.Symbol(checks.SymbolSpec("shop.domain.money", "PriceSpec"))
+    same = domain.Symbol(domain.SymbolSpec("shop.domain.money", "MoneySpec"))
+    other = domain.Symbol(domain.SymbolSpec("shop.domain.money", "PriceSpec"))
     assert same == spec_ref.symbol()
     assert hash(same) == hash(spec_ref.symbol())
     assert same != other
@@ -2135,7 +2136,7 @@ def test_a_spec_reference_is_a_symbol_with_a_shape() -> None:
 def test_optional_construction_data_is_the_only_union() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/opt.py",
                 "shop.domain.opt",
@@ -2161,7 +2162,7 @@ def test_optional_construction_data_is_the_only_union() -> None:
 def test_bytes_is_construction_primitive() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/digest.py",
                 "shop.domain.digest",
@@ -2182,7 +2183,7 @@ def test_bytes_is_construction_primitive() -> None:
 def test_async_def_is_not_a_way_around_a_method_rule() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/client/async_client.py",
                 "shop.client.async_client",
@@ -2223,7 +2224,7 @@ def test_async_def_is_not_a_way_around_a_method_rule() -> None:
 def test_an_adapters_module_holds_one_kind() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/gateways.py",
                 "shop.adapters.gateways",
@@ -2247,7 +2248,7 @@ def test_an_adapters_module_holds_one_kind() -> None:
 def test_a_jobs_module_holds_the_job_context_the_job_beside_it_builds() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/jobs/engine.py",
                 "shop.adapters.jobs.engine",
@@ -2310,7 +2311,7 @@ def test_a_jobs_module_holds_the_job_context_the_job_beside_it_builds() -> None:
 def test_a_dotted_module_base_resolves() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/test_doubles.py",
                 "shop.test_doubles",
@@ -2336,7 +2337,7 @@ def test_a_dotted_module_base_resolves() -> None:
 def test_import_matrix_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "two/client/client.py",
                 "two.client.client",
@@ -2390,7 +2391,7 @@ def test_import_matrix_is_flagged() -> None:
 def test_srv_and_app_import_rows() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/gateways.py",
                 "shop.adapters.gateways",
@@ -2465,7 +2466,7 @@ def test_srv_and_app_import_rows() -> None:
 def test_only_a_handler_imports_its_own_client() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/handlers/http.py",
                 "shop.adapters.handlers.http",
@@ -2512,7 +2513,7 @@ def test_only_a_handler_imports_its_own_client() -> None:
 def test_only_a_gateway_reaches_a_foreign_client() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "two/client/client.py",
                 "two.client.client",
@@ -2543,7 +2544,7 @@ def test_only_a_gateway_reaches_a_foreign_client() -> None:
 def test_role_module_tesser_import_is_exactly_once_as_ts() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "lone/domain/thing.py",
                 "lone.domain.thing",
@@ -2607,7 +2608,7 @@ def test_role_module_tesser_import_is_exactly_once_as_ts() -> None:
 def test_reexport_only_role_init_needs_no_tesser_import() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "deep/domain/__init__.py",
                 "deep.domain",
@@ -2631,7 +2632,7 @@ def test_reexport_only_role_init_needs_no_tesser_import() -> None:
 def test_role_init_only_reexports_its_own_role() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "pkg/domain/__init__.py",
                 "pkg.domain",
@@ -2692,7 +2693,7 @@ def test_a_role_init_re_exports_under_the_name_the_module_defines() -> None:
     def run(init: tuple[str, str, str, bool]) -> tuple[str, ...]:
         return tuple(
             f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-            for v in checks.Codebase(_spec(sources=(vo, init, reader, client_init))).violations()
+            for v in domain.Codebase(_spec(sources=(vo, init, reader, client_init))).violations()
         )
 
     clean = run((
@@ -2733,7 +2734,7 @@ def test_a_role_init_re_exports_under_the_name_the_module_defines() -> None:
 def test_a_role_init_re_exports_only_what_the_outside_reads() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/domain/vo.py",
                 "mod.domain.vo",
@@ -2777,7 +2778,7 @@ def test_a_role_init_re_exports_only_what_the_outside_reads() -> None:
 def test_a_module_outside_a_role_package_imports_the_package() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/domain/vo.py",
                 "mod.domain.vo",
@@ -2804,12 +2805,12 @@ def test_a_module_outside_a_role_package_imports_the_package() -> None:
     )
     assert any(
         "mod.client.client imports mod.domain.vo, a module of mod.domain; "
-        "a module outside a role package imports the package, because the role "
+        "a module outside an exporting package imports the package, because the package "
         "__init__ is the list of what the outside may name" in f
         for f in findings
     ), findings
     assert any(
-        "mod.domain.vo imports mod.domain; a module inside a role package never "
+        "mod.domain.vo imports mod.domain; a module inside an exporting package never "
         "imports its own package, because the package imports the module back" in f
         for f in findings
     ), findings
@@ -2818,7 +2819,7 @@ def test_a_module_outside_a_role_package_imports_the_package() -> None:
 def test_a_module_in_a_role_package_never_imports_a_module_beside_it() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/domain/tag.py",
                 "mod.domain.tag",
@@ -2858,22 +2859,25 @@ def test_a_module_in_a_role_package_never_imports_a_module_beside_it() -> None:
         ))).violations()
     )
     assert any(
-        "mod.domain.label imports mod.domain.tag, a module beside it; a module in a "
-        "role package imports the packages around it and never a module of its own "
-        "package, and only a sibling test imports the module it is named for" in f
+        "mod.domain.label imports mod.domain.tag, a module beside it; a module in an "
+        "exporting package imports the packages around it and never a module of its "
+        "own package, its sibling test included" in f
         for f in findings
     ), findings
     assert any(
         "mod.domain.test_label imports mod.domain.tag, a module beside it" in f
         for f in findings
     ), findings
-    assert not any("mod.domain.test_tag imports mod.domain.tag" in f for f in findings), findings
+    assert any(
+        "mod.domain.test_tag imports mod.domain.tag, a module beside it" in f
+        for f in findings
+    ), findings
 
 
 def test_srv_and_app_statement_totality() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "srv/box.py",
                 "srv.box",
@@ -2963,7 +2967,7 @@ def test_srv_and_app_statement_totality() -> None:
 def test_a_srv_entry_point_is_ts_main_and_nothing_else() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "srv/good.py",
                 "srv.good",
@@ -3048,7 +3052,7 @@ def test_a_srv_entry_point_is_ts_main_and_nothing_else() -> None:
 def test_sibling_reference_scoping_and_spoof_resistance() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "plain/domain/y.py",
                 "plain.domain.y",
@@ -3135,7 +3139,7 @@ def test_sibling_reference_scoping_and_spoof_resistance() -> None:
 def test_pure_core_stdlib_allowlist() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "io1/domain/thing.py",
                 "io1.domain.thing",
@@ -3187,7 +3191,7 @@ def test_pure_core_stdlib_allowlist() -> None:
 def test_context_module_import_form() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "form/client/client.py",
                 "form.client.client",
@@ -3232,7 +3236,7 @@ def test_context_module_import_form() -> None:
 def test_relative_imports_resolve_against_the_package() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "rel/domain/__init__.py",
                 "rel.domain",
@@ -3317,7 +3321,7 @@ def test_relative_imports_resolve_against_the_package() -> None:
 def test_nested_imports_neither_classify_nor_satisfy_presence() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "lazy/domain/thing.py",
                 "lazy.domain.thing",
@@ -3372,7 +3376,7 @@ def test_nested_imports_neither_classify_nor_satisfy_presence() -> None:
 def test_srv_and_app_tesser_form_modes() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "srv/dup.py",
                 "srv.dup",
@@ -3534,7 +3538,8 @@ def test_srv_and_app_tesser_form_modes() -> None:
         for f in findings
     )
     assert any(
-        "srv __init__ declares code; a srv or app __init__ is empty" in f
+        "srv __init__ declares code; a role __init__ only re-exports from its own "
+        "role" in f
         for f in findings
     )
     assert not any("bootstrap __init__ declares code" in f for f in findings)
@@ -3543,7 +3548,7 @@ def test_srv_and_app_tesser_form_modes() -> None:
 def test_pure_core_allowlist_covers_application_and_domain_future() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "io2/domain/thing.py",
                 "io2.domain.thing",
@@ -3580,7 +3585,7 @@ def test_pure_core_allowlist_covers_application_and_domain_future() -> None:
 def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/gateways.py",
                 "shop.adapters.gateways",
@@ -3662,7 +3667,7 @@ def test_srv_kinds_stay_out_of_contexts_and_context_kinds_out_of_srv() -> None:
 def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/test_forms.py",
                 "shop.test_forms",
@@ -3723,7 +3728,7 @@ def test_form_rule_fires_in_tests_and_srv_and_skips_illegal_edges() -> None:
 def test_a_denied_app_edge_is_not_form_checked() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "srv/host.py",
                 "srv.host",
@@ -3744,7 +3749,7 @@ def test_a_denied_app_edge_is_not_form_checked() -> None:
 def test_production_never_imports_the_tests_package() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_ok.py",
                 "tests.test_ok",
@@ -3791,7 +3796,7 @@ def test_production_never_imports_the_tests_package() -> None:
 def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "protocol/protocol_http.py",
                 "protocol.http",
@@ -3868,7 +3873,7 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
 def test_a_classless_module_inside_handlers_may_speak_protocol() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
             ("shop/adapters/handlers/__init__.py", "shop.adapters.handlers", "", True),
             (
@@ -3888,7 +3893,7 @@ def test_a_classless_module_inside_handlers_may_speak_protocol() -> None:
 def test_a_shell_name_missing_from_the_tree_is_not_the_shell() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -3911,7 +3916,7 @@ def test_a_shell_name_missing_from_the_tree_is_not_the_shell() -> None:
 def test_a_vendored_tesser_package_is_not_the_tree() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("tesser/testing.py", "tesser.testing", "X = 1\n", False),
             ("conftest.py", "conftest", "import tesser.testing\n", False),
         ))).violations()
@@ -3926,7 +3931,7 @@ def test_a_vendored_tesser_package_is_not_the_tree() -> None:
 def test_a_root_module_is_homeless() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "helpers.py",
                 "helpers",
@@ -3945,7 +3950,7 @@ def test_a_root_module_is_homeless() -> None:
 def test_a_root_conftest_is_a_leaf() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "conftest.py",
                 "conftest",
@@ -3965,7 +3970,7 @@ def test_a_root_conftest_is_a_leaf() -> None:
 def test_a_protocol_module_imports_nothing_else_from_its_tree() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("serialization.py", "serialization", "X = 1\n", False),
             (
                 "protocol/http.py",
@@ -3985,7 +3990,7 @@ def test_a_protocol_module_imports_nothing_else_from_its_tree() -> None:
 def test_a_norm_module_is_imported_as_a_module_where_its_placement_allows() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "fine/domain/money.py",
                 "fine.domain.money",
@@ -4101,7 +4106,7 @@ def test_a_norm_module_is_imported_as_a_module_where_its_placement_allows() -> N
 def test_wiring_bootstrap_and_srv_may_import_tesser_errors_as_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/component/component.py",
                 "shop.component.component",
@@ -4202,7 +4207,7 @@ def test_wiring_bootstrap_and_srv_may_import_tesser_errors_as_a_module() -> None
 def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/money.py",
                 "shop.domain.money",
@@ -4346,7 +4351,7 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
     )
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=loose)).violations()
+                   for v in domain.Codebase(_spec(sources=loose)).violations()
                )
     for outside in ("shop.adapters.eval_flat", "shop.tests.eval_tier", "shop.domain.eval_role"):
         assert any(
@@ -4357,7 +4362,7 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
 
     housed = tuple(
                  f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                 for v in checks.Codebase(_spec(sources=loose
+                 for v in domain.Codebase(_spec(sources=loose
         + (
             (
                 "shop/adapters/gateways/__init__.py",
@@ -4398,7 +4403,7 @@ def test_an_eval_lives_only_in_a_gateway() -> None:
 def test_a_handler_sibling_fakes_only_the_client() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/handlers/http.py",
                 "shop.adapters.handlers.http",
@@ -4451,7 +4456,7 @@ def test_a_handler_sibling_fakes_only_the_client() -> None:
 def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/handlers/http.py",
                 "shop.adapters.handlers.http",
@@ -4488,7 +4493,7 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
 def test_a_test_reaches_only_what_its_placement_allows() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "far/domain/test_thing.py",
                 "far.domain.test_thing",
@@ -4537,7 +4542,7 @@ def test_a_test_reaches_only_what_its_placement_allows() -> None:
 def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/repositories/words.py",
                 "shop.adapters.repositories.words",
@@ -4557,8 +4562,8 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
             (
                 "shop/adapters/repositories/test_words.py",
                 "shop.adapters.repositories.test_words",
-                "import shop.adapters.repositories.words as words\n"
-                "import shop.application.ports.words as words_port\n"
+                "import shop.adapters.repositories as repositories\n"
+                "import shop.application.ports as ports\n"
                 "import shop.domain.thing as thing\n"
                 "import far.client.client as farclient\n"
                 "def test_x() -> None:\n"
@@ -4599,14 +4604,14 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
         "a test reaches only what its placement allows" in f
         for f in findings
     )
-    assert not any("test_words.py:1:" in f for f in findings)
-    assert not any("test_words.py:2:" in f for f in findings)
+    assert not any("test_words.py:1:" in f for f in findings), findings
+    assert not any("test_words.py:2:" in f for f in findings), findings
 
 
 def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("shop/component/__init__.py", "shop.component", "", True),
             (
                 "shop/component/component.py",
@@ -4676,7 +4681,7 @@ def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
 def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/client/test_client.py",
                 "shop.client.test_client",
@@ -4700,7 +4705,7 @@ def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
 def test_an_app_test_reaches_a_context_like_a_production_app() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "app/boot.py",
                 "app.boot",
@@ -4733,7 +4738,7 @@ def test_an_app_test_reaches_a_context_like_a_production_app() -> None:
 def test_a_protocol_test_reaches_no_context() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "protocol/test_proto.py",
                 "protocol.test_proto",
@@ -4756,7 +4761,7 @@ def test_a_protocol_test_reaches_no_context() -> None:
 def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/test_flat.py",
                 "shop.adapters.test_flat",
@@ -4823,7 +4828,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
     assert not any(
         "near.tests.test_wiring" in f for f in tuple(
                                                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                                                   for v in checks.Codebase(_spec(sources=empty + context)).violations()
+                                                   for v in domain.Codebase(_spec(sources=empty + context)).violations()
                                                )
     )
 
@@ -4832,7 +4837,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
         "near.tests __init__ declares code; a context tests __init__ is empty" in f
         for f in tuple(
                      f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                     for v in checks.Codebase(_spec(sources=declared + context)).violations()
+                     for v in domain.Codebase(_spec(sources=declared + context)).violations()
                  )
     )
 
@@ -4842,7 +4847,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
         "a context tests package holds only test modules and conftest" in f
         for f in tuple(
                      f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                     for v in checks.Codebase(_spec(sources=empty + context + helpers)).violations()
+                     for v in domain.Codebase(_spec(sources=empty + context + helpers)).violations()
                  )
     )
 
@@ -4850,7 +4855,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
 def test_a_root_test_reaches_a_context_only_through_component_and_client() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/component/component.py",
                 "shop.component.component",
@@ -4907,7 +4912,7 @@ def test_a_root_test_reaches_a_context_only_through_component_and_client() -> No
 def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -4962,7 +4967,7 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
 def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("shop/tests/__init__.py", "shop.tests", "", True),
             (
                 "shop/tests/test_thing.py",
@@ -5000,7 +5005,7 @@ def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
 def test_an_unplaced_test_module_is_still_governed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "weird/test_nested.py",
                 "weird.test_nested",
@@ -5028,7 +5033,7 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
 def test_a_conftest_off_the_tier_map_is_a_leaf() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/conftest.py",
                 "shop.adapters.conftest",
@@ -5060,7 +5065,7 @@ def test_a_conftest_off_the_tier_map_is_a_leaf() -> None:
 def test_a_placed_conftest_carries_its_tier() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/conftest.py",
                 "tests.conftest",
@@ -5112,7 +5117,7 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
     )
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("protocol/protocol_http.py", "protocol.http", "import tesser.srv as ts\n", False),
             ("srv/protocol_http.py", "srv.http", "", False),
         )
@@ -5156,7 +5161,7 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
 def test_an_eval_in_a_gateway_reaches_no_shell_package() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
             ("srv/http.py", "srv.http", "", False),
             ("shop/adapters/gateways/__init__.py", "shop.adapters.gateways", "", True),
@@ -5185,7 +5190,7 @@ def test_an_eval_in_a_gateway_reaches_no_shell_package() -> None:
 def test_a_context_tests_helper_answers_for_its_imports() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("shop/tests/__init__.py", "shop.tests", "", True),
             (
                 "shop/tests/support.py",
@@ -5210,7 +5215,7 @@ def test_a_context_tests_helper_answers_for_its_imports() -> None:
 def test_a_main_below_the_context_root_is_a_governed_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/__main__.py",
                 "shop.domain.__main__",
@@ -5237,16 +5242,16 @@ def test_a_main_below_the_context_root_is_a_governed_module() -> None:
 
 def test_every_test_tier_has_a_shell_row() -> None:
     tiers = (
-        set(checks.TEST_TIER_REACH)
-        | {checks.SRV_TIER, checks.APP_TIER, checks.PROTOCOL_TIER, checks.APP_TIER}
+        set(domain.TEST_TIER_REACH)
+        | {domain.SRV_TIER, domain.APP_TIER, domain.PROTOCOL_TIER, domain.APP_TIER}
     )
-    assert tiers <= set(checks.TEST_TIER_SHELL)
+    assert tiers <= set(domain.TEST_TIER_SHELL)
 
 
 def test_test_module_tesser_import_rules() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/test_imports.py",
                 "shop.test_imports",
@@ -5294,7 +5299,7 @@ def test_test_module_tesser_import_rules() -> None:
 def test_a_test_module_may_omit_tesser_testing() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_bare.py",
                 "tests.test_bare",
@@ -5309,7 +5314,7 @@ def test_a_test_module_may_omit_tesser_testing() -> None:
 def test_test_module_totality_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/test_junk.py",
                 "shop.test_junk",
@@ -5395,7 +5400,7 @@ def test_test_module_totality_is_flagged() -> None:
 def test_helper_rules_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/test_helpers.py",
                 "shop.test_helpers",
@@ -5429,7 +5434,7 @@ def test_helper_rules_are_flagged() -> None:
 def test_a_helper_is_reported_where_it_stands_in_its_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/test_placed_helpers.py",
                 "shop.test_placed_helpers",
@@ -5459,7 +5464,7 @@ def test_a_helper_is_reported_where_it_stands_in_its_module() -> None:
 def test_a_helper_builds_any_construction_data_but_never_a_protocol_or_a_domain_object() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/thing_reader.py",
                 "shop.application.ports.thing_reader",
@@ -5514,7 +5519,7 @@ def test_a_helper_builds_any_construction_data_but_never_a_protocol_or_a_domain_
 def test_a_fake_may_implement_a_protocol_port() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "protocol/box.py",
                 "protocol.box",
@@ -5545,7 +5550,7 @@ def test_a_fake_may_implement_a_protocol_port() -> None:
 def test_a_test_module_may_import_tesser_serialization_as_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -5559,7 +5564,7 @@ def test_a_test_module_may_import_tesser_serialization_as_a_module() -> None:
     assert not any("shop.domain.test_thing" in f for f in findings)
     member = tuple(
                  f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                 for v in checks.Codebase(_spec(sources=(
+                 for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -5581,7 +5586,7 @@ def test_a_test_module_may_import_tesser_serialization_as_a_module() -> None:
 def test_comments_docstrings_and_bare_strings_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_prose.py",
                 "tests.test_prose",
@@ -5613,7 +5618,7 @@ def test_comments_docstrings_and_bare_strings_are_flagged() -> None:
 def test_the_retired_category_marker_is_an_ordinary_comment() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_marked.py",
                 "tests.test_marked",
@@ -5632,7 +5637,7 @@ def test_the_retired_category_marker_is_an_ordinary_comment() -> None:
 def test_mocking_library_and_patcher_fixtures_are_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_mocky.py",
                 "tests.test_mocky",
@@ -5662,7 +5667,7 @@ def test_mocking_library_and_patcher_fixtures_are_flagged() -> None:
 def test_a_marked_patcher_seam_is_suppressed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_seam.py",
                 "tests.test_seam",
@@ -5678,7 +5683,7 @@ def test_a_marked_patcher_seam_is_suppressed() -> None:
 def test_a_called_shadowed_builtin_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_shadow.py",
                 "tests.test_shadow",
@@ -5702,7 +5707,7 @@ def test_a_called_shadowed_builtin_is_flagged() -> None:
 def test_string_form_equality_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "tests/test_streq.py",
                 "tests.test_streq",
@@ -5725,7 +5730,7 @@ def test_string_form_equality_is_flagged() -> None:
 def test_a_value_object_mutable_collection_field_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/bag.py",
                 "shop.domain.bag",
@@ -5752,7 +5757,7 @@ def test_a_value_object_mutable_collection_field_is_flagged() -> None:
 def test_a_mutable_set_is_a_mutable_collection_and_a_quoted_field_is_a_quoting_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/holder.py",
                 "shop.domain.holder",
@@ -5782,7 +5787,7 @@ def test_a_mutable_set_is_a_mutable_collection_and_a_quoted_field_is_a_quoting_f
 def test_a_value_object_hides_its_representation() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/leaky.py",
                 "shop.domain.leaky",
@@ -5815,7 +5820,7 @@ def test_a_value_object_hides_its_representation() -> None:
 def test_an_accessor_never_hands_back_the_backing_collection() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/box.py",
                 "shop.domain.box",
@@ -5843,7 +5848,7 @@ def test_an_accessor_never_hands_back_the_backing_collection() -> None:
 def test_an_aggregate_is_referenced_by_id_never_held() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/pair.py",
                 "shop.domain.pair",
@@ -5870,7 +5875,7 @@ def test_an_aggregate_is_referenced_by_id_never_held() -> None:
 def test_exit_norms_leaf_and_structured() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/exits.py",
                 "shop.domain.exits",
@@ -5929,7 +5934,7 @@ def test_exit_norms_leaf_and_structured() -> None:
 def test_composition_norms() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/shapes.py",
                 "shop.domain.shapes",
@@ -5964,7 +5969,7 @@ def test_composition_norms() -> None:
 def test_a_value_object_has_one_construction_path() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/doors.py",
                 "shop.domain.doors",
@@ -5994,7 +5999,7 @@ def test_a_value_object_has_one_construction_path() -> None:
 def test_domain_returns_and_spec_returns() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/returns.py",
                 "shop.domain.returns",
@@ -6032,7 +6037,7 @@ def test_domain_returns_and_spec_returns() -> None:
 def test_review_pins_for_the_shape_norms() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/pins.py",
                 "shop.domain.pins",
@@ -6091,7 +6096,7 @@ def test_review_pins_for_the_shape_norms() -> None:
 def test_module_qualified_canonical_delegation_passes() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/policy.py",
                 "shop.domain.policy",
@@ -6121,7 +6126,7 @@ def test_module_qualified_canonical_delegation_passes() -> None:
 def test_undeclared_backing_collection_is_still_caught() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/sack.py",
                 "shop.domain.sack",
@@ -6147,7 +6152,7 @@ def test_undeclared_backing_collection_is_still_caught() -> None:
 def test_a_debt_marker_suppresses_exactly_its_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt TB040\n", False),))).violations()
+                   for v in domain.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt TB040\n", False),))).violations()
                )
     assert not any("stray" in f for f in findings)
 
@@ -6155,7 +6160,7 @@ def test_a_debt_marker_suppresses_exactly_its_finding() -> None:
 def test_a_scoped_debt_marker_leaves_other_codes_alone() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt TB050\n", False),))).violations()
+                   for v in domain.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt TB050\n", False),))).violations()
                )
     assert any(
         "stray belongs to no governed package" in f and " TB040 " in f for f in findings
@@ -6170,7 +6175,7 @@ def test_a_scoped_debt_marker_leaves_other_codes_alone() -> None:
 def test_a_stale_debt_marker_is_itself_a_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/extra.py",
                 "shop.domain.extra",
@@ -6196,7 +6201,7 @@ def test_a_stale_debt_marker_is_itself_a_finding() -> None:
 def test_a_file_level_debt_marker_covers_the_whole_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "srv/host.py",
                 "srv.host",
@@ -6212,7 +6217,7 @@ def test_a_file_level_debt_marker_covers_the_whole_module() -> None:
 def test_a_marker_suppresses_several_codes_space_or_comma_separated() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("stray.py", "stray", "import os  # tesser:debt TB040 TB050\n", False),
             ("loose.py", "loose", "import os  # tesser:debt TB040, TB050\n", False),
         ))).violations()
@@ -6224,7 +6229,7 @@ def test_a_marker_suppresses_several_codes_space_or_comma_separated() -> None:
 def test_a_file_level_debt_marker_requires_codes() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt-file\n", False),))).violations()
+                   for v in domain.Codebase(_spec(sources=(("stray.py", "stray", "import os  # tesser:debt-file\n", False),))).violations()
                )
     assert any("stray belongs to no governed package" in f for f in findings)
     assert any("stray.py:1: TB090" in f for f in findings)
@@ -6233,7 +6238,7 @@ def test_a_file_level_debt_marker_requires_codes() -> None:
 def test_a_typo_or_junk_token_makes_the_marker_inert() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("stray.py", "stray", "import os  # tesser:debts TB040\n", False),
             (
                 "loose.py",
@@ -6255,7 +6260,7 @@ def test_a_typo_or_junk_token_makes_the_marker_inert() -> None:
 def test_a_near_miss_marker_word_is_an_ordinary_comment() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("stray.py", "stray", "import os  # tesser:debts TB040\n", False),
             ("loose.py", "loose", "import os  # tesser:debtfile TB040\n", False),
             ("dashed.py", "dashed", "import os  # tesser:debt-filed TB040\n", False),
@@ -6273,7 +6278,7 @@ def test_a_near_miss_marker_word_is_an_ordinary_comment() -> None:
 def test_a_bare_line_debt_marker_is_line_scoped() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/extra.py",
                 "shop.domain.extra",
@@ -6289,7 +6294,7 @@ def test_a_bare_line_debt_marker_is_line_scoped() -> None:
 def test_tb090_itself_cannot_be_suppressed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/extra.py",
                 "shop.domain.extra",
@@ -6308,7 +6313,7 @@ def test_tb090_itself_cannot_be_suppressed() -> None:
 def test_a_colliding_module_definition_is_a_finding_not_a_crash() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("col.py", "col", "import tesser.srv as ts\n", False),
             ("col/__init__.py", "col", "", True),
         ))).violations()
@@ -6325,7 +6330,7 @@ def test_a_colliding_module_definition_is_a_finding_not_a_crash() -> None:
 def test_an_unparseable_module_is_a_finding_not_a_crash() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("broken.py", "broken", "def f(:\n", False),))).violations()
+                   for v in domain.Codebase(_spec(sources=(("broken.py", "broken", "def f(:\n", False),))).violations()
                )
     assert any(
         "broken.py:1: TB043" in f and "every checked module parses" in f for f in findings
@@ -6336,7 +6341,7 @@ def test_an_unparseable_module_is_a_finding_not_a_crash() -> None:
 def test_a_non_utf8_file_is_a_finding_not_a_crash() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(("binary.py", "binary", None, False),))).violations()
+                   for v in domain.Codebase(_spec(sources=(("binary.py", "binary", None, False),))).violations()
                )
     assert any(
         "binary.py:1: TB043" in f and "every checked module is readable UTF-8 Python" in f
@@ -6347,7 +6352,7 @@ def test_a_non_utf8_file_is_a_finding_not_a_crash() -> None:
 def test_a_colliding_unparseable_file_reports_the_collision() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("col.py", "col", "def f(:\n", False),
             ("col/__init__.py", "col", "", True),
         ))).violations()
@@ -6361,7 +6366,7 @@ def test_a_colliding_unparseable_file_reports_the_collision() -> None:
 def test_reader_findings_are_never_inline_suppressible() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "broken.py",
                 "broken",
@@ -6396,18 +6401,18 @@ def _universe_spec(
         ),
         ("shop/__init__.py", "shop", "", True),
     ),
-) -> checks.CodebaseSpec:
+) -> domain.CodebaseSpec:
     return _spec(sources=sources, base=base)
 
 
 def test_a_stub_names_no_context_for_the_modules_that_parsed() -> None:
     alone = tuple(
                 f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                for v in checks.Codebase(_universe_spec()).violations()
+                for v in domain.Codebase(_universe_spec()).violations()
             )
     stub = tuple(
                f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-               for v in checks.Codebase(_universe_spec(sources=(
+               for v in domain.Codebase(_universe_spec(sources=(
                    ("shop/domain/money.pyi", "shop.domain.money", "class Money: pass\n", False),
                ))).violations()
            )
@@ -6424,11 +6429,11 @@ def test_a_stub_names_no_context_for_the_modules_that_parsed() -> None:
 def test_a_module_that_does_not_parse_names_no_context() -> None:
     alone = tuple(
                 f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                for v in checks.Codebase(_universe_spec()).violations()
+                for v in domain.Codebase(_universe_spec()).violations()
             )
     broken = tuple(
                  f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                 for v in checks.Codebase(_universe_spec(sources=(
+                 for v in domain.Codebase(_universe_spec(sources=(
                      ("shop/domain/money.py", "shop.domain.money", "def (:\n", False),
                  ))).violations()
              )
@@ -6442,7 +6447,7 @@ def test_a_module_that_does_not_parse_names_no_context() -> None:
 def test_ports_is_a_package_never_a_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports.py",
                 "shop.application.ports",
@@ -6462,7 +6467,7 @@ def test_ports_is_a_package_never_a_module() -> None:
 def test_a_ports_init_is_a_role_init() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6481,7 +6486,7 @@ def test_a_ports_init_is_a_role_init() -> None:
 def test_a_ports_module_is_a_leaf() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6523,7 +6528,7 @@ def test_a_ports_module_is_a_leaf() -> None:
 def test_a_ports_module_stdlib_allowlist() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6553,7 +6558,7 @@ def test_a_ports_module_stdlib_allowlist() -> None:
 def test_a_ports_module_tesser_import_rules() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6591,7 +6596,7 @@ def test_a_ports_module_tesser_import_rules() -> None:
 def test_a_ports_module_holds_only_imports_and_classes() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6619,7 +6624,7 @@ def test_a_ports_module_holds_only_imports_and_classes() -> None:
 def test_a_ports_module_declares_exactly_one_port() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6662,7 +6667,7 @@ def test_a_ports_module_declares_exactly_one_port() -> None:
 def test_a_ports_module_declares_at_most_one_store_beside_its_port() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6708,7 +6713,7 @@ def test_a_ports_module_declares_at_most_one_store_beside_its_port() -> None:
 def test_a_store_declares_exactly_one_transaction_that_yields_its_port() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6776,7 +6781,7 @@ def test_a_store_declares_exactly_one_transaction_that_yields_its_port() -> None
 def test_a_store_transaction_yields_a_port_and_not_any_class_beside_it() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6831,7 +6836,7 @@ def test_a_store_transaction_yields_a_port_and_not_any_class_beside_it() -> None
 def test_a_ports_module_holds_only_port_kinds() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6866,7 +6871,7 @@ def test_a_ports_module_holds_only_port_kinds() -> None:
 def test_a_port_method_speaks_one_request_and_one_response() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6913,7 +6918,7 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
 def test_an_adapter_reaches_application_only_through_ports() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6953,7 +6958,7 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
 def test_a_port_dto_field_is_never_a_union() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -6987,7 +6992,7 @@ def test_a_port_dto_field_is_never_a_union() -> None:
 def test_a_client_dto_field_may_still_be_optional() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/client/optional.py",
                 "shop.client.optional",
@@ -7009,7 +7014,7 @@ def test_a_client_dto_field_may_still_be_optional() -> None:
 def test_a_conforming_ports_module_is_silent() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7055,7 +7060,7 @@ def test_a_conforming_ports_module_is_silent() -> None:
 def test_a_ports_module_imports_a_module_never_names() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7091,7 +7096,7 @@ def test_a_ports_module_imports_a_module_never_names() -> None:
 def test_a_ports_package_holds_only_ports_modules() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7138,7 +7143,7 @@ def test_a_ports_package_holds_only_ports_modules() -> None:
 def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/client/verdict.py",
                 "shop.client.verdict",
@@ -7163,7 +7168,7 @@ def test_a_client_dto_with_a_sibling_enum_stays_strict() -> None:
 def test_a_port_dto_field_is_never_a_bare_bool() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7200,7 +7205,7 @@ def test_a_port_dto_field_is_never_a_bare_bool() -> None:
 def test_a_port_dto_is_never_subclassed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7234,7 +7239,7 @@ def test_a_port_dto_is_never_subclassed() -> None:
 def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7268,7 +7273,7 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
 def test_a_fake_implementing_a_port_may_expose_inspection_methods() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7320,7 +7325,7 @@ def test_a_fake_implementing_a_port_may_expose_inspection_methods() -> None:
 def test_a_ports_enum_is_a_plain_enum() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7355,7 +7360,7 @@ def test_a_ports_enum_is_a_plain_enum() -> None:
 def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7393,7 +7398,7 @@ def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
 def test_a_debt_marked_ports_file_is_still_governed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports.py",
                 "shop.application.ports",
@@ -7421,7 +7426,7 @@ def test_a_debt_marked_ports_file_is_still_governed() -> None:
 def test_an_enum_base_cannot_hide_a_second_port() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7450,7 +7455,7 @@ def test_an_enum_base_cannot_hide_a_second_port() -> None:
 def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7494,7 +7499,7 @@ def test_an_enum_is_resolved_by_its_binding_not_its_spelling() -> None:
 def test_a_dynamic_import_is_not_a_way_around_the_matrix() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7532,7 +7537,7 @@ def test_a_dynamic_import_is_not_a_way_around_the_matrix() -> None:
 def test_a_dto_declares_its_fields_where_the_rules_can_read_them() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7572,7 +7577,7 @@ def test_a_dto_declares_its_fields_where_the_rules_can_read_them() -> None:
 def test_an_async_method_on_a_dto_is_still_a_method() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7605,7 +7610,7 @@ def test_an_async_method_on_a_dto_is_still_a_method() -> None:
 def test_a_nested_class_cannot_hide_a_second_port() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7638,7 +7643,7 @@ def test_a_nested_class_cannot_hide_a_second_port() -> None:
 def test_a_dynamic_import_is_resolved_by_binding_not_spelling() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7686,7 +7691,7 @@ def test_a_dynamic_import_is_resolved_by_binding_not_spelling() -> None:
 def test_a_port_speaks_shapes_it_declares_itself() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7724,7 +7729,7 @@ def test_a_port_speaks_shapes_it_declares_itself() -> None:
 def test_a_ports_class_carries_no_class_level_statement() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7765,7 +7770,7 @@ def test_a_ports_class_carries_no_class_level_statement() -> None:
 def test_a_private_port_method_carries_no_body() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7802,7 +7807,7 @@ def test_a_private_port_method_carries_no_body() -> None:
 def test_a_stub_cannot_shadow_the_shape_the_rules_read() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7835,7 +7840,7 @@ def test_a_stub_cannot_shadow_the_shape_the_rules_read() -> None:
 def test_a_ports_enum_carries_nothing_but_its_members() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7871,7 +7876,7 @@ def test_a_ports_enum_carries_nothing_but_its_members() -> None:
 def test_a_port_dto_constructor_only_assigns_its_parameters() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7913,7 +7918,7 @@ def test_a_port_dto_constructor_only_assigns_its_parameters() -> None:
 def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -7953,7 +7958,7 @@ def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
 def test_a_ports_module_runs_nothing_at_import() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8020,7 +8025,7 @@ def test_a_ports_module_runs_nothing_at_import() -> None:
 def test_an_async_port_method_runs_nothing_at_import() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8056,7 +8061,7 @@ def test_an_async_port_method_runs_nothing_at_import() -> None:
 def test_a_port_dto_binds_only_its_own_parameters() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8093,7 +8098,7 @@ def test_a_port_dto_binds_only_its_own_parameters() -> None:
 def test_a_ports_class_carries_no_keyword() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8124,7 +8129,7 @@ def test_a_ports_class_carries_no_keyword() -> None:
 def test_an_enum_member_may_be_negative_or_annotated() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8160,7 +8165,7 @@ def test_an_enum_member_may_be_negative_or_annotated() -> None:
 def test_a_ports_module_computes_no_annotation() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8198,7 +8203,7 @@ def test_a_ports_module_computes_no_annotation() -> None:
 def test_every_spelling_of_a_dynamic_import_is_a_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8268,7 +8273,7 @@ def test_every_spelling_of_a_dynamic_import_is_a_finding() -> None:
 def test_a_ports_module_holds_only_shapes_the_rules_can_read() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8310,7 +8315,7 @@ def test_a_ports_module_holds_only_shapes_the_rules_can_read() -> None:
 def test_a_ports_enum_member_sharing_a_line_with_an_extra_is_readable() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -8338,11 +8343,11 @@ def test_a_ports_enum_member_sharing_a_line_with_an_extra_is_readable() -> None:
 def test_declarations_are_reported_in_the_order_the_file_lists_them() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(
+        for v in domain.Codebase(
             _spec(imports=("zeta", "alpha"), pure_stdlib=("uuid", "bisect"), stdlib=("uuid", "bisect"))
         ).violations()
     )
-    rows = [f for f in findings if checks.TREE_DECLARATION in f]
+    rows = [f for f in findings if domain.TREE_DECLARATION in f]
     zeta = next(index for index, f in enumerate(rows) if "'import zeta'" in f)
     alpha = next(index for index, f in enumerate(rows) if "'import alpha'" in f)
     uuid_row = next(index for index, f in enumerate(rows) if "'stdlib uuid'" in f)
@@ -8354,7 +8359,7 @@ def test_declarations_are_reported_in_the_order_the_file_lists_them() -> None:
 def test_a_second_export_declaration_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), exports=('one', 'two'))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), exports=('one', 'two'))).violations()
     )
     assert len(findings) == 1, findings
     assert any(
@@ -8367,7 +8372,7 @@ def test_a_second_export_declaration_is_a_finding() -> None:
 def test_an_export_that_is_no_package_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), exports=('ghost',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), exports=('ghost',))).violations()
     )
     assert any(
         "this tree exports 'ghost' but no such package exists; "
@@ -8380,7 +8385,7 @@ def test_an_export_never_takes_a_shell_or_kernel_name() -> None:
     for taken in ("srv", "kernel", "tests", "protocol", "app"):
         findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), exports=(taken,))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), exports=(taken,))).violations()
     )
         assert any(
             "an exported kernel never takes the name of the kernel package "
@@ -8392,7 +8397,7 @@ def test_an_export_never_takes_a_shell_or_kernel_name() -> None:
 def test_kernel_is_a_package_never_a_module() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel.py', 'kernel', 'X = 1\n', False),))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel.py', 'kernel', 'X = 1\n', False),))).violations()
     )
     assert any(
         "kernel.py:1: TB041 kernel is a kernel module at the tree root; "
@@ -8404,7 +8409,7 @@ def test_kernel_is_a_package_never_a_module() -> None:
 def test_a_kernel_init_only_reexports_from_its_own_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import shop.domain.thing as thing\nX = 1\n', True)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import shop.domain.thing as thing\nX = 1\n', True)))).violations()
     )
     assert any(
         "kernel imports shop.domain.thing; "
@@ -8421,7 +8426,7 @@ def test_a_kernel_init_only_reexports_from_its_own_kernel() -> None:
 def test_every_kernel_class_declares_its_block() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/loose.py', 'kernel.loose', 'import tesser.domain as ts\nclass Bare:\n    pass\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/loose.py', 'kernel.loose', 'import tesser.domain as ts\nclass Bare:\n    pass\n', False)))).violations()
     )
     assert any(
         "kernel.loose.Bare declares no ts.* base; "
@@ -8433,7 +8438,7 @@ def test_every_kernel_class_declares_its_block() -> None:
 def test_a_kernel_holds_only_domain_kinds() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/svc.py', 'kernel.svc', 'import tesser.domain as ts\nimport tesser.application as tsa\nclass Svc(tsa.ApplicationService):\n    pass\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/svc.py', 'kernel.svc', 'import tesser.domain as ts\nimport tesser.application as tsa\nclass Svc(tsa.ApplicationService):\n    pass\n', False)))).violations()
     )
     assert any(
         "a kernel holds only domain kinds — "
@@ -8445,7 +8450,7 @@ def test_a_kernel_holds_only_domain_kinds() -> None:
 def test_kernel_statement_totality() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/loose.py', 'kernel.loose', 'import tesser.domain as ts\nLIMIT = 3\ndef helper() -> int:\n    return LIMIT\nprint(LIMIT)\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/loose.py', 'kernel.loose', 'import tesser.domain as ts\nLIMIT = 3\ndef helper() -> int:\n    return LIMIT\nprint(LIMIT)\n', False)))).violations()
     )
     assert any("kernel constants are Final" in f for f in findings), findings
     assert any(
@@ -8460,14 +8465,14 @@ def test_kernel_statement_totality() -> None:
 def test_kernel_tesser_import_rules() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/wrong.py', 'kernel.wrong', 'import tesser.adapters as ts\nclass Money(ts.ValueObject):\n    pass\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/wrong.py', 'kernel.wrong', 'import tesser.adapters as ts\nclass Money(ts.ValueObject):\n    pass\n', False)))).violations()
     )
     assert any(
         "a kernel module imports only tesser.domain" in f for f in findings
     ), findings
     absent = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/bare.py', 'kernel.bare', 'from typing import Final\nLIMIT: Final[int] = 3\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/bare.py', 'kernel.bare', 'from typing import Final\nLIMIT: Final[int] = 3\n', False)))).violations()
     )
     assert any(
         "a kernel module imports tesser.domain exactly once, as ts" in f
@@ -8478,7 +8483,7 @@ def test_kernel_tesser_import_rules() -> None:
 def test_kernel_import_allowlist() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nfrom decimal import Decimal\nimport kernel.money as money\nimport shop.domain.thing\nimport requests\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nfrom decimal import Decimal\nimport kernel.money as money\nimport shop.domain.thing\nimport requests\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
     )
     assert any(
         "kernel.prices imports shop.domain.thing; a kernel imports only its "
@@ -8498,7 +8503,7 @@ def test_a_declared_kernel_import_is_legal_in_a_kernel() -> None:
     def grown(imports: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=imports)).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=imports)).violations()
     )
 
     assert not any(
@@ -8510,7 +8515,7 @@ def test_a_declared_kernel_import_is_legal_in_a_kernel() -> None:
 def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
             (
                 "kernel/test_money.py",
                 "kernel.test_money",
@@ -8536,7 +8541,7 @@ def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
     assert not any("shop/domain/price.py" in f for f in findings), findings
     direct = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_amount", amount)\n', False),
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_amount", amount)\n', False),
             (
                 "kernel/test_money.py",
                 "kernel.test_money",
@@ -8560,7 +8565,7 @@ def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
     ), direct
     member = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_amount", amount)\n', False),
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_amount", amount)\n', False),
             (
                 "kernel/test_money.py",
                 "kernel.test_money",
@@ -8587,7 +8592,7 @@ def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
 def test_an_undeclared_package_in_a_pure_role_is_still_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
     )
     assert any(
         "shop.domain.price imports money_kernel; domain, client, and application "
@@ -8600,7 +8605,7 @@ def test_an_undeclared_package_in_a_pure_role_is_still_a_finding() -> None:
 def test_a_kernel_test_reaches_only_its_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import tesser.testing as ts\nfrom kernel.money import Money\nimport shop.domain.thing\ndef test_money() -> None:\n    assert Money(1) == Money(1)\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import tesser.testing as ts\nfrom kernel.money import Money\nimport shop.domain.thing\ndef test_money() -> None:\n    assert Money(1) == Money(1)\n', False)))).violations()
     )
     assert any(
         "kernel.test_money imports shop.domain.thing, but a test placed in "
@@ -8614,7 +8619,7 @@ def test_a_kernel_test_reaches_only_its_kernel() -> None:
 def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
             (
                 "kernel/test_money.py",
                 "kernel.test_money",
@@ -8652,7 +8657,7 @@ def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
 def test_a_context_shaped_export_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('beta/__init__.py', 'beta', '', True), ('beta/domain/policy.py', 'beta.domain.policy', 'import tesser.domain as ts\nclass PolicySpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), exports=('beta',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('beta/__init__.py', 'beta', '', True), ('beta/domain/policy.py', 'beta.domain.policy', 'import tesser.domain as ts\nclass PolicySpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), exports=('beta',))).violations()
     )
     assert len(findings) == 1, findings
     assert any(
@@ -8665,7 +8670,7 @@ def test_an_import_declaration_never_names_this_tree() -> None:
     for declared in ("srv", "kernel", "tests", "shop"):
         findings = tuple(
             f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-            for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), imports=(declared,))).violations()
+            for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), imports=(declared,))).violations()
         )
         assert any(
             "an import declaration names an installed external kernel, "
@@ -8677,7 +8682,7 @@ def test_an_import_declaration_never_names_this_tree() -> None:
 def test_an_import_declaration_never_names_the_stdlib() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), imports=('subprocess', 'os.path'), stdlib=('os', 'subprocess'))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), imports=('subprocess', 'os.path'), stdlib=('os', 'subprocess'))).violations()
     )
     assert (
         sum(
@@ -8691,7 +8696,7 @@ def test_an_import_declaration_never_names_the_stdlib() -> None:
 def test_an_unused_import_declaration_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), imports=('money_kernel',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False)), imports=('money_kernel',))).violations()
     )
     assert any(
         "an import declaration that legalizes nothing is itself a finding" in f
@@ -8702,7 +8707,7 @@ def test_an_unused_import_declaration_is_a_finding() -> None:
 def test_a_future_import_is_not_a_member_import() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "fut/domain/thing.py",
                 "fut.domain.thing",
@@ -8731,7 +8736,7 @@ def _stdlib_spec(
     stdlib: tuple[str, ...] = ("collections", "typing", "enum"),
     pure_stdlib: tuple[str, ...] = (),
     extra: tuple[tuple[str, str, str | None, bool], ...] = (),
-) -> checks.CodebaseSpec:
+) -> domain.CodebaseSpec:
     return _spec(
         sources=(
             (
@@ -8779,14 +8784,14 @@ def _stdlib_spec(
 def test_a_stdlib_declaration_widens_the_domain_and_the_kernel() -> None:
     declared = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(
+        for v in domain.Codebase(
             _stdlib_spec(pure_stdlib=("collections",))
         ).violations()
     )
     assert declared == (), declared
     submodule = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_stdlib_spec(
+        for v in domain.Codebase(_stdlib_spec(
             module="http.client",
             stdlib=("http", "typing", "enum"),
             pure_stdlib=("http",),
@@ -8795,7 +8800,7 @@ def test_a_stdlib_declaration_widens_the_domain_and_the_kernel() -> None:
     assert submodule == (), submodule
     bare = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_stdlib_spec()).violations()
+        for v in domain.Codebase(_stdlib_spec()).violations()
     )
     assert any(
         "coll.domain.thing imports collections; domain, client, and application "
@@ -8813,7 +8818,7 @@ def test_a_stdlib_declaration_widens_the_domain_and_the_kernel() -> None:
 def test_a_stdlib_declaration_widens_neither_application_nor_client() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_stdlib_spec(
+        for v in domain.Codebase(_stdlib_spec(
             pure_stdlib=("collections",),
             extra=(
                 (
@@ -8879,7 +8884,7 @@ def test_a_stdlib_declaration_names_the_stdlib_and_widens_it_and_is_used() -> No
     )
     external = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(
+        for v in domain.Codebase(
             _stdlib_spec(pure_stdlib=("requests",), extra=stray)
         ).violations()
     )
@@ -8890,7 +8895,7 @@ def test_a_stdlib_declaration_names_the_stdlib_and_widens_it_and_is_used() -> No
     ), external
     repeated = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(
+        for v in domain.Codebase(
             _stdlib_spec(pure_stdlib=("typing",), extra=stray)
         ).violations()
     )
@@ -8901,7 +8906,7 @@ def test_a_stdlib_declaration_names_the_stdlib_and_widens_it_and_is_used() -> No
     ), repeated
     unused = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_stdlib_spec(
+        for v in domain.Codebase(_stdlib_spec(
             stdlib=("collections", "typing", "enum", "sqlite3"),
             pure_stdlib=("collections", "sqlite3"),
         )).violations()
@@ -8915,7 +8920,7 @@ def test_a_stdlib_declaration_names_the_stdlib_and_widens_it_and_is_used() -> No
 def test_a_stdlib_declaration_below_a_default_module_is_a_repeat() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_stdlib_spec(
+        for v in domain.Codebase(_stdlib_spec(
             module="typing",
             pure_stdlib=("typing.io",),
         )).violations()
@@ -8930,7 +8935,7 @@ def test_a_stdlib_declaration_below_a_default_module_is_a_repeat() -> None:
 def test_the_default_pure_stdlib_carries_the_shapes_a_domain_reaches_for() -> None:
     silent = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "wide/domain/thing.py",
                 "wide.domain.thing",
@@ -8955,7 +8960,7 @@ def test_the_default_pure_stdlib_carries_the_shapes_a_domain_reaches_for() -> No
     assert silent == (), silent
     loud = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "narrow/domain/thing.py",
                 "narrow.domain.thing",
@@ -8983,7 +8988,7 @@ def test_the_default_pure_stdlib_carries_the_shapes_a_domain_reaches_for() -> No
 def test_a_kernel_module_imports_a_module_never_names() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             ("kernel/__init__.py", "kernel", "", True),
             (
                 "kernel/money.py",
@@ -9016,7 +9021,7 @@ def test_a_kernel_module_imports_a_module_never_names() -> None:
 def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
             (
                 "kernel/test_money.py",
                 "kernel.test_money",
@@ -9053,7 +9058,7 @@ def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
 def test_the_exported_kernel_never_imports_the_private_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass BaseSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False)), exports=('shells',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass BaseSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False)), exports=('shells',))).violations()
     )
     assert any(
         "shells.base imports kernel.money; a kernel imports only its "
@@ -9065,7 +9070,7 @@ def test_the_exported_kernel_never_imports_the_private_kernel() -> None:
 def test_a_declared_import_matches_on_the_package_boundary() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel.sub\nimport money_kernel_evil\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=('money_kernel',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel.sub\nimport money_kernel_evil\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=('money_kernel',))).violations()
     )
     assert any("imports money_kernel_evil" in f for f in findings), findings
     assert not any("imports money_kernel.sub" in f for f in findings), findings
@@ -9074,7 +9079,7 @@ def test_a_declared_import_matches_on_the_package_boundary() -> None:
 def test_a_kernel_import_is_only_trusted_when_its_module_was_walked() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
             (
                 "kernel/test_money.py",
                 "kernel.test_money",
@@ -9111,7 +9116,7 @@ def test_a_kernel_import_is_only_trusted_when_its_module_was_walked() -> None:
 def test_a_pure_role_kernel_import_needs_the_kernel_to_exist() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),))).violations()
+        for v in domain.Codebase(_spec(sources=(('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False),))).violations()
     )
     assert any(
         "shop.domain.price imports kernel.money; domain, client, and application "
@@ -9124,7 +9129,7 @@ def test_a_pure_role_kernel_import_needs_the_kernel_to_exist() -> None:
 def test_a_role_named_subpackage_of_the_fixed_kernel_stays_kernel_governed() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/domain/__init__.py', 'kernel.domain', '', True), ('kernel/domain/svc.py', 'kernel.domain.svc', 'import tesser.domain as ts\nimport tesser.application as tsa\nclass Svc(tsa.ApplicationService):\n    pass\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/domain/__init__.py', 'kernel.domain', '', True), ('kernel/domain/svc.py', 'kernel.domain.svc', 'import tesser.domain as ts\nimport tesser.application as tsa\nclass Svc(tsa.ApplicationService):\n    pass\n', False)))).violations()
     )
     assert any(
         "a kernel holds only domain kinds" in f for f in findings
@@ -9135,7 +9140,7 @@ def test_a_role_named_subpackage_of_the_fixed_kernel_stays_kernel_governed() -> 
 def test_a_kernel_init_rejects_a_near_miss_package() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import kernelish.money as money\n', True), ('kernelish/__init__.py', 'kernelish', '', True), ('kernelish/money.py', 'kernelish.money', 'import shop.domain.thing\n', False)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'import kernelish.money as money\n', True), ('kernelish/__init__.py', 'kernelish', '', True), ('kernelish/money.py', 'kernelish.money', 'import shop.domain.thing\n', False)))).violations()
     )
     assert any(
         "kernel imports kernelish.money; "
@@ -9147,7 +9152,7 @@ def test_a_kernel_init_rejects_a_near_miss_package() -> None:
 def test_a_member_form_reexport_in_a_kernel_init_is_legal() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True)))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True)))).violations()
     )
     assert not any("kernel/__init__.py" in f for f in findings), findings
 
@@ -9155,7 +9160,7 @@ def test_a_member_form_reexport_in_a_kernel_init_is_legal() -> None:
 def test_an_export_naming_a_bare_module_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells.py', 'shells', 'X = 1\n', False)), exports=('shells',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells.py', 'shells', 'X = 1\n', False)), exports=('shells',))).violations()
     )
     assert len(findings) == 1, findings
     assert any(
@@ -9166,7 +9171,7 @@ def test_an_export_naming_a_bare_module_is_a_finding() -> None:
 def test_a_kernel_test_may_reach_the_trees_other_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import kernel.money as money\nimport shells.base as base\ndef test_money() -> None:\n    assert money.Money(1) == money.Money(1)\n    assert base.BaseSpec("x") is not None\n', False)), exports=('shells',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import kernel.money as money\nimport shells.base as base\ndef test_money() -> None:\n    assert money.Money(1) == money.Money(1)\n    assert base.BaseSpec("x") is not None\n', False)), exports=('shells',))).violations()
     )
     assert not any("kernel/test_money.py" in f for f in findings), findings
 
@@ -9174,7 +9179,7 @@ def test_a_kernel_test_may_reach_the_trees_other_kernel() -> None:
 def test_an_implementation_module_carries_exactly_one_sibling_test() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/money.py",
                 "shop.domain.money",
@@ -9204,7 +9209,7 @@ def test_an_implementation_module_carries_exactly_one_sibling_test() -> None:
 def test_a_sibling_test_names_the_module_beside_it() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -9246,7 +9251,7 @@ def test_a_sibling_test_names_the_module_beside_it() -> None:
 def test_a_declaration_only_module_needs_no_sibling_test() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -9289,7 +9294,7 @@ def test_a_declaration_only_module_needs_no_sibling_test() -> None:
 def test_a_ports_module_and_an_init_need_no_sibling_test() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
@@ -9359,8 +9364,8 @@ def _tesser_export_spec(
             False,
         ),
     ),
-) -> checks.CodebaseSpec:
-    return checks.CodebaseSpec(
+) -> domain.CodebaseSpec:
+    return domain.CodebaseSpec(
         sources=base + sources,
         declared="app",
         nested=(),
@@ -9372,7 +9377,7 @@ def _tesser_export_spec(
 def test_the_shells_tree_is_clean_and_not_context_shaped() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec()).violations()
+        for v in domain.Codebase(_tesser_export_spec()).violations()
     )
     assert findings == (), findings
 
@@ -9380,7 +9385,7 @@ def test_the_shells_tree_is_clean_and_not_context_shaped() -> None:
 def test_a_tesser_shell_module_imports_a_module_never_names() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "tesser/domain/tag.py",
@@ -9411,7 +9416,7 @@ def test_a_tesser_shell_module_imports_a_module_never_names() -> None:
 def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "tesser/testing/__init__.py",
@@ -9443,7 +9448,7 @@ def test_a_tesser_init_only_reexports_from_the_distribution() -> None:
 def test_the_distribution_holds_only_consumer_namespaces() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(("tesser/extras.py", "tesser.extras", "X = 1\n", False),),
         )).violations()
     )
@@ -9457,7 +9462,7 @@ def test_the_distribution_holds_only_consumer_namespaces() -> None:
 def test_a_shell_module_stays_on_the_shell_stdlib() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "tesser/srv/host.py",
@@ -9485,7 +9490,7 @@ def test_a_shell_module_stays_on_the_shell_stdlib() -> None:
 def test_the_shells_tests_probe_freely_with_any_tesser_import() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "tests/test_shells.py",
@@ -9507,7 +9512,7 @@ def test_the_shells_tests_probe_freely_with_any_tesser_import() -> None:
 def test_the_shells_tests_keep_function_totality() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "tests/test_shells.py",
@@ -9537,7 +9542,7 @@ def test_the_shells_tests_keep_function_totality() -> None:
 def test_a_tree_exporting_tesser_holds_nothing_else() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "billing/domain/money.py",
@@ -9562,7 +9567,7 @@ def test_a_tree_exporting_tesser_holds_nothing_else() -> None:
 def test_a_stray_subpackage_in_the_distribution_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "tesser/evil/__init__.py",
@@ -9583,7 +9588,7 @@ def test_a_stray_subpackage_in_the_distribution_is_a_finding() -> None:
 def test_a_conftest_leaf_counts_tesser_edges_in_the_exporting_tree() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 (
                     "conftest.py",
@@ -9604,7 +9609,7 @@ def test_a_conftest_leaf_counts_tesser_edges_in_the_exporting_tree() -> None:
 def test_an_app_module_holds_only_app_kinds() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "app/wrong.py",
                 "app.wrong",
@@ -9636,7 +9641,7 @@ def test_an_app_module_holds_only_app_kinds() -> None:
 def test_a_component_releases_what_it_constructed() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "leaky/component/component.py",
                 "leaky.component.component",
@@ -9671,7 +9676,7 @@ def test_a_component_releases_what_it_constructed() -> None:
 def test_a_config_constructs_from_exactly_one_spec() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "loose/component/config.py",
                 "loose.component.config",
@@ -9714,7 +9719,7 @@ def test_a_config_constructs_from_exactly_one_spec() -> None:
 def test_a_do_not_use_tesser_module_is_not_a_consumer_namespace() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_tesser_export_spec(
+        for v in domain.Codebase(_tesser_export_spec(
             sources=(
                 ("tesser/do_not_use_declared.py", "tesser.do_not_use_declared", "def function(fn: object) -> object:\n    return fn\n", False),
                 ("tesser/test_do_not_use_declared.py", "tesser.test_do_not_use_declared", "def test_declared() -> None:\n    assert True\n", False),
@@ -9730,7 +9735,7 @@ def test_a_do_not_use_tesser_module_is_not_a_consumer_namespace() -> None:
 def test_a_sibling_method_reference_is_flagged_in_every_module_kind() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             ("shop/domain2.py", "shop.domain2", "", False),
             (
                 "plain/domain/thing.py",
@@ -9784,7 +9789,7 @@ def test_a_sibling_method_reference_is_flagged_in_every_module_kind() -> None:
 def test_a_domain_enum_is_a_primitive() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -9831,7 +9836,7 @@ def test_a_domain_enum_is_a_primitive() -> None:
 def test_a_domain_enum_is_a_plain_enum() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -9858,7 +9863,7 @@ def test_a_domain_enum_is_a_plain_enum() -> None:
 def test_a_domain_enum_carries_nothing_but_its_members() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -9893,7 +9898,7 @@ def test_a_domain_enum_carries_nothing_but_its_members() -> None:
 def test_an_application_enum_still_declares_no_block() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/kinds.py",
                 "shop.application.kinds",
@@ -9914,7 +9919,7 @@ def test_an_application_enum_still_declares_no_block() -> None:
 def test_a_domain_enum_subclasses_enum_alone() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -9941,7 +9946,7 @@ def test_a_domain_enum_subclasses_enum_alone() -> None:
 def test_a_ports_enum_subclasses_enum_alone() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -9973,7 +9978,7 @@ def test_a_ports_enum_subclasses_enum_alone() -> None:
 def test_a_kernel_domain_enum_is_not_a_context_enum() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "kernel/domain/state.py",
                 "kernel.domain.state",
@@ -10004,7 +10009,7 @@ def test_a_kernel_domain_enum_is_not_a_context_enum() -> None:
 def test_an_enum_with_a_ts_base_is_its_declared_kind() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -10030,7 +10035,7 @@ def test_an_enum_with_a_ts_base_is_its_declared_kind() -> None:
 def test_an_enum_auto_member_is_a_member() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/ports/__init__.py",
                 "shop.application.ports",
@@ -10059,7 +10064,7 @@ def test_an_enum_auto_member_is_a_member() -> None:
 def test_a_client_dto_still_rejects_a_domain_enum() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -10091,7 +10096,7 @@ def test_a_client_dto_still_rejects_a_domain_enum() -> None:
 def test_an_enum_wearing_a_dto_block_is_not_a_spec_field() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -10117,7 +10122,7 @@ def test_an_enum_wearing_a_dto_block_is_not_a_spec_field() -> None:
 def test_a_value_object_does_not_hand_back_a_domain_enum() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/state.py",
                 "shop.domain.state",
@@ -10149,7 +10154,7 @@ def test_a_value_object_does_not_hand_back_a_domain_enum() -> None:
 def test_a_spec_initializes_its_domain_object_and_does_nothing_else() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/tag.py",
                 "shop.domain.tag",
@@ -10222,7 +10227,7 @@ def test_a_spec_initializes_its_domain_object_and_does_nothing_else() -> None:
 def test_a_spec_is_held_by_an_annotation_or_by_a_maker_function() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mint/domain/coin.py",
                 "mint.domain.coin",
@@ -10270,7 +10275,7 @@ def test_a_spec_is_held_by_an_annotation_or_by_a_maker_function() -> None:
 def test_a_nested_parameter_named_for_the_spec_is_a_different_name() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "forge/domain/blade.py",
                 "forge.domain.blade",
@@ -10331,7 +10336,7 @@ def test_a_nested_parameter_named_for_the_spec_is_a_different_name() -> None:
 def test_a_config_reads_its_spec_where_it_initializes_itself() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/component/setup.py",
                 "shop.component.setup",
@@ -10374,7 +10379,7 @@ def test_a_config_reads_its_spec_where_it_initializes_itself() -> None:
 def test_a_mapper_and_a_wider_spec_never_keep_a_spec() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/mapping.py",
                 "shop.application.mapping",
@@ -10436,7 +10441,7 @@ def test_a_mapper_and_a_wider_spec_never_keep_a_spec() -> None:
 def test_a_comprehension_hides_the_spec_only_when_it_binds_the_name() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/lister.py",
                 "shop.adapters.lister",
@@ -10473,7 +10478,7 @@ def test_a_comprehension_hides_the_spec_only_when_it_binds_the_name() -> None:
 def test_one_line_reaching_for_the_spec_twice_is_reported_once() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/twice.py",
                 "shop.adapters.twice",
@@ -10500,7 +10505,7 @@ def test_one_line_reaching_for_the_spec_twice_is_reported_once() -> None:
 def test_writing_through_the_spec_is_not_reading_it() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/adapters/hider.py",
                 "shop.adapters.hider",
@@ -10533,7 +10538,7 @@ def test_writing_through_the_spec_is_not_reading_it() -> None:
 def test_a_spec_is_read_through_a_keyword_a_guard_or_an_async_method() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "lace/domain/knot.py",
                 "lace.domain.knot",
@@ -10580,7 +10585,7 @@ def test_a_spec_is_read_through_a_keyword_a_guard_or_an_async_method() -> None:
 def test_a_conftest_imports_modules_never_names() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "conftest.py",
                 "conftest",
@@ -10616,7 +10621,7 @@ def test_a_conftest_imports_modules_never_names() -> None:
 def test_a_nested_from_import_is_still_a_member_import() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "nest/domain/thing.py",
                 "nest.domain.thing",
@@ -10646,7 +10651,7 @@ def test_a_nested_from_import_is_still_a_member_import() -> None:
 def test_a_spec_is_tracked_through_aliases_stores_and_shadows() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/tag.py",
                 "shop.domain.tag",
@@ -10745,7 +10750,7 @@ def test_a_spec_is_tracked_through_aliases_stores_and_shadows() -> None:
 def test_a_spec_is_tracked_at_module_level_through_makers_mutators_and_match() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/tag.py",
                 "shop.domain.tag",
@@ -10830,7 +10835,7 @@ def test_a_spec_is_tracked_at_module_level_through_makers_mutators_and_match() -
 def test_a_spec_is_read_only_by_the_init_of_its_own_object() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/family.py",
                 "shop.domain.family",
@@ -10896,7 +10901,7 @@ def test_a_spec_is_read_only_by_the_init_of_its_own_object() -> None:
 def test_a_spec_constructs_exactly_one_object_and_a_value_object_takes_it_exactly() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/pair.py",
                 "shop.domain.pair",
@@ -10949,7 +10954,7 @@ def test_a_spec_constructs_exactly_one_object_and_a_value_object_takes_it_exactl
 def test_a_second_taker_a_tuple_target_keep_and_a_test_module_maker_name_are_handled() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/coin.py",
                 "shop.domain.coin",
@@ -11017,7 +11022,7 @@ def test_a_second_taker_a_tuple_target_keep_and_a_test_module_maker_name_are_han
 def test_an_outcome_is_a_closed_set_of_auto_members() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/advance.py",
                 "shop.domain.advance",
@@ -11071,7 +11076,7 @@ def test_an_outcome_is_a_closed_set_of_auto_members() -> None:
 def test_an_outcome_is_returned_and_matched_never_held() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/run.py",
                 "shop.domain.run",
@@ -11127,7 +11132,7 @@ def test_an_outcome_is_returned_and_matched_never_held() -> None:
 def test_an_outcome_member_is_read_only_by_an_exhaustive_match() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/run.py",
                 "shop.domain.run",
@@ -11237,7 +11242,7 @@ def test_an_outcome_member_is_read_only_by_an_exhaustive_match() -> None:
 def test_an_outcome_is_tracked_through_the_shapes_the_rules_do_not_name() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/run.py",
                 "shop.domain.run",
@@ -11373,7 +11378,7 @@ def test_an_outcome_is_tracked_through_the_shapes_the_rules_do_not_name() -> Non
 def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/run.py",
                 "shop.domain.run",
@@ -11737,21 +11742,21 @@ def _kinds_spec(
             "        self._quotes = quotes\n"
             "    async def run(self, quote_request: ports.QuoteRequest) -> FlowResponse:\n"
             "        name = thing.Name(quote_request.text)\n"
-            "        quoted = await self._quotes.quote(self._job_context, MapToQuoteRequest(name))\n"
-            "        return MapToFlowResponse(quoted)\n",
+            "        quote_response = await self._quotes.quote(self._job_context, MapToQuoteRequest(name))\n"
+            "        return MapToFlowResponse(quote_response)\n",
             False,
         ),
         (
             "shop/application/orchestrators/test_flow.py",
             "shop.application.orchestrators.test_flow",
             "import tesser.testing as ts\n"
-            "import shop.application.orchestrators.flow as flow\n"
+            "import shop.application.orchestrators as orchestrators\n"
             "@ts.fake\n"
             "class FakeJobContext(ts.JobContext):\n"
             "    async def call[I, O](self, step, request) -> O:\n"
             "        return await step(None, request)\n"
             "def test_flow_exists() -> None:\n"
-            "    assert flow.Flow is not None\n",
+            "    assert orchestrators.Flow is not None\n",
             False,
         ),
         ("shop/adapters/__init__.py", "shop.adapters", "", True),
@@ -11798,8 +11803,8 @@ def _kinds_spec(
             "import tesser.adapters as ts\n"
             "import shop.client.client as client\n"
             "class Handler(ts.Handler):\n"
-            "    def __init__(self, inner: client.Client) -> None:\n"
-            "        self._inner = inner\n",
+            "    def __init__(self, client: client.Client) -> None:\n"
+            "        self._client = client\n",
             False,
         ),
         (
@@ -11894,8 +11899,8 @@ def _kinds_spec(
             False,
         ),
     ),
-) -> checks.CodebaseSpec:
-    return checks.CodebaseSpec(
+) -> domain.CodebaseSpec:
+    return domain.CodebaseSpec(
         sources=base + sources,
         declared="app",
         nested=(),
@@ -11910,7 +11915,7 @@ def _kinds_spec(
 def test_the_application_kinds_stand_clean_together() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec()).violations()
+        for v in domain.Codebase(_kinds_spec()).violations()
     )
     assert findings == (), findings
 
@@ -11918,7 +11923,7 @@ def test_the_application_kinds_stand_clean_together() -> None:
 def test_a_reserved_name_inside_the_application_client_is_a_stray() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/client/test_quotes.py",
                 "shop.application.client.test_quotes",
@@ -11939,7 +11944,7 @@ def test_a_reserved_name_inside_the_application_client_is_a_stray() -> None:
 def test_the_application_client_and_the_orchestrators_are_packages_never_modules() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(base=(), sources=(
+        for v in domain.Codebase(_spec(base=(), sources=(
             (
                 "shop/application/client.py",
                 "shop.application.client",
@@ -11969,7 +11974,7 @@ def test_the_application_client_and_the_orchestrators_are_packages_never_modules
 def test_the_new_application_packages_carry_role_inits() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(base=(), sources=(
+        for v in domain.Codebase(_spec(base=(), sources=(
             (
                 "shop/application/client/__init__.py",
                 "shop.application.client",
@@ -11999,7 +12004,7 @@ def test_the_new_application_packages_carry_role_inits() -> None:
 def test_an_application_client_module_imports_tesser_application_once_as_ts() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/client/twice.py",
                 "shop.application.client.twice",
@@ -12029,7 +12034,7 @@ def test_an_application_client_module_imports_tesser_application_once_as_ts() ->
 def test_an_application_client_module_speaks_one_ports_module() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/ports/other.py",
                 "shop.application.ports.other",
@@ -12089,7 +12094,7 @@ def test_an_application_client_module_speaks_one_ports_module() -> None:
 def test_an_application_client_module_holds_only_imports_and_one_protocol() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/client/loose.py",
                 "shop.application.client.loose",
@@ -12162,7 +12167,7 @@ def test_an_application_client_module_holds_only_imports_and_one_protocol() -> N
 def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/client/wide.py",
                 "shop.application.client.wide",
@@ -12212,7 +12217,7 @@ def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
 def test_an_orchestrators_module_holds_one_orchestrator_and_at_most_one_response() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/orchestrators/crowded.py",
                 "shop.application.orchestrators.crowded",
@@ -12251,7 +12256,7 @@ def test_an_orchestrators_module_holds_one_orchestrator_and_at_most_one_response
 def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/loose.py",
                 "shop.adapters.loose",
@@ -12287,7 +12292,7 @@ def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
 def test_an_adapters_mapper_is_admitted_and_takes_a_librarys_primitive() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/repositories/memory.py",
                 "shop.adapters.repositories.memory",
@@ -12351,7 +12356,7 @@ def test_an_adapters_mapper_is_admitted_and_takes_a_librarys_primitive() -> None
 def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/jobs/wire.py",
                 "shop.adapters.jobs.wire",
@@ -12473,13 +12478,13 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
 def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/peeker.py",
                 "shop.application.peeker",
                 "import tesser.application as ts\n"
                 "import shop.application.client.quotes as quotes_client\n"
-                "import shop.application.orchestrators.flow as flow\n"
+                "import shop.application.orchestrators as orchestrators\n"
                 "class Peek(ts.ApplicationService):\n"
                 "    pass\n",
                 False,
@@ -12488,7 +12493,7 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
                 "shop/component/peek.py",
                 "shop.component.peek",
                 "import tesser.component as ts\n"
-                "import shop.application.orchestrators.flow as flow\n"
+                "import shop.application.orchestrators as orchestrators\n"
                 "class Peek(ts.Component):\n"
                 "    def close(self) -> None:\n"
                 "        return None\n",
@@ -12536,7 +12541,7 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
             (
                 "shop/tests/test_peek.py",
                 "shop.tests.test_peek",
-                "import shop.application.orchestrators.flow as flow\n"
+                "import shop.application.orchestrators as orchestrators\n"
                 "def test_x() -> None:\n    assert True\n",
                 False,
             ),
@@ -12549,12 +12554,12 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
         for f in findings
     )
     assert any(
-        "shop.application.peeker imports shop.application.orchestrators.flow; "
+        "shop.application.peeker imports shop.application.orchestrators; "
         "only a job imports the application client and the orchestrators" in f
         for f in findings
     )
     assert any(
-        "shop.component.peek imports shop.application.orchestrators.flow; only a "
+        "shop.component.peek imports shop.application.orchestrators; only a "
         "job imports the application client and the orchestrators" in f
         for f in findings
     )
@@ -12585,7 +12590,7 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
         for f in findings
     )
     assert any(
-        "shop.tests.test_peek imports shop.application.orchestrators.flow, but "
+        "shop.tests.test_peek imports shop.application.orchestrators, but "
         "only a test placed in jobs reaches the application client and the "
         "orchestrators; a test reaches only what its placement allows" in f
         for f in findings
@@ -12599,7 +12604,7 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
 def test_a_host_reaches_a_context_through_its_handlers_and_its_jobs() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "srv/wide.py",
                 "srv.wide",
@@ -12627,7 +12632,7 @@ def test_a_host_reaches_a_context_through_its_handlers_and_its_jobs() -> None:
 def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/ports/other.py",
                 "shop.application.ports.other",
@@ -12739,7 +12744,7 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
 def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/ports/widgets.py",
                 "shop.application.ports.widgets",
@@ -12815,7 +12820,7 @@ def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
 def test_a_component_publishes_only_its_client_and_its_jobs() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/component/bad.py",
                 "shop.component.bad",
@@ -12845,7 +12850,7 @@ def test_a_component_publishes_only_its_client_and_its_jobs() -> None:
 def test_an_orchestrator_takes_and_threads_exactly_one_job_context() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/orchestrators/bare.py",
                 "shop.application.orchestrators.bare",
@@ -12905,7 +12910,7 @@ def test_an_orchestrator_takes_and_threads_exactly_one_job_context() -> None:
 def test_a_job_context_is_led_with_or_it_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/ports/trailing.py",
                 "shop.application.ports.trailing",
@@ -12996,7 +13001,7 @@ def test_a_job_context_is_led_with_or_it_is_a_finding() -> None:
 def test_a_quoted_return_is_the_quoting_finding_and_resolves_to_nothing() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/gateways/quoted.py",
                 "shop.adapters.gateways.quoted",
@@ -13025,7 +13030,7 @@ def test_a_quoted_return_is_the_quoting_finding_and_resolves_to_nothing() -> Non
 def test_an_unquoted_return_still_draws_the_job_context_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/gateways/handed.py",
                 "shop.adapters.gateways.handed",
@@ -13048,7 +13053,7 @@ def test_an_unquoted_return_still_draws_the_job_context_finding() -> None:
 def test_a_literal_string_in_an_annotation_is_data_not_a_quoted_type() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/gateways/graded.py",
                 "shop.adapters.gateways.graded",
@@ -13067,7 +13072,7 @@ def test_a_literal_string_in_an_annotation_is_data_not_a_quoted_type() -> None:
 def test_a_gateway_never_holds_an_invocations_job_context() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/gateways/holding.py",
                 "shop.adapters.gateways.holding",
@@ -13096,7 +13101,7 @@ def test_a_gateway_never_holds_an_invocations_job_context() -> None:
 def test_a_repository_never_holds_an_invocations_job_context() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/adapters/repositories/holding.py",
                 "shop.adapters.repositories.holding",
@@ -13121,7 +13126,7 @@ def test_a_repository_never_holds_an_invocations_job_context() -> None:
 def test_a_component_publishes_its_jobs_as_one_job_or_a_tuple_of_them() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/component/mixed.py",
                 "shop.component.mixed",
@@ -13149,7 +13154,7 @@ def test_a_component_publishes_its_jobs_as_one_job_or_a_tuple_of_them() -> None:
 def test_a_service_decides_once_and_only_on_a_domain_answer() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -13314,7 +13319,7 @@ def test_a_service_decides_once_and_only_on_a_domain_answer() -> None:
 def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/order.py",
                 "shop.domain.order",
@@ -13418,7 +13423,7 @@ def test_a_domain_method_takes_one_primitive_spec_or_domain_object() -> None:
 def test_a_service_decision_is_not_hidden_in_a_call_a_shadow_or_a_destructuring() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -13510,7 +13515,7 @@ def test_a_service_decision_is_not_hidden_in_a_call_a_shadow_or_a_destructuring(
 def test_a_public_call_is_read_like_any_other_actions_or_orchestrator_method() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_kinds_spec(sources=(
             (
                 "shop/application/calling_actions.py",
                 "shop.application.calling_actions",
@@ -13552,7 +13557,7 @@ def test_a_public_call_is_read_like_any_other_actions_or_orchestrator_method() -
 def test_a_domain_method_parameter_is_read_through_the_wrappers_that_hide_a_container() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/crate.py",
                 "shop.domain.crate",
@@ -13625,7 +13630,7 @@ def test_a_domain_method_parameter_is_read_through_the_wrappers_that_hide_a_cont
 def test_a_service_decision_is_read_through_the_binding_forms_that_hide_its_subject() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -13791,7 +13796,7 @@ def test_a_service_decision_is_read_through_the_binding_forms_that_hide_its_subj
 def test_a_public_call_is_a_public_method_on_a_domain_object() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/caller.py",
                 "shop.domain.caller",
@@ -13832,7 +13837,7 @@ def test_a_public_call_is_a_public_method_on_a_domain_object() -> None:
 def test_a_service_decision_hides_in_a_negation_a_dunder_or_the_operator_module() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(stdlib=("operator",), sources=(
+                   for v in domain.Codebase(_spec(stdlib=("operator",), sources=(
             (
                 "shop/hidden.py",
                 "shop.hidden",
@@ -13880,7 +13885,7 @@ def test_a_service_decision_hides_in_a_negation_a_dunder_or_the_operator_module(
 def test_a_match_subject_names_a_method_annotated_to_answer_an_outcome() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -13974,7 +13979,7 @@ def test_a_match_subject_names_a_method_annotated_to_answer_an_outcome() -> None
 def test_a_match_subject_names_a_method_whose_annotation_is_itself_an_outcome() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -14076,7 +14081,7 @@ def test_a_match_subject_names_a_method_whose_annotation_is_itself_an_outcome() 
 def test_an_override_replaces_the_outcome_answer_it_inherits() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -14164,7 +14169,7 @@ def test_an_override_replaces_the_outcome_answer_it_inherits() -> None:
 def test_one_decision_in_a_branch_test_is_one_finding() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/deduped.py",
                 "shop.deduped",
@@ -14193,7 +14198,7 @@ def test_one_decision_in_a_branch_test_is_one_finding() -> None:
 def test_an_outcome_match_arms_all_name_members_beside_the_closer() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -14253,7 +14258,7 @@ def test_an_outcome_match_arms_all_name_members_beside_the_closer() -> None:
 def test_a_client_dto_field_is_never_a_bare_bool() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "gate/client/client.py",
                 "gate.client.client",
@@ -14278,7 +14283,7 @@ def test_a_client_dto_field_is_never_a_bare_bool() -> None:
 def test_a_client_call_takes_the_signature_rules_of_a_client_method() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/calling.py",
                 "shop.calling",
@@ -14308,7 +14313,7 @@ def test_a_client_call_takes_the_signature_rules_of_a_client_method() -> None:
 def test_a_value_object_call_that_hands_back_the_primitive_is_a_leak() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/dialled.py",
                 "shop.domain.dialled",
@@ -14337,7 +14342,7 @@ def test_a_value_object_call_that_hands_back_the_primitive_is_a_leak() -> None:
 def test_a_service_that_asks_a_truth_builtin_is_deciding_for_itself() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(stdlib=("operator",), sources=(
+                   for v in domain.Codebase(_spec(stdlib=("operator",), sources=(
             (
                 "shop/truthy.py",
                 "shop.truthy",
@@ -14382,7 +14387,7 @@ def test_a_service_that_asks_a_truth_builtin_is_deciding_for_itself() -> None:
 def test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "gate/client/client.py",
                 "gate.client.client",
@@ -14443,7 +14448,7 @@ def test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it() -> Non
 def test_a_domain_method_names_what_it_hands_back() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/mute.py",
                 "shop.domain.mute",
@@ -14475,7 +14480,7 @@ def test_a_domain_method_names_what_it_hands_back() -> None:
 def test_a_service_reads_an_outcome_a_domain_object_inherits() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -14534,7 +14539,7 @@ def test_a_service_reads_an_outcome_a_domain_object_inherits() -> None:
 def test_a_service_reads_an_outcome_it_awaited() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/answer.py",
                 "shop.domain.answer",
@@ -14602,7 +14607,7 @@ def test_a_service_reads_an_outcome_it_awaited() -> None:
 def test_a_conditional_expression_over_a_comparison_is_one_decision() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-                   for v in checks.Codebase(_spec(sources=(
+                   for v in domain.Codebase(_spec(sources=(
             (
                 "shop/choosing.py",
                 "shop.choosing",
@@ -14622,23 +14627,23 @@ def test_a_conditional_expression_over_a_comparison_is_one_decision() -> None:
 
 
 def test_annotation_equality() -> None:
-    one = checks.Annotation(ast.parse("dict[str, int] | None", mode="eval").body)
-    same = checks.Annotation(ast.parse("(dict[str, int] | None)", mode="eval").body)
-    other = checks.Annotation(ast.parse("dict[str, str] | None", mode="eval").body)
+    one = domain.Annotation(ast.parse("dict[str, int] | None", mode="eval").body)
+    same = domain.Annotation(ast.parse("(dict[str, int] | None)", mode="eval").body)
+    other = domain.Annotation(ast.parse("dict[str, str] | None", mode="eval").body)
     assert one == same
     assert hash(one) == hash(same)
     assert one != other
 
 
 def test_names_equality() -> None:
-    one = checks.Names(("b", "a", "b"))
-    same = checks.Names(("a", "b"))
+    one = domain.Names(("b", "a", "b"))
+    same = domain.Names(("a", "b"))
     assert one == same
     assert hash(one) == hash(same)
-    assert one != checks.Names(("a",))
-    assert one - checks.Names(("b",)) == checks.Names(("a",))
-    assert one & checks.Names(("b", "c")) == checks.Names(("b",))
-    assert one | checks.Names(("c",)) == checks.Names(("c", "b", "a"))
+    assert one != domain.Names(("a",))
+    assert one - domain.Names(("b",)) == domain.Names(("a",))
+    assert one & domain.Names(("b", "c")) == domain.Names(("b",))
+    assert one | domain.Names(("c",)) == domain.Names(("c", "b", "a"))
 
 
 def test_kind_table_equality_and_lookup() -> None:
@@ -14647,19 +14652,19 @@ def test_kind_table_equality_and_lookup() -> None:
         ("shop.domain.order", "Order", "aggregate"),
         ("shop.domain.aaa", "Aaa", "spec"),
     )
-    kind_table = checks.KindTable(checks.KindTableSpec(entries))
-    assert kind_table == checks.KindTable(checks.KindTableSpec(tuple(reversed(entries))))
-    assert str(kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.order", "Order")))) == "aggregate"
-    assert str(kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.aaa", "Aaa")))) == "spec"
-    assert kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.zzz", "Zzz"))) is None
-    assert kind_table.block_of(checks.Symbol(checks.SymbolSpec("shop.domain.money", "Other"))) is None
-    assert checks.KindTable(checks.KindTableSpec(())).block_of(checks.Symbol(checks.SymbolSpec("a", "B"))) is None
+    kind_table = domain.KindTable(domain.KindTableSpec(entries))
+    assert kind_table == domain.KindTable(domain.KindTableSpec(tuple(reversed(entries))))
+    assert str(kind_table.block_of(domain.Symbol(domain.SymbolSpec("shop.domain.order", "Order")))) == "aggregate"
+    assert str(kind_table.block_of(domain.Symbol(domain.SymbolSpec("shop.domain.aaa", "Aaa")))) == "spec"
+    assert kind_table.block_of(domain.Symbol(domain.SymbolSpec("shop.domain.zzz", "Zzz"))) is None
+    assert kind_table.block_of(domain.Symbol(domain.SymbolSpec("shop.domain.money", "Other"))) is None
+    assert domain.KindTable(domain.KindTableSpec(())).block_of(domain.Symbol(domain.SymbolSpec("a", "B"))) is None
 
 
 def test_a_comparison_dunder_takes_no_domain_method_parameter_check() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/tag.py",
                 "shop.domain.tag",
@@ -14680,7 +14685,7 @@ def test_a_comparison_dunder_takes_no_domain_method_parameter_check() -> None:
 def test_an_import_declaration_is_credited_by_the_first_match_only() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(
+        for v in domain.Codebase(_spec(
             sources=(
                 (
                     "shop/domain/uses.py",
@@ -14703,7 +14708,7 @@ def test_an_import_declaration_is_credited_by_the_first_match_only() -> None:
 def test_a_spec_constructor_first_slot_is_self() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/domain/named.py",
                 "shop.domain.named",
@@ -14721,7 +14726,7 @@ def test_a_spec_constructor_first_slot_is_self() -> None:
 def test_a_store_yields_exactly_one_port() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             ("shop/application/ports/__init__.py", "shop.application.ports", "", True),
             (
                 "shop/application/ports/pair.py",
@@ -14826,8 +14831,8 @@ def _reexport_spec(
             False,
         ),
     ),
-) -> checks.CodebaseSpec:
-    return checks.CodebaseSpec(
+) -> domain.CodebaseSpec:
+    return domain.CodebaseSpec(
         sources=base + sources,
         declared="app",
         nested=(),
@@ -14839,8 +14844,8 @@ def _reexport_spec(
 def _ports_sources(
     quotes: str = "mod.application.ports.quotes",
     other: str = "mod.application.ports.other",
-) -> checks.CodebaseSpec:
-    return checks.CodebaseSpec(
+) -> domain.CodebaseSpec:
+    return domain.CodebaseSpec(
         sources=(
             (
                 "mod/application/ports/quotes.py",
@@ -14918,7 +14923,7 @@ def _ports_sources(
 def test_an_outcome_match_reads_through_a_re_export() -> None:
     clean = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=(
+        for v in domain.Codebase(_reexport_spec(sources=(
             (
                 "mod/application/service.py",
                 "mod.application.service",
@@ -14953,7 +14958,7 @@ def test_an_outcome_match_reads_through_a_re_export() -> None:
 
     stray = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=(
+        for v in domain.Codebase(_reexport_spec(sources=(
             (
                 "mod/application/service.py",
                 "mod.application.service",
@@ -14982,7 +14987,7 @@ def test_an_outcome_match_reads_through_a_re_export() -> None:
 def test_an_outcome_member_read_through_a_re_export_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=(
+        for v in domain.Codebase(_reexport_spec(sources=(
             (
                 "mod/application/service.py",
                 "mod.application.service",
@@ -15007,7 +15012,7 @@ def test_an_outcome_member_read_through_a_re_export_is_a_finding() -> None:
 def test_a_spec_read_through_a_re_export_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=(
+        for v in domain.Codebase(_reexport_spec(sources=(
             (
                 "mod/application/service.py",
                 "mod.application.service",
@@ -15032,7 +15037,7 @@ def test_a_spec_read_through_a_re_export_is_a_finding() -> None:
 def test_a_mapper_target_read_through_a_re_export_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=(
+        for v in domain.Codebase(_reexport_spec(sources=(
             (
                 "mod/application/service.py",
                 "mod.application.service",
@@ -15060,7 +15065,7 @@ def test_a_mapper_target_read_through_a_re_export_is_a_finding() -> None:
 def test_a_value_object_read_through_a_re_export_is_a_finding() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=(
+        for v in domain.Codebase(_reexport_spec(sources=(
             (
                 "mod/adapters/repositories/store.py",
                 "mod.adapters.repositories.store",
@@ -15090,7 +15095,7 @@ def test_a_value_object_read_through_a_re_export_is_a_finding() -> None:
 def test_an_action_port_read_through_a_re_export() -> None:
     good = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=_ports_sources().sources + (
+        for v in domain.Codebase(_reexport_spec(sources=_ports_sources().sources + (
             (
                 "mod/application/orchestrators/flow.py",
                 "mod.application.orchestrators.flow",
@@ -15112,7 +15117,7 @@ def test_an_action_port_read_through_a_re_export() -> None:
 
     bad = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_reexport_spec(sources=_ports_sources().sources + (
+        for v in domain.Codebase(_reexport_spec(sources=_ports_sources().sources + (
             (
                 "mod/application/orchestrators/flow.py",
                 "mod.application.orchestrators.flow",
@@ -15139,7 +15144,7 @@ def test_an_action_port_read_through_a_re_export() -> None:
 def test_a_package_is_imported_under_its_last_segment() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/domain/__init__.py",
                 "mod.domain",
@@ -15217,7 +15222,7 @@ def test_a_package_is_imported_under_its_last_segment() -> None:
 def test_a_package_never_exports_a_class_of_its_own_name() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/client/__init__.py",
                 "mod.client",
@@ -15276,10 +15281,16 @@ def test_a_package_never_exports_a_class_of_its_own_name() -> None:
     ), findings
 
 
-def test_a_shell_class_never_takes_the_name_of_its_module() -> None:
+def test_a_shell_package_never_exports_a_class_of_its_own_name() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "app/__init__.py",
+                "app",
+                "from app.app import App as App\n",
+                True,
+            ),
             (
                 "app/app.py",
                 "app.app",
@@ -15292,16 +15303,16 @@ def test_a_shell_class_never_takes_the_name_of_its_module() -> None:
             (
                 "app/test_app.py",
                 "app.test_app",
+                "import app\n"
                 "def test_app() -> None:\n"
-                "    assert True\n",
+                "    assert app.App is not None\n",
                 False,
             ),
         ))).violations()
     )
     assert any(
-        "app.app.App takes the name of its module; a shell module is imported as a "
-        "module, so a class in it never takes the module's own name, because the name "
-        "derived from the class rebinds the alias" in f
+        "app re-exports App; a package never exports a class of its own name, because "
+        "the name derived from the class rebinds the package's alias" in f
         for f in findings
     ), findings
 
@@ -15309,7 +15320,7 @@ def test_a_shell_class_never_takes_the_name_of_its_module() -> None:
 def test_a_role_init_binds_no_module() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/domain/__init__.py",
                 "mod.domain",
@@ -15353,7 +15364,7 @@ def test_a_role_init_binds_no_module() -> None:
 def test_no_shell_module_and_no_role_outside_the_domain_imports_a_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "kernel/__init__.py",
                 "kernel",
@@ -15465,7 +15476,7 @@ def test_no_shell_module_and_no_role_outside_the_domain_imports_a_kernel() -> No
 def test_a_two_hop_re_export_chain_resolves_to_the_defining_module() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "kernel/__init__.py",
                 "kernel",
@@ -15540,7 +15551,7 @@ def test_a_two_hop_re_export_chain_resolves_to_the_defining_module() -> None:
 def test_a_name_is_derived_from_the_type_it_carries() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/domain/__init__.py",
                 "mod.domain",
@@ -15557,47 +15568,148 @@ def test_a_name_is_derived_from_the_type_it_carries() -> None:
                 "        self.text = text\n"
                 "class Tag(ts.ValueObject):\n"
                 "    def __init__(self, spec: TagSpec) -> None:\n"
-                "        object.__setattr__(self, '_text', spec.text)\n",
+                "        object.__setattr__(self, '_text', spec.text)\n"
+                "    def relabel(self, tag_spec: TagSpec) -> Tag:\n"
+                "        return Tag(tag_spec)\n",
                 False,
             ),
             (
                 "mod/domain/test_tag.py",
                 "mod.domain.test_tag",
-                "import mod.domain.tag as tag\n"
+                "import mod.domain as domain\n"
                 "def test_a_tag_is_built_from_its_spec() -> None:\n"
-                "    made = tag.TagSpec('a')\n"
-                "    assert tag.Tag(made) is not None\n"
+                "    made = domain.TagSpec('a')\n"
+                "    assert domain.Tag(made) is not None\n"
+                "def test_a_relabel_answers_a_tag() -> None:\n"
+                "    other = domain.Tag(domain.TagSpec('a')).relabel(domain.TagSpec('b'))\n"
+                "    assert other is not None\n"
                 "def test_two_specs_of_one_type_keep_their_places() -> None:\n"
-                "    first = tag.TagSpec('a')\n"
-                "    second = tag.TagSpec('a')\n"
-                "    assert tag.Tag(first) == tag.Tag(second)\n",
+                "    first = domain.TagSpec('a')\n"
+                "    second = domain.TagSpec('a')\n"
+                "    assert domain.Tag(first) == domain.Tag(second)\n",
                 False,
             ),
         ))).violations()
     )
     assert any(
-        "mod.domain.tag.__init__ names spec for a tag_spec; a name is derived from "
-        "the type it carries, in snake_case, because a reader who knows the type then "
-        "knows the name" in f
+        "mod.domain.test_tag.test_a_tag_is_built_from_its_spec names made for a "
+        "tag_spec; a name is derived from the class it carries, in snake_case, read "
+        "through the annotation of the parameter, the constructor, or the field, "
+        "parameter, or module function a call is made on, because a name the analyzer "
+        "cannot check is a name it is not checking" in f
         for f in findings
     ), findings
     assert any(
-        "mod.domain.test_tag.test_a_tag_is_built_from_its_spec names made for a "
-        "tag_spec" in f
+        "mod.domain.test_tag.test_a_relabel_answers_a_tag names other for a tag" in f
         for f in findings
     ), findings
     assert not any(
         "test_two_specs_of_one_type_keep_their_places" in f for f in findings
     ), findings
-    assert not any(
-        "mod.domain.tag.__init__ names text" in f for f in findings
+    assert not any("mod.domain.tag.__init__" in f for f in findings), findings
+
+
+def test_a_call_the_analyzer_cannot_read_is_a_finding() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n"
+                "    def widen(self):\n"
+                "        return self\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "import mod.domain as domain\n"
+                "def test_widen() -> None:\n"
+                "    tag = domain.Tag('a')\n"
+                "    wider = tag.widen()\n"
+                "    assert wider is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain.test_tag.test_widen names wider from a call it cannot read; a name "
+        "is derived from the class it carries, in snake_case, read through the "
+        "annotation of the parameter, the constructor, or the field, parameter, or "
+        "module function a call is made on, because a name the analyzer cannot check "
+        "is a name it is not checking" in f
+        for f in findings
+    ), findings
+
+
+def test_a_constructors_one_spec_is_named_spec() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n"
+                "from mod.domain.tag import TagSpec as TagSpec\n"
+                "from mod.domain.tag import Word as Word\n"
+                "from mod.domain.tag import WordSpec as WordSpec\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class TagSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class WordSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, tag_spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', tag_spec.text)\n"
+                "class Word(ts.AggregateRoot):\n"
+                "    def __init__(self, word_spec: WordSpec) -> None:\n"
+                "        self.text = word_spec.text\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "import mod.domain as domain\n"
+                "def test_tag() -> None:\n"
+                "    assert domain.Tag(domain.TagSpec('a')) is not None\n"
+                "    assert domain.Word(domain.WordSpec('a')) is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain.tag.Tag.__init__ names its spec 'tag_spec'; a constructor's one "
+        "spec is named spec, because the annotation already says which spec it is" in f
+        for f in findings
+    ), findings
+    assert any(
+        "mod.domain.tag.Word.__init__ names its spec 'word_spec'; a constructor's one "
+        "spec is named spec, because the annotation already says which spec it is" in f
+        for f in findings
     ), findings
 
 
 def test_an_init_keeps_its_parameters_name_in_the_field_it_sets() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/application/__init__.py",
                 "mod.application",
@@ -15664,10 +15776,10 @@ def test_an_init_keeps_its_parameters_name_in_the_field_it_sets() -> None:
     ), findings
 
 
-def test_a_spec_and_a_dto_take_field_names_and_a_module_alias_keeps_its_name() -> None:
+def test_a_spec_and_a_dto_take_field_names() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "mod/domain/__init__.py",
                 "mod.domain",
@@ -15687,17 +15799,17 @@ def test_a_spec_and_a_dto_take_field_names_and_a_module_alias_keeps_its_name() -
                 "    def __init__(self, part: PartSpec) -> None:\n"
                 "        self.part = part\n"
                 "class Tag(ts.ValueObject):\n"
-                "    def __init__(self, tag_spec: TagSpec) -> None:\n"
-                "        object.__setattr__(self, '_text', tag_spec.part.text)\n",
+                "    def __init__(self, spec: TagSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', spec.part.text)\n",
                 False,
             ),
             (
                 "mod/domain/test_tag.py",
                 "mod.domain.test_tag",
-                "import mod.domain.tag as tag\n"
+                "import mod.domain as domain\n"
                 "def test_a_tag_reads_its_part() -> None:\n"
-                "    domain_tag = tag.Tag(tag.TagSpec(tag.PartSpec('a')))\n"
-                "    assert domain_tag is not None\n",
+                "    tag = domain.Tag(domain.TagSpec(domain.PartSpec('a')))\n"
+                "    assert tag is not None\n",
                 False,
             ),
         ))).violations()

@@ -25,10 +25,10 @@ class Clearance(ts.ValueObject):
 
     _verdict: str
 
-    def __init__(self, clearance_spec: ClearanceSpec) -> None:
-        if clearance_spec.verdict not in ("ok", "refused"):
-            raise errors.invalid("invalid_verdict", f"verdict {clearance_spec.verdict!r} is not a verdict")
-        object.__setattr__(self, "_verdict", clearance_spec.verdict)
+    def __init__(self, spec: ClearanceSpec) -> None:
+        if spec.verdict not in ("ok", "refused"):
+            raise errors.invalid("invalid_verdict", f"verdict {spec.verdict!r} is not a verdict")
+        object.__setattr__(self, "_verdict", spec.verdict)
 
     def decide(self) -> Verdict:
         if self._verdict == "ok":
@@ -73,8 +73,8 @@ class PartSpec(ts.Spec):
 
 class Part(ts.Entity):
 
-    def __init__(self, part_spec: PartSpec) -> None:
-        self._id = kernel.Identity(part_spec.id)
+    def __init__(self, spec: PartSpec) -> None:
+        self._id = kernel.Identity(spec.id)
 
     @property
     def identity(self) -> kernel.Identity:
@@ -100,11 +100,11 @@ class WidgetSpec(ts.Spec):
 
 class Widget(ts.AggregateRoot):
 
-    def __init__(self, widget_spec: WidgetSpec) -> None:
-        self._name = Name(widget_spec.name)
-        self._part = Part(widget_spec.part)
-        self._label = kernel.Label(widget_spec.name)
-        self._standing = Standing(widget_spec.standing)
+    def __init__(self, spec: WidgetSpec) -> None:
+        self._name = Name(spec.name)
+        self._part = Part(spec.part)
+        self._label = kernel.Label(spec.name)
+        self._standing = Standing(spec.standing)
 
     @property
     def identity(self) -> Name:

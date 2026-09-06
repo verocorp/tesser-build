@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
-import alpha.application.alpha_service as alpha_service
+import alpha.application as application
 import alpha.application.ports as ports
 import alpha.client as client
 
@@ -50,30 +50,30 @@ def add_request(name: str = "a", part: str = "p") -> client.AddRequest:
 class TestAlphaService:
 
     def test_add_answers_the_added_name(self) -> None:
-        application_alpha_service = alpha_service.AlphaService(FakeWidgetRepository(), FakeOkBetaCheck())
-        added = application_alpha_service.add(add_request())
-        assert added.name == "a"
+        alpha_service = application.AlphaService(FakeWidgetRepository(), FakeOkBetaCheck())
+        add_response = alpha_service.add(add_request())
+        assert add_response.name == "a"
 
     def test_a_new_part_is_taken_and_the_widget_saved_kept(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
         fake_ok_beta_check = FakeOkBetaCheck()
-        added = alpha_service.AlphaService(fake_widget_repository, fake_ok_beta_check).add(add_request(name="a", part="p"))
+        add_response = application.AlphaService(fake_widget_repository, fake_ok_beta_check).add(add_request(name="a", part="p"))
         assert fake_ok_beta_check.checked == []
-        assert added.standing == "kept"
+        assert add_response.standing == "kept"
         assert fake_widget_repository.standing_by_name == {"a": "kept"}
 
     def test_a_held_part_cleared_by_beta_is_persisted_as_kept(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
         fake_ok_beta_check = FakeOkBetaCheck()
-        added = alpha_service.AlphaService(fake_widget_repository, fake_ok_beta_check).add(add_request(name="a", part="a"))
+        add_response = application.AlphaService(fake_widget_repository, fake_ok_beta_check).add(add_request(name="a", part="a"))
         assert fake_ok_beta_check.checked == ["a"]
-        assert added.standing == "kept"
+        assert add_response.standing == "kept"
         assert fake_widget_repository.standing_by_name == {"a": "kept"}
 
     def test_a_held_part_refused_by_beta_is_persisted_as_released(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
         fake_refused_beta_check = FakeRefusedBetaCheck()
-        added = alpha_service.AlphaService(fake_widget_repository, fake_refused_beta_check).add(add_request(name="a", part="a"))
+        add_response = application.AlphaService(fake_widget_repository, fake_refused_beta_check).add(add_request(name="a", part="a"))
         assert fake_refused_beta_check.checked == ["a"]
-        assert added.standing == "released"
+        assert add_response.standing == "released"
         assert fake_widget_repository.standing_by_name == {"a": "released"}

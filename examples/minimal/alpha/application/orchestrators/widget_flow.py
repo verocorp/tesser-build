@@ -32,5 +32,5 @@ class WidgetFlow(ts.Orchestrator):
 
     def run(self, quote_request: ports.QuoteRequest) -> FlowResponse:
         name = domain.Name(quote_request.name)
-        quoted = self._quoting.quote(self._job_context, MapToQuoteRequest(name))
-        return MapToFlowResponse(quoted)
+        quote_response = self._quoting.quote(self._job_context, MapToQuoteRequest(name))
+        return MapToFlowResponse(quote_response)

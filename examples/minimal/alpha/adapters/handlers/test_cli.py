@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
-import alpha.adapters.handlers.cli as alpha_cli
+import alpha.adapters.handlers as handlers
 import alpha.client as client
-import protocol.cli as protocol_cli
+import protocol
 
 
 @ts.fake
@@ -17,6 +17,6 @@ class FakeClient(client.AlphaClient):
 class TestHandler:
 
     def test_add_prints_the_added_name(self) -> None:
-        handler = alpha_cli.Handler(FakeClient())
-        response = handler.add(protocol_cli.CliRequest(args=("a", "p")))
-        assert response.line == protocol_cli.Line(text="a")
+        handler = handlers.Handler(FakeClient())
+        cli_response = handler.add(protocol.CliRequest(args=("a", "p")))
+        assert cli_response.line == protocol.Line(text="a")
