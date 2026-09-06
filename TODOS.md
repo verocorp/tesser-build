@@ -19,6 +19,40 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `TB053`, `TB042`, and the kernel clauses) where the mechanics-doc template
   would give each its own section.
 
+- [ ] **Investigate reporting dead code in general.** The immediate case is a
+  module in a role package that nothing can reach: under the sibling ban
+  (`TB060`) no module of its own package may import it, its `__init__` does not
+  re-export from it, and no sibling test names it. It is unreachable and draws
+  no finding today. The totality clause built for it on 2026-09-05 — "a role
+  `__init__` re-exports from every module of its role" — was pulled because it
+  deadlocks against the standing clause "a role `__init__` re-exports only what
+  a module outside its role reads": for a module nothing outside reads, both
+  fire at once and no legal state exists short of deleting the file, which is
+  not what either message says. Moving the finding onto the module removes the
+  double report but leaves the author walked through two steps ("export it" →
+  "nobody reads it") to reach "delete it", and the analyzer has no clause of
+  that shape.
+
+  The narrow case is worth widening into one question — **what does the
+  analyzer owe the reader about a thing nothing uses?** Five shapes, and where
+  each stands today:
+
+  | shape | reported? | by what |
+  |---|---|---|
+  | an unreachable module in a role package | **no** | — (this item) |
+  | an exported name nothing outside the role reads | **yes** | `TB042`, "a role `__init__` re-exports only what a module outside its role reads" — role inits only; a kernel `__init__` and the tesser distribution `__init__` carry no totality clause |
+  | a class or function nothing names | **no** | — (the walk builds no whole-tree reference table; `TB074` only pairs a module with a sibling test, and `TB071`/`TB072` only say what a test module may hold) |
+  | a port no adapter implements | **no** | — (`TB081` reports an *orchestrator* depending on a port no application client speaks, which is a different question; nothing checks that a declared port has an implementation anywhere) |
+  | a declaration or marker that legalizes nothing | **yes** | `TB044` (an unused `import`/`stdlib` line in `.tesser-root`) and `TB090` (a debt marker that suppresses nothing) |
+
+  The two that already work share a shape worth copying: both are a *declaration*
+  checked against the uses the same walk can see, reported on the declaration,
+  with one obvious remedy (delete the line). The three that do not need a
+  whole-tree reference table the analyzer does not build, and a decision about
+  what the remedy line should say when the remedy is "delete this file". Decide
+  whether dead code is the analyzer's business at all before building any of
+  them — a false positive here tells someone to delete working code.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five
