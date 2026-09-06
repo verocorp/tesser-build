@@ -56,25 +56,36 @@ class TestRestateWorkflowJobs:
 
 class TestRestateSerdes:
 
-    def test_the_start_request_shim_carries_the_orders_snapshot(self) -> None:
-        serde = restate_jobs.RestateStartRequestSerde()
-        raw = serde.serialize(start_request())
-        assert raw == b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
-        back = serde.deserialize(raw)
-        assert back is not None
-        assert back.order.sku == order.Sku("widget")
+    def test_each_shim_writes_what_its_relay_snapshot_writes(self) -> None:
+        asked = order_relay.QuoteRequest(sku="widget")
+        answered = order_relay.QuoteResponse(cents=250)
+        ran = order_relay.RunResponse(order_id="o1", total_cents=500)
+        started = start_request()
+        assert restate_jobs.RestateStartRequestSerde().serialize(started) == order_relay.StartRequestSnapshot().serialize(started)
+        assert restate_jobs.RestateQuoteRequestSerde().serialize(asked) == order_relay.QuoteRequestSnapshot().serialize(asked)
+        assert restate_jobs.RestateQuoteResponseSerde().serialize(answered) == order_relay.QuoteResponseSnapshot().serialize(answered)
+        assert restate_jobs.RestateRunResponseSerde().serialize(ran) == order_relay.RunResponseSnapshot().serialize(ran)
 
-    def test_the_quote_shims_round_trip_their_primitives(self) -> None:
-        asked = restate_jobs.RestateQuoteRequestSerde()
-        answered = restate_jobs.RestateQuoteResponseSerde()
-        assert asked.deserialize(asked.serialize(order_relay.QuoteRequest(sku="widget"))) == order_relay.QuoteRequest(sku="widget")
-        assert answered.deserialize(answered.serialize(order_relay.QuoteResponse(cents=250))) == order_relay.QuoteResponse(cents=250)
+    def test_each_shim_reads_back_what_it_wrote(self) -> None:
+        asked = order_relay.QuoteRequest(sku="widget")
+        answered = order_relay.QuoteResponse(cents=250)
+        ran = order_relay.RunResponse(order_id="o1", total_cents=500)
+        request_serde = restate_jobs.RestateQuoteRequestSerde()
+        response_serde = restate_jobs.RestateQuoteResponseSerde()
+        run_serde = restate_jobs.RestateRunResponseSerde()
+        assert request_serde.deserialize(request_serde.serialize(asked)) == asked
+        assert response_serde.deserialize(response_serde.serialize(answered)) == answered
+        assert run_serde.deserialize(run_serde.serialize(ran)) == ran
 
-    def test_an_empty_body_is_no_message(self) -> None:
-        assert restate_jobs.RestateStartRequestSerde().serialize(None) == b""
-        assert restate_jobs.RestateStartRequestSerde().deserialize(b"") is None
-        assert restate_jobs.RestateRunResponseSerde().serialize(None) == b""
-        assert restate_jobs.RestateRunResponseSerde().deserialize(b"") is None
+    def test_an_empty_body_is_no_message_on_every_shim(self) -> None:
+        for serde in (
+            restate_jobs.RestateStartRequestSerde(),
+            restate_jobs.RestateQuoteRequestSerde(),
+            restate_jobs.RestateQuoteResponseSerde(),
+            restate_jobs.RestateRunResponseSerde(),
+        ):
+            assert serde.serialize(None) == b""
+            assert serde.deserialize(b"") is None
 
 
 class TestRestateOrderRelay:

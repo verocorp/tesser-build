@@ -75,12 +75,13 @@ each would still have a method that cannot run — the `None` at least says
 which leg an instance is for, at the one place that builds it.
 
 A job hands a relay message on whole and reads nothing off it: both
-`RestateActionJobs.quote` and `RestateWorkflowJobs.run` pass `request`
-straight through. The two places that do read `.order` are the serde shim
-(`RestateStartRequestSerde`, whose job is to write the aggregate down) and
-`RestateOrderRelay.start`, which needs `str(request.order.identity)` for the
-workflow key Restate's ingress requires. Both are separate classes from the
-jobs, which is what keeps the rule greppable.
+`RestateActionJobs.quote` and `RestateWorkflowJobs.run` pass `request` straight
+through. Stronger, and greppable: **no field name of any message or domain
+object appears anywhere in `adapters/jobs/restate.py`** — not `sku`, not
+`cents`, not `quantity`, not `order_id`, not `total_cents`. Every encoding is a
+snapshot in `order_relay.py`, and the module's one remaining read is
+`str(request.order.identity)` in `RestateOrderRelay.start`, for the workflow key
+Restate's ingress requires.
 
 ## The three application kinds, and where each lives
 
@@ -92,7 +93,7 @@ This tree is the worked example for `docs/design-app-service-types.md`:
 - `OrderOrchestrator(ts.Orchestrator)` in `application/orchestrators/` —
   not a service. Built per invocation by the job with that invocation's
   `OrderRelay`; stores nothing but it; takes the relay's own `StartRequest`
-  — reading the `Order` straight off it — and returns its own `RunResponse`.
+  — reading the `Order` straight off it — and returns the relay's `RunResponse`.
   It has no job context and no generic call.
 - `OrderActions(ts.Actions)` beside the services — a class of actions over
   exactly one port (`CatalogRepository`), each method making exactly one call
@@ -104,9 +105,9 @@ And the adapter kind that ties them to the engine, all in one module,
 `adapters/jobs/restate.py`: `RestateActionJobs(ts.Job)` declaring the
 `OrderingActions` service over the application client,
 `RestateWorkflowJobs(ts.Job)` declaring the `Ordering` workflow and building
-`RestateOrderRelay` per invocation, and four thin serde shims. A handler
-calls the context client; a job calls an application client or constructs an
-orchestrator.
+`RestateOrderRelay` per invocation, and four compatibility shims that know
+nothing but `None` and which relay snapshot to call. A handler calls the context
+client; a job calls an application client or constructs an orchestrator.
 
 ## What the engine is, in this anatomy
 
@@ -197,13 +198,16 @@ receive side of one message are not independent boundaries: `RunRequest` *is*
 `order_relay.StartRequest`, and the action's `QuoteRequest` / `QuoteResponse`
 are the relay's own. The gateway sends the relay's DTO, the job receives it,
 and `application/client/order_actions.py` speaks the same two shapes to the
-job. All four exist exactly once, in `application/relays/order_relay.py`; the
-one exception is the workflow's result, `RunResponse`, which no relay speaks
-and which the orchestrators module therefore declares itself.
+job. The workflow's result, `RunResponse`, is a relay message too — the engine
+stores it and the ingress hands it back — so it lives there with the rest. All
+five exist exactly once, in `application/relays/order_relay.py`.
 
-**The aggregate's wire form is one explicit serde, and it belongs to the
-relay.** `OrderSnapshot(ts.Serde)` sits in `order_relay.py` beside the messages
-it serves, and it is written out longhand rather than derived:
+**Every wire form is an explicit snapshot beside its message, and they all
+belong to the relay.** `order_relay.py` carries five: `OrderSnapshot` for the
+aggregate, and `StartRequestSnapshot`, `QuoteRequestSnapshot`,
+`QuoteResponseSnapshot`, `RunResponseSnapshot` for the messages that cross.
+Each is a `ts.Serde` with exactly `serialize` and `deserialize`, written out
+longhand rather than derived:
 
 ```python
 class OrderSnapshot(ts.Serde):
@@ -235,20 +239,48 @@ constructor, the serialization norm's one inbound path, so every invariant
 re-runs on the way in and a journal holding an order of zero units is refused on
 replay rather than hydrated. Renaming `_sku` is now an ordinary rename.
 
-The body `POST /Ordering/o1/run/send` carries is:
+`StartRequestSnapshot` is the whole of what a workflow start puts on the wire —
+the order it carries, and nothing wrapped around it:
+
+```python
+class StartRequestSnapshot(ts.Serde):
+
+    def serialize(self, request: StartRequest) -> bytes:
+        return OrderSnapshot().serialize(request.order)
+
+    def deserialize(self, buf: bytes) -> StartRequest:
+        return StartRequest(order=OrderSnapshot().deserialize(buf))
+```
+
+so the body `POST /Ordering/o1/run/send` carries is:
 
 ```json
 {"order_id": "o1", "sku": "widget", "quantity": 2}
 ```
 
-The SDK cannot serialize a `ts.Request` on its own —
-`restate.serde.DefaultSerde` handles msgspec Structs, Pydantic models, and
-dataclasses; anything else falls through to `json.dumps(obj)` — so
-`adapters/jobs/restate.py` carries four thin shims that satisfy
-`restate.serde.Serde[T]`, one per message the SDK has to move.
-`RestateStartRequestSerde` delegates to `OrderSnapshot` and does nothing else;
-the other three are one `json.dumps` of the DTO's primitives each. They are
-bound at the decorators in the jobs:
+**No field name of any message or domain object appears in
+`adapters/jobs/restate.py`.** The SDK cannot serialize a `ts.Request` on its own
+— `restate.serde.DefaultSerde` handles msgspec Structs, Pydantic models, and
+dataclasses; anything else falls through to `json.dumps(obj)` — so that module
+carries four compatibility shims, one per message the SDK moves. A shim does two
+things and no more: answer the SDK's `None`/empty convention, and delegate to
+the relay's snapshot.
+
+```python
+class RestateStartRequestSerde(ts.Serde, restate.serde.Serde[order_relay.StartRequest]):
+
+    def serialize(self, obj: order_relay.StartRequest | None) -> bytes:
+        if obj is None:
+            return b""
+        return order_relay.StartRequestSnapshot().serialize(obj)
+
+    def deserialize(self, buf: bytes) -> order_relay.StartRequest | None:
+        if not buf:
+            return None
+        return order_relay.StartRequestSnapshot().deserialize(buf)
+```
+
+They are bound at the decorators in the jobs:
 
 ```python
 @self.workflow.main(
@@ -257,10 +289,16 @@ bound at the decorators in the jobs:
 )
 ```
 
-None of them is generic. There is no `Serde[T]` that reflects over a class; four
-explicit shims cost more lines and say exactly what crosses. A field added to a
-message still changes the bytes an in-flight journal already holds — payload
-versioning on a durable leg is a rule this tree does not yet make.
+None of them is generic and none of them knows a field. What crosses is decided
+in one module — the relay's — and the engine adapter only carries it. A field
+added to a message still changes the bytes an in-flight journal already holds;
+payload versioning on a durable leg is a rule this tree does not yet make.
+
+The one thing `restate.py` still reads off a message is the **workflow key**:
+`RestateOrderRelay.start` does `str(request.order.identity)`, because Restate's
+ingress addresses a workflow by key and the aggregate's identity is the key. That
+is the aggregate's public identity, not an internal, but it is still the engine
+module reaching into a message.
 
 Binding it on the handler is enough for both directions: the ingress client
 reads `handler_from_callable(tpe).handler_io` for its serde and its
@@ -296,8 +334,10 @@ The sibling test builds the same real client over a real socket listening on
 `127.0.0.1:0`, hands the relay the real `run` handler off a real
 `RestateWorkflowJobs`, and checks the request line the SDK forms from it
 (`POST /Ordering/o1/run/send`). It asserts the route and the key, not the body
-— the payload is pinned once, in `relays/test_order_relay.py`, where the
-snapshot is defined. A transport cannot be injected through a base URL any
+— every payload is pinned once, in `relays/test_order_relay.py`, where the
+snapshots are defined; the Restate tests assert routing, delegation, and the
+SDK's `None`/empty convention, and never a literal body. A transport cannot be
+injected through a base URL any
 more, and inventing a constructor parameter only tests would pass is worse than
 talking to a real socket — so the test talks to a real socket, and the
 unreachable case just points at a closed port.

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import collections.abc as abc
-import json
 import typing
 
 import tesser.adapters as ts
@@ -22,12 +21,12 @@ class RestateStartRequestSerde(ts.Serde, restate.serde.Serde[order_relay.StartRe
     def serialize(self, obj: order_relay.StartRequest | None) -> bytes:
         if obj is None:
             return b""
-        return order_relay.OrderSnapshot().serialize(obj.order)
+        return order_relay.StartRequestSnapshot().serialize(obj)
 
     def deserialize(self, buf: bytes) -> order_relay.StartRequest | None:
         if not buf:
             return None
-        return order_relay.StartRequest(order=order_relay.OrderSnapshot().deserialize(buf))
+        return order_relay.StartRequestSnapshot().deserialize(buf)
 
 
 class RestateQuoteRequestSerde(ts.Serde, restate.serde.Serde[order_relay.QuoteRequest]):
@@ -35,12 +34,12 @@ class RestateQuoteRequestSerde(ts.Serde, restate.serde.Serde[order_relay.QuoteRe
     def serialize(self, obj: order_relay.QuoteRequest | None) -> bytes:
         if obj is None:
             return b""
-        return json.dumps({"sku": obj.sku}).encode()
+        return order_relay.QuoteRequestSnapshot().serialize(obj)
 
     def deserialize(self, buf: bytes) -> order_relay.QuoteRequest | None:
         if not buf:
             return None
-        return order_relay.QuoteRequest(sku=json.loads(buf)["sku"])
+        return order_relay.QuoteRequestSnapshot().deserialize(buf)
 
 
 class RestateQuoteResponseSerde(ts.Serde, restate.serde.Serde[order_relay.QuoteResponse]):
@@ -48,28 +47,25 @@ class RestateQuoteResponseSerde(ts.Serde, restate.serde.Serde[order_relay.QuoteR
     def serialize(self, obj: order_relay.QuoteResponse | None) -> bytes:
         if obj is None:
             return b""
-        return json.dumps({"cents": obj.cents}).encode()
+        return order_relay.QuoteResponseSnapshot().serialize(obj)
 
     def deserialize(self, buf: bytes) -> order_relay.QuoteResponse | None:
         if not buf:
             return None
-        return order_relay.QuoteResponse(cents=json.loads(buf)["cents"])
+        return order_relay.QuoteResponseSnapshot().deserialize(buf)
 
 
-class RestateRunResponseSerde(ts.Serde, restate.serde.Serde[order_orchestrator.RunResponse]):
+class RestateRunResponseSerde(ts.Serde, restate.serde.Serde[order_relay.RunResponse]):
 
-    def serialize(self, obj: order_orchestrator.RunResponse | None) -> bytes:
+    def serialize(self, obj: order_relay.RunResponse | None) -> bytes:
         if obj is None:
             return b""
-        return json.dumps({"order_id": obj.order_id, "total_cents": obj.total_cents}).encode()
+        return order_relay.RunResponseSnapshot().serialize(obj)
 
-    def deserialize(self, buf: bytes) -> order_orchestrator.RunResponse | None:
+    def deserialize(self, buf: bytes) -> order_relay.RunResponse | None:
         if not buf:
             return None
-        read = json.loads(buf)
-        return order_orchestrator.RunResponse(
-            order_id=read["order_id"], total_cents=read["total_cents"]
-        )
+        return order_relay.RunResponseSnapshot().deserialize(buf)
 
 
 class RestateOrderRelay(ts.Gateway):
@@ -93,7 +89,7 @@ class RestateOrderRelay(ts.Gateway):
                 await restate.client.Client(http).workflow_send(self._run, key=keyed, arg=request)
         except (restate.HttpError, httpx.TransportError) as e:
             raise errors.InfraError(f"restate ingress refused the workflow: {e}") from e
-        return order_relay.StartResponse(order_id=keyed)
+        return order_relay.StartResponse(keyed)
 
     async def quote(self, request: order_relay.QuoteRequest) -> order_relay.QuoteResponse:
         if self._ctx is None:
@@ -142,7 +138,7 @@ class RestateWorkflowJobs(ts.Job):
         )
         async def run(
             ctx: restate.WorkflowContext, request: order_relay.StartRequest
-        ) -> order_orchestrator.RunResponse:
+        ) -> order_relay.RunResponse:
             orchestrator = order_orchestrator.OrderOrchestrator(
                 RestateOrderRelay(ingress, run, quote, ctx)
             )
