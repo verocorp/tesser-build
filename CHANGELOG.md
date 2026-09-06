@@ -30,6 +30,17 @@ analyzer was silent and `mypy --strict` was clean.
   convention the interpreter does not enforce, because the analyzer now checks
   it at every read site.
 
+### Fixed
+- **The rulebook's diagnostics reach the maintainer.** `srv/cli/rules.py`
+  collapsed every non-usage exception into the string `unexpected error`, so an
+  authored diagnostic like `checks.py:7781: no reader name for message hole
+  {node.value.id}; extend HOLE_NAMES` was discarded and the only way to read it
+  was to construct `Rulebook` by hand. Those twelve `RuntimeError`s are now
+  `errors.invalid(...)`, and the host grows the `DomainError` and `InfraError`
+  arms that `examples/minimal/srv/cli/main.py` already teaches. The bare
+  `except Exception` arm stays, so an incidental crash still reports
+  `unexpected error` and leaks no internals.
+
 ### Known
 - The clause has nothing to check against a package whose `__init__` is empty,
   since an empty export list produces no rows. `TB042`'s existing clauses govern
