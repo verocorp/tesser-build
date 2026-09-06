@@ -1,5 +1,7 @@
 from __future__ import annotations  # tesser:debt TB041
 
+import urllib.parse
+
 import tesser.adapters as ts
 import httpx
 import restate
@@ -24,7 +26,7 @@ class RestateOrderOrchestratorRunner(ts.Gateway):
             async with httpx.AsyncClient(base_url=self._ingress) as async_client:
                 await restate.client.Client(async_client).workflow_send(
                     self._restate_order_runtime.order_orchestrator_handler,
-                    key=key,
+                    key=urllib.parse.quote(key, safe=""),
                     arg=order_orchestrator_request,
                 )
         except (restate.HttpError, httpx.TransportError) as transport_error:

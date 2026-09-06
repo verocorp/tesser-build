@@ -6,6 +6,7 @@ import typing
 import tesser.application as ts
 
 import ordering.domain as domain
+import tesser.errors as errors
 
 
 class OrderSnapshot(ts.Serde):  # tesser:debt TB052
@@ -21,6 +22,14 @@ class OrderSnapshot(ts.Serde):  # tesser:debt TB052
 
     def deserialize(self, buf: bytes) -> domain.Order:
         snapshot = json.loads(buf)
+        if not (
+            isinstance(snapshot, dict)
+            and isinstance(snapshot.get("order_id"), str)
+            and isinstance(snapshot.get("sku"), str)
+            and isinstance(snapshot.get("quantity"), int)
+            and not isinstance(snapshot.get("quantity"), bool)
+        ):
+            raise errors.invalid("malformed_order_snapshot", "an order snapshot is order_id, sku, and quantity")
         return domain.Order(
             domain.OrderSpec(
                 order_id=snapshot["order_id"],

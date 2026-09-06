@@ -116,7 +116,18 @@ anywhere under `adapters/runtimes/` or `adapters/runners/` — not `sku`, not
 a snapshot beside its message in `relays/`, and the one read left is
 `str(order_orchestrator_request.order.identity)` in
 `RestateOrderOrchestratorRunner.start_order_orchestrator`, for the workflow
-key Restate's ingress requires.
+key Restate's ingress requires. The SDK splices that key into the request
+path unencoded (`restate/client.py`, `endpoint += f"/{key}"`), and the id
+comes from the public body, so the runner percent-encodes it
+(`urllib.parse.quote(key, safe="")`); an `order_id` of `../admin` reaches the
+ingress as `/OrderOrchestrator/..%2Fadmin/run/send`, not as a different route.
+
+An `OrderSnapshot` on the way in checks the shape of what it reads before
+the constructor sees it: `order_id` and `sku` must be strings and `quantity`
+an `int` that is not a `bool`, or the snapshot is refused as a validation
+error. The value objects guard their invariants, not their types, so without
+that check a list where a `sku` should be builds an `Order` that raises a
+`TypeError` later, inside the orchestrator, where Restate would retry it.
 
 ## The three application kinds, and where each lives
 
@@ -391,3 +402,16 @@ sends SIGINT.
   two Restate objects by name. A second engine (an in-process one for tests,
   or Temporal) would implement the same two runner protocols over its own
   runtime, and the component would have to publish that too.
+- The deployment endpoint at `/restate` is mounted on the same public bind as
+  `POST /orders`, with no `identity_keys`. Anyone who can reach port 8000 can
+  `POST /restate/invoke/OrderActions/prepare_quote` with a body of their own
+  and bypass the service. A deployment passes Restate's request-identity keys
+  to `restate.app(...)` or serves the endpoint on a bind only the Restate
+  server reaches.
+- An invalid snapshot that reaches the deployment endpoint directly (a
+  `quantity` of `0` posted to the ingress rather than to `POST /orders`) is
+  refused inside the SDK's input deserialization, which wraps every exception
+  as a `TerminalError` with status 500 (`restate/handler.py`); the same body
+  at `POST /orders` is a 422. Restate does not retry it, but the status is
+  the SDK's, not the domain's. Validating inside the handler instead would
+  make the wire shape something other than the aggregate.
