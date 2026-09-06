@@ -1148,7 +1148,7 @@ class KindTable(ts.ValueObject):
         wanted_module = str(symbol.module())
         wanted_name = str(symbol.name())
         index = bisect.bisect_left(
-            self._entries, (wanted_module, wanted_name), key=lambda item: (item[0], item[1])
+            self._entries, (wanted_module, wanted_name), key=lambda item: (item[0], item[1])  # tesser:debt TB023
         )
         if (
             index < len(self._entries)
@@ -2709,7 +2709,7 @@ class Body(ts.ValueObject):
                 facts.append((node.lineno, "decision", "not", ()))
             elif isinstance(node, ast.comprehension) and node.ifs:
                 facts.append((node.ifs[0].lineno, "decision", "filter", ()))
-        matches.sort(key=lambda node: node.lineno)
+        matches.sort(key=lambda node: node.lineno)  # tesser:debt TB023
         for node in matches:
             traits: list[str] = []
             subject = node.subject
@@ -5043,7 +5043,7 @@ class ClassDecl(ts.Entity):
                 elements = list(annotation.slice_names())
                 named = bool(elements) and all(
                     element != "?" and (
-                        lambda resolved: resolved is not None and str(kinds.block_of(resolved)) == "job"
+                        lambda resolved: resolved is not None and str(kinds.block_of(resolved)) == "job"  # tesser:debt TB023
                     )(self._scope.resolve(Text(element)))
                     for element in elements
                 )
@@ -6543,7 +6543,7 @@ class Module(ts.Entity):
                 elif isinstance(node, ast.AnnAssign):
                     sites.append(node.annotation)
         found: list[Violation] = []
-        for site in sorted(sites, key=lambda item: (item.lineno, item.col_offset)):
+        for site in sorted(sites, key=lambda item: (item.lineno, item.col_offset)):  # tesser:debt TB023
             written = Annotation(site)
             if not written.quoted():
                 continue
@@ -6580,6 +6580,27 @@ class Module(ts.Entity):
                     "Any names nothing, Callable names a function where a port would "
                     "name what it answers, and Awaitable names the waiting instead of "
                     "the answer",
+                ))
+            )
+        return tuple(found)
+
+    def lambda_violations(self) -> tuple[Violation, ...]:
+        module_name = self._name
+        lines: list[int] = []
+        for stmt in self._body:
+            for node in ast.walk(stmt):
+                if isinstance(node, ast.Lambda):
+                    lines.append(node.lineno)
+        found: list[Violation] = []
+        for line in sorted(lines):
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    line,
+                    "TB023",
+                    f"{module_name} writes a lambda; a function is declared with a name — "
+                    "a lambda is behavior no rule can read, and an ordering belongs on the "
+                    "object it orders while a deferred call belongs behind a port",
                 ))
             )
         return tuple(found)
@@ -9503,7 +9524,7 @@ class Module(ts.Entity):
                 else None,
                 fn.name == "__init__" and block in SPEC_BLOCKS,
             )
-        return tuple(sorted(found, key=lambda v: int(v.line())))
+        return tuple(sorted(found, key=lambda v: int(v.line())))  # tesser:debt TB023
 
     def class_decls(self, registry: RegistrySpec) -> tuple[ClassDecl, ...]:
         scope = ScopeSpec(
@@ -10014,7 +10035,7 @@ class Codebase(ts.AggregateRoot):
                             and (field := reader.ref(Annotation(arg.annotation))) is not None
                         }
         self._spec_methods = {name: made for name, made in returning.items() if made is not None}
-        self._spec_shared.sort(key=lambda entry: entry[:3])
+        self._spec_shared.sort(key=lambda entry: entry[:3])  # tesser:debt TB023
         registry = RegistrySpec(
             kind_rows,
             domain_enum_rows,
@@ -10062,6 +10083,7 @@ class Codebase(ts.AggregateRoot):
         for module in self._modules:
             found.extend(module.annotation_violations())
             found.extend(module.type_name_violations())
+            found.extend(module.lambda_violations())
             found.extend(module.comment_violations())
             found.extend(module.double_violations())
             found.extend(module.shadowing_violations())

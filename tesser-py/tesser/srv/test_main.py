@@ -28,7 +28,7 @@ def test_main_exits_zero_when_run_returns_zero() -> None:
     sys.argv = ["prog"]
     try:
         with pytest.raises(SystemExit) as leaving:
-            srv.main(lambda argv: 0)
+            srv.main(lambda argv: 0)  # tesser:debt TB023
     finally:
         sys.argv = held
     assert leaving.value.code == 0

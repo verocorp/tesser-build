@@ -91,6 +91,20 @@ for `Awaitable`. The async protocols the store contract needs stay legal —
 and `typing.AsyncIterator[...]` is what its implementation yields; both name a
 shape the caller can use.
 
+**A function is declared with a name** (TB023, maintainer ruling 2026-09-06).
+A `lambda` anywhere in a module is a finding. It is the value half of the rule
+above: `TB022` bans `Callable` in type position, and a lambda is what that
+type describes, so banning one without the other leaves the same behavior
+passed the same way with the annotation rewritten. Two shapes, and they want
+opposite fixes. A `sorted(...)`/`.sort(key=...)` lambda **is an ordering
+rule** — `key=lambda row: (row.decision == _ALLOWED, str(row.slug))` is a
+comparison and a representation read, the shapes a service body may not
+carry — and it belongs on the object being ordered, as a method that answers
+the rank. A lambda passed as a value is **deferred behavior**, and it belongs
+behind a `ts.Port` or a named module function that the import rules can see.
+Renaming a lambda to a nested `def` satisfies the letter of the rule and
+moves nothing; the finding is asking for one of the two relocations above.
+
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
 compare by type and content, and a subclass that tries to override

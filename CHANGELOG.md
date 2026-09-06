@@ -7,10 +7,12 @@ carries the analyzer package's own version — separate streams.)
 
 ## [0.0.97.0] - 2026-09-06
 
-A type names what the value is. `TB022` reports `Any`, `Callable` and
-`Awaitable` wherever a module names them. This is the checker half only: the
-21 sites in this repo that name one carry a site-level `# tesser:debt TB022`,
-and making them conformant is the follow-up.
+A type names what the value is, and a function is declared with a name.
+`TB022` reports `Any`, `Callable` and `Awaitable` wherever a module names
+them; `TB023` reports a `lambda` anywhere. They are one rule seen from the
+type side and the value side, which is why they ship together. This is the
+checker half only: the 38 lines in this repo that carry one draw a site-level
+`# tesser:debt`, and making them conformant is the follow-up.
 
 ### Added
 - **`TB022` — a type names what the value is.** `Module.type_name_violations`
@@ -40,14 +42,37 @@ and making them conformant is the follow-up.
   abc.Callable[[typing.Any, I], abc.Awaitable[O]]`, which draws all three
   names on one line and is copied into every job-context fake. `checks.py`
   itself is clean — its `"Callable"` and `"Any"` are string constants.
-- **The rest of each family is an open ruling** (`TODOS.md`): `Coroutine` and
-  `AnyStr` (the one-token evasions), `object` in type position, `typing.cast`
-  and `# type: ignore`, and `lambda` as the `Callable` literal.
+- **`TB023` — a function is declared with a name.** `Module.lambda_violations`
+  reports an `ast.Lambda` anywhere in a module, at the line it is written
+  (maintainer ruling 2026-09-06, taken off `TB022`'s open list during review).
+  It is the value half of `TB022`: `Callable` is banned in type position and a
+  lambda is what that type describes, so banning one without the other leaves
+  the same behavior passed the same way with the annotation rewritten. The pair
+  is what closes `tesser.errors.collect` — the signature drew `TB022` while its
+  three call sites in `examples/errorspy` drew nothing.
+- **18 lambdas over 17 lines, all marked `# tesser:debt TB023`**, in two
+  populations that want opposite fixes. Seven are `sort`/`sorted`/`bisect`
+  `key=` arguments where the lambda *is* an ordering rule and belongs on the
+  object it orders; the specimen is
+  `examples/python-app/reports/domain/report.py:144`, which ranks `LinkVerdict`
+  rows by `(row.decision == _ALLOWED, str(row.slug))` — a comparison and a
+  representation read, the shapes `TB082` reports in a service body, inside a
+  domain object where `TB082` does not look. Eleven are deferred calls that
+  belong behind a port or a named function. Six of the 17 lines are in
+  `tessercheck-py` itself, five of them `sorted(key=...)`: this is the first
+  rule in the family the analyzer does not pass unmarked.
+- **The remaining `TB022` family members stay an open ruling** (`TODOS.md`):
+  `Coroutine` and `AnyStr` (the one-token evasions), `object` in type position,
+  `typing.cast` and `# type: ignore`. `errors.collect`'s redesign is tracked
+  separately — its carrier is already named `NeedsDesignFieldProblem`, so this
+  wave marks it and changes nothing there.
 - **Renderings** (`docs/skill-authoring.md` P5): `skills/tesser-build/python.md`
-  gains "A type names what the value is" beside the unquoted-annotation rule
-  (skill-version 66 → 67); `rationale/coverage.md` gains the `TB022`
-  enforcement row and its skill-materializations row; `roadmap/registry.json`
-  adds `TB022` to `norm-annotations`, which regenerates `ROADMAP.md`.
+  gains "A type names what the value is" and "A function is declared with a
+  name" beside the unquoted-annotation rule (skill-version 66 → 68);
+  `rationale/coverage.md` gains both enforcement rows and both
+  skill-materializations rows; `roadmap/registry.json` adds `TB022` to
+  `norm-annotations` and a new `norm-named-functions` row for `TB023`, which
+  regenerates `ROADMAP.md`.
 
 ## [0.0.96.0] - 2026-08-30
 

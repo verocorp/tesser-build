@@ -38,7 +38,7 @@ def test_wrap_field_override_wins() -> None:
 
 
 def test_collect_passes_when_every_field_is_valid() -> None:
-    errors.collect(name=lambda: "ok", slug=lambda: "ok")
+    errors.collect(name=lambda: "ok", slug=lambda: "ok")  # tesser:debt TB023
 
 
 def test_collect_gathers_validation_problems_into_one_error() -> None:

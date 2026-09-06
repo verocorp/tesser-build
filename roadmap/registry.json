@@ -373,6 +373,20 @@
       "rationale": []
     },
     {
+      "key": "norm-named-functions",
+      "title": "Norm: named functions",
+      "py_example": [
+        "examples/minimal",
+        "examples/ports"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB023"
+      ],
+      "rationale": []
+    },
+    {
       "key": "norm-serialization",
       "title": "Norm: serialization",
       "skill": "serialization.md",

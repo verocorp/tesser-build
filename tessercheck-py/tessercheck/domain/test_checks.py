@@ -12824,6 +12824,40 @@ def test_any_callable_and_awaitable_are_findings_wherever_they_are_named() -> No
     assert not any("names Anywhere" in f for f in findings)
 
 
+def test_a_lambda_is_a_finding_as_a_sort_key_and_as_a_deferred_call() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/anon.py",
+                "shop.adapters.gateways.anon",
+                "import tesser.adapters as ts\n"
+                "class AnonGateway(ts.Gateway):\n"
+                "    def ranked(self, rows: list[str]) -> list[str]:\n"
+                "        rows.sort(key=lambda row: (row.startswith('a'), row))\n"
+                "        return rows\n"
+                "    def deferred(self) -> None:\n"
+                "        run(first=lambda: 1, second=lambda: 2)\n"
+                "    def named(self, rows: list[str]) -> list[str]:\n"
+                "        def rank(row: str) -> str:\n"
+                "            return row\n"
+                "        rows.sort(key=rank)\n"
+                "        return rows\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "anon.py:4: TB023 shop.adapters.gateways.anon writes a lambda; a function is "
+        "declared with a name — a lambda is behavior no rule can read, and an ordering "
+        "belongs on the object it orders while a deferred call belongs behind a port" in f
+        for f in findings
+    )
+    assert len([f for f in findings if "anon.py:7: TB023" in f]) == 1
+    assert not any("anon.py:9: TB023" in f for f in findings)
+    assert not any("anon.py:11: TB023" in f for f in findings)
+
+
 def test_a_gateway_never_holds_an_invocations_job_context() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

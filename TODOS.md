@@ -480,7 +480,7 @@ too — so today the analyzer reports a metadata string as a quoted type.
   `test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it`
   locks the present behaviour so a change is visible.
 
-## How far TB022's families reach (2026-09-06, v0.0.97.0)
+## How far TB022/TB023's families reach (2026-09-06, v0.0.97.0)
 
 `TB022` bans exactly three names — `Any`, `Callable`, `Awaitable` — wherever a
 module names them. Each sits at the head of a family, and the rest of each
@@ -508,10 +508,29 @@ migration runs.
   `hypercorn` ASGI) and seven `type: ignore` sites today. `# type: ignore` is
   currently *exempt* from `TB020` as a machine directive, so banning it means
   reading a comment the comments norm agreed not to read.
-- [ ] **`lambda`.** A lambda is a `Callable` literal — banning the type and
-  allowing the value is the annotation-shaped half of one rule. *Against:*
-  `sorted(key=lambda ...)` is 8 of the 12 sites, including inside
-  `checks.py` itself, so this is a real wave rather than a free one.
+- [x] **`lambda` — RULED 2026-09-06, shipped as `TB023`.** A lambda is the
+  value form of the `Callable` the type rule bans, and the two are different
+  sites: `tesser.errors.collect`'s signature drew `TB022` while its three call
+  sites drew nothing. 18 lambdas over 17 lines, all marked.
+- [ ] **`TB023`'s inline-`def` dodge.** A nested `def rank(row): ...` in the
+  same scope satisfies the rule and relocates nothing — the ban is on the
+  spelling, not on where the behavior sits. Nothing forbids a nested `def`
+  today (the only nesting rules are about nested *classes*: `TB052`, `TB071`).
+  *For closing it:* the two fixes the rule asks for — an ordering method on the
+  object being ordered, a port or named module function for a deferred call —
+  are both relocations, and a rule an inline rename satisfies reports the
+  spelling rather than the defect. *Against:* a nested `def` at least has a
+  name a reader and a stack trace can use, which is most of what the rule
+  bought; and the general "no nested functions" rule that would close it is a
+  much wider claim than the lambda ban, reaching every closure in the tree.
+  Zero sites today either way — nothing in the gated trees writes a nested
+  `def` — so this is a tripwire question, not a migration.
+- [ ] **`TB023`'s two populations may want two codes.** The `key=` shape (7
+  sites) is a decision written where nothing reads it — closer to `TB082` than
+  to `TB022` — while the deferred-call shape (11 sites) is `TB022`'s value
+  half. One code reports both with one message that names both fixes. Whether
+  the conformance wave wants them split is answerable after the migration,
+  not before.
 - [ ] **The async protocols stay legal, and that needs saying.**
   `AsyncContextManager` is *required* by `TB081` as a `ts.Store.transaction`
   return, and `AsyncIterator` is what the implementation yields. Neither is an

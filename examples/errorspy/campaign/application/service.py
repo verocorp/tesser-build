@@ -62,9 +62,9 @@ class CampaignService(ts.ApplicationService):
 
     def add_link(self, req: client.AddLinkRequest) -> client.CampaignView:
         errors.collect(
-            campaign_id=lambda: values.CampaignID(req.campaign_id),
-            slug=lambda: values.Slug(req.slug),
-            target_url=lambda: values.TargetURL(req.target_url),
+            campaign_id=lambda: values.CampaignID(req.campaign_id),  # tesser:debt TB023
+            slug=lambda: values.Slug(req.slug),  # tesser:debt TB023
+            target_url=lambda: values.TargetURL(req.target_url),  # tesser:debt TB023
         )
         campaign_id = values.CampaignID(req.campaign_id)
         campaign_id_text = str(campaign_id)

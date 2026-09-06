@@ -141,7 +141,7 @@ class LinkVerdicts(ts.ValueObject):
                     )
                 )
             )
-        rows.sort(key=lambda row: (row.decision == _ALLOWED, str(row.slug)))
+        rows.sort(key=lambda row: (row.decision == _ALLOWED, str(row.slug)))  # tesser:debt TB023
         object.__setattr__(self, "_rows", tuple(rows))
 
     @property
