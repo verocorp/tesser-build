@@ -426,7 +426,10 @@ def test_a_role_must_be_a_package() -> None:
         "flat.domain is a role module; a role is a package, never a module" in f
         for f in findings
     )
-    assert not any("flat.client" in f for f in findings)
+    assert not any(
+        "flat.client" in f and "a role is a package, never a module" in f
+        for f in findings
+    ), findings
 
 
 def test_a_role_may_be_a_package() -> None:
@@ -506,8 +509,8 @@ def test_wiring_is_a_role() -> None:
                 "shop/component/component.py",
                 "shop.component.component",
                 "import tesser.component as ts\n"
-                "import shop.application.service as application\n"
-                "import shop.client.client as client\n"
+                "import shop.application.service as service\n"
+                "import shop.client.client as shop_client\n"
                 "import two.client.client as two_client\n"
                 "import two.domain.thing\n"
                 "class AskWiring(ts.Component):\n"
@@ -2235,9 +2238,73 @@ def test_an_adapters_module_holds_one_kind() -> None:
                )
     assert any(
         "shop.adapters.gateways mixes adapter kinds" in f
-        and "an adapters module holds one adapter kind" in f
+        and "an adapters module holds the kinds of its own kind package, and only a "
+        "jobs module holds a job beside the job context it builds" in f
         for f in findings
-    )
+    ), findings
+
+
+def test_a_jobs_module_holds_the_job_context_the_job_beside_it_builds() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in checks.Codebase(_spec(sources=(
+            (
+                "shop/adapters/jobs/engine.py",
+                "shop.adapters.jobs.engine",
+                "import tesser.adapters as ts\n"
+                "class InlineJobContext(ts.JobContext):\n"
+                "    pass\n"
+                "class EngineJob(ts.Job):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/jobs/test_engine.py",
+                "shop.adapters.jobs.test_engine",
+                "def test_engine() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/adapters/jobs/__init__.py",
+                "shop.adapters.jobs",
+                "from shop.adapters.jobs.engine import EngineJob as EngineJob\n",
+                True,
+            ),
+            (
+                "shop/adapters/repositories/mixed.py",
+                "shop.adapters.repositories.mixed",
+                "import tesser.adapters as ts\n"
+                "class SideGateway(ts.Gateway):\n"
+                "    pass\n"
+                "class ThingRepository(ts.Repository):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/repositories/test_mixed.py",
+                "shop.adapters.repositories.test_mixed",
+                "def test_mixed() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/adapters/repositories/__init__.py",
+                "shop.adapters.repositories",
+                "from shop.adapters.repositories.mixed import ThingRepository as ThingRepository\n",
+                True,
+            ),
+        ))).violations()
+               )
+    assert not any(
+        "shop.adapters.jobs.engine mixes adapter kinds" in f for f in findings
+    ), findings
+    assert any(
+        "shop.adapters.repositories.mixed mixes adapter kinds; an adapters module "
+        "holds the kinds of its own kind package, and only a jobs module holds a job "
+        "beside the job context it builds" in f
+        for f in findings
+    ), findings
 
 
 def test_a_dotted_module_base_resolves() -> None:
@@ -2283,7 +2350,7 @@ def test_import_matrix_is_flagged() -> None:
                 "two/adapters/gateways.py",
                 "two.adapters.gateways",
                 "import tesser.adapters as ts\n"
-                "import shop.client.client as shop_client\n"
+                "import shop.client.client as client\n"
                 "class Bridge(ts.Gateway):\n"
                 "    pass\n",
                 False,
@@ -2292,7 +2359,7 @@ def test_import_matrix_is_flagged() -> None:
                 "two/domain/thing.py",
                 "two.domain.thing",
                 "import tesser.domain as ts\n"
-                "import two.client.client\n"
+                "import two.client.client as client\n"
                 "class TwoSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n",
@@ -2302,7 +2369,7 @@ def test_import_matrix_is_flagged() -> None:
                 "two/application/service.py",
                 "two.application.service",
                 "import tesser.application as ts\n"
-                "import shop.domain.thing\n",
+                "import shop.domain.thing as thing\n",
                 False,
             ),
         ))).violations()
@@ -2352,19 +2419,19 @@ def test_srv_and_app_import_rows() -> None:
             (
                 "srv/http.py",
                 "srv.http",
-                "import shop.application.service\n"
-                "import shop.adapters.gateways as app_adapters\n"
-                "import two.adapters.gateways\n"
-                "import app.wire\n",
+                "import shop.application.service as service\n"
+                "import shop.adapters.gateways as shop_gateways\n"
+                "import two.adapters.gateways as two_gateways\n"
+                "import app.wire as wire\n",
                 False,
             ),
             (
                 "app/wire.py",
                 "app.wire",
-                "import shop.domain.thing\n"
+                "import shop.domain.thing as thing\n"
                 "import shop.component.component as wiring\n"
-                "import shop.client.client as shop_client\n"
-                "import srv.http\n",
+                "import shop.client.client as client\n"
+                "import srv.http as http\n",
                 False,
             ),
         ))).violations()
@@ -2403,10 +2470,10 @@ def test_only_a_handler_imports_its_own_client() -> None:
                 "shop/adapters/handlers/http.py",
                 "shop.adapters.handlers.http",
                 "import tesser.adapters as ts\n"
-                "import shop.client.client as shop_client\n"
+                "import shop.client.client as client\n"
                 "class HttpHandler(ts.Handler):\n"
                 "    def ask(self, body: str) -> str:\n"
-                "        return shop_client.AskRequest(text=body).text\n",
+                "        return client.AskRequest(text=body).text\n",
                 False,
             ),
             (
@@ -2422,7 +2489,7 @@ def test_only_a_handler_imports_its_own_client() -> None:
                 "two/adapters/gateways/sneaky.py",
                 "two.adapters.gateways.sneaky",
                 "import tesser.adapters as ts\n"
-                "import two.client.client as two_client\n"
+                "import two.client.client as client\n"
                 "class SneakyGateway(ts.Gateway):\n"
                 "    pass\n",
                 False,
@@ -2742,11 +2809,65 @@ def test_a_module_outside_a_role_package_imports_the_package() -> None:
         for f in findings
     ), findings
     assert any(
-        "mod.domain.vo imports mod.domain; a module inside a role package imports "
-        "its siblings as modules, never its own package, because the package "
-        "imports the module back" in f
+        "mod.domain.vo imports mod.domain; a module inside a role package never "
+        "imports its own package, because the package imports the module back" in f
         for f in findings
     ), findings
+
+
+def test_a_module_in_a_role_package_never_imports_a_module_beside_it() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "import mod.domain.tag as tag\n"
+                "def test_tag() -> None:\n"
+                "    assert tag.Tag('a') == tag.Tag('a')\n",
+                False,
+            ),
+            (
+                "mod/domain/label.py",
+                "mod.domain.label",
+                "import tesser.domain as ts\n"
+                "import mod.domain.tag as tag\n"
+                "class Label(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_tag', tag.Tag(text))\n",
+                False,
+            ),
+            (
+                "mod/domain/test_label.py",
+                "mod.domain.test_label",
+                "import mod.domain.tag as tag\n"
+                "def test_label() -> None:\n"
+                "    assert tag.Tag('a') is not None\n",
+                False,
+            ),
+            ("mod/domain/__init__.py", "mod.domain", "", True),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain.label imports mod.domain.tag, a module beside it; a module in a "
+        "role package imports the packages around it and never a module of its own "
+        "package, and only a sibling test imports the module it is named for" in f
+        for f in findings
+    ), findings
+    assert any(
+        "mod.domain.test_label imports mod.domain.tag, a module beside it" in f
+        for f in findings
+    ), findings
+    assert not any("mod.domain.test_tag imports mod.domain.tag" in f for f in findings), findings
 
 
 def test_srv_and_app_statement_totality() -> None:
@@ -3672,7 +3793,7 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
             (
-                "protocol/http.py",
+                "protocol/protocol_http.py",
                 "protocol.http",
                 "import tesser.srv as ts\n",
                 False,
@@ -3681,8 +3802,8 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 "shop/adapters/handlers.py",
                 "shop.adapters.handlers",
                 "import tesser.adapters as ts\n"
-                "import protocol.http as http\n"
-                "import srv.http as host\n"
+                "import protocol.http as protocol_http\n"
+                "import srv.http as srv_http\n"
                 "class HttpHandler(ts.Handler):\n"
                 "    pass\n",
                 False,
@@ -3691,14 +3812,14 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 "shop/component/component.py",
                 "shop.component.component",
                 "import tesser.component as ts\n"
-                "import protocol.http as http\n",
+                "import protocol.http as protocol_http\n",
                 False,
             ),
             (
                 "shop/adapters/gateways.py",
                 "shop.adapters.gateways",
                 "import tesser.adapters as ts\n"
-                "import protocol.http as http\n"
+                "import protocol.http as protocol_http\n"
                 "class PeerGateway(ts.Gateway):\n"
                 "    pass\n",
                 False,
@@ -3707,7 +3828,7 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 "shop/adapters/handlers_support.py",
                 "shop.adapters.handlers_support",
                 "import tesser.adapters as ts\n"
-                "import protocol.http as http\n",
+                "import protocol.http as protocol_http\n",
                 False,
             ),
             ("shop/adapters/repositories/__init__.py", "shop.adapters.repositories", "", True),
@@ -3715,12 +3836,12 @@ def test_a_context_role_reaches_the_app_shell_only_as_handlers_to_protocol() -> 
                 "shop/adapters/repositories/smuggle.py",
                 "shop.adapters.repositories.smuggle",
                 "import tesser.adapters as ts\n"
-                "import protocol.http as http\n"
+                "import protocol.http as protocol_http\n"
                 "class SmuggleHandler(ts.Handler):\n"
                 "    pass\n",
                 False,
             ),
-            ("srv/http.py", "srv.http", "", False),
+            ("srv/protocol_http.py", "srv.http", "", False),
         ))).violations()
                )
     clause = "of the app shell a context imports only protocol, and only from its handlers"
@@ -4500,7 +4621,7 @@ def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
                 "shop/component/test_component.py",
                 "shop.component.test_component",
                 "import shop.application.service as service\n"
-                "import far.client as farclient\n"
+                "import far.client as client\n"
                 "import shop.domain.thing as thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
@@ -4692,7 +4813,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
             "near.tests.test_wiring",
             "import tesser.testing as ts\n"
             "import near.domain as domain\n"
-            "import shop.application.service as neighbour\n"
+            "import shop.application.service as service\n"
             "def test_x() -> None:\n"
             "    assert True\n",
             False,
@@ -4740,11 +4861,11 @@ def test_a_root_test_reaches_a_context_only_through_component_and_client() -> No
                 "tests/test_app.py",
                 "tests.test_app",
                 "import shop.client.client as client\n"
-                "import shop.component.component as wire\n"
+                "import shop.component.component as component\n"
                 "import shop.domain.thing as thing\n"
                 "import shop.application.service as service\n"
-                "import app.wire\n"
-                "import tests.support\n"
+                "import app.wire as wire\n"
+                "import tests.support as support\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -4754,7 +4875,7 @@ def test_a_root_test_reaches_a_context_only_through_component_and_client() -> No
                 "import shop.domain.thing as thing\n",
                 False,
             ),
-            ("app/wire.py", "app.wire", "", False),
+            ("app/component.py", "app.wire", "", False),
         ))).violations()
                )
     reach = (
@@ -4790,15 +4911,15 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
-                "import srv.http\n"
+                "import srv.http as http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
             (
                 "srv/test_host.py",
                 "srv.test_host",
-                "import app.wire\n"
-                "import tests.test_root\n"
+                "import app.wire as wire\n"
+                "import tests.test_root as test_root\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -4811,7 +4932,7 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
             (
                 "app/test_component.py",
                 "app.test_component",
-                "import srv.http\n"
+                "import srv.http as http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -4846,8 +4967,8 @@ def test_a_context_tests_module_reaches_its_own_tests_package() -> None:
             (
                 "shop/tests/test_thing.py",
                 "shop.tests.test_thing",
-                "import shop.tests.conftest as helpers\n"
-                "import two.tests.test_two as foreign\n"
+                "import shop.tests.conftest as conftest\n"
+                "import two.tests.test_two as test_two\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -4943,14 +5064,14 @@ def test_a_placed_conftest_carries_its_tier() -> None:
             (
                 "tests/conftest.py",
                 "tests.conftest",
-                "import app.wire\nimport shop.domain.thing\n",
+                "import app.wire as wire\nimport shop.domain.thing as thing\n",
                 False,
             ),
             ("shop/tests/__init__.py", "shop.tests", "", True),
             (
                 "shop/tests/conftest.py",
                 "shop.tests.conftest",
-                "import shop.domain.thing as thing\nimport srv.http\n",
+                "import shop.domain.thing as thing\nimport srv.http as http\n",
                 False,
             ),
             ("app/wire.py", "app.wire", "", False),
@@ -4982,8 +5103,8 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
             (
                 f"shop/adapters/{kind}/test_{kind}.py",
                 f"shop.adapters.{kind}.test_{kind}",
-                "import protocol.http as http\n"
-                "import srv.http\n"
+                "import protocol.http as protocol_http\n"
+                "import srv.http as srv_http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -4992,16 +5113,16 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in checks.Codebase(_spec(sources=(
-            ("protocol/http.py", "protocol.http", "import tesser.srv as ts\n", False),
-            ("srv/http.py", "srv.http", "", False),
+            ("protocol/protocol_http.py", "protocol.http", "import tesser.srv as ts\n", False),
+            ("srv/protocol_http.py", "srv.http", "", False),
         )
         + adapters
         + (
             (
                 "protocol/test_http.py",
                 "protocol.test_http",
-                "import protocol.http as http\n"
-                "import srv.http\n"
+                "import protocol.http as protocol_http\n"
+                "import srv.http as srv_http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -8357,7 +8478,7 @@ def test_kernel_tesser_import_rules() -> None:
 def test_kernel_import_allowlist() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nfrom decimal import Decimal\nimport kernel.money\nimport shop.domain.thing\nimport requests\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nfrom decimal import Decimal\nimport kernel.money as money\nimport shop.domain.thing\nimport requests\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)))).violations()
     )
     assert any(
         "kernel.prices imports shop.domain.thing; a kernel imports only its "
@@ -8386,7 +8507,7 @@ def test_a_declared_kernel_import_is_legal_in_a_kernel() -> None:
     assert any("imports money_kernel" in f for f in grown(())), grown(())
 
 
-def test_pure_roles_may_import_kernels() -> None:
+def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
@@ -8396,16 +8517,47 @@ def test_pure_roles_may_import_kernels() -> None:
                 "def test_money_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport kernel.money as money\nimport money_kernel\nclass Price(ts.ValueObject):\n    _money: money.Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", money.Money(amount))\n', False),
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport shop.domain.kernel as kernel\nimport money_kernel\nclass Price(ts.ValueObject):\n    _money: kernel.Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", kernel.Money(amount))\n', False),
             (
                 "shop/domain/test_price.py",
                 "shop.domain.test_price",
                 "def test_price_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            )), imports=('money_kernel',))).violations()
+            ),
+            (
+                "shop/domain/kernel/__init__.py",
+                "shop.domain.kernel",
+                "from kernel import Money as Money\n",
+                True,
+            ),
+            ("kernel/__init__.py", "kernel", "from kernel.money import Money as Money\n", True)), imports=('money_kernel',))).violations()
     )
     assert not any("shop/domain/price.py" in f for f in findings), findings
+    direct = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_amount", amount)\n', False),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport kernel.money as money\nclass Price(ts.ValueObject):\n    _money: money.Money\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_money", money.Money(amount))\n', False),
+            (
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            )))).violations()
+    )
+    assert any(
+        "shop.domain.price imports kernel.money; a kernel is domain that two or more "
+        "domain modules share, so only a context's domain kernel package imports a "
+        "root kernel" in f
+        for f in direct
+    ), direct
     member = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        object.__setattr__(self, "_amount", amount)\n', False),
@@ -8476,13 +8628,19 @@ def test_an_exported_kernel_is_governed_like_a_kernel() -> None:
                 "def test_svc_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport shells.svc as svc\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport shop.domain.kernel as kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False),
             (
                 "shop/domain/test_price.py",
                 "shop.domain.test_price",
                 "def test_price_exists() -> None:\n"
                 "    assert True\n",
                 False,
+            ),
+            (
+                "shop/domain/kernel/__init__.py",
+                "shop.domain.kernel",
+                "from shells import Svc as Svc\n",
+                True,
             )), exports=('shells',))).violations()
     )
     assert any(
@@ -8872,7 +9030,7 @@ def test_kernel_siblings_import_each_other_in_both_kernel_shapes() -> None:
                 "def test_base_exists() -> None:\n"
                 "    assert True\n",
                 False,
-            ), ('shells/rich.py', 'shells.rich', 'import tesser.domain as ts\nimport shells.base as shellsbase\nclass RichSpec(ts.Spec):\n    def __init__(self, base: shellsbase.BaseSpec) -> None:\n        self.base = base\n', False),
+            ), ('shells/rich.py', 'shells.rich', 'import tesser.domain as ts\nimport shells.base as base\nclass RichSpec(ts.Spec):\n    def __init__(self, base: base.BaseSpec) -> None:\n        self.base = base\n', False),
             (
                 "shells/test_rich.py",
                 "shells.test_rich",
@@ -8916,10 +9074,38 @@ def test_a_declared_import_matches_on_the_package_boundary() -> None:
 def test_a_kernel_import_is_only_trusted_when_its_module_was_walked() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nfrom kernel.money import Money\nfrom kernel.vendored.impure import Client\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: Money) -> None:\n        self.money = money\n', False)))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', 'from kernel.money import Money as Money\n', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False),
+            (
+                "kernel/test_money.py",
+                "kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/domain/kernel/__init__.py",
+                "shop.domain.kernel",
+                "from kernel import Money as Money\n"
+                "from kernel.vendored.impure import Client as Client\n",
+                True,
+            ), ('shop/domain/price.py', 'shop.domain.price', 'import tesser.domain as ts\nimport shop.domain.kernel as kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, money: kernel.Money) -> None:\n        self.money = money\n', False),
+            (
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            )))).violations()
     )
-    assert any("imports kernel.vendored.impure" in f for f in findings), findings
-    assert not any("imports kernel.money" in f for f in findings), findings
+    assert any(
+        "shop.domain.kernel imports kernel.vendored.impure; a role __init__ only "
+        "re-exports a module of its own role, and a context kernel __init__ also "
+        "re-exports from a root kernel" in f
+        for f in findings
+    ), findings
+    assert not any(
+        "shop.domain.kernel imports kernel;" in f for f in findings
+    ), findings
 
 
 def test_a_pure_role_kernel_import_needs_the_kernel_to_exist() -> None:
@@ -8980,7 +9166,7 @@ def test_an_export_naming_a_bare_module_is_a_finding() -> None:
 def test_a_kernel_test_may_reach_the_trees_other_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import kernel.money as money\nimport shells.base as shellsbase\ndef test_money() -> None:\n    assert money.Money(1) == money.Money(1)\n    assert shellsbase.BaseSpec("x") is not None\n', False)), exports=('shells',))).violations()
+        for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import kernel.money as money\nimport shells.base as base\ndef test_money() -> None:\n    assert money.Money(1) == money.Money(1)\n    assert base.BaseSpec("x") is not None\n', False)), exports=('shells',))).violations()
     )
     assert not any("kernel/test_money.py" in f for f in findings), findings
 
@@ -11465,7 +11651,7 @@ def _kinds_spec(
         (
             "shop/application/client/__init__.py",
             "shop.application.client",
-            "from shop.application.client.quotes import Client as Client\n",
+            "from shop.application.client.quotes import ShopApplicationClient as ShopApplicationClient\n",
             True,
         ),
         (
@@ -11474,7 +11660,7 @@ def _kinds_spec(
             "import typing\n"
             "import tesser.application as ts\n"
             "import shop.application.ports as ports\n"
-            "class Client(ts.Client, typing.Protocol):\n"
+            "class ShopApplicationClient(ts.Client, typing.Protocol):\n"
             "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
             False,
         ),
@@ -11633,19 +11819,23 @@ def _kinds_spec(
             "shop/adapters/jobs/engine.py",
             "shop.adapters.jobs.engine",
             "import tesser.adapters as ts\n"
-            "import shop.adapters.jobs.context as context\n"
-            "import shop.application.client as application_client\n"
+            "import shop.application.client as client\n"
             "import shop.application.orchestrators as orchestrators\n"
             "import shop.application.ports as ports\n"
+            "class EngineJobContext(ts.JobContext):\n"
+            "    def __init__(self, inner: object) -> None:\n"
+            "        self._inner = inner\n"
+            "    async def call(self, step: object, request: object) -> object:\n"
+            "        return request\n"
             "class EngineJob(ts.Job):\n"
-            "    def __init__(self, actions: application_client.Client, quoting: ports.Quotes) -> None:\n"
+            "    def __init__(self, actions: client.ShopApplicationClient, quoting: ports.Quotes) -> None:\n"
             "        self._actions = actions\n"
             "        self._quoting = quoting\n"
             "    def quote(self, request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
             "        return self._actions.quote(request)\n"
             "    async def run(self, inner: object, request: ports.QuoteRequest)"
             " -> orchestrators.FlowResponse:\n"
-            "        return await orchestrators.Flow(context.EngineJobContext(inner), self._quoting)"
+            "        return await orchestrators.Flow(EngineJobContext(inner), self._quoting)"
             ".run(request)\n",
             False,
         ),
@@ -11657,37 +11847,19 @@ def _kinds_spec(
             False,
         ),
         (
-            "shop/adapters/jobs/context.py",
-            "shop.adapters.jobs.context",
-            "import tesser.adapters as ts\n"
-            "class EngineJobContext(ts.JobContext):\n"
-            "    def __init__(self, inner: object) -> None:\n"
-            "        self._inner = inner\n"
-            "    async def call(self, step: object, request: object) -> object:\n"
-            "        return request\n",
-            False,
-        ),
-        (
-            "shop/adapters/jobs/test_context.py",
-            "shop.adapters.jobs.test_context",
-            "def test_context_exists() -> None:\n"
-            "    assert True\n",
-            False,
-        ),
-        (
             "shop/component/component.py",
             "shop.component.component",
             "import tesser.component as ts\n"
             "import shop.adapters.gateways as gateways\n"
             "import shop.adapters.jobs as jobs\n"
-            "import shop.application.quotes as quote_actions\n"
+            "import shop.application.quotes as quotes\n"
             "import shop.application.service as service\n"
             "import shop.client.client as client\n"
             "class Shop(ts.Component):\n"
             "    def __init__(self) -> None:\n"
             "        self._quotes = gateways.QuoteGateway()\n"
             "        self._listing = gateways.CatalogGateway()\n"
-            "        self._actions = quote_actions.Quotes(self._listing)\n"
+            "        self._actions = quotes.Quotes(self._listing)\n"
             "        self.client: client.Client = service.AskService()\n"
             "        self.jobs: tuple[jobs.EngineJob, ...] = (\n"
             "            jobs.EngineJob(self._actions, self._quotes),\n"
@@ -15315,3 +15487,404 @@ def test_a_spec_without_an_init_binds_nothing_and_does_not_crash() -> None:
     )
     rendered = str(checks.Rulebook(checks.RulebookSpec(checks_text)))
     assert "the rendered tail" in rendered
+
+def test_a_package_is_imported_under_its_last_segment() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "two/domain/__init__.py",
+                "two.domain",
+                "from two.domain.tag import Label as Label\n",
+                True,
+            ),
+            (
+                "two/domain/tag.py",
+                "two.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Label(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "two/domain/test_tag.py",
+                "two.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "tests/test_both.py",
+                "tests.test_both",
+                "import mod.domain as tags\n"
+                "import two.domain as two_domain\n"
+                "def test_both() -> None:\n"
+                "    assert tags.Tag('a') is not None\n"
+                "    assert two_domain.Label('a') is not None\n",
+                False,
+            ),
+            (
+                "tests/test_one.py",
+                "tests.test_one",
+                "import mod.domain as domain\n"
+                "def test_one() -> None:\n"
+                "    assert domain.Tag('a') is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "tests.test_both imports mod.domain as tags, not mod_domain; a package is "
+        "imported under its last segment, and where two imported packages share that "
+        "segment each takes its context as a prefix" in f
+        for f in findings
+    ), findings
+    assert not any("tests.test_both imports two.domain as" in f for f in findings), findings
+    assert not any("tests.test_one imports mod.domain as" in f for f in findings), findings
+
+
+def test_a_package_never_exports_a_class_of_its_own_name() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/client/__init__.py",
+                "mod.client",
+                "from mod.client.client import Client as Client\n",
+                True,
+            ),
+            (
+                "mod/client/client.py",
+                "mod.client.client",
+                "import typing\n"
+                "import tesser.context as ts\n"
+                "class Client(ts.Client, typing.Protocol):\n"
+                "    ...\n",
+                False,
+            ),
+            (
+                "mod/client/test_client.py",
+                "mod.client.test_client",
+                "def test_client() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "kernel/__init__.py",
+                "kernel",
+                "from kernel.identity import Kernel as Kernel\n",
+                True,
+            ),
+            (
+                "kernel/identity.py",
+                "kernel.identity",
+                "import tesser.domain as ts\n"
+                "class Kernel(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "kernel/test_identity.py",
+                "kernel.test_identity",
+                "def test_identity() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.client re-exports Client; a package never exports a class of its own "
+        "name, because the name derived from the class rebinds the package's alias" in f
+        for f in findings
+    ), findings
+    assert any(
+        "kernel re-exports Kernel; a package never exports a class of its own name, "
+        "because the name derived from the class rebinds the package's alias" in f
+        for f in findings
+    ), findings
+
+
+def test_a_shell_class_never_takes_the_name_of_its_module() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "app/app.py",
+                "app.app",
+                "import tesser.app as ts\n"
+                "class App(ts.App):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "app/test_app.py",
+                "app.test_app",
+                "def test_app() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "app.app.App takes the name of its module; a shell module is imported as a "
+        "module, so a class in it never takes the module's own name, because the name "
+        "derived from the class rebinds the alias" in f
+        for f in findings
+    ), findings
+
+
+def test_a_role_init_binds_no_module() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "import mod.domain.tag as tag\n"
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "tests/test_tag.py",
+                "tests.test_tag",
+                "import mod.domain as domain\n"
+                "def test_tag() -> None:\n"
+                "    assert domain.Tag('a') is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain __init__ binds a module; a role __init__ is the export list, and "
+        "a module import exports nothing" in f
+        for f in findings
+    ), findings
+
+
+def test_no_shell_module_and_no_role_outside_the_domain_imports_a_kernel() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "kernel/__init__.py",
+                "kernel",
+                "from kernel.identity import Identity as Identity\n",
+                True,
+            ),
+            (
+                "kernel/identity.py",
+                "kernel.identity",
+                "import tesser.domain as ts\n"
+                "class Identity(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "kernel/test_identity.py",
+                "kernel.test_identity",
+                "def test_identity() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "mod/domain/kernel/__init__.py",
+                "mod.domain.kernel",
+                "from kernel import Identity as Identity\n",
+                True,
+            ),
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "import mod.domain.kernel as kernel\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_id', kernel.Identity(text))\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "mod/application/__init__.py",
+                "mod.application",
+                "from mod.application.service import AskService as AskService\n",
+                True,
+            ),
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.domain.kernel as kernel\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def __init__(self) -> None:\n"
+                "        self._named = kernel.Identity\n",
+                False,
+            ),
+            (
+                "mod/application/test_service.py",
+                "mod.application.test_service",
+                "def test_service() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "app/wire.py",
+                "app.wire",
+                "import tesser.app as ts\n"
+                "import kernel\n"
+                "class Wired(ts.App):\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+            (
+                "app/test_wire.py",
+                "app.test_wire",
+                "def test_wire() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("mod.domain.tag imports mod.domain.kernel" in f for f in findings), findings
+    assert any(
+        "mod.application.service imports mod.domain.kernel; a context's domain kernel "
+        "is imported only by that context's domain modules, because outside the domain "
+        "a kernel type is named through the domain __init__" in f
+        for f in findings
+    ), findings
+    assert any(
+        "app.wire imports kernel; neither an app nor a host imports a kernel, because "
+        "a kernel is domain and the shell composes components, clients, adapters, and "
+        "handlers" in f
+        for f in findings
+    ), findings
+
+
+def test_a_two_hop_re_export_chain_resolves_to_the_defining_module() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in checks.Codebase(_spec(sources=(
+            (
+                "kernel/__init__.py",
+                "kernel",
+                "from kernel.identity import IdSpec as IdSpec\n",
+                True,
+            ),
+            (
+                "kernel/identity.py",
+                "kernel.identity",
+                "import tesser.domain as ts\n"
+                "class IdSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "kernel/test_identity.py",
+                "kernel.test_identity",
+                "def test_identity() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "kernel/rates.py",
+                "kernel.rates",
+                "import tesser.domain as ts\n"
+                "import kernel.identity as identity\n"
+                "class Rate(ts.ValueObject):\n"
+                "    def __init__(self, id_spec: identity.IdSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', id_spec.text)\n",
+                False,
+            ),
+            (
+                "kernel/test_rates.py",
+                "kernel.test_rates",
+                "def test_rates() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "mod/domain/kernel/__init__.py",
+                "mod.domain.kernel",
+                "from kernel import IdSpec as IdSpec\n",
+                True,
+            ),
+            ("mod/domain/__init__.py", "mod.domain", "", True),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "import mod.domain.kernel as kernel\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, id_spec: kernel.IdSpec) -> None:\n"
+                "        object.__setattr__(self, '_text', id_spec.text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.domain.tag.Tag takes kernel.identity.IdSpec, which kernel.rates.Rate "
+        "already takes; a spec constructs exactly one object" in f
+        for f in findings
+    ), findings

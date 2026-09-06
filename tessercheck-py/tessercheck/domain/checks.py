@@ -7516,16 +7516,15 @@ class Module(ts.Entity):
                         "a role __init__ only re-exports from its own role",
                     ))
                 )
-        sourced: set[str] = set()
         for edge in self._edges:
             target = str(edge._target)
             lineno = int(edge._lineno)
             root_kernel = (
                 context_kernel and target.split(".")[0] in kernel_tops and target in packages
             )
-            if root_kernel:
-                sourced.add(target)
-            elif target.rsplit(".", 1)[0] != module_name or target not in modules:
+            if not root_kernel and (
+                target.rsplit(".", 1)[0] != module_name or target not in modules
+            ):
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
@@ -7536,30 +7535,7 @@ class Module(ts.Entity):
                         "context kernel __init__ also re-exports from a root kernel",
                     ))
                 )
-            else:
-                sourced.add(target)
             found.extend(edge.form_violations())
-        for name in facts.modules_under(Text(module_name)):
-            base = name.rsplit(".", 1)[1] if "." in name else name
-            if (
-                name.rsplit(".", 1)[0] != module_name
-                or name in packages
-                or base.startswith(TEST_PREFIX)
-                or base.startswith(EVAL_PREFIX)
-                or base == "conftest"
-                or name in sourced
-            ):
-                continue
-            found.append(
-                Violation(ViolationSpec(
-                    self._path,
-                    1,
-                    "TB042",
-                    f"{module_name} re-exports nothing from {name}; a role __init__ "
-                    "re-exports from every module of its role, because a module the "
-                    "init never names is one nothing outside the role can reach",
-                ))
-            )
         for _, original, exported, lineno in self._members:
             if not exported:
                 found.append(
@@ -7716,11 +7692,13 @@ class Module(ts.Entity):
 
     def alias_violations(self, registry: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        tops = frozenset(Registry(registry).tops())
+        facts = Registry(registry)
+        tops = frozenset(facts.tops())
+        walked = frozenset(facts.module_names())
         inside: list[tuple[str, str, int]] = []
         for local, package in self._package_aliases.items():
             head = package.split(".")[0]
-            if head == TESSER or head not in tops:
+            if head == TESSER or head not in tops or package not in walked:
                 continue
             for edge in self._edges:
                 if str(edge._target) == package and str(edge._form) != "member":
