@@ -158,7 +158,7 @@ class TestPostgresWidgetStore:
         release_first = asyncio.Event()
         order: list[str] = []
 
-        async def first() -> None:
+        async def first() -> None:  # tesser:debt TB023
             async with postgres_widget_store.transaction() as widget_repository:
                 await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
                 first_loaded.set()
@@ -166,7 +166,7 @@ class TestPostgresWidgetStore:
                 await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="first", standing="kept"))
                 order.append("first")
 
-        async def second() -> None:
+        async def second() -> None:  # tesser:debt TB023
             await first_loaded.wait()
             async with postgres_widget_store.transaction() as widget_repository:
                 loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))

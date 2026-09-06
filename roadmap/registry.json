@@ -364,7 +364,22 @@
       "go_example": [],
       "go_analyzers": [],
       "py_checks": [
-        "TB021"
+        "TB021",
+        "TB022"
+      ],
+      "rationale": []
+    },
+    {
+      "key": "norm-function-placement",
+      "title": "Norm: function placement",
+      "py_example": [
+        "examples/minimal",
+        "examples/ports"
+      ],
+      "go_example": [],
+      "go_analyzers": [],
+      "py_checks": [
+        "TB023"
       ],
       "rationale": []
     },

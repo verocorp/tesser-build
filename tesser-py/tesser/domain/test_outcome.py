@@ -16,7 +16,7 @@ class Advance(ts.Outcome):
 
 
 def test_an_outcome_is_a_closed_set_the_type_checker_can_exhaust() -> None:
-    def route(outcome: Advance) -> str:
+    def route(outcome: Advance) -> str:  # tesser:debt TB023
         match outcome:
             case Advance.CONTINUE:
                 return "again"
@@ -99,7 +99,7 @@ def test_a_metaclass_cannot_skip_the_gate_it_inherits() -> None:
             cls: str,
             bases: tuple[type, ...],
             classdict: enum._EnumDict,
-            **kwargs: typing.Any,
+            **kwargs: typing.Any,  # tesser:debt TB022
         ) -> Skipping:
             return enum.EnumMeta.__new__(metacls, cls, bases, classdict, **kwargs)
 
@@ -248,7 +248,7 @@ def test_a_well_formed_outcome_survives_the_gate() -> None:
         REFUSED = enum.auto()
         RETRY = enum.auto()
 
-    def route(outcome: Settle) -> str:
+    def route(outcome: Settle) -> str:  # tesser:debt TB023
         match outcome:
             case Settle.PAID:
                 return "paid"

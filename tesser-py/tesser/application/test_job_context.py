@@ -10,7 +10,7 @@ import tesser.application.job_context as job_context
 class FakeJobContext(job_context.JobContext):
 
     async def call[I, O](
-        self, step: typing.Callable[[typing.Any, I], typing.Awaitable[O]], request: I
+        self, step: typing.Callable[[typing.Any, I], typing.Awaitable[O]], request: I  # tesser:debt TB022
     ) -> O:
         return await step(None, request)
 
@@ -18,7 +18,7 @@ class FakeJobContext(job_context.JobContext):
 class TestJobContext:
 
     def test_a_job_context_runs_a_step_it_is_handed(self) -> None:
-        async def double(ctx: object, request: int) -> int:
+        async def double(ctx: object, request: int) -> int:  # tesser:debt TB023
             return request * 2
 
         assert asyncio.run(FakeJobContext().call(double, 21)) == 42

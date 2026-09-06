@@ -2690,7 +2690,7 @@ def test_a_role_init_re_exports_under_the_name_the_module_defines() -> None:
     )
     client_init = ("mod/client/__init__.py", "mod.client", "", True)
 
-    def run(init: tuple[str, str, str, bool]) -> tuple[str, ...]:
+    def run(init: tuple[str, str, str, bool]) -> tuple[str, ...]:  # tesser:debt TB023
         return tuple(
             f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
             for v in domain.Codebase(_spec(sources=(vo, init, reader, client_init))).violations()
@@ -8596,7 +8596,7 @@ def test_kernel_import_allowlist() -> None:
 
 
 def test_a_declared_kernel_import_is_legal_in_a_kernel() -> None:
-    def grown(imports: tuple[str, ...]) -> tuple[str, ...]:
+    def grown(imports: tuple[str, ...]) -> tuple[str, ...]:  # tesser:debt TB023
         return tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=imports)).violations()
@@ -13163,6 +13163,216 @@ def test_a_literal_string_in_an_annotation_is_data_not_a_quoted_type() -> None:
         ))).violations()
     )
     assert not any("TB021" in f for f in findings)
+
+
+def test_any_callable_and_awaitable_are_findings_wherever_they_are_named() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/loose.py",
+                "shop.adapters.gateways.loose",
+                "import collections.abc as abc\n"
+                "import typing\n"
+                "from typing import Any\n"
+                "import tesser.adapters as ts\n"
+                "Loose = dict[str, Any]\n"
+                "class LooseGateway(ts.Gateway):\n"
+                "    def run(self, step: abc.Callable[[typing.Any], abc.Awaitable[int]]) -> None:\n"
+                "        return None\n"
+                "    def held(self) -> typing.AsyncContextManager[int]: ...\n"
+                "    def anything(self, value: Anywhere) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "loose.py:5: TB022 shop.adapters.gateways.loose names Any; a type names what "
+        "the value is — Any names nothing, Callable names a function where a port "
+        "would name what it answers, and Awaitable names the waiting instead of the "
+        "answer" in f
+        for f in findings
+    )
+    assert any(
+        "loose.py:7: TB022 shop.adapters.gateways.loose names abc.Callable; a type "
+        "names what the value is — Any names nothing, Callable names a function where "
+        "a port would name what it answers, and Awaitable names the waiting instead "
+        "of the answer" in f
+        for f in findings
+    )
+    assert any(
+        "loose.py:7: TB022 shop.adapters.gateways.loose names typing.Any; a type "
+        "names what the value is — Any names nothing, Callable names a function where "
+        "a port would name what it answers, and Awaitable names the waiting instead "
+        "of the answer" in f
+        for f in findings
+    )
+    assert any(
+        "loose.py:7: TB022 shop.adapters.gateways.loose names abc.Awaitable; a type "
+        "names what the value is — Any names nothing, Callable names a function where "
+        "a port would name what it answers, and Awaitable names the waiting instead "
+        "of the answer" in f
+        for f in findings
+    )
+    assert not any("loose.py:9: TB022" in f for f in findings)
+    assert not any("names Anywhere" in f for f in findings)
+
+
+def test_a_lambda_and_a_nested_def_are_findings_and_a_method_is_not() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/anon.py",
+                "shop.adapters.gateways.anon",
+                "import tesser.adapters as ts\n"
+                "class AnonGateway(ts.Gateway):\n"
+                "    def ranked(self, rows: list[str]) -> list[str]:\n"
+                "        rows.sort(key=lambda row: (row.startswith('a'), row))\n"
+                "        return rows\n"
+                "    def deferred(self) -> None:\n"
+                "        run(first=lambda: 1, second=lambda: 2)\n"
+                "    def named(self, rows: list[str]) -> list[str]:\n"
+                "        def rank(row: str) -> str:\n"
+                "            return row\n"
+                "        rows.sort(key=rank)\n"
+                "        return rows\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "anon.py:4: TB023 shop.adapters.gateways.anon writes a lambda; a function is "
+        "declared at module level or as a method, because every rule about a function "
+        "keys on its placement and a nested one has none — an ordering belongs on the "
+        "object it orders, a deferred call behind a port" in f
+        for f in findings
+    )
+    assert len([f for f in findings if "anon.py:7: TB023" in f]) == 1
+    assert any(
+        "anon.py:9: TB023 shop.adapters.gateways.anon declares rank inside a function; "
+        "a function is declared at module level or as a method, because every rule about "
+        "a function keys on its placement and a nested one has none — an ordering belongs "
+        "on the object it orders, a deferred call behind a port" in f
+        for f in findings
+    )
+    assert not any("anon.py:3: TB023" in f for f in findings)
+    assert not any("anon.py:8: TB023" in f for f in findings)
+
+
+def test_a_nested_class_resets_the_scope_and_a_branch_body_does_not() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/scoped.py",
+                "shop.adapters.gateways.scoped",
+                "import tesser.adapters as ts\n"
+                "def free() -> int:\n"
+                "    return 1\n"
+                "class ScopedGateway(ts.Gateway):\n"
+                "    def holds(self) -> None:\n"
+                "        class Local:\n"
+                "            def method(self) -> int:\n"
+                "                return 1\n"
+                "    async def branched(self) -> None:\n"
+                "        if True:\n"
+                "            async def buried() -> int:\n"
+                "                return 1\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("scoped.py:2: TB023" in f for f in findings)
+    assert not any("scoped.py:7: TB023" in f for f in findings)
+    assert any(
+        "scoped.py:11: TB023 shop.adapters.gateways.scoped declares buried inside a "
+        "function; a function is declared at module level or as a method, because every "
+        "rule about a function keys on its placement and a nested one has none — an "
+        "ordering belongs on the object it orders, a deferred call behind a port" in f
+        for f in findings
+    )
+
+
+def test_a_lambda_is_a_finding_at_module_level_and_in_a_class_body() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/loose_fn.py",
+                "shop.adapters.gateways.loose_fn",
+                "import tesser.adapters as ts\n"
+                "RANK = lambda row: row\n"
+                "class LooseFnGateway(ts.Gateway):\n"
+                "    ORDER = lambda row: row\n"
+                "    def kept(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "loose_fn.py:2: TB023 shop.adapters.gateways.loose_fn writes a lambda; a function "
+        "is declared at module level or as a method, because every rule about a function "
+        "keys on its placement and a nested one has none — an ordering belongs on the "
+        "object it orders, a deferred call behind a port" in f
+        for f in findings
+    )
+    assert any("loose_fn.py:4: TB023" in f for f in findings)
+
+
+def test_two_banned_names_of_the_same_kind_on_one_line_report_once() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/twice.py",
+                "shop.adapters.gateways.twice",
+                "import typing\n"
+                "import tesser.adapters as ts\n"
+                "class TwiceGateway(ts.Gateway):\n"
+                "    def paired(self, a: typing.Any, b: typing.Any) -> None: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert len([f for f in findings if "twice.py:4: TB022" in f]) == 1
+
+
+def test_a_banned_type_is_named_outside_an_annotation_too() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/reached.py",
+                "shop.adapters.gateways.reached",
+                "import collections.abc as abc\n"
+                "import typing\n"
+                "import tesser.adapters as ts\n"
+                "class Reached(abc.Callable):\n"
+                "    pass\n"
+                "class ReachedGateway(ts.Gateway):\n"
+                "    def cast(self) -> int:\n"
+                "        return typing.cast(typing.Any, 1)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "reached.py:4: TB022 shop.adapters.gateways.reached names abc.Callable; a type "
+        "names what the value is — Any names nothing, Callable names a function where a "
+        "port would name what it answers, and Awaitable names the waiting instead of the "
+        "answer" in f
+        for f in findings
+    )
+    assert any(
+        "reached.py:8: TB022 shop.adapters.gateways.reached names typing.Any; a type "
+        "names what the value is — Any names nothing, Callable names a function where a "
+        "port would name what it answers, and Awaitable names the waiting instead of the "
+        "answer" in f
+        for f in findings
+    )
 
 
 def test_a_gateway_never_holds_an_invocations_job_context() -> None:

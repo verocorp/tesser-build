@@ -85,7 +85,7 @@ def test_srv_records_are_distinct_kinds_from_the_context_dtos() -> None:
 
 
 def test_declaration_decorators_return_their_target_unchanged() -> None:
-    def build() -> str:
+    def build() -> str:  # tesser:debt TB023
         return "built"
 
     class Double:

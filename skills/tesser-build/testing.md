@@ -244,9 +244,9 @@ file says *how*, and it is the cross-cutting layer they assume.
   under a `tests` package is a placement finding outright (TB041), and even
   an excused one still answers for its imports like a test placed there
   (TB070). A `conftest.py` answers to the universal checks (TB004, TB020,
-  TB030, TB033) and carries its location's import row: at the tree root it
-  is a leaf that imports nothing from its tree (TB065); inside a tests
-  location it reaches exactly what a test placed there reaches (TB070).
+  TB021, TB022, TB023, TB030, TB033) and carries its location's import row: at
+  the tree root it is a leaf that imports nothing from its tree (TB065); inside
+  a tests location it reaches exactly what a test placed there reaches (TB070).
 
 - Rules 3-8 are **guidance, not checked.** Each is either a semantic judgment
   (3, 4, 5) or not mechanically decidable in a way worth the false positives

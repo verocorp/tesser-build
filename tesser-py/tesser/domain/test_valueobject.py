@@ -114,7 +114,7 @@ def test_cooperative_class_kwargs_pass_through() -> None:
 
 
 def test_identity_dunder_overrides_are_rejected() -> None:
-    def boom(*args: object) -> None:
+    def boom(*args: object) -> None:  # tesser:debt TB023
         return None
 
     for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):

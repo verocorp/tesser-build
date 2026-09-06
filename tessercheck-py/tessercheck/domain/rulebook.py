@@ -84,6 +84,8 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "owner": "⟨module⟩.⟨class⟩",
     "module_name": "⟨module⟩",
     "annotation.source()": "⟨annotation⟩",
+    "banned": "⟨type⟩",
+    "nested": "⟨function⟩",
     "type_params": "⟨count⟩",
     "local": "⟨alias⟩",
     "wanted": "⟨alias⟩",
@@ -104,6 +106,8 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.tesser_shell_violations": "tesser distribution module",
     "Module.kernel_import_violations": "kernel module",
     "Module.annotation_violations": "every module",
+    "Module.type_name_violations": "every module",
+    "Module.function_placement_violations": "every module",
     "Module.comment_violations": "every module",
     "Module.double_violations": "every module",
     "Module.shadowing_violations": "every module",
@@ -278,7 +282,7 @@ class Rulebook(ts.ValueObject):
 
     def __init__(self, spec: RulebookSpec) -> None:
         subjects: set[str] = set()
-        def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
+        def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:  # tesser:debt TB023
             if call.keywords or len(call.args) != 1:
                 return None
             violation_spec_call = call.args[0]

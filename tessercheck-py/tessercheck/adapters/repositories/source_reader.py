@@ -129,7 +129,7 @@ class FilesystemSourceReader(ts.Repository):
             root=root,
             nested=tuple(nested),
             symlinked=tuple(symlinked),
-            sources=tuple(sorted(found, key=lambda source: source.path)),
+            sources=tuple(sorted(found, key=lambda source: source.path)),  # tesser:debt TB023
             exports=tuple(exports),
             imports=tuple(imports),
             stdlib=tuple(sorted(sys.stdlib_module_names)),

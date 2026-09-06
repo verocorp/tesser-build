@@ -13,7 +13,7 @@ import alpha.application.ports as ports
 class InlineJobContext(ts.JobContext):
 
     async def call[I, O](
-        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I
+        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I  # tesser:debt TB022
     ) -> O:
         return await step(None, request)
 

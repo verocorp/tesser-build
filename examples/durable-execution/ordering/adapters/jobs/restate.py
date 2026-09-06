@@ -20,7 +20,7 @@ class RestateJobContext(ts.JobContext):
         self._ctx = ctx
 
     async def call[I, O](
-        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I
+        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I  # tesser:debt TB022
     ) -> O:
         return await self._ctx.service_call(step, request)
 
@@ -50,7 +50,7 @@ class RestateActionJobs(ts.Job):
             input_serde=RecordSerde(ports.QuoteRequest),
             output_serde=RecordSerde(ports.QuoteResponse),
         )
-        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:
+        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:  # tesser:debt TB023
             try:
                 return ordering_application_client.quote(request)
             except errors.DomainError as e:
@@ -71,7 +71,7 @@ class RestateWorkflowJobs(ts.Job):
             input_serde=RecordSerde(ports.StartRequest),
             output_serde=RecordSerde(orchestrators.RunResponse),
         )
-        async def run(
+        async def run(  # tesser:debt TB023
             ctx: restate.WorkflowContext, request: ports.StartRequest
         ) -> orchestrators.RunResponse:
             order_orchestrator = orchestrators.OrderOrchestrator(RestateJobContext(ctx), quoting)

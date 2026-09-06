@@ -222,6 +222,58 @@ a rule pass; it makes the rule blind, which is why the quoting itself is what
 gets reported. Strings inside `typing.Literal[...]` are data, not types, and
 are left alone.
 
+**A type names what the value is** (TB022, maintainer ruling 2026-09-06).
+`Any`, `Callable`, and `Awaitable` are findings wherever the module names
+them — an annotation, a base class, a `TypeVar` bound, a `typing.cast`
+argument. The match is on the trailing segment of a name
+*load* — an `ast.Name` or `ast.Attribute` — which is what lets it reach the
+three above; the cost is that an ordinary *identifier* named `Any` reports too,
+so do not name a domain value after a typing one. A place that binds or spells
+the name without loading it is not read: `from typing import Any`, `import
+typing as Any`, `except ValueError as Any`, `global Any`, a `case Any:` capture,
+and a keyword-argument name. Nothing depends on those staying unread — `TB053`
+already bans the import forms — but the rule is name-load-blind, not
+position-blind, and the exception list in `TODOS.md` is where narrowing it is
+argued. Each names a mechanism where a type should name a value. `Any`
+turns the checker off, so nothing downstream of it is checked and the change
+you were relying on the checker to catch is silent. `Callable` says a
+function arrives without saying what it answers; the way to declare "someone
+else supplies this behavior" is a `ts.Port` in `application/ports/`, which
+names its request and its response and which the import rules can see —
+a bare `Callable` is that same dependency written so nothing can read it.
+`Awaitable` names the waiting rather than the answer, and `async def
+f() -> X` already says both. Fix by naming the thing: the concrete type for
+`Any`, a port protocol for `Callable`, and the awaited type on an `async def`
+for `Awaitable`. The async protocols the store contract needs stay legal —
+`typing.AsyncContextManager[...]` is what a `ts.Store.transaction` returns,
+and `typing.AsyncIterator[...]` is what its implementation yields; both name a
+shape the caller can use.
+
+**A function is declared at module level or as a method** (TB023, maintainer
+ruling 2026-09-06). A `lambda` anywhere, and a `def` inside another function,
+are both findings. The mechanical reason is placement: every rule about a
+function keys on where it sits — `TB040` on which module it belongs to,
+`TB070` on which tier its test lives in, `TB071` on every *module-level*
+function in a test module being a test, a `@ts.helper` or a `@ts.fake`. A
+function nested inside another function has no placement, so none of those
+rules can read it; it is the one shape that is invisible to the totality
+checks by construction.
+
+`lambda` is also the value half of the rule above: `TB022` bans `Callable` in
+type position, and a lambda is what that type describes, so banning one
+without the other leaves the same behavior passed the same way with the
+annotation rewritten. A nested `def` is the same escape with a name attached.
+
+Two shapes, wanting opposite fixes. A `sorted(...)`/`.sort(key=...)` argument
+**is an ordering rule** — `key=lambda row: (row.decision == _ALLOWED,
+str(row.slug))` is a comparison and a representation read, the shapes a
+service body may not carry — and it belongs on the object being ordered, as a
+method that answers the rank. Anything else passed or held as behavior is
+**deferred behavior**, and it belongs behind a `ts.Port` or a named
+module-level function the import rules can see. A class nested in a function
+resets the scope, so its methods are methods — that hole, and which nested
+functions genuinely have no relocation, are open questions (`TODOS.md`).
+
 **What the shell buys, once.** `ts.ValueObject` owns immutability and value
 equality at runtime: assignment and deletion raise, `__eq__`/`__hash__`
 compare by type and content, and a subclass that tries to override
@@ -1087,7 +1139,7 @@ class OrderOrchestrator(ts.Orchestrator):
 # ordering/adapters/gateways/restate_quoting.py (verified impl: examples/durable-execution/)
 class RestateQuoting(ts.Gateway):                       # built once; holds the handler function only
 
-    def __init__(self, quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]]) -> None:
+    def __init__(self, quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]]) -> None:  # tesser:debt TB022 — see the exception list
         self._quote = quote
 
     async def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
@@ -1100,7 +1152,7 @@ class RestateJobContext(ts.JobContext):                 # the one per-invocation
     def __init__(self, ctx: restate.Context) -> None:
         self._ctx = ctx
 
-    async def call[I, O](self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I) -> O:
+    async def call[I, O](self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I) -> O:  # tesser:debt TB022 — the ts.JobContext signature, unruled
         return await self._ctx.service_call(step, request)
 
 
@@ -1111,7 +1163,7 @@ class RestateActionJobs(ts.Job):
         self.service = restate.Service("OrderingActions")
 
         @self.service.handler(...)
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:  # tesser:debt TB023 — engine registration, unruled
             return actions.quote(request)
 
         self.quote = quote
@@ -1123,7 +1175,7 @@ class RestateWorkflowJobs(ts.Job):
         self.workflow = restate.Workflow("Ordering")
 
         @self.workflow.main(...)
-        async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:
+        async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:  # tesser:debt TB023 — engine registration, unruled
             orchestrator = order_orchestrator.OrderOrchestrator(
                 restate_context.RestateJobContext(ctx), quotes
             )
@@ -1473,7 +1525,7 @@ def routes_for(app: App) -> tuple[Route, ...]:
 
 
         def _dispatch(self, method: str) -> HttpResponse:   # the host's entire request path
-            def run() -> HttpResponse:
+            def run() -> HttpResponse:                   # tesser:debt TB023 — host server loop, unruled
                 found = match(routes, method, self.path)     # router: URL knowledge lives there
                 if found is None:
                     return HttpResponse.problem(404, "not_found", "unknown route")

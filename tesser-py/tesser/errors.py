@@ -87,7 +87,7 @@ def wrap(err: DomainError, message: str, *, field: str | None = None) -> DomainE
     )
 
 
-def collect(**fields: abc.Callable[[], object]) -> None:
+def collect(**fields: abc.Callable[[], object]) -> None:  # tesser:debt TB022
     problems: list[NeedsDesignFieldProblem] = []
     for name, thunk in fields.items():
         try:

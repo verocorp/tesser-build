@@ -69,7 +69,7 @@ class TestRestateJobContext:
                 seen.append(arg.sku)
                 return ports.QuoteResponse(cents=250)
 
-        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:
+        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:  # tesser:debt TB023
             return ports.QuoteResponse(cents=0)
 
         restate_job_context = jobs.RestateJobContext(

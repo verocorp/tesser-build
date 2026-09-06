@@ -38,14 +38,14 @@ def test_wrap_field_override_wins() -> None:
 
 
 def test_collect_passes_when_every_field_is_valid() -> None:
-    errors.collect(name=lambda: "ok", slug=lambda: "ok")
+    errors.collect(name=lambda: "ok", slug=lambda: "ok")  # tesser:debt TB023
 
 
 def test_collect_gathers_validation_problems_into_one_error() -> None:
-    def bad_name() -> str:
+    def bad_name() -> str:  # tesser:debt TB023
         raise errors.invalid("bad_name", "empty")
 
-    def bad_slug() -> str:
+    def bad_slug() -> str:  # tesser:debt TB023
         raise errors.invalid("bad_slug", "empty", field="s")
 
     with pytest.raises(errors.DomainError) as caught:
@@ -60,7 +60,7 @@ def test_collect_gathers_validation_problems_into_one_error() -> None:
 
 
 def test_collect_reraises_a_non_validation_error_unchanged() -> None:
-    def missing_row() -> str:
+    def missing_row() -> str:  # tesser:debt TB023
         raise errors.not_found("no_row", "missing")
 
     with pytest.raises(errors.DomainError) as caught:

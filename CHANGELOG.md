@@ -5,6 +5,133 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.101.0] - 2026-09-06
+
+A type names what the value is, and a function is declared at module level or
+as a method. `TB022` reports `Any`, `Callable` and `Awaitable` wherever a
+module names them; `TB023` reports a `lambda` anywhere and a `def` inside
+another function. `Callable` and `lambda` are one defect seen from the type
+side and the value side, which is why they ship together. This is the
+checker half only: the 147 lines in this repo that carry one draw a site-level
+`# tesser:debt`, and making them conformant is the follow-up — gated, for
+`TB023`, on the exception list in `TODOS.md`.
+
+### Added
+- **`TB022` — a type names what the value is.** `Module.type_name_violations`
+  walks every module and reports an `ast.Name` or `ast.Attribute` whose
+  trailing segment is `Any`, `Callable`, or `Awaitable`, at the line it is
+  written. Matching the trailing segment rather than a resolved import path is
+  what makes `typing.Any`, `abc.Callable` and a bare `Any` all report from one
+  rule, and it means the check is not confined to the positions the annotation
+  reader walks — a base class, a `TypeVar` bound and a `typing.cast` argument
+  are read the same way. Each of the three names a mechanism where a type
+  should name a value: `Any` turns the checker off, so nothing downstream of
+  it is checked; `Callable` says a function arrives without saying what it
+  answers, which is a `ts.Port` declared anonymously and therefore a
+  dependency no import rule can see; `Awaitable` names the waiting rather than
+  the answer, where `async def f() -> X` already says both.
+- **The async protocols the store contract needs stay legal, deliberately.**
+  `typing.AsyncContextManager` is what `TB081` *requires* a
+  `ts.Store.transaction` to return, and `typing.AsyncIterator` is what the
+  implementation yields. Neither is an escape from naming a value, so neither
+  is in `BANNED_TYPES`; `examples/asyncpg`, which is built out of both, draws
+  no `TB022` finding. Recorded in `TODOS.md` so a later reading of "the async
+  family" cannot sweep them in silently.
+- **21 `# tesser:debt TB022` markers**, one per nonconformant line, across
+  `tesser-py` (9), `examples/durable-execution` (4), `examples/minimal` (3),
+  `examples/llmport` (3), `examples/python-app` (1) and `tessercheck-py` (1).
+  Most are the one shape: the `ts.JobContext.step` signature, `step:
+  abc.Callable[[typing.Any, I], abc.Awaitable[O]]`, which draws all three
+  names on one line and is copied into every job-context fake. `checks.py`
+  itself is clean — its `"Callable"` and `"Any"` are string constants.
+- **`TB023` — a function is declared at module level or as a method.**
+  `Module.function_placement_violations` reports an `ast.Lambda` anywhere, and a `def`
+  inside another function, at the line each is written (maintainer ruling
+  2026-09-06: the lambda ban taken off `TB022`'s open list during review, then
+  widened to nested functions in the same session). A `ClassDef` resets the
+  scope, so a class defined inside a function has methods, not nested
+  functions.
+- **The reason the rule is placement, not naming.** Every rule about a function
+  keys on where it sits: `TB040` on which module it belongs to, `TB070` on
+  which tier its test lives in, `TB071` on every *module-level* function in a
+  test module being a test, a `@ts.helper` or a `@ts.fake`. A function nested
+  inside another has no placement, so it is invisible to the totality checks by
+  construction — which is also why an inline `def` was the lambda ban's one
+  dodge, and why closing it was the same rule rather than a second one.
+- **`lambda` is `TB022`'s value half.** `Callable` is banned in type position
+  and a lambda is what that type describes, so banning one without the other
+  leaves the same behavior passed the same way with the annotation rewritten.
+  The pair is what closes `tesser.errors.collect` — the signature drew `TB022`
+  while its three call sites in `examples/errorspy` drew nothing.
+- **126 lines marked `# tesser:debt TB023`** — 17 carrying 18 lambdas, 109
+  carrying a nested function. Three populations. The `key=` lambdas (7) *are*
+  an ordering rule and belong on the object ordered; the specimen is
+  `examples/python-app/reports/domain/report.py:187`, which ranks `LinkVerdict`
+  rows by `(row.decision == _ALLOWED, str(row.slug))` — a comparison and a
+  representation read, the shapes `TB082` reports in a service body, inside a
+  domain object where `TB082` does not look. The deferred calls (11) belong
+  behind a port or a named function. The nested functions (109) split again by
+  why they are nested, and that list is the gate on the conformance wave
+  (`TODOS.md`, "What TB023 has to let through"): 61 are the analyzer's own
+  `ast`-parsing closures, 43 are a test's local fake behavior, and the
+  remaining 5 are an engine registration callback and a host's server loop, where
+  the API is the constraint rather than taste.
+- **From the ship review.** `TB023` now emits in line order like every sibling
+  check (it reported all lambdas before all nested functions). The rule is
+  `Module.function_placement_violations`, renamed from `lambda_violations` once
+  nested functions became 109 of its 127 findings — the name is load-bearing,
+  because `rulebook.py`'s `APPLIES_TO` keys on it and `RULES.md` is generated
+  from it. Five fixture tests were added for the paths a refactor could have
+  changed silently: the `ClassDef` scope reset (nothing locked it, and
+  propagating `enclosed` there instead of resetting would have altered reach
+  across every tree with the suite still green), a nested `async def`, a `def`
+  inside a branch body, a module-level and a class-body lambda (the lambda arm
+  ignores `enclosed` on purpose), and `TB022` in a base class and a
+  `typing.cast` argument. `TB022`'s same-line collapse is now pinned the way
+  `TB023`'s already was.
+- **`TB022` is position-blind, and the docs now say so.** The match is on a
+  name's trailing segment in any position — that is what reaches a `cast`
+  argument, a base class and a `TypeVar` bound — so an *identifier* named `Any`
+  reports too. `python.md` states the real scope; whether to narrow it is an
+  open ruling in `TODOS.md`, deliberately not locked by a test either way.
+- **From the red-team pass.** The shipped copy-in skill was teaching the code
+  its own new rule rejects: five `verified impl` blocks in
+  `skills/tesser-build/python.md` carried a banned type or a nested function
+  with no marker, while the source files they were copied from all carry one.
+  They now carry the marker and name the open exception. Two `SKILL.md` routing
+  rows were added for the annotation and behavior-as-value tasks — the
+  resolver-route column in `rationale/coverage.md` had been naming routes that
+  did not exist, a defect `TB021` shipped with in v0.0.96.0 and these two
+  copied, and which `coverage_test.go` does not check.
+- **The one finding that is a ruling, not a fix: `TB022` cannot be satisfied by
+  `ts.JobContext`.** The Protocol's single method is `async def call[I, O](self,
+  step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I) -> O`, and
+  every implementer must reproduce it verbatim to type-check. That is a
+  permanent finding forced by this toolkit's own shipped API, not backlog a
+  conformance wave can retire — and `python.md`'s advice ("a behavior someone
+  else supplies is a `ts.Port`") cannot apply, because the parameter *is* the
+  step function the engine hands back. It needs the same kind of ruling
+  `AsyncContextManager` got. Recorded in `TODOS.md`.
+- **Still open** (`TODOS.md`): the rest of `TB022`'s families — `Coroutine` and
+  `AnyStr` (the one-token evasions), `object` in type position, `typing.cast`
+  and `# type: ignore`; `TB023`'s exception list, which the conformance wave
+  waits on; whether `TB023`'s populations eventually want separate codes; and
+  the class-in-a-function hole the scope reset leaves open on purpose.
+  `errors.collect`'s redesign is tracked separately — its carrier is already
+  named `NeedsDesignFieldProblem`, so this wave marks it and changes nothing
+  there.
+- **Renderings** (`docs/skill-authoring.md` P5): `skills/tesser-build/python.md`
+  gains "A type names what the value is" and "A function is declared at module
+  level or as a method" beside the unquoted-annotation rule
+  (skill-version 69 → 71, the last bump carrying the universal-checks list in
+  `testing.md`, which named `TB004`/`TB020`/`TB030`/`TB033` and not the three
+  every-module codes — this branch proved it incomplete by marking
+  `conftest.py:77`);
+  `rationale/coverage.md` gains both enforcement rows and both
+  skill-materializations rows; `roadmap/registry.json` adds `TB022` to
+  `norm-annotations` and a new `norm-function-placement` row for `TB023`, which
+  regenerates `ROADMAP.md`.
+
 ## [0.0.100.0] - 2026-09-06
 
 A mapper's local is named for the target, not for the mapper. This was the one
@@ -28,7 +155,6 @@ finding every migrated tree reported independently in v0.0.98.0.
   `examples/llmport` (9), `examples/errorspy` (7), `examples/ports` (7),
   `layout` (7), `examples/asyncpg` (5). Two are production services; the rest
   are tests.
-
 ## [0.0.99.0] - 2026-09-06
 
 The export list is also the read list. `TB060` said which package you may

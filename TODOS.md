@@ -740,6 +740,200 @@ too — so today the analyzer reports a metadata string as a quoted type.
   `test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it`
   locks the present behaviour so a change is visible.
 
+## How far TB022/TB023's families reach (2026-09-06, v0.0.97.0)
+
+`TB022` bans exactly three names — `Any`, `Callable`, `Awaitable` — wherever a
+module names them. Each sits at the head of a family, and the rest of each
+family is unruled. The 21 debt-marked sites are the migration this ban owes;
+these are the questions about whether the ban should be wider before that
+migration runs.
+
+- [ ] **`Coroutine` and `AnyStr` — the one-token evasions.** `typing.Coroutine[Any, Any, X]`
+  is `Awaitable[X]` with two more `Any`s, and `AnyStr` is `Any` constrained to
+  two types. *For adding:* no gated tree names either, so the cost is zero and
+  a ban without them can be sidestepped by a rename. *Against:* the ruling
+  named three, and `Coroutine`'s third slot is the answer type, so it is
+  strictly more informative than `Awaitable` — the argument that it names the
+  waiting is weaker there.
+- [ ] **`object` in type position.** The checked top type: `dict[str, object]`
+  and `abc.Callable[..., object]` appear in `tesser-py` and `llmport`. *For:*
+  it is `Any` that survives `--strict`, and it names no value either.
+  *Against:* unlike `Any` it does not switch the checker off — a caller must
+  narrow before using it — and `object.__setattr__` is the value-object
+  idiom, so the check would have to tell the annotation apart from the
+  builtin.
+- [ ] **`typing.cast` and `# type: ignore`.** Both assert a type the checker
+  cannot verify — the same silent site as `Any`, written as a promise instead
+  of a hole. Three `cast` sites (all at an engine boundary: `restate.Context`,
+  `hypercorn` ASGI) and seven `type: ignore` sites today. `# type: ignore` is
+  currently *exempt* from `TB020` as a machine directive, so banning it means
+  reading a comment the comments norm agreed not to read.
+- [x] **`lambda` — RULED 2026-09-06, shipped as `TB023`.** A lambda is the
+  value form of the `Callable` the type rule bans, and the two are different
+  sites: `tesser.errors.collect`'s signature drew `TB022` while its three call
+  sites drew nothing. 18 lambdas over 17 lines, all marked.
+- [x] **`TB023`'s inline-`def` dodge — RULED 2026-09-06, closed in the same
+  wave.** A nested `def` is now the same finding. The reason that decided it is
+  placement, not spelling: `TB040` keys on which module a function belongs to,
+  `TB070` on which tier its test lives in, and `TB071` on every *module-level*
+  function in a test module being a test, a `@ts.helper` or a `@ts.fake`. A
+  nested function has no placement, so it is invisible to the totality checks
+  by construction. **This was ruled on a wrong number** — the session reported
+  "zero sites today"; the measured count is 109.
+- [ ] **`TB022` fires in value position, not just type position.** The match is
+  position-blind by design — that is what lets it reach a `typing.cast`
+  argument, a `Callable` base class and a `TypeVar` bound, which are the
+  positions the annotation reader never walks. The cost, measured during the
+  v0.0.97.0 ship review: an *identifier* named `Any`, `Callable` or `Awaitable`
+  also reports. `Any = "any"` as an enum member, and a `Scope.Any` attribute
+  read, both draw `TB022` in code with no type in sight. Zero sites in the
+  gated trees today, so nothing is red — but the first consumer with an `Any`
+  enum member gets a finding whose message ("a type names what the value is")
+  does not describe their code. *For narrowing:* the message is wrong for that
+  site, and a rule that misreports is worse than one that under-reports.
+  *Against:* every narrowing needs a notion of "type position", which is
+  exactly the annotation-reader scope the rule was written to escape; and the
+  name collision is itself worth a finding, since a domain identifier named
+  `Any` reads as the typing one. Deliberately NOT locked by a test either way,
+  so whichever ruling lands does not have to fight a fixture.
+- [ ] **`TB023`'s two populations may want two codes.** The `key=` shape (7
+  sites) is a decision written where nothing reads it — closer to `TB082` than
+  to `TB022` — while the deferred-call shape (11 sites) is `TB022`'s value
+  half. Nested `def`s are a third population again. One code reports all of
+  them with one message that names two fixes. Whether the conformance wave
+  wants them split is answerable after the migration, not before.
+- [ ] **The async protocols stay legal, and that needs saying.**
+  `AsyncContextManager` is *required* by `TB081` as a `ts.Store.transaction`
+  return, and `AsyncIterator` is what the implementation yields. Neither is an
+  escape from naming a value, so neither is a candidate — recorded here so a
+  later "ban the async family" reading does not sweep them in.
+
+## What TB023 has to let through (2026-09-06, the exception list)
+
+`TB023` bans a `lambda` anywhere and a `def` inside another function. 126
+lines carry a marker — 17 lambdas (18 sites), 109 nested functions — and the conformance
+wave cannot run until this list is ruled, because a rule with no exceptions at
+this scale is a rule that gets suppressed rather than followed. **The question
+is not "is a nested function bad" but "which of these 126 has a relocation
+available, and what is the shape of the ones that do not."** The populations,
+measured:
+
+- [ ] **The analyzer's own parsing closures — 60 in `checks.py`, 1 in
+  `rulebook.py`.** `Annotation.__init__` alone holds `head_of`, `candidates`,
+  `names_bool`, `is_union` and `primitive_leaf`; they exist because a value
+  object does all its work in `__init__` (`TB080`) and the work is a recursive
+  walk over an `ast` node. Relocating them to module level makes them
+  module-level functions in a domain module, which `TB051` and the module
+  function policy have their own views about; relocating them to methods makes
+  them public surface on a value object, which `TB019` reads. This is the same
+  question as **Foreign types at the analyzer's door** below, one level down:
+  the closure exists because the foreign type has no domain object yet. Rule
+  them together.
+- [ ] **A test's local fake behavior — 43 across the example, tesser-py and
+  tessercheck-py test modules.** `examples/llmport/srv/voice/test_agent.py` has 11: `def
+  halt`, `def drive` — a coroutine the test hands to the thing under test so
+  it can assert what happened. `TB030` says a test double is a hand-written
+  fake and `TB071`/`TB072` say a test module holds tests, `@ts.helper`s and
+  `@ts.fake`s. A nested `def` is a fourth thing, and the honest reading is
+  that it is a `@ts.fake` that never got declared — but a `@ts.fake` is a
+  *class*, and some of these are one function. Does the testing norm need a
+  declared per-test callable, or does the fake become a class with one method?
+- [ ] **An engine's registration callback — `examples/durable-execution`
+  `ordering/adapters/jobs/restate.py` (`def quote`, `def run` inside
+  `__init__`).** The SDK wants a function registered against a handler name at
+  construction time. The closure captures `self`. This is the shape with the
+  least obvious relocation, because the engine's API is the constraint, not
+  the code's taste — and it is exactly where the durable-execution example's
+  existing debt markers already sit.
+- [ ] **A host's server loop — `srv/cli/main.py`, `srv/http/main.py`,
+  `srv/voice/agent.py` in three trees, 1 each.** A `def serve()` nested in
+  `main()` so it closes over the parsed config. `srv` modules already carry
+  their own function rules (`SRV_FUNCTIONS`); the question is whether the
+  answer here is "a host is a class" or "a nested function is legal in `srv`
+  and nowhere else."
+- [ ] **Four markers the wave can retire by fixing code, not excusing it**
+  (found by the v0.0.97.0 ship review's simplification pass, deferred here
+  deliberately so the exception list is ruled before any migration runs).
+  `KindTable.block_of`'s `bisect.bisect_left(self._entries, (wanted_module,
+  wanted_name), key=lambda item: (item[0], item[1]))` at `checks.py:1205` — the
+  key is a **no-op**, verified empirically across prefix, exact, before-first
+  and after-last probes: a 2-tuple probe already compares strictly less than
+  any 3-tuple sharing its prefix, so bisect lands on the same index without it.
+  Deleting the key retires the marker and removes dead code. The other three
+  are sort keys that `operator` replaces —
+  `checks.py:6762` `key=lambda item: (item.lineno, item.col_offset)` →
+  `operator.attrgetter("lineno", "col_offset")`, `checks.py:2901`
+  `key=lambda node: node.lineno` → `operator.attrgetter("lineno")`, and
+  `checks.py:11010` `key=lambda entry: entry[:3]` →
+  `operator.itemgetter(0, 1, 2)` — which costs one `stdlib operator` line in
+  `tessercheck-py/.tesser-root`, exactly as `bisect` is widened today. The
+  v0.0.98.0/v0.0.99.0 merge added two more `key=` sites that belong in the same
+  ruling: `source_reader.py:132` `key=lambda source: source.path`, which
+  `operator.attrgetter("path")` replaces, and `checks.py:10440`
+  `key=lambda v: int(v.line())`, which does not — it reads through a method and
+  needs either a named function or an ordering on `Violation` itself.
+- [ ] **`TB022` is unsatisfiable for `ts.JobContext.call`, and that is the
+  toolkit's own API.** Red-team finding, v0.0.97.0 ship review. `ts.JobContext`
+  declares `async def call[I, O](self, step: abc.Callable[[typing.Any, I],
+  abc.Awaitable[O]], request: I) -> O`, and every implementer must reproduce
+  the signature verbatim to type-check — `examples/minimal`'s
+  `alpha/adapters/jobs/engine.py` and durable-execution's
+  `ordering/adapters/jobs/restate.py` both do (both were `*_context.py` until
+  the v0.0.98.0 naming wave folded them in), both debt-marked. This is not backlog a conformance wave can retire: it is a
+  permanent finding forced by a shipped Protocol, and `python.md` tells the
+  reader to fix it with a `ts.Port`, which is impossible here because the
+  parameter *is* the step function the engine hands back. Rule it the way
+  `AsyncContextManager`/`AsyncIterator` were ruled: either carve the
+  `ts.JobContext.call` signature out of `TB022`, or redesign `call` to take a
+  named step object. Until then the rule asks consumers to fix an unfixable
+  line.
+- [ ] **"Wrap it in a function-local class" is not an acceptable `TB023`
+  retirement.** The `ClassDef` arm resets `enclosed` unconditionally at every
+  depth, so `def outer(): class C: def m(self): ...` produces zero findings —
+  verified. That is the cheapest mechanical way to clear any of the 109 nested
+  `def` markers, and it converts a visible marker into an invisible evasion
+  while defeating the rule's own rationale (a method of a function-local class
+  has no more placement than the nested `def` it replaced). Rule the reset
+  before the wave runs, or the wave has 109 sites pointed at the dodge.
+- [ ] **Two generated artifacts disagree about the skill rendering, and both
+  gates pass.** `ROADMAP.md` renders the Skill-doc cell as `—` ("intentionally
+  n/a" per its own legend) for `Norm: annotations` and `Norm: function
+  placement`, while `rationale/coverage.md` names
+  `python.md#building-domain-code-in-python` for the same codes and this change
+  added ~50 lines of exactly that rendering. Cause: `roadmap/generate.py`
+  returns the n/a symbol whenever a registry row has no `"skill"` key, and the
+  totality guard only runs file→row, never row→rendering, so `—` is an
+  unchecked assertion rather than a derived fact. Give both rows a skill
+  binding, or make a missing key render as unknown.
+- [ ] **The resolver-route column in `coverage.md` was never checked, and
+  `TB021`'s row is still wrong.** `coverage_test.go`'s
+  `TestSkillMaterializationAnchors` validates only the `file.md#anchor` cells,
+  never the route text — so `TB021` shipped in v0.0.96.0 naming a `SKILL.md`
+  route that did not exist, and `TB022`/`TB023` copied it. The two routes were
+  added to `SKILL.md`'s Mode 2 table in this change (covering `TB021` as well),
+  but the column is still unguarded: extend the test to assert every non-`—`
+  route cell appears verbatim in `SKILL.md`.
+- [ ] **A cited `py_example` can be a counterexample.** `norm-function-placement`
+  and `norm-annotations` cite `examples/minimal` (and `examples/python-app`),
+  and all of those trees carry debt markers for exactly the codes the rows
+  claim — so `ROADMAP.md` renders "Py example ✅" for a norm whose exemplar only
+  passes by excusing the rule. `examples/ports` is genuinely marker-free. Fix
+  the citations, or add a guard failing when a row's `py_example` tree holds a
+  marker naming one of that row's `py_checks`.
+- [ ] **The report is still not line-ordered.** `TB023` now sorts its own
+  findings, but `Codebase.violations()` extends per check, per module, and
+  nothing sorts globally — so a file with a `TB020` and a `TB022` finding still
+  reports them out of line order, and every `TB090` lands after everything
+  else. One `sorted(kept, key=(path, line, code))` before the return would
+  subsume every per-check sort.
+- [ ] **The class-in-a-function hole, which the check leaves open on
+  purpose.** A `ClassDef` resets the scope, so a class defined inside a test
+  function has ordinary methods, not nested functions. That is right for the
+  `ts.Outcome` gate tests, which define a malformed subclass inside the test
+  that proves it is rejected — but it also means "wrap it in a class" is an
+  available dodge for anything else. Rule whether the reset stays unconditional
+  or is scoped to a test module.
+
 ## Foreign types at the analyzer's door (2026-08-30, deferred rule)
 
 The TB051 burn-down of `tessercheck/domain/checks.py` decomposes `Codebase`'s

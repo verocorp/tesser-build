@@ -17,7 +17,7 @@ import tesser.errors as errors
 class FakeJobContext(ts.JobContext):
 
     async def call[I, O](
-        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I
+        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I  # tesser:debt TB022
     ) -> O:
         return await step(None, request)
 
@@ -28,7 +28,7 @@ class TestRestateQuoting:
         service = restate.Service("OrderingActions")
 
         @service.handler()
-        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:
+        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:  # tesser:debt TB023
             return ports.QuoteResponse(cents=250)
 
         restate_quoting = gateways.RestateQuoting(quote)
@@ -41,7 +41,7 @@ class TestRestateQuoting:
         service = restate.Service("OrderingActions")
 
         @service.handler()
-        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:
+        async def quote(ctx: restate.Context, request: ports.QuoteRequest) -> ports.QuoteResponse:  # tesser:debt TB023
             raise restate.TerminalError("no price for sku 'nope'", status_code=404)
 
         restate_quoting = gateways.RestateQuoting(quote)

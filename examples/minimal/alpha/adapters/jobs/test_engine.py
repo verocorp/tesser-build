@@ -39,7 +39,7 @@ class TestEngineJob:
 class TestInlineJobContext:
 
     def test_call_runs_the_step_in_place(self) -> None:
-        async def echo(job_context: object, request: str) -> str:
+        async def echo(job_context: object, request: str) -> str:  # tesser:debt TB023
             return request
 
         assert asyncio.run(jobs.InlineJobContext().call(echo, "a")) == "a"

@@ -94,7 +94,7 @@ class TestToolAgent:
     def test_the_agent_speaks_the_instructions_the_surface_owns(self) -> None:
         halted: list[str] = []
 
-        async def halt() -> None:
+        async def halt() -> None:  # tesser:debt TB023
             halted.append("halt")
 
         fake_tool_surface = FakeToolSurface(tool_turn(), tool_turn())
@@ -106,7 +106,7 @@ class TestToolAgent:
     def test_opening_the_session_mounts_the_tools_the_surface_handed_back(self) -> None:
         halted: list[str] = []
 
-        async def halt() -> None:
+        async def halt() -> None:  # tesser:debt TB023
             halted.append("halt")
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
@@ -121,7 +121,7 @@ class TestToolAgent:
     def test_a_tool_call_reaches_the_route_of_that_name_and_rebinds_to_its_turn(self) -> None:
         halted: list[str] = []
 
-        async def halt() -> None:
+        async def halt() -> None:  # tesser:debt TB023
             halted.append("halt")
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
@@ -132,7 +132,7 @@ class TestToolAgent:
             halt,
         )
 
-        async def drive() -> str:
+        async def drive() -> str:  # tesser:debt TB023
             await tool_agent.on_enter()
             return await tool_agent.tools[0]({"name": "Ada"})
 
@@ -146,13 +146,13 @@ class TestToolAgent:
     def test_a_tool_the_routes_do_not_name_is_a_tool_error_and_never_halts(self) -> None:
         halted: list[str] = []
 
-        async def halt() -> None:
+        async def halt() -> None:  # tesser:debt TB023
             halted.append("halt")
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
         tool_agent = voice.ToolAgent(fake_tool_surface, (), halt)
 
-        async def drive() -> str:
+        async def drive() -> str:  # tesser:debt TB023
             await tool_agent.on_enter()
             return await tool_agent.tools[0]({"name": "Ada"})
 
@@ -164,7 +164,7 @@ class TestToolAgent:
     def test_a_call_the_model_can_correct_rebinds_from_the_surface_and_never_halts(self) -> None:
         halted: list[str] = []
 
-        async def halt() -> None:
+        async def halt() -> None:  # tesser:debt TB023
             halted.append("halt")
 
         fake_tool_surface = FakeToolSurface(
@@ -176,7 +176,7 @@ class TestToolAgent:
             halt,
         )
 
-        async def drive() -> str:
+        async def drive() -> str:  # tesser:debt TB023
             await tool_agent.on_enter()
             return await tool_agent.tools[0]({"name": "Ada"})
 
@@ -190,7 +190,7 @@ class TestToolAgent:
     def test_a_failure_the_model_cannot_correct_halts_the_session_and_propagates(self) -> None:
         halted: list[str] = []
 
-        async def halt() -> None:
+        async def halt() -> None:  # tesser:debt TB023
             halted.append("halt")
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
@@ -200,7 +200,7 @@ class TestToolAgent:
             halt,
         )
 
-        async def drive() -> str:
+        async def drive() -> str:  # tesser:debt TB023
             await tool_agent.on_enter()
             return await tool_agent.tools[0]({"name": "Ada"})
 
@@ -213,7 +213,7 @@ class TestToolAgent:
     def test_a_surface_that_cannot_open_halts_the_session_and_propagates(self) -> None:
         halted: list[str] = []
 
-        async def halt() -> None:
+        async def halt() -> None:  # tesser:debt TB023
             halted.append("halt")
 
         tool_agent = voice.ToolAgent(FakeUnreachableToolSurface(), (), halt)

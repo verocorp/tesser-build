@@ -26,11 +26,11 @@ class LlmToolHandler(ts.Handler):
         self._booking_id = booking_id
         self._declarations: dict[
             str,
-            tuple[str, abc.Callable[[client.BookingStateResponse], dict[str, object]]],
+            tuple[str, abc.Callable[[client.BookingStateResponse], dict[str, object]]],  # tesser:debt TB022
         ] = {
             PROVIDE_NAME: (
                 "Record the caller's full name.",
-                lambda _state: {
+                lambda _state: {  # tesser:debt TB023
                     "type": "object",
                     "properties": {"name": {"type": "string"}},
                     "required": ["name"],
@@ -39,7 +39,7 @@ class LlmToolHandler(ts.Handler):
             ),
             CHOOSE_SLOT: (
                 "Record the slot the caller chose.",
-                lambda state: {
+                lambda state: {  # tesser:debt TB023
                     "type": "object",
                     "properties": {
                         "slot": {"type": "string", "enum": list(state.offered_slots)}
@@ -50,7 +50,7 @@ class LlmToolHandler(ts.Handler):
             ),
             CONFIRM_BOOKING: (
                 "Book the chosen slot after the caller confirms.",
-                lambda _state: {
+                lambda _state: {  # tesser:debt TB023
                     "type": "object",
                     "properties": {},
                     "additionalProperties": False,
