@@ -149,6 +149,21 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   name — which is the whole point of hiding them. Decide whether an equality
   test is owed for a hidden value object, and if so how it is written.
 
+- [ ] **A module merge widened an env-read exemption.** `examples/python-app`'s
+  `ruff.toml` exempts exactly one file from the `TID251` ban on reading the
+  environment, and that file used to be `app/repository.py` — the config
+  repository, and nothing else. The sibling-module ban merged `app.py`,
+  `config.py`, `loader.py` and `repository.py` into one `app/app.py`, so the
+  exemption now names the whole app shell. Nothing reads the environment outside
+  the config repository today, and `tests/test_architecture_teeth.py` was updated
+  to assert the new exempt file, so the guard still bites — but the blast radius
+  of the exemption grew from one small module to the module that also holds the
+  loader and the app itself. This is the first case of the merge rule widening a
+  guard rather than only moving code, and it will recur wherever a narrow
+  file-scoped exemption names a module that gets merged. Either the exemption
+  learns a finer scope than a file, or the merge rule needs an escape for a
+  module a linter exemption names.
+
 ## Left open by the v0.0.89.0 adversarial pass (2026-08-29, PR #148)
 
 Seventeen bypass probes were run against the new clauses — twelve mine, five

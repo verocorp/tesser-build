@@ -150,7 +150,7 @@ database instead of a DSN.
   database per distinct request — built before the components; each component
   is handed its own database directly; `open()` opens them all; `close()`
   closes the components, then the databases (bounded, as above).
-- `alpha/component/config.py`, `beta/component/config.py`: `Config` derives
+- `alpha/component/component.py`, `beta/component/component.py`: `Config` derives
   `database: DatabaseRequest | None` from the storage coordinate.
 - `alpha/component/component.py`, `beta/component/component.py`: take the
   database as decided above; no request builds the memory repository, a

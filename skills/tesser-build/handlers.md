@@ -168,7 +168,8 @@ read endpoint over a cross-context read model).
    version it, and can't move it behind a prefix without editing the context.
    The host declares `(method, pattern, endpoint)` and passes the extracted
    parameters in the request DTO; the handler never sees a URL
-   (verified impl: `examples/python-app/srv/http/host.py:routes_for`).
+   (verified impl: `examples/python-app/srv/http/main.py`, where `HttpHost.__init__`
+   builds the route table).
 6. **Buffered body, or streamed?** The verified impl **buffers**: the host reads
    a declared, finite, under-cap body into `bytes`, and refuses the rest — an
    oversized body is a 413, a `Transfer-Encoding: chunked` body is a 411, both

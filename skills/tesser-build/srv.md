@@ -57,7 +57,7 @@ Yes → a host.
    `examples/python-app/tests/test_bootstrap_once.py`) and runs its `Host`
    (`run(stop)` — serve, then drain on stop) under a runner that installs
    SIGINT/SIGTERM and calls `App.close()` in a `finally`
-   (`examples/python-app/srv/http/main.py`, `srv/http/host.py`; both signals
+   (`examples/python-app/srv/http/main.py`, which now holds the host too; both signals
    locked to exit 0 by `examples/python-app/srv/http/test_main.py`, though the
    close-on-crash path itself is currently unasserted). Installing the signal
    handler is **load-bearing**: a bare `finally: app.close()` does *not* survive
@@ -129,8 +129,7 @@ A missing app-config var stays an empty coordinate and `bootstrap.new` fails
 fast on it — the host never invents a default for someone else's config; a
 host's own launch knobs (a listen port) may default locally, inside `from_env`.
 Construction mechanics: `python.md#inbound-handlers-and-hosts`; verified impl:
-`examples/python-app/srv/` (`run.py`, `http/host.py`, `http/main.py`,
-`cli/main.py`).
+`examples/python-app/srv/` (`http/main.py`, `cli/main.py`).
 
 The same route-and-transform split holds per mechanism: the **HTTP** host maps
 `(method, path)` → handler and moves bytes; the **CLI** host maps a command name

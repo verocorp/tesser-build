@@ -24,10 +24,11 @@ them.
 > subclassing one is a *declaration* of what a class is — and **tessercheck**
 > (`tessercheck-py/`) verifies everything against its declaration, at zero
 > findings in CI. The domain mechanics live in
-> `examples/python-app/campaign/domain/` (leaf value objects in `values.py`,
-> the compound `Money` backed by `decimal.Decimal` in `money.py`, the
-> collection value object `Labels` in `labels.py`, the entity `ShortLink`, the
-> aggregate `Campaign`). The service, repository, public-interface, and
+> `examples/python-app/campaign/domain/` (the leaf value objects, the compound
+> `Money` backed by `decimal.Decimal`, the entity `ShortLink` and the aggregate
+> `Campaign` all in `campaign.py`, since the sibling-module ban puts two modules
+> that need each other in one module; the collection value object `Labels`
+> stands alone in `labels.py`). The service, repository, public-interface, and
 > composition-root mechanics — and the app-level anatomy of `bootstrap` +
 > per-context `client.py`/`wiring` + `srv` hosts + inbound handlers — are
 > `examples/python-app/` end to end (multi-context, self-enforcing tests).
@@ -228,7 +229,7 @@ family code).
 validate in the one constructor:**
 
 ```python
-# campaign/domain/values.py (verified impl)
+# campaign/domain/campaign.py (verified impl)
 import tesser.domain as ts
 
 import tesser.errors as errors
@@ -280,7 +281,7 @@ child; what remains the compound's own is exactly the **cross-field
 invariants**.
 
 ```python
-# campaign/domain/money.py (verified impl)
+# campaign/domain/campaign.py (verified impl)
 class MoneySpec(ts.Spec):
 
     def __init__(self, amount: str, currency: str) -> None:
@@ -477,7 +478,7 @@ with its own invariant, not a second factory on this one.
 ## Entities
 
 ```python
-# campaign/domain/short_link.py (verified impl)
+# campaign/domain/campaign.py (verified impl)
 class ShortLinkSpec(ts.Spec):
 
     def __init__(self, slug: str, target_url: str, active: bool) -> None:
@@ -1412,14 +1413,14 @@ class Handler(ts.Handler):
   asserts on the returned `HttpResponse`. Only a handler imports its own
   context's client (TB060).
 - **`respond` is the whole error table for the mechanism** (it lives with the
-  host, `srv/http/host.py`): shape guard → 400, domain kind → status through
+  host, `srv/http/main.py`): shape guard → 400, domain kind → status through
   the one pure mapper (`status_for` over the closed `Kind` set), infra → 503,
   unexpected → 500 — plus the host's own framing rejections (413, 411)
   through the same table. `HttpResponse.problem` renders the RFC 9457-shaped
   object — decided once, at this path.
 
 ```python
-# srv/http/host.py (verified impl) — the route table: the whole URL surface, one place
+# srv/http/main.py (verified impl) — the route table: the whole URL surface, one place
 def routes_for(app: App) -> tuple[Route, ...]:
     campaign = http.Handler(app.campaign)         # one handler per exposed context,
     reports = reports_http.Handler(app.reports)   # built once from the single App
