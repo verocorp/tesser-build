@@ -1,0 +1,1 @@
+from scheduling.adapters.gateways.directory_memory import MemorySlotDirectory as MemorySlotDirectory

@@ -1,20 +1,60 @@
 from __future__ import annotations
 
-import app.app as app
-import app.config as config
-import repo.component.config as repo_config
+import tesser.testing as ts
+
+import app
+import repo.component as component
+
+
+@ts.fake
+class FakeConfigRepository(app.AppConfigRepository):
+
+    def __init__(self) -> None:
+        self.reads = 0
+
+    def get(self) -> app.AppConfig:
+        self.reads += 1
+        return app.AppConfig(app.Spec(repo=component.Config(component.Spec())))
+
+
+def test_a_config_carries_the_slice_its_component_reads() -> None:
+    config = component.Config(component.Spec())
+
+    assert app.AppConfig(app.Spec(repo=config)).repo is config
+
+
+def test_the_env_repository_reads_a_config() -> None:
+    assert isinstance(app.EnvConfigRepository().get(), app.AppConfig)
+
+
+def test_each_read_returns_its_own_config() -> None:
+    env_config_repository = app.EnvConfigRepository()
+
+    assert env_config_repository.get() is not env_config_repository.get()
 
 
 def test_an_app_builds_one_component_per_slice() -> None:
-    cfg = config.Config(config.Spec(repo=repo_config.Config(repo_config.Spec())))
+    app_config = app.AppConfig(app.Spec(repo=component.Config(component.Spec())))
 
-    assert app.App(cfg).repo.client is not None
+    assert app.LayoutApp(app_config).repo.client is not None
 
 
 def test_an_app_closes_its_components() -> None:
-    cfg = config.Config(config.Spec(repo=repo_config.Config(repo_config.Spec())))
-    built = app.App(cfg)
+    app_config = app.AppConfig(app.Spec(repo=component.Config(component.Spec())))
+    layout_app = app.LayoutApp(app_config)
 
-    built.close()
+    layout_app.close()
 
-    assert built.repo.client is not None
+    assert layout_app.repo.client is not None
+
+
+def test_a_loader_reads_its_repository_once_per_load() -> None:
+    fake_config_repository = FakeConfigRepository()
+
+    app.AppLoader(fake_config_repository).load()
+
+    assert fake_config_repository.reads == 1
+
+
+def test_a_loader_returns_an_app_built_from_what_the_repository_gave_it() -> None:
+    assert app.AppLoader(FakeConfigRepository()).load().repo.client is not None

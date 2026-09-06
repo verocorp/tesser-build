@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 
-import scheduling.application.ports.slot_directory as slot_directory
+import scheduling.application.ports as ports
 
 
 class MemorySlotDirectory(ts.Gateway):
@@ -10,16 +10,20 @@ class MemorySlotDirectory(ts.Gateway):
         self.slots = list(slots)
         self.reserved: list[tuple[str, str]] = []
 
-    def available(self, request: slot_directory.AvailableSlotsRequest) -> slot_directory.AvailableSlotsResponse:
-        return slot_directory.AvailableSlotsResponse(slots=tuple(self.slots))
+    def available(
+        self, available_slots_request: ports.AvailableSlotsRequest
+    ) -> ports.AvailableSlotsResponse:
+        return ports.AvailableSlotsResponse(slots=tuple(self.slots))
 
-    def reserve(self, request: slot_directory.ReserveSlotRequest) -> slot_directory.ReserveSlotResponse:
-        if request.slot not in self.slots:
-            return slot_directory.ReserveSlotResponse(
-                outcome=slot_directory.ReservationOutcome.SLOT_TAKEN, available=tuple(self.slots)
+    def reserve(
+        self, reserve_slot_request: ports.ReserveSlotRequest
+    ) -> ports.ReserveSlotResponse:
+        if reserve_slot_request.slot not in self.slots:
+            return ports.ReserveSlotResponse(
+                outcome=ports.ReservationOutcome.SLOT_TAKEN, available=tuple(self.slots)
             )
-        self.slots.remove(request.slot)
-        self.reserved.append((request.slot, request.name))
-        return slot_directory.ReserveSlotResponse(
-            outcome=slot_directory.ReservationOutcome.RESERVED, available=()
+        self.slots.remove(reserve_slot_request.slot)
+        self.reserved.append((reserve_slot_request.slot, reserve_slot_request.name))
+        return ports.ReserveSlotResponse(
+            outcome=ports.ReservationOutcome.RESERVED, available=()
         )

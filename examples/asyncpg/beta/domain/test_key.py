@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import beta.domain.key as key
+import beta.domain as domain
 
 
 class TestKey:
 
     def test_a_key_equals_by_value(self) -> None:
-        first = key.Key("k")
-        second = key.Key("k")
+        first = domain.Key("k")
+        second = domain.Key("k")
         assert first == second

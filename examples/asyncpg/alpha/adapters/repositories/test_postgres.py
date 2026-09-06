@@ -6,8 +6,8 @@ import os
 import asyncpg
 import pytest
 
-import alpha.adapters.repositories.postgres as postgres
-import alpha.application.ports.widget_repository as widget_repository
+import alpha.adapters.repositories as repositories
+import alpha.application.ports as ports
 import pgdatabase.database as pgdatabase
 import tesser.errors as errors
 
@@ -21,19 +21,19 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
-        async with widget_store.transaction() as widgets_repo:
-            saved = await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="p", standing="kept"))
-        async with widget_store.transaction() as widgets_repo:
-            loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="a"))
-            found = await widgets_repo.find_widget(widget_repository.FindWidgetRequest(name="a"))
-            missing = await widgets_repo.find_widget(widget_repository.FindWidgetRequest(name="x"))
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
+        async with postgres_widget_store.transaction() as widget_repository:
+            saved = await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="p", standing="kept"))
+        async with postgres_widget_store.transaction() as widget_repository:
+            loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
+            found = await widget_repository.find_widget(ports.FindWidgetRequest(name="a"))
+            missing = await widget_repository.find_widget(ports.FindWidgetRequest(name="x"))
         await database.close()
         assert saved.name == "a"
         assert loaded.part == "p"
         assert loaded.standing == "kept"
-        assert found.found is widget_repository.Found.YES
-        assert missing.found is widget_repository.Found.NO
+        assert found.found is ports.Found.YES
+        assert missing.found is ports.Found.NO
 
     async def test_a_released_widget_is_loaded_back_as_released(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
@@ -42,13 +42,13 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
-        async with widget_store.transaction() as widgets_repo:
-            await widgets_repo.save_widget(
-                widget_repository.SaveWidgetRequest(name="a", part="p", standing="released")
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
+        async with postgres_widget_store.transaction() as widget_repository:
+            await widget_repository.save_widget(
+                ports.SaveWidgetRequest(name="a", part="p", standing="released")
             )
-        async with widget_store.transaction() as widgets_repo:
-            loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="a"))
+        async with postgres_widget_store.transaction() as widget_repository:
+            loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
         await database.close()
         assert loaded.standing == "released"
 
@@ -59,18 +59,18 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
-        async with widget_store.transaction() as widgets_repo:
-            await widgets_repo.add_widget(
-                widget_repository.AddWidgetRequest(name="a", part="p", standing="released")
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
+        async with postgres_widget_store.transaction() as widget_repository:
+            await widget_repository.add_widget(
+                ports.AddWidgetRequest(name="a", part="p", standing="released")
             )
         with pytest.raises(errors.DomainError) as caught:
-            async with widget_store.transaction() as widgets_repo:
-                await widgets_repo.add_widget(
-                    widget_repository.AddWidgetRequest(name="a", part="q", standing="kept")
+            async with postgres_widget_store.transaction() as widget_repository:
+                await widget_repository.add_widget(
+                    ports.AddWidgetRequest(name="a", part="q", standing="kept")
                 )
-        async with widget_store.transaction() as widgets_repo:
-            loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="a"))
+        async with postgres_widget_store.transaction() as widget_repository:
+            loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
         await database.close()
         assert caught.value.kind is errors.Kind.CONFLICT
         assert loaded.part == "p"
@@ -87,9 +87,9 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
-        async with widget_store.transaction() as widgets_repo:
-            loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="old"))
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
+        async with postgres_widget_store.transaction() as widget_repository:
+            loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="old"))
         await database.close()
         assert loaded.standing == "kept"
 
@@ -100,10 +100,10 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
         with pytest.raises(errors.DomainError) as caught:
-            async with widget_store.transaction() as widgets_repo:
-                await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="x"))
+            async with postgres_widget_store.transaction() as widget_repository:
+                await widget_repository.load_widget(ports.LoadWidgetRequest(name="x"))
         await database.close()
         assert caught.value.kind is errors.Kind.NOT_FOUND
 
@@ -114,15 +114,15 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
-        async with widget_store.transaction() as widgets_repo:
-            await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="p", standing="kept"))
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
+        async with postgres_widget_store.transaction() as widget_repository:
+            await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="p", standing="kept"))
         with pytest.raises(RuntimeError):
-            async with widget_store.transaction() as widgets_repo:
-                await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="q", standing="kept"))
+            async with postgres_widget_store.transaction() as widget_repository:
+                await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="q", standing="kept"))
                 raise RuntimeError("abort")
-        async with widget_store.transaction() as widgets_repo:
-            loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="a"))
+        async with postgres_widget_store.transaction() as widget_repository:
+            loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
         await database.close()
         assert loaded.part == "p"
 
@@ -133,10 +133,10 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
         with pytest.raises(RuntimeError):
-            async with widget_store.transaction() as widgets_repo:
-                await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="p", standing="kept"))
+            async with postgres_widget_store.transaction() as widget_repository:
+                await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="p", standing="kept"))
                 raise RuntimeError("abort")
         await database.close()
         connection = await asyncpg.connect(dsn)
@@ -151,25 +151,25 @@ class TestPostgresWidgetStore:
         await connection.close()
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn), min_size=1, max_size=2)
         await database.open()
-        widget_store = postgres.PostgresWidgetStore(database)
-        async with widget_store.transaction() as widgets_repo:
-            await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="p", standing="kept"))
+        postgres_widget_store = repositories.PostgresWidgetStore(database)
+        async with postgres_widget_store.transaction() as widget_repository:
+            await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="p", standing="kept"))
         first_loaded = asyncio.Event()
         release_first = asyncio.Event()
         order: list[str] = []
 
         async def first() -> None:
-            async with widget_store.transaction() as widgets_repo:
-                await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="a"))
+            async with postgres_widget_store.transaction() as widget_repository:
+                await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
                 first_loaded.set()
                 await release_first.wait()
-                await widgets_repo.save_widget(widget_repository.SaveWidgetRequest(name="a", part="first", standing="kept"))
+                await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="first", standing="kept"))
                 order.append("first")
 
         async def second() -> None:
             await first_loaded.wait()
-            async with widget_store.transaction() as widgets_repo:
-                loaded = await widgets_repo.load_widget(widget_repository.LoadWidgetRequest(name="a"))
+            async with postgres_widget_store.transaction() as widget_repository:
+                loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
                 order.append(f"second saw {loaded.part}")
 
         second_task = asyncio.create_task(second())

@@ -1,46 +1,46 @@
 from __future__ import annotations
 
-import catalog.client.client as client
-import catalog.component.component as wire
+import catalog.client as client
+import catalog.component as component
 
 
 def test_the_wired_client_serves_an_item_it_stored() -> None:
-    svc = wire.Catalog().client
-    svc.add(client.AddItemRequest(id="a1", name="Anvil"))
-    got = svc.get(client.GetItemRequest(id="a1"))
-    assert tuple((view.id, view.name) for view in got.items) == (("a1", "Anvil"),)
+    catalog_client = component.Catalog().client
+    catalog_client.add(client.AddItemRequest(id="a1", name="Anvil"))
+    get_item_response = catalog_client.get(client.GetItemRequest(id="a1"))
+    assert tuple((view.id, view.name) for view in get_item_response.items) == (("a1", "Anvil"),)
 
 
 def test_the_wired_client_refuses_the_reserved_name() -> None:
-    svc = wire.Catalog().client
-    added = svc.add(client.AddItemRequest(id="c3", name="admin"))
-    assert added.items == ()
-    assert added.reason == "name is reserved"
+    catalog_client = component.Catalog().client
+    add_item_response = catalog_client.add(client.AddItemRequest(id="c3", name="admin"))
+    assert add_item_response.items == ()
+    assert add_item_response.reason == "name is reserved"
 
 
 def test_the_wired_client_accepts_a_name_that_is_not_reserved() -> None:
-    svc = wire.Catalog().client
-    added = svc.add(client.AddItemRequest(id="a1", name="Anvil"))
-    assert tuple((v.id, v.name) for v in added.items) == (("a1", "Anvil"),)
-    assert added.reason == ""
+    catalog_client = component.Catalog().client
+    add_item_response = catalog_client.add(client.AddItemRequest(id="a1", name="Anvil"))
+    assert tuple((v.id, v.name) for v in add_item_response.items) == (("a1", "Anvil"),)
+    assert add_item_response.reason == ""
 
 
 def test_the_wired_client_lists_everything_it_stored() -> None:
-    svc = wire.Catalog().client
-    svc.add(client.AddItemRequest(id="a1", name="Anvil"))
-    svc.add(client.AddItemRequest(id="b2", name="Bellows"))
-    listed = svc.list(client.ListItemsRequest())
-    assert tuple(view.name for view in listed.items) == ("Anvil", "Bellows")
+    catalog_client = component.Catalog().client
+    catalog_client.add(client.AddItemRequest(id="a1", name="Anvil"))
+    catalog_client.add(client.AddItemRequest(id="b2", name="Bellows"))
+    list_items_response = catalog_client.list(client.ListItemsRequest())
+    assert tuple(view.name for view in list_items_response.items) == ("Anvil", "Bellows")
 
 
 def test_a_wiring_hands_out_one_service() -> None:
-    component = wire.Catalog()
-    assert component.client is component.client
+    catalog = component.Catalog()
+    assert catalog.client is catalog.client
 
 
 def test_two_wirings_do_not_share_what_they_stored() -> None:
-    first = wire.Catalog()
-    second = wire.Catalog()
+    first = component.Catalog()
+    second = component.Catalog()
     first.client.add(client.AddItemRequest(id="a1", name="Anvil"))
-    got = second.client.get(client.GetItemRequest(id="a1"))
-    assert got.items == ()
+    get_item_response = second.client.get(client.GetItemRequest(id="a1"))
+    assert get_item_response.items == ()

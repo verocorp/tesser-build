@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import parcel.adapters.gateways.wire as wire
-import parcel.application.ports.parcel_wire as parcel_wire
-import parcel.domain.parcel as parcel
+import parcel.adapters.gateways as gateways
+import parcel.application.ports as ports
+import parcel.domain as domain
 
 
 def test_wire_golden_locks_the_payload_shape() -> None:
-    built = parcel.Parcel(
-        parcel.ParcelSpec(
+    parcel = domain.Parcel(
+        domain.ParcelSpec(
             code="PKG-2026-0042",
             items=3,
             weight_kg=21.5,
@@ -16,24 +16,24 @@ def test_wire_golden_locks_the_payload_shape() -> None:
             scanned_at="2026-07-20T10:16:15.123456-05:00",
         )
     )
-    record = parcel_wire.ParcelRecord(
-        code=str(built.code),
-        items=int(built.items),
-        weight_kg=float(built.weight),
-        label_digest=bytes(built.label_digest),
-        declared_value=str(built.declared_value),
-        scanned_at=str(built.scanned_at),
+    parcel_record = ports.ParcelRecord(
+        code=str(parcel.code),
+        items=int(parcel.items),
+        weight_kg=float(parcel.weight),
+        label_digest=bytes(parcel.label_digest),
+        declared_value=str(parcel.declared_value),
+        scanned_at=str(parcel.scanned_at),
         weight_class=(
-            parcel_wire.WeightClass.HEAVY
-            if str(built.weight_class()) == "heavy"
-            else parcel_wire.WeightClass.LIGHT
+            ports.WeightClass.HEAVY
+            if str(parcel.weight_class()) == "heavy"
+            else ports.WeightClass.LIGHT
         ),
     )
-    response = wire.ParcelWireGateway().to_payload(record)
-    assert response.parcel_code == "PKG-2026-0042"
-    assert response.item_count == 3
-    assert response.weight_kg == 21.5
-    assert response.label_digest_hex == "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-    assert response.declared_value == "199.99"
-    assert response.scanned_at == "2026-07-20T15:16:15.123456+00:00"
-    assert response.weight_class is parcel_wire.WeightClass.HEAVY
+    payload_response = gateways.ParcelWireGateway().to_payload(parcel_record)
+    assert payload_response.parcel_code == "PKG-2026-0042"
+    assert payload_response.item_count == 3
+    assert payload_response.weight_kg == 21.5
+    assert payload_response.label_digest_hex == "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    assert payload_response.declared_value == "199.99"
+    assert payload_response.scanned_at == "2026-07-20T15:16:15.123456+00:00"
+    assert payload_response.weight_class is ports.WeightClass.HEAVY

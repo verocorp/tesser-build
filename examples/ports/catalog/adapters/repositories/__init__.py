@@ -1,0 +1,1 @@
+from catalog.adapters.repositories.repo_memory import MemoryItemRepository as MemoryItemRepository

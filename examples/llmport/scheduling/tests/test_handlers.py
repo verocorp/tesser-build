@@ -1,13 +1,13 @@
 import pytest
 import tesser.testing as ts
 
-import scheduling.adapters.gateways.directory_memory as directory_memory
-import scheduling.adapters.handlers.handlers as handlers
-import scheduling.adapters.repositories.repo_memory as repo_memory
-import scheduling.application.service as application
-import scheduling.client.client as client
-import scheduling.domain.scheduling as domain
-import protocol.voice as voice
+import protocol
+import scheduling.adapters.gateways as gateways
+import scheduling.adapters.handlers as handlers
+import scheduling.adapters.repositories as repositories
+import scheduling.application as application
+import scheduling.client as client
+import scheduling.domain as domain
 
 
 @ts.fake
@@ -16,24 +16,34 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.pending = list(states)
         self.requests: list[object] = []
 
-    def begin(self, request: client.BeginBookingRequest) -> client.BookingStateResponse:
-        self.requests.append(request)
+    def begin(
+        self, begin_booking_request: client.BeginBookingRequest
+    ) -> client.BookingStateResponse:
+        self.requests.append(begin_booking_request)
         return self.pending.pop(0)
 
-    def provide_name(self, request: client.ProvideNameRequest) -> client.BookingStateResponse:
-        self.requests.append(request)
+    def provide_name(
+        self, provide_name_request: client.ProvideNameRequest
+    ) -> client.BookingStateResponse:
+        self.requests.append(provide_name_request)
         return self.pending.pop(0)
 
-    def choose_slot(self, request: client.ChooseSlotRequest) -> client.BookingStateResponse:
-        self.requests.append(request)
+    def choose_slot(
+        self, choose_slot_request: client.ChooseSlotRequest
+    ) -> client.BookingStateResponse:
+        self.requests.append(choose_slot_request)
         return self.pending.pop(0)
 
-    def confirm(self, request: client.ConfirmBookingRequest) -> client.BookingStateResponse:
-        self.requests.append(request)
+    def confirm(
+        self, confirm_booking_request: client.ConfirmBookingRequest
+    ) -> client.BookingStateResponse:
+        self.requests.append(confirm_booking_request)
         return self.pending.pop(0)
 
-    def status(self, request: client.StatusRequest) -> client.BookingStateResponse:
-        self.requests.append(request)
+    def status(
+        self, status_request: client.StatusRequest
+    ) -> client.BookingStateResponse:
+        self.requests.append(status_request)
         return self.pending.pop(0)
 
 
@@ -42,14 +52,14 @@ def test_the_tool_map_covers_exactly_the_domain_steps() -> None:
 
 
 def test_every_offered_tool_is_declarable_and_routable() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
+    llm_tool_handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
     offered = {name for names in handlers.TOOLS_FOR_STEP.values() for name in names}
 
-    assert offered == set(handler._declarations)
+    assert offered == set(llm_tool_handler._declarations)
     routes = (
-        voice.Route(handlers.PROVIDE_NAME, handler.provide_name),
-        voice.Route(handlers.CHOOSE_SLOT, handler.choose_slot),
-        voice.Route(handlers.CONFIRM_BOOKING, handler.confirm),
+        protocol.Route(handlers.PROVIDE_NAME, llm_tool_handler.provide_name),
+        protocol.Route(handlers.CHOOSE_SLOT, llm_tool_handler.choose_slot),
+        protocol.Route(handlers.CONFIRM_BOOKING, llm_tool_handler.confirm),
     )
     assert offered == {route.name for route in routes}
 
@@ -57,19 +67,19 @@ def test_every_offered_tool_is_declarable_and_routable() -> None:
 def test_a_tool_call_does_not_alias_the_arguments_it_was_handed() -> None:
     arguments: dict[str, object] = {"name": "Ada", "nested": {"a": 1}}
 
-    call = voice.ToolCall("provide_name", arguments)
+    tool_call = protocol.ToolCall("provide_name", arguments)
     arguments["name"] = "Eve"
     nested = arguments["nested"]
     assert isinstance(nested, dict)
     nested["a"] = 2
 
-    assert call.arguments == {"name": "Ada", "nested": {"a": 1}}
+    assert tool_call.arguments == {"name": "Ada", "nested": {"a": 1}}
 
 
 def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed_even_nested() -> None:
     slot: dict[str, object] = {"enum": ["mon-9am"]}
     parameters: dict[str, object] = {"type": "object", "properties": {"slot": slot}}
-    tool = voice.Tool("choose_slot", "Record the slot the caller chose.", parameters)
+    tool = protocol.Tool("choose_slot", "Record the slot the caller chose.", parameters)
 
     parameters["type"] = "string"
     slot["enum"] = ["INBOUND-CHANGED"]
@@ -86,7 +96,7 @@ def test_a_tool_declaration_does_not_alias_the_schema_it_was_handed_even_nested(
 
 
 def test_a_tool_declaration_renders_its_wire_schema() -> None:
-    tool = voice.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
+    tool = protocol.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
 
     assert tool.schema() == {
         "name": "provide_name",
@@ -96,63 +106,87 @@ def test_a_tool_declaration_renders_its_wire_schema() -> None:
 
 
 def test_a_route_carries_the_endpoint_the_host_calls() -> None:
-    scripted = FakeSchedulingClientScripted(client.BookingStateResponse(step="choose_slot", offered_slots=("mon-9am", "tue-2pm"), reply="offer the caller the available slots"))
-    handler = handlers.LlmToolHandler(scripted, "b1")
+    fake_scheduling_client_scripted = FakeSchedulingClientScripted(
+        client.BookingStateResponse(
+            step="choose_slot",
+            offered_slots=("mon-9am", "tue-2pm"),
+            reply="offer the caller the available slots",
+        )
+    )
+    llm_tool_handler = handlers.LlmToolHandler(fake_scheduling_client_scripted, "b1")
 
     routes = (
-        voice.Route(handlers.PROVIDE_NAME, handler.provide_name),
-        voice.Route(handlers.CHOOSE_SLOT, handler.choose_slot),
-        voice.Route(handlers.CONFIRM_BOOKING, handler.confirm),
+        protocol.Route(handlers.PROVIDE_NAME, llm_tool_handler.provide_name),
+        protocol.Route(handlers.CHOOSE_SLOT, llm_tool_handler.choose_slot),
+        protocol.Route(handlers.CONFIRM_BOOKING, llm_tool_handler.confirm),
     )
-    route: voice.Route | None = None
+    route: protocol.Route | None = None
     for candidate in routes:
         if candidate.name == handlers.PROVIDE_NAME:
             route = candidate
             break
 
     assert route is not None
-    endpoint: voice.ToolEndpoint = route.endpoint
-    turn = endpoint(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"}))
-    assert [tool.name for tool in turn.tools] == [handlers.CHOOSE_SLOT]
-    request = scripted.requests[0]
+    endpoint: protocol.ToolEndpoint = route.endpoint
+    tool_turn = endpoint(protocol.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"}))
+    assert [tool.name for tool in tool_turn.tools] == [handlers.CHOOSE_SLOT]
+    request = fake_scheduling_client_scripted.requests[0]
     assert isinstance(request, client.ProvideNameRequest)
     assert request.booking_id == "b1"
     assert request.name == "Ada Lovelace"
 
 
 def test_the_handler_satisfies_the_voicewire_contract() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name")), "b1")
+    llm_tool_handler = handlers.LlmToolHandler(
+        FakeSchedulingClientScripted(
+            client.BookingStateResponse(
+                step="collect_name", offered_slots=(), reply="ask the caller for their name"
+            )
+        ),
+        "b1",
+    )
 
-    wired: voice.ToolSurface = handler
-    turn: voice.ToolTurn = wired.begin()
+    wired: protocol.ToolSurface = llm_tool_handler
+    tool_turn: protocol.ToolTurn = wired.begin()
 
-    assert turn.reply == "ask the caller for their name"
+    assert tool_turn.reply == "ask the caller for their name"
 
 
 def test_the_handler_owns_the_agent_instructions() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
+    llm_tool_handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
 
-    assert "book an appointment" in handler.instructions()
-    assert "never invent slots" in handler.instructions()
+    assert "book an appointment" in llm_tool_handler.instructions()
+    assert "never invent slots" in llm_tool_handler.instructions()
 
 
 def test_a_turn_carries_the_reply_and_the_tools_for_the_step() -> None:
-    scripted = FakeSchedulingClientScripted(client.BookingStateResponse(step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm"))
-    handler = handlers.LlmToolHandler(scripted, "b1")
+    fake_scheduling_client_scripted = FakeSchedulingClientScripted(
+        client.BookingStateResponse(
+            step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm"
+        )
+    )
+    llm_tool_handler = handlers.LlmToolHandler(fake_scheduling_client_scripted, "b1")
 
-    turn = handler.begin()
+    tool_turn = llm_tool_handler.begin()
 
-    assert turn.reply == "ask the caller to confirm"
-    assert [tool.name for tool in turn.tools] == [
+    assert tool_turn.reply == "ask the caller to confirm"
+    assert [tool.name for tool in tool_turn.tools] == [
         handlers.CHOOSE_SLOT,
         handlers.CONFIRM_BOOKING,
     ]
 
 
 def test_the_provide_name_tool_declares_exactly_a_required_name() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="collect_name", offered_slots=(), reply="ask the caller for their name")), "b1")
+    llm_tool_handler = handlers.LlmToolHandler(
+        FakeSchedulingClientScripted(
+            client.BookingStateResponse(
+                step="collect_name", offered_slots=(), reply="ask the caller for their name"
+            )
+        ),
+        "b1",
+    )
 
-    tool = handler.begin().tools[0]
+    tool = llm_tool_handler.begin().tools[0]
 
     assert tool.name == handlers.PROVIDE_NAME
     assert tool.description == "Record the caller's full name."
@@ -165,10 +199,17 @@ def test_the_provide_name_tool_declares_exactly_a_required_name() -> None:
 
 
 def test_the_confirm_booking_tool_declares_no_arguments() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm")), "b1")
+    llm_tool_handler = handlers.LlmToolHandler(
+        FakeSchedulingClientScripted(
+            client.BookingStateResponse(
+                step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm"
+            )
+        ),
+        "b1",
+    )
 
-    turn = handler.begin()
-    tool = turn.tools[1]
+    tool_turn = llm_tool_handler.begin()
+    tool = tool_turn.tools[1]
 
     assert tool.name == handlers.CONFIRM_BOOKING
     assert tool.parameters == {
@@ -179,21 +220,32 @@ def test_the_confirm_booking_tool_declares_no_arguments() -> None:
 
 
 def test_a_tool_declaration_is_frozen_and_compares_by_value() -> None:
-    tool = voice.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
+    tool = protocol.Tool("provide_name", "Record the caller's full name.", {"type": "object"})
 
-    assert tool == voice.Tool(
+    assert tool == protocol.Tool(
         "provide_name", "Record the caller's full name.", {"type": "object"}
     )
-    assert tool != voice.Tool("choose_slot", "Record the caller's full name.", {"type": "object"})
+    assert tool != protocol.Tool(
+        "choose_slot", "Record the caller's full name.", {"type": "object"}
+    )
     with pytest.raises(AttributeError):
         tool.name = "cancel_booking"
 
 
 def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(client.BookingStateResponse(step="choose_slot", offered_slots=("mon-9am", "tue-2pm"), reply="offer the caller the available slots")), "b1")
+    llm_tool_handler = handlers.LlmToolHandler(
+        FakeSchedulingClientScripted(
+            client.BookingStateResponse(
+                step="choose_slot",
+                offered_slots=("mon-9am", "tue-2pm"),
+                reply="offer the caller the available slots",
+            )
+        ),
+        "b1",
+    )
 
-    turn = handler.begin()
-    tool = turn.tools[0]
+    tool_turn = llm_tool_handler.begin()
+    tool = tool_turn.tools[0]
 
     properties = tool.parameters["properties"]
     assert isinstance(properties, dict)
@@ -203,14 +255,14 @@ def test_the_choose_slot_schema_offers_exactly_the_current_slots() -> None:
 
 
 def test_an_unroutable_tool_name_has_no_endpoint() -> None:
-    handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
+    llm_tool_handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
 
     routes = (
-        voice.Route(handlers.PROVIDE_NAME, handler.provide_name),
-        voice.Route(handlers.CHOOSE_SLOT, handler.choose_slot),
-        voice.Route(handlers.CONFIRM_BOOKING, handler.confirm),
+        protocol.Route(handlers.PROVIDE_NAME, llm_tool_handler.provide_name),
+        protocol.Route(handlers.CHOOSE_SLOT, llm_tool_handler.choose_slot),
+        protocol.Route(handlers.CONFIRM_BOOKING, llm_tool_handler.confirm),
     )
-    matched: voice.Route | None = None
+    matched: protocol.Route | None = None
     for candidate in routes:
         if candidate.name == "cancel_booking":
             matched = candidate
@@ -220,105 +272,123 @@ def test_an_unroutable_tool_name_has_no_endpoint() -> None:
 
 
 def test_a_non_string_argument_is_rejected_with_the_wire_word() -> None:
-    scripted = FakeSchedulingClientScripted()
-    handler = handlers.LlmToolHandler(scripted, "b1")
+    fake_scheduling_client_scripted = FakeSchedulingClientScripted()
+    llm_tool_handler = handlers.LlmToolHandler(fake_scheduling_client_scripted, "b1")
 
-    with pytest.raises(voice.BadToolCall):
-        handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": 3}))
+    with pytest.raises(protocol.BadToolCall):
+        llm_tool_handler.provide_name(
+            protocol.ToolCall(handlers.PROVIDE_NAME, {"name": 3})
+        )
 
-    assert scripted.requests == []
+    assert fake_scheduling_client_scripted.requests == []
 
 
 def test_the_flow_through_the_tool_surface() -> None:
-    directory = directory_memory.MemorySlotDirectory(("mon-9am", "tue-2pm"))
-    service = application.BookingService(directory, repo_memory.MemoryBookingRepository())
-    handler = handlers.LlmToolHandler(service, "b1")
+    memory_slot_directory = gateways.MemorySlotDirectory(("mon-9am", "tue-2pm"))
+    booking_service = application.BookingService(
+        memory_slot_directory, repositories.MemoryBookingRepository()
+    )
+    llm_tool_handler = handlers.LlmToolHandler(booking_service, "b1")
 
-    turn = handler.begin()
-    assert turn.reply == "ask the caller for their name"
-    assert [tool.name for tool in turn.tools] == [handlers.PROVIDE_NAME]
+    tool_turn = llm_tool_handler.begin()
+    assert tool_turn.reply == "ask the caller for their name"
+    assert [tool.name for tool in tool_turn.tools] == [handlers.PROVIDE_NAME]
 
-    turn = handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"}))
-    assert turn.reply == "offer the caller the available slots"
-    assert [tool.name for tool in turn.tools] == [handlers.CHOOSE_SLOT]
+    tool_turn = llm_tool_handler.provide_name(
+        protocol.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada Lovelace"})
+    )
+    assert tool_turn.reply == "offer the caller the available slots"
+    assert [tool.name for tool in tool_turn.tools] == [handlers.CHOOSE_SLOT]
 
-    turn = handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
-    assert turn.reply == "slot mon-9am selected; ask the caller to confirm"
-    assert [tool.name for tool in turn.tools] == [
+    tool_turn = llm_tool_handler.choose_slot(
+        protocol.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
+    )
+    assert tool_turn.reply == "slot mon-9am selected; ask the caller to confirm"
+    assert [tool.name for tool in tool_turn.tools] == [
         handlers.CHOOSE_SLOT,
         handlers.CONFIRM_BOOKING,
     ]
 
-    turn = handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
-    assert turn.reply == "booked mon-9am for Ada Lovelace"
-    assert turn.tools == ()
-    assert service.status(client.StatusRequest(booking_id="b1")).step == "booked"
-    assert directory.reserved == [("mon-9am", "Ada Lovelace")]
+    tool_turn = llm_tool_handler.confirm(protocol.ToolCall(handlers.CONFIRM_BOOKING, {}))
+    assert tool_turn.reply == "booked mon-9am for Ada Lovelace"
+    assert tool_turn.tools == ()
+    assert booking_service.status(client.StatusRequest(booking_id="b1")).step == "booked"
+    assert memory_slot_directory.reserved == [("mon-9am", "Ada Lovelace")]
 
 
 def test_a_taken_last_slot_with_nothing_to_reoffer_reaches_the_model_as_an_error() -> None:
-    directory = directory_memory.MemorySlotDirectory(("mon-9am",))
-    service = application.BookingService(directory, repo_memory.MemoryBookingRepository())
-    handler = handlers.LlmToolHandler(service, "b1")
-    handler.begin()
-    handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
-    handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+    memory_slot_directory = gateways.MemorySlotDirectory(("mon-9am",))
+    booking_service = application.BookingService(
+        memory_slot_directory, repositories.MemoryBookingRepository()
+    )
+    llm_tool_handler = handlers.LlmToolHandler(booking_service, "b1")
+    llm_tool_handler.begin()
+    llm_tool_handler.provide_name(protocol.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    llm_tool_handler.choose_slot(
+        protocol.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
+    )
 
-    directory.slots.remove("mon-9am")
+    memory_slot_directory.slots.remove("mon-9am")
     with pytest.raises(ValueError) as excinfo:
-        handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
+        llm_tool_handler.confirm(protocol.ToolCall(handlers.CONFIRM_BOOKING, {}))
 
     assert "no slots are available" in str(excinfo.value)
 
 
 def test_a_confirm_at_the_wrong_step_keeps_its_own_error_and_mutates_nothing() -> None:
-    service = application.BookingService(
-        directory_memory.MemorySlotDirectory(("mon-9am", "tue-2pm")),
-        repo_memory.MemoryBookingRepository(),
+    booking_service = application.BookingService(
+        gateways.MemorySlotDirectory(("mon-9am", "tue-2pm")),
+        repositories.MemoryBookingRepository(),
     )
-    handler = handlers.LlmToolHandler(service, "b1")
-    handler.begin()
-    handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    llm_tool_handler = handlers.LlmToolHandler(booking_service, "b1")
+    llm_tool_handler.begin()
+    llm_tool_handler.provide_name(protocol.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
 
     with pytest.raises(ValueError) as excinfo:
-        handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
+        llm_tool_handler.confirm(protocol.ToolCall(handlers.CONFIRM_BOOKING, {}))
 
     assert "choose_slot" in str(excinfo.value)
     assert "now available" not in str(excinfo.value)
-    state = service.status(client.StatusRequest(booking_id="b1"))
-    assert state.step == "choose_slot"
-    assert state.offered_slots == ("mon-9am", "tue-2pm")
+    booking_state_response = booking_service.status(client.StatusRequest(booking_id="b1"))
+    assert booking_state_response.step == "choose_slot"
+    assert booking_state_response.offered_slots == ("mon-9am", "tue-2pm")
 
 
 def test_a_choose_slot_before_any_offer_is_rejected_cleanly() -> None:
-    service = application.BookingService(
-        directory_memory.MemorySlotDirectory(("mon-9am",)),
-        repo_memory.MemoryBookingRepository(),
+    booking_service = application.BookingService(
+        gateways.MemorySlotDirectory(("mon-9am",)),
+        repositories.MemoryBookingRepository(),
     )
-    handler = handlers.LlmToolHandler(service, "b1")
-    handler.begin()
+    llm_tool_handler = handlers.LlmToolHandler(booking_service, "b1")
+    llm_tool_handler.begin()
 
     with pytest.raises(ValueError) as excinfo:
-        handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+        llm_tool_handler.choose_slot(
+            protocol.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
+        )
 
     assert "collect_name" in str(excinfo.value)
 
 
 def test_a_taken_slot_comes_back_as_one_turn_offering_the_fresh_slots() -> None:
-    directory = directory_memory.MemorySlotDirectory(("mon-9am", "tue-2pm"))
-    service = application.BookingService(directory, repo_memory.MemoryBookingRepository())
-    handler = handlers.LlmToolHandler(service, "b1")
-    handler.begin()
-    handler.provide_name(voice.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
-    handler.choose_slot(voice.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"}))
+    memory_slot_directory = gateways.MemorySlotDirectory(("mon-9am", "tue-2pm"))
+    booking_service = application.BookingService(
+        memory_slot_directory, repositories.MemoryBookingRepository()
+    )
+    llm_tool_handler = handlers.LlmToolHandler(booking_service, "b1")
+    llm_tool_handler.begin()
+    llm_tool_handler.provide_name(protocol.ToolCall(handlers.PROVIDE_NAME, {"name": "Ada"}))
+    llm_tool_handler.choose_slot(
+        protocol.ToolCall(handlers.CHOOSE_SLOT, {"slot": "mon-9am"})
+    )
 
-    directory.slots.remove("mon-9am")
-    turn = handler.confirm(voice.ToolCall(handlers.CONFIRM_BOOKING, {}))
+    memory_slot_directory.slots.remove("mon-9am")
+    tool_turn = llm_tool_handler.confirm(protocol.ToolCall(handlers.CONFIRM_BOOKING, {}))
 
-    assert turn.reply == "mon-9am was just taken; offer the caller the updated slots"
-    assert service.status(client.StatusRequest(booking_id="b1")).step == "choose_slot"
-    assert [tool.name for tool in turn.tools] == [handlers.CHOOSE_SLOT]
-    tool = turn.tools[0]
+    assert tool_turn.reply == "mon-9am was just taken; offer the caller the updated slots"
+    assert booking_service.status(client.StatusRequest(booking_id="b1")).step == "choose_slot"
+    assert [tool.name for tool in tool_turn.tools] == [handlers.CHOOSE_SLOT]
+    tool = tool_turn.tools[0]
     properties = tool.parameters["properties"]
     assert isinstance(properties, dict)
     slot = properties["slot"]
