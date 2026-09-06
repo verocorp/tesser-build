@@ -373,8 +373,8 @@
       "rationale": []
     },
     {
-      "key": "norm-named-functions",
-      "title": "Norm: named functions",
+      "key": "norm-function-placement",
+      "title": "Norm: function placement",
       "py_example": [
         "examples/minimal",
         "examples/ports"

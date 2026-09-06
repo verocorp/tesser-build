@@ -28,7 +28,7 @@ class TestRestateQuoting:
         service = restate.Service("OrderingActions")
 
         @service.handler()
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:  # tesser:debt TB023
             return quoting.QuoteResponse(cents=250)
 
         gateway = restate_quoting.RestateQuoting(quote)
@@ -39,7 +39,7 @@ class TestRestateQuoting:
         service = restate.Service("OrderingActions")
 
         @service.handler()
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:  # tesser:debt TB023
             raise restate.TerminalError("no price for sku 'nope'", status_code=404)
 
         gateway = restate_quoting.RestateQuoting(quote)

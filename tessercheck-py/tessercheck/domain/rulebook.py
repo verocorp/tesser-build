@@ -79,6 +79,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "module_name": "⟨module⟩",
     "written.source()": "⟨annotation⟩",
     "banned": "⟨type⟩",
+    "nested": "⟨function⟩",
     "type_params": "⟨count⟩",
 }
 
@@ -270,7 +271,7 @@ class Rulebook(ts.ValueObject):
 
     def __init__(self, spec: RulebookSpec) -> None:
         subjects: set[str] = set()
-        def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:
+        def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:  # tesser:debt TB023
             if call.keywords or len(call.args) != 1:
                 return None
             violation_spec_call = call.args[0]

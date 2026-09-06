@@ -36,7 +36,7 @@ class ToolAgent(agents.Agent, ts.Host):
         )
 
     def _shim(self, name: str) -> abc.Callable[..., abc.Awaitable[str]]:  # tesser:debt TB022
-        async def call(raw_arguments: dict[str, object]) -> str:
+        async def call(raw_arguments: dict[str, object]) -> str:  # tesser:debt TB023
             async with self._lock:
                 route: voice.Route | None = None
                 for candidate in self._routes:

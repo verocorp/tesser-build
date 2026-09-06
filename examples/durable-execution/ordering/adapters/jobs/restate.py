@@ -39,7 +39,7 @@ class RestateActionJobs(ts.Job):
             input_serde=RecordSerde(quoting.QuoteRequest),
             output_serde=RecordSerde(quoting.QuoteResponse),
         )
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:  # tesser:debt TB023
             try:
                 return actions.quote(request)
             except errors.DomainError as e:
@@ -60,7 +60,7 @@ class RestateWorkflowJobs(ts.Job):
             input_serde=RecordSerde(order_workflow.StartRequest),
             output_serde=RecordSerde(order_orchestrator.RunResponse),
         )
-        async def run(
+        async def run(  # tesser:debt TB023
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_orchestrator.RunResponse:
             orchestrator = order_orchestrator.OrderOrchestrator(

@@ -1647,7 +1647,7 @@ class EnumShape(ts.ValueObject):
                     base_name = str(origin.name())
                     break
 
-        def is_enum_auto(value: ast.expr) -> bool:
+        def is_enum_auto(value: ast.expr) -> bool:  # tesser:debt TB023
             if not isinstance(value, ast.Call) or value.args or value.keywords:
                 return False
             if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
@@ -1725,7 +1725,7 @@ class Annotation(ts.ValueObject):
     _form: Names
 
     def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
-        def head_of(inner: ast.expr) -> str | None:
+        def head_of(inner: ast.expr) -> str | None:  # tesser:debt TB023
             cursor: ast.expr | None = inner
             while cursor is not None:
                 if isinstance(cursor, ast.Name):
@@ -1738,7 +1738,7 @@ class Annotation(ts.ValueObject):
                 return None
             return None
 
-        def candidates(inner: ast.expr | None) -> list[tuple[str, str]]:
+        def candidates(inner: ast.expr | None) -> list[tuple[str, str]]:  # tesser:debt TB023
             if inner is None:
                 return []
             if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
@@ -1757,7 +1757,7 @@ class Annotation(ts.ValueObject):
                 return [(f"{ast.unparse(inner.value)}.{inner.attr}", "one")]
             return []
 
-        def names_bool(inner: ast.expr | None) -> bool:
+        def names_bool(inner: ast.expr | None) -> bool:  # tesser:debt TB023
             if inner is None:
                 return False
             probe = inner
@@ -1770,7 +1770,7 @@ class Annotation(ts.ValueObject):
                 return names_bool(wrapped)
             return isinstance(probe, ast.Name) and probe.id == "bool"
 
-        def is_union(inner: ast.expr | None) -> bool:
+        def is_union(inner: ast.expr | None) -> bool:  # tesser:debt TB023
             if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
                 return True
             if isinstance(inner, ast.Subscript):
@@ -1782,7 +1782,7 @@ class Annotation(ts.ValueObject):
                 return inner.attr in ("Optional", "Union")
             return False
 
-        def primitive_leaf(inner: ast.expr) -> bool:
+        def primitive_leaf(inner: ast.expr) -> bool:  # tesser:debt TB023
             probe = inner
             if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
                 return primitive_leaf(probe.left) or primitive_leaf(probe.right)
@@ -2468,7 +2468,7 @@ class Body(ts.ValueObject):
         held_contexts = frozenset(spec.held_contexts)
         facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
 
-        def ref_of(node: ast.expr) -> str | None:
+        def ref_of(node: ast.expr) -> str | None:  # tesser:debt TB023
             cursor = node
             while isinstance(cursor, ast.Subscript):
                 cursor = cursor.value
@@ -2478,7 +2478,7 @@ class Body(ts.ValueObject):
                 return f"{ast.unparse(cursor.value)}.{cursor.attr}"
             return None
 
-        def block_of(node: ast.expr | None) -> str | None:
+        def block_of(node: ast.expr | None) -> str | None:  # tesser:debt TB023
             if node is None:
                 return None
             ref = ref_of(node)
@@ -2490,11 +2490,11 @@ class Body(ts.ValueObject):
             block = kinds.block_of(symbol)
             return str(block) if block is not None else None
 
-        def symbol_of(node: ast.expr) -> Symbol | None:
+        def symbol_of(node: ast.expr) -> Symbol | None:  # tesser:debt TB023
             ref = ref_of(node)
             return scope.resolve(Text(ref)) if ref is not None else None
 
-        def own_scope(root: ast.AST) -> typing.Iterator[ast.AST]:
+        def own_scope(root: ast.AST) -> typing.Iterator[ast.AST]:  # tesser:debt TB023
             stack: list[ast.AST] = list(ast.iter_child_nodes(root))
             while stack:
                 node = stack.pop()
@@ -2503,7 +2503,7 @@ class Body(ts.ValueObject):
                 yield node
                 stack.extend(ast.iter_child_nodes(node))
 
-        def bindings() -> tuple[dict[str, list[ast.expr]], frozenset[str]]:
+        def bindings() -> tuple[dict[str, list[ast.expr]], frozenset[str]]:  # tesser:debt TB023
             values: dict[str, list[ast.expr]] = {}
             args = fn.args
             otherwise: set[str] = {arg.arg for arg in args.posonlyargs + args.args + args.kwonlyargs}
@@ -2559,7 +2559,7 @@ class Body(ts.ValueObject):
                     otherwise.update(sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name))
             return values, frozenset(otherwise)
 
-        def domain_kind(node: ast.expr) -> tuple[str, str] | None:
+        def domain_kind(node: ast.expr) -> tuple[str, str] | None:  # tesser:debt TB023
             if not isinstance(node, ast.Call):
                 return None
             symbol = symbol_of(node.func)
@@ -2580,7 +2580,7 @@ class Body(ts.ValueObject):
             if first is not None and all(kind == first for kind in found_kinds):
                 domain_names[name] = first
 
-        def answers_an_outcome(node: ast.expr) -> bool:
+        def answers_an_outcome(node: ast.expr) -> bool:  # tesser:debt TB023
             if isinstance(node, ast.Await):
                 node = node.value
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
@@ -2601,12 +2601,12 @@ class Body(ts.ValueObject):
             if name not in otherwise and all(answers_an_outcome(value) for value in bound)
         )
 
-        def outcome_key(node: ast.expr) -> bool:
+        def outcome_key(node: ast.expr) -> bool:  # tesser:debt TB023
             if not isinstance(node, ast.Attribute):
                 return False
             return block_of(node.value) == OUTCOME_BLOCK
 
-        def is_comparison_call(func: ast.expr) -> bool:
+        def is_comparison_call(func: ast.expr) -> bool:  # tesser:debt TB023
             if isinstance(func, ast.Attribute):
                 if func.attr in COMPARISON_CALLS:
                     return True
@@ -2623,7 +2623,7 @@ class Body(ts.ValueObject):
                 )
             return False
 
-        def is_truth_builtin(func: ast.expr) -> bool:
+        def is_truth_builtin(func: ast.expr) -> bool:  # tesser:debt TB023
             return isinstance(func, ast.Name) and func.id in TRUTH_BUILTINS and func.id not in scope.locals()
 
         positional = list(fn.args.args)
@@ -3637,7 +3637,7 @@ class Method(ts.Entity):
         if carrier:
             method_facts.append((node.lineno, "carrier", None, ()))
 
-        def own_returns(root: ast.AST) -> list[ast.Return]:
+        def own_returns(root: ast.AST) -> list[ast.Return]:  # tesser:debt TB023
             returned: list[ast.Return] = []
             for child in ast.iter_child_nodes(root):
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
@@ -3947,7 +3947,7 @@ class ClassDecl(ts.Entity):
 
         SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None, bool]
 
-        def slot(name: str, annotation: Annotation | None) -> SlotRow:
+        def slot(name: str, annotation: Annotation | None) -> SlotRow:  # tesser:debt TB023
             if annotation is None:
                 return (name, None, (), None, False)
             primary = annotation.primary()
@@ -3971,7 +3971,7 @@ class ClassDecl(ts.Entity):
             str, str, int, str, tuple[str, ...], tuple[SlotRow, ...], SlotRow | None, SlotRow | None
         ]
 
-        def slot_spec(row: SlotRow) -> SlotSpec:
+        def slot_spec(row: SlotRow) -> SlotSpec:  # tesser:debt TB023
             symbol = row[3]
             return SlotSpec(
                 row[0],
@@ -3981,7 +3981,7 @@ class ClassDecl(ts.Entity):
                 SymbolSpec(symbol[0], symbol[1]) if symbol is not None else None,
             )
 
-        def signature_spec(row: SignatureRow) -> SignatureSpec:
+        def signature_spec(row: SignatureRow) -> SignatureSpec:  # tesser:debt TB023
             return SignatureSpec(
                 row[0],
                 row[1],
@@ -4017,7 +4017,7 @@ class ClassDecl(ts.Entity):
             None,
         )
 
-        def held(kind: str) -> tuple[str, ...]:
+        def held(kind: str) -> tuple[str, ...]:  # tesser:debt TB023
             if init_node is None:
                 return ()
             named: set[str] = set()
@@ -4087,7 +4087,7 @@ class ClassDecl(ts.Entity):
             decoration.append("keyworded")
         object.__setattr__(self, "_decoration", Names(tuple(decoration)))
 
-        def is_enum_auto(value: ast.expr) -> bool:
+        def is_enum_auto(value: ast.expr) -> bool:  # tesser:debt TB023
             if not isinstance(value, ast.Call) or value.args or value.keywords:
                 return False
             if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
@@ -4172,7 +4172,7 @@ class ClassDecl(ts.Entity):
                             continue
                         serde_facts.append((stored_leaf.lineno, "store", stored_leaf.attr, ()))
 
-            def empty_test(test: ast.expr) -> bool:
+            def empty_test(test: ast.expr) -> bool:  # tesser:debt TB023
                 if isinstance(test, ast.Name):
                     return True
                 if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
@@ -5921,7 +5921,7 @@ class Placement(ts.ValueObject):
         contexts = frozenset(spec.contexts)
         export = spec.export
 
-        def locate() -> str:
+        def locate() -> str:  # tesser:debt TB023
             parts = name.split(".")
             basename = parts[-1]
             reserved = (
@@ -6230,7 +6230,7 @@ class Module(ts.Entity):
         kinds = Registry(registry).kinds()
         scope = self._scope
 
-        def resolve(node: ast.expr) -> tuple[str, str] | None:
+        def resolve(node: ast.expr) -> tuple[str, str] | None:  # tesser:debt TB023
             cursor = node
             while isinstance(cursor, ast.Subscript):
                 cursor = cursor.value
@@ -6244,20 +6244,20 @@ class Module(ts.Entity):
             symbol = scope.resolve(Text(ref))
             return (str(symbol.module()), str(symbol.name())) if symbol is not None else None
 
-        def block_of(node: ast.expr) -> str | None:
+        def block_of(node: ast.expr) -> str | None:  # tesser:debt TB023
             key = resolve(node)
             if key is None:
                 return None
             block = kinds.block_of(Symbol(SymbolSpec(key[0], key[1])))
             return str(block) if block is not None else None
 
-        def names_outcome(node: ast.expr) -> bool:
+        def names_outcome(node: ast.expr) -> bool:  # tesser:debt TB023
             for sub in ast.walk(node):
                 if isinstance(sub, (ast.Name, ast.Attribute)) and block_of(sub) == OUTCOME_BLOCK:
                     return True
             return False
 
-        def outcome_key(node: ast.expr) -> tuple[str, str] | None:
+        def outcome_key(node: ast.expr) -> tuple[str, str] | None:  # tesser:debt TB023
             if not isinstance(node, ast.Attribute):
                 return None
             key = resolve(node.value)
@@ -6265,12 +6265,12 @@ class Module(ts.Entity):
                 return None
             return key
 
-        def is_member_pattern(pattern: ast.pattern) -> bool:
+        def is_member_pattern(pattern: ast.pattern) -> bool:  # tesser:debt TB023
             if isinstance(pattern, ast.MatchOr):
                 return all(is_member_pattern(alternative) for alternative in pattern.patterns)
             return isinstance(pattern, ast.MatchValue) and outcome_key(pattern.value) is not None
 
-        def returned(node: ast.expr) -> typing.Iterator[ast.expr]:
+        def returned(node: ast.expr) -> typing.Iterator[ast.expr]:  # tesser:debt TB023
             yield node
             if isinstance(node, ast.IfExp):
                 yield from returned(node.body)
@@ -6282,7 +6282,7 @@ class Module(ts.Entity):
                 for value in node.values:
                     yield from returned(value)
 
-        def closes_with_assert_never(node: ast.Match) -> bool:
+        def closes_with_assert_never(node: ast.Match) -> bool:  # tesser:debt TB023
             last = node.cases[-1]
             pattern = last.pattern
             if last.guard is not None:
@@ -6586,21 +6586,45 @@ class Module(ts.Entity):
 
     def lambda_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
-        lines: list[int] = []
-        for stmt in self._body:
-            for node in ast.walk(stmt):
-                if isinstance(node, ast.Lambda):
-                    lines.append(node.lineno)
+        anonymous: list[int] = []
+        inner: list[tuple[int, str]] = []
+        pending: list[tuple[ast.AST, bool]] = [(stmt, False) for stmt in self._body]
+        while pending:
+            node, enclosed = pending.pop()
+            if isinstance(node, ast.Lambda):
+                anonymous.append(node.lineno)
+                pending.extend((child, True) for child in ast.iter_child_nodes(node))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if enclosed:
+                    inner.append((node.lineno, node.name))
+                pending.extend((child, True) for child in ast.iter_child_nodes(node))
+            elif isinstance(node, ast.ClassDef):
+                pending.extend((child, False) for child in ast.iter_child_nodes(node))
+            else:
+                pending.extend((child, enclosed) for child in ast.iter_child_nodes(node))
         found: list[Violation] = []
-        for line in sorted(lines):
+        for line in sorted(anonymous):
             found.append(
                 Violation(ViolationSpec(
                     self._path,
                     line,
                     "TB023",
-                    f"{module_name} writes a lambda; a function is declared with a name — "
-                    "a lambda is behavior no rule can read, and an ordering belongs on the "
-                    "object it orders while a deferred call belongs behind a port",
+                    f"{module_name} writes a lambda; a function is declared at module "
+                    "level or as a method, because every rule about a function keys on "
+                    "its placement and a nested one has none — an ordering belongs on "
+                    "the object it orders, a deferred call behind a port",
+                ))
+            )
+        for line, nested in sorted(inner):
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    line,
+                    "TB023",
+                    f"{module_name} declares {nested} inside a function; a function is "
+                    "declared at module level or as a method, because every rule about a "
+                    "function keys on its placement and a nested one has none — an "
+                    "ordering belongs on the object it orders, a deferred call behind a port",
                 ))
             )
         return tuple(found)
@@ -6886,7 +6910,7 @@ class Module(ts.Entity):
 
     def sibling_reference_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
-        def declared(body: list[ast.stmt]) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+        def declared(body: list[ast.stmt]) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:  # tesser:debt TB023
             out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
             stack: list[ast.AST] = list(body)
             while stack:
@@ -6899,7 +6923,7 @@ class Module(ts.Entity):
                 stack.extend(ast.iter_child_nodes(cur))
             return out
 
-        def receiver(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+        def receiver(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:  # tesser:debt TB023
             names = {d.id for d in fn.decorator_list if isinstance(d, ast.Name)}
             if "staticmethod" in names:
                 return None
@@ -6908,7 +6932,7 @@ class Module(ts.Entity):
                 return None
             return args[0].arg
 
-        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, name: str) -> bool:
+        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, name: str) -> bool:  # tesser:debt TB023
             args = fn.args
             bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
             if args.vararg is not None:
@@ -6917,7 +6941,7 @@ class Module(ts.Entity):
                 bound.add(args.kwarg.arg)
             return name in bound
 
-        def reads(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> list[ast.Attribute]:
+        def reads(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> list[ast.Attribute]:  # tesser:debt TB023
             hits: list[ast.Attribute] = []
             stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
             while stack:
@@ -6950,7 +6974,7 @@ class Module(ts.Entity):
                 stack.extend(ast.iter_child_nodes(cur))
             return hits
 
-        def recurs(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str | None) -> bool:
+        def recurs(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str | None) -> bool:  # tesser:debt TB023
             if name is None:
                 return False
             stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
@@ -8207,7 +8231,7 @@ class Module(ts.Entity):
                 ))
             )
 
-        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:
+        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:  # tesser:debt TB023
             inner: list[ast.ClassDef] = []
             for item in body:
                 if isinstance(item, ast.ClassDef):
@@ -8283,11 +8307,11 @@ class Module(ts.Entity):
         )
         found: list[Violation] = []
 
-        def block_named(class_name: str) -> str | None:
+        def block_named(class_name: str) -> str | None:  # tesser:debt TB023
             named = kinds.block_of(Symbol(SymbolSpec(module_name, class_name)))
             return str(named) if named is not None else None
 
-        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:
+        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:  # tesser:debt TB023
             inner: list[ast.ClassDef] = []
             for item in body:
                 if isinstance(item, ast.ClassDef):
@@ -8295,14 +8319,14 @@ class Module(ts.Entity):
                     inner.extend(nested_class_defs(item.body))
             return inner
 
-        def computes(node: ast.expr | None) -> bool:
+        def computes(node: ast.expr | None) -> bool:  # tesser:debt TB023
             return node is not None and any(
                 isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
                 or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
                 for inner in ast.walk(node)
             )
 
-        def decoration(where: str, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[Violation, ...]:
+        def decoration(where: str, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[Violation, ...]:  # tesser:debt TB023
             return tuple(
                 Violation(ViolationSpec(
                     path,
@@ -8315,7 +8339,7 @@ class Module(ts.Entity):
                 for _ in node.decorator_list
             )
 
-        def readable(node: ast.expr) -> bool:
+        def readable(node: ast.expr) -> bool:  # tesser:debt TB023
             if isinstance(node, ast.Constant):
                 return node.value is None or node.value is Ellipsis
             if isinstance(node, ast.Name):
@@ -8329,7 +8353,7 @@ class Module(ts.Entity):
                 return readable(node.left) and readable(node.right)
             return False
 
-        def unreadable(where: str, node: ast.AST) -> tuple[Violation, ...]:
+        def unreadable(where: str, node: ast.AST) -> tuple[Violation, ...]:  # tesser:debt TB023
             return (
                 Violation(ViolationSpec(
                     path,
@@ -8685,7 +8709,7 @@ class Module(ts.Entity):
         if export != TESSER:
             found.extend(TEST_TESSER_IMPORTS.violations(self))
 
-        def decorated_as(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, wanted: str) -> bool:
+        def decorated_as(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, wanted: str) -> bool:  # tesser:debt TB023
             for decorator in node.decorator_list:
                 ref = Annotation(decorator).primary()
                 symbol = scope.resolve(ref) if ref is not None else None
@@ -9130,14 +9154,14 @@ class Module(ts.Entity):
             registry,
         ))
 
-        def annotation(node: ast.expr | None) -> SpecRef | None:
+        def annotation(node: ast.expr | None) -> SpecRef | None:  # tesser:debt TB023
             return reader.ref(Annotation(node)) if node is not None else None
 
-        def resolve(node: ast.expr) -> Symbol | None:
+        def resolve(node: ast.expr) -> Symbol | None:  # tesser:debt TB023
             ref = Annotation(node).primary()
             return scope.resolve(ref) if ref is not None else None
 
-        def maker(node: ast.expr) -> SpecRef | None:
+        def maker(node: ast.expr) -> SpecRef | None:  # tesser:debt TB023
             made = annotation(node)
             if made is not None:
                 return made
@@ -9152,7 +9176,7 @@ class Module(ts.Entity):
                 return facts.spec_method(Text(node.attr))
             return None
 
-        def typed(node: ast.expr, names: dict[str, SpecRef]) -> SpecRef | None:
+        def typed(node: ast.expr, names: dict[str, SpecRef]) -> SpecRef | None:  # tesser:debt TB023
             if isinstance(node, (ast.Await, ast.NamedExpr)):
                 return typed(node.value, names)
             if isinstance(node, ast.Name):
@@ -9183,7 +9207,7 @@ class Module(ts.Entity):
                         return found_value
             return None
 
-        def carried(node: ast.expr, names: dict[str, SpecRef]) -> str | None:
+        def carried(node: ast.expr, names: dict[str, SpecRef]) -> str | None:  # tesser:debt TB023
             if isinstance(node, (ast.Name, ast.Call, ast.Attribute, ast.Subscript)) and typed(node, names) is not None:
                 if isinstance(node, ast.Name):
                     return node.id
@@ -9213,7 +9237,7 @@ class Module(ts.Entity):
                     return hit
             return None
 
-        def bound(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:
+        def bound(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:  # tesser:debt TB023
             args = fn.args
             out = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
             if args.vararg is not None:
@@ -9222,7 +9246,7 @@ class Module(ts.Entity):
                 out.add(args.kwarg.arg)
             return out
 
-        def own_scope(nodes: list[ast.AST]) -> list[ast.AST]:
+        def own_scope(nodes: list[ast.AST]) -> list[ast.AST]:  # tesser:debt TB023
             out: list[ast.AST] = []
             stack = list(nodes)
             while stack:
@@ -9245,10 +9269,10 @@ class Module(ts.Entity):
                 stack.extend(ast.iter_child_nodes(cur))
             return out
 
-        def stored(node: ast.AST) -> list[str]:
+        def stored(node: ast.AST) -> list[str]:  # tesser:debt TB023
             return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
 
-        def element(target: ast.expr, iterable: ast.expr, names: dict[str, SpecRef]) -> tuple[str, SpecRef] | None:
+        def element(target: ast.expr, iterable: ast.expr, names: dict[str, SpecRef]) -> tuple[str, SpecRef] | None:  # tesser:debt TB023
             many = typed(iterable, names)
             if many is None or many.shape() != SPEC_MANY:
                 return None
@@ -9265,7 +9289,7 @@ class Module(ts.Entity):
                 return target.elts[1].id, many.one()
             return None
 
-        def held_in(body: list[ast.stmt], names: dict[str, SpecRef]) -> dict[str, SpecRef]:
+        def held_in(body: list[ast.stmt], names: dict[str, SpecRef]) -> dict[str, SpecRef]:  # tesser:debt TB023
             names = dict(names)
             local = own_scope(list(body))
             local.extend(
@@ -9336,7 +9360,7 @@ class Module(ts.Entity):
                                 shadowed.add(pattern.rest)
             return {name: made for name, made in names.items() if name not in shadowed}
 
-        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: dict[str, SpecRef]) -> dict[str, SpecRef]:
+        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: dict[str, SpecRef]) -> dict[str, SpecRef]:  # tesser:debt TB023
             seeded = dict(names)
             for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
                 made = annotation(a.annotation)
@@ -9344,7 +9368,7 @@ class Module(ts.Entity):
                     seeded[a.arg] = made
             return held_in(list(fn.body), seeded)
 
-        def kept(node: ast.AST, names: dict[str, SpecRef], top: bool) -> str | None:
+        def kept(node: ast.AST, names: dict[str, SpecRef], top: bool) -> str | None:  # tesser:debt TB023
             if top and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) for t in node.targets):
                 return carried(node.value, names)
             if top and isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
@@ -9380,7 +9404,7 @@ class Module(ts.Entity):
                     return carried(node.args[2], names)
             return None
 
-        def read(node: ast.AST, names: dict[str, SpecRef]) -> tuple[str, str, Symbol] | None:
+        def read(node: ast.AST, names: dict[str, SpecRef]) -> tuple[str, str, Symbol] | None:  # tesser:debt TB023
             if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
                 owner = typed(node.value, names)
                 if owner is not None and owner.shape() == SPEC_ONE and not node.attr.startswith("__"):
@@ -9406,7 +9430,7 @@ class Module(ts.Entity):
         found: list[Violation] = []
         seen: set[tuple[int, str, str]] = set()
 
-        def scan(
+        def scan(  # tesser:debt TB023
             nodes: list[ast.AST],
             names: dict[str, SpecRef],
             where: str,
@@ -9491,7 +9515,7 @@ class Module(ts.Entity):
                             ))
                         )
 
-        def roots() -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]]:
+        def roots() -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]]:  # tesser:debt TB023
             out: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]] = []
             stack: list[tuple[ast.AST, ast.ClassDef | None]] = [(stmt, None) for stmt in self._body]
             while stack:
@@ -9978,7 +10002,7 @@ class Codebase(ts.AggregateRoot):
             package_names=package_name_rows,
         )
 
-        def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:
+        def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
             init = decl.constructor()
             return policy.missing_constructor_violations(decl) if init is None else policy.violations(init)
 

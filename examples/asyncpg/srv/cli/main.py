@@ -14,7 +14,7 @@ import tesser.errors as errors
 class CliHost(ts.Host):
 
     def run(self, argv: list[str]) -> int:
-        async def serve() -> int:
+        async def serve() -> int:  # tesser:debt TB023
             app = loader.load()
             try:
                 await app.open()

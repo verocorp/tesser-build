@@ -2,7 +2,7 @@ import tesser.testing as testing
 
 
 def test_helper_returns_the_same_object_it_decorates() -> None:
-    def build() -> str:
+    def build() -> str:  # tesser:debt TB023
         return "spec"
 
     assert testing.helper(build) is build
@@ -10,7 +10,7 @@ def test_helper_returns_the_same_object_it_decorates() -> None:
 
 
 def test_helper_is_a_marker_the_walk_reads_not_behavior() -> None:
-    def target(value: int) -> int:
+    def target(value: int) -> int:  # tesser:debt TB023
         return value * 2
 
     decorated = testing.helper(target)

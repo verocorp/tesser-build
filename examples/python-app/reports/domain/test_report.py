@@ -156,7 +156,7 @@ def test_a_verdict_the_domain_would_not_accept_fails_the_whole_join() -> None:
 
 
 def test_two_joins_of_the_same_links_and_verdicts_are_equal() -> None:
-    def joined() -> report.LinkVerdicts:
+    def joined() -> report.LinkVerdicts:  # tesser:debt TB023
         return report.LinkVerdicts(
             report.LinkVerdictsSpec(
                 links=(report.LinkSpec("spring-sale", "https://a.example/s"),),

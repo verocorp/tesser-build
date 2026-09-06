@@ -23,7 +23,7 @@ class TestRestateJobContext:
                 seen.append(arg.sku)
                 return quoting.QuoteResponse(cents=250)
 
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
+        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:  # tesser:debt TB023
             return quoting.QuoteResponse(cents=0)
 
         job = restate_context.RestateJobContext(typing.cast(restate.Context, Journaling()))

@@ -8,7 +8,7 @@ import tesser.srv as srv
 def test_main_hands_the_process_arguments_to_run_and_exits_with_its_code() -> None:
     seen: list[list[str]] = []
 
-    def run(argv: list[str]) -> int:
+    def run(argv: list[str]) -> int:  # tesser:debt TB023
         seen.append(argv)
         return 3
 

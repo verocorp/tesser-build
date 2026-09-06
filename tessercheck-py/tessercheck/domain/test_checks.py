@@ -8271,7 +8271,7 @@ def test_kernel_import_allowlist() -> None:
 
 
 def test_a_declared_kernel_import_is_legal_in_a_kernel() -> None:
-    def grown(imports: tuple[str, ...]) -> tuple[str, ...]:
+    def grown(imports: tuple[str, ...]) -> tuple[str, ...]:  # tesser:debt TB023
         return tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=imports)).violations()
@@ -12824,7 +12824,7 @@ def test_any_callable_and_awaitable_are_findings_wherever_they_are_named() -> No
     assert not any("names Anywhere" in f for f in findings)
 
 
-def test_a_lambda_is_a_finding_as_a_sort_key_and_as_a_deferred_call() -> None:
+def test_a_lambda_and_a_nested_def_are_findings_and_a_method_is_not() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in checks.Codebase(_kinds_spec(sources=(
@@ -12849,13 +12849,21 @@ def test_a_lambda_is_a_finding_as_a_sort_key_and_as_a_deferred_call() -> None:
     )
     assert any(
         "anon.py:4: TB023 shop.adapters.gateways.anon writes a lambda; a function is "
-        "declared with a name — a lambda is behavior no rule can read, and an ordering "
-        "belongs on the object it orders while a deferred call belongs behind a port" in f
+        "declared at module level or as a method, because every rule about a function "
+        "keys on its placement and a nested one has none — an ordering belongs on the "
+        "object it orders, a deferred call behind a port" in f
         for f in findings
     )
     assert len([f for f in findings if "anon.py:7: TB023" in f]) == 1
-    assert not any("anon.py:9: TB023" in f for f in findings)
-    assert not any("anon.py:11: TB023" in f for f in findings)
+    assert any(
+        "anon.py:9: TB023 shop.adapters.gateways.anon declares rank inside a function; "
+        "a function is declared at module level or as a method, because every rule about "
+        "a function keys on its placement and a nested one has none — an ordering belongs "
+        "on the object it orders, a deferred call behind a port" in f
+        for f in findings
+    )
+    assert not any("anon.py:3: TB023" in f for f in findings)
+    assert not any("anon.py:8: TB023" in f for f in findings)
 
 
 def test_a_gateway_never_holds_an_invocations_job_context() -> None:

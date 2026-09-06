@@ -18,7 +18,7 @@ class FakeJobContext(job_context.JobContext):
 class TestJobContext:
 
     def test_a_job_context_runs_a_step_it_is_handed(self) -> None:
-        async def double(ctx: object, request: int) -> int:
+        async def double(ctx: object, request: int) -> int:  # tesser:debt TB023
             return request * 2
 
         assert asyncio.run(FakeJobContext().call(double, 21)) == 42

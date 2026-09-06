@@ -27,7 +27,7 @@ class TestRestateOrderWorkflow:
         workflow = restate.Workflow("Ordering")
 
         @workflow.main(input_serde=Body())
-        async def run(
+        async def run(  # tesser:debt TB023
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
             return order_workflow.StartResponse(order_id=ctx.key())
@@ -38,7 +38,7 @@ class TestRestateOrderWorkflow:
         port = listener.getsockname()[1]
         seen: list[bytes] = []
 
-        def ingress() -> None:
+        def ingress() -> None:  # tesser:debt TB023
             conn, _ = listener.accept()
             with conn:
                 raw = b""
@@ -61,7 +61,7 @@ class TestRestateOrderWorkflow:
                     + answer
                 )
 
-        async def start() -> order_workflow.StartResponse:
+        async def start() -> order_workflow.StartResponse:  # tesser:debt TB023
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
             return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
@@ -88,7 +88,7 @@ class TestRestateOrderWorkflow:
         workflow = restate.Workflow("Ordering")
 
         @workflow.main(input_serde=Body())
-        async def run(
+        async def run(  # tesser:debt TB023
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
             return order_workflow.StartResponse(order_id=ctx.key())
@@ -98,14 +98,14 @@ class TestRestateOrderWorkflow:
         listener.listen(1)
         port = listener.getsockname()[1]
 
-        def ingress() -> None:
+        def ingress() -> None:  # tesser:debt TB023
             conn, _ = listener.accept()
             with conn:
                 while b"\r\n\r\n" not in conn.recv(4096):
                     continue
                 conn.sendall(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n")
 
-        async def start() -> order_workflow.StartResponse:
+        async def start() -> order_workflow.StartResponse:  # tesser:debt TB023
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
             return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 
@@ -129,7 +129,7 @@ class TestRestateOrderWorkflow:
         workflow = restate.Workflow("Ordering")
 
         @workflow.main(input_serde=Body())
-        async def run(
+        async def run(  # tesser:debt TB023
             ctx: restate.WorkflowContext, request: order_workflow.StartRequest
         ) -> order_workflow.StartResponse:
             return order_workflow.StartResponse(order_id=ctx.key())
@@ -138,7 +138,7 @@ class TestRestateOrderWorkflow:
             closed.bind(("127.0.0.1", 0))
             port = closed.getsockname()[1]
 
-        async def start() -> order_workflow.StartResponse:
+        async def start() -> order_workflow.StartResponse:  # tesser:debt TB023
             workflows = restate_workflow.RestateOrderWorkflow(f"http://127.0.0.1:{port}", run)
             return await workflows.start(order_workflow.StartRequest(order_id="o1", sku="widget", quantity=2))
 

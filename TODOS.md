@@ -512,30 +512,76 @@ migration runs.
   value form of the `Callable` the type rule bans, and the two are different
   sites: `tesser.errors.collect`'s signature drew `TB022` while its three call
   sites drew nothing. 18 lambdas over 17 lines, all marked.
-- [ ] **`TB023`'s inline-`def` dodge.** A nested `def rank(row): ...` in the
-  same scope satisfies the rule and relocates nothing — the ban is on the
-  spelling, not on where the behavior sits. Nothing forbids a nested `def`
-  today (the only nesting rules are about nested *classes*: `TB052`, `TB071`).
-  *For closing it:* the two fixes the rule asks for — an ordering method on the
-  object being ordered, a port or named module function for a deferred call —
-  are both relocations, and a rule an inline rename satisfies reports the
-  spelling rather than the defect. *Against:* a nested `def` at least has a
-  name a reader and a stack trace can use, which is most of what the rule
-  bought; and the general "no nested functions" rule that would close it is a
-  much wider claim than the lambda ban, reaching every closure in the tree.
-  Zero sites today either way — nothing in the gated trees writes a nested
-  `def` — so this is a tripwire question, not a migration.
+- [x] **`TB023`'s inline-`def` dodge — RULED 2026-09-06, closed in the same
+  wave.** A nested `def` is now the same finding. The reason that decided it is
+  placement, not spelling: `TB040` keys on which module a function belongs to,
+  `TB070` on which tier its test lives in, and `TB071` on every *module-level*
+  function in a test module being a test, a `@ts.helper` or a `@ts.fake`. A
+  nested function has no placement, so it is invisible to the totality checks
+  by construction. **This was ruled on a wrong number** — the session reported
+  "zero sites today"; the measured count is 108.
 - [ ] **`TB023`'s two populations may want two codes.** The `key=` shape (7
   sites) is a decision written where nothing reads it — closer to `TB082` than
   to `TB022` — while the deferred-call shape (11 sites) is `TB022`'s value
-  half. One code reports both with one message that names both fixes. Whether
-  the conformance wave wants them split is answerable after the migration,
-  not before.
+  half. Nested `def`s are a third population again. One code reports all of
+  them with one message that names two fixes. Whether the conformance wave
+  wants them split is answerable after the migration, not before.
 - [ ] **The async protocols stay legal, and that needs saying.**
   `AsyncContextManager` is *required* by `TB081` as a `ts.Store.transaction`
   return, and `AsyncIterator` is what the implementation yields. Neither is an
   escape from naming a value, so neither is a candidate — recorded here so a
   later "ban the async family" reading does not sweep them in.
+
+## What TB023 has to let through (2026-09-06, the exception list)
+
+`TB023` bans a `lambda` anywhere and a `def` inside another function. 125
+lines carry a marker — 17 lambdas, 108 nested functions — and the conformance
+wave cannot run until this list is ruled, because a rule with no exceptions at
+this scale is a rule that gets suppressed rather than followed. **The question
+is not "is a nested function bad" but "which of these 125 has a relocation
+available, and what is the shape of the ones that do not."** The populations,
+measured:
+
+- [ ] **The analyzer's own parsing closures — 60 in `checks.py`, 1 in
+  `rulebook.py`.** `Annotation.__init__` alone holds `head_of`, `candidates`,
+  `names_bool`, `is_union` and `primitive_leaf`; they exist because a value
+  object does all its work in `__init__` (`TB080`) and the work is a recursive
+  walk over an `ast` node. Relocating them to module level makes them
+  module-level functions in a domain module, which `TB051` and the module
+  function policy have their own views about; relocating them to methods makes
+  them public surface on a value object, which `TB019` reads. This is the same
+  question as **Foreign types at the analyzer's door** below, one level down:
+  the closure exists because the foreign type has no domain object yet. Rule
+  them together.
+- [ ] **A test's local fake behavior — ~35 across the example and tesser-py
+  test modules.** `examples/llmport/srv/voice/test_agent.py` has 11: `def
+  halt`, `def drive` — a coroutine the test hands to the thing under test so
+  it can assert what happened. `TB030` says a test double is a hand-written
+  fake and `TB071`/`TB072` say a test module holds tests, `@ts.helper`s and
+  `@ts.fake`s. A nested `def` is a fourth thing, and the honest reading is
+  that it is a `@ts.fake` that never got declared — but a `@ts.fake` is a
+  *class*, and some of these are one function. Does the testing norm need a
+  declared per-test callable, or does the fake become a class with one method?
+- [ ] **An engine's registration callback — `examples/durable-execution`
+  `ordering/adapters/jobs/restate.py` (`def quote`, `def run` inside
+  `__init__`).** The SDK wants a function registered against a handler name at
+  construction time. The closure captures `self`. This is the shape with the
+  least obvious relocation, because the engine's API is the constraint, not
+  the code's taste — and it is exactly where the durable-execution example's
+  existing debt markers already sit.
+- [ ] **A host's server loop — `srv/cli/main.py`, `srv/http/main.py`,
+  `srv/voice/agent.py` in three trees, 1 each.** A `def serve()` nested in
+  `main()` so it closes over the parsed config. `srv` modules already carry
+  their own function rules (`SRV_FUNCTIONS`); the question is whether the
+  answer here is "a host is a class" or "a nested function is legal in `srv`
+  and nowhere else."
+- [ ] **The class-in-a-function hole, which the check leaves open on
+  purpose.** A `ClassDef` resets the scope, so a class defined inside a test
+  function has ordinary methods, not nested functions. That is right for the
+  `ts.Outcome` gate tests, which define a malformed subclass inside the test
+  that proves it is rejected — but it also means "wrap it in a class" is an
+  available dodge for anything else. Rule whether the reset stays unconditional
+  or is scoped to a test module.
 
 ## Foreign types at the analyzer's door (2026-08-30, deferred rule)
 

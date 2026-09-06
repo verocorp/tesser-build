@@ -11,7 +11,7 @@ import tesser.errors as errors
 class TestCliHost:
 
     def test_the_host_runs_the_command(self) -> None:
-        async def drop() -> None:
+        async def drop() -> None:  # tesser:debt TB023
             database = pgdatabase.Database(pgdatabase.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
             await database.open()
             async with database.acquire() as connection:
@@ -23,7 +23,7 @@ class TestCliHost:
         assert exit_code == 0
 
     def test_the_host_reports_the_conflict_of_a_second_add(self) -> None:
-        async def drop() -> None:
+        async def drop() -> None:  # tesser:debt TB023
             database = pgdatabase.Database(pgdatabase.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
             await database.open()
             async with database.acquire() as connection:
