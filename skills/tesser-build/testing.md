@@ -225,7 +225,26 @@ file says *how*, and it is the cross-cutting layer they assume.
   is out of contract. A class that is neither
   `Test`-prefixed nor a declared `@ts.fake` is a `TB072` finding. The
   `Test` prefix is load-bearing: it is what pytest collects, so a test
-  class named anything else would hold tests that silently never run. `TB073` is the shape
+  class named anything else would hold tests that silently never run.
+
+  **A fake mirrors its port**, and that is `TB072`'s second clause: a
+  `@ts.fake` names as a base the contract it doubles — an application port, a
+  store, a protocol port, a client, an actions client, a job context, or a
+  config repository — and a fake that names none of those is a finding. The
+  base is what makes the double checkable: it is how the analyzer knows which
+  methods the fake owes, and it is what breaks the test when the port's
+  signature changes. A fake that names nothing is a second, unversioned copy
+  of a contract nobody can see.
+
+  The consequence worth stating, because it is where the reaching goes wrong:
+  **if you want to fake a single callable behavior and there is no port to
+  mirror, the missing thing is the port, not a new kind of fake.** A bare
+  function handed to the thing under test is a dependency declared
+  anonymously — `TB022` says so in type position and `TB023` says so in value
+  position — and the fix is the same in a test as in production: declare the
+  `ts.Port` in `application/ports/`, then fake it. Do not reach for a
+  one-method class to satisfy the letter of this rule; reach for the port the
+  one-method class is standing in for. `TB073` is the shape
   half: a declared helper takes only defaulted primitives, has no control
   flow, and builds a spec. A helper that legitimately builds something else —
   a wired object graph for an end-to-end test, a JSON payload — declares

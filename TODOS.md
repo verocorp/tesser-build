@@ -838,6 +838,18 @@ measured:
   that it is a `@ts.fake` that never got declared — but a `@ts.fake` is a
   *class*, and some of these are one function. Does the testing norm need a
   declared per-test callable, or does the fake become a class with one method?
+  **Half-ruled, v0.0.101.1 (maintainer, 2026-09-06): neither.** A fake mirrors
+  its port, and a single callable behavior with no port to mirror is a *missing
+  port*, not a new kind of fake — so the answer for a site in this bucket is
+  the `ts.Port` the bare function is standing in for, and the `@ts.fake` that
+  implements it. `TB072` already forces this: a fake naming no port, store,
+  client, actions client, job context, protocol port or config repository is a
+  finding today, so a one-method class invented to clear `TB023` reddens
+  `TB072` instead. What is still open is the arithmetic: how many of the 43
+  resolve to a port that should exist anyway (`test_agent.py`'s `halt` is the
+  specimen — `ToolEndpoint` beside it is already a `ts.Port`, `halt` is a bare
+  `abc.Callable`), versus how many are genuinely per-test arrangement with no
+  production dependency behind them. Count that before the wave runs.
 - [ ] **An engine's registration callback — `examples/durable-execution`
   `ordering/adapters/jobs/restate.py` (`def quote`, `def run` inside
   `__init__`).** The SDK wants a function registered against a handler name at
