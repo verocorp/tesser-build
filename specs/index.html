@@ -416,10 +416,24 @@ function navStory(){
     then:"I am there in one click if it has a name, or a short scroll if it does not, knowing exactly where I am the whole way",
     children:[
       page("j-nav-a", "show every card's identifier, its level, and the chain of identifiers above it"),
-      page("j-nav-b", "collapse to any level on one click, saying how much each cut node hides"),
+      page("j-nav-b", "collapse to any level on one click, saying what sits directly under each cut node"),
       page("j-nav-c", "make every so-that that names a story a link to that story"),
-      page("j-nav-d", "take a typed identifier or word to the first node that matches"),
+      page("j-nav-d", "take a click on any identifier, or a typed identifier or word, to that node with its parents on screen above it"),
       page("j-nav-e", "keep everything outside what the user is working on collapsed to a line that still says what and where it is, so there is little to scroll past")
+    ]};
+}
+
+/* putting a branch out of the way while working elsewhere — by hand, and it stays that way */
+function minimizeStory(){
+  return {kind:"story", id:"s-min", status:"accepted", source:"chris",
+    given:"a branch on the page I am not working on",
+    when:"I minimize it",
+    then:"it takes one line that says what it is and what it holds, and stays that way until I open it again, even after I come back",
+    children:[
+      {kind:"jtbd", id:"j-min-a", level:2, status:"accepted", source:"chris",
+       role:"the product specification page",
+       need:"show a minimize control on every jtbd and story, collapse it to one line naming what is directly under it, and remember that until it is opened again",
+       soThat:"S1.4 is fulfilled", stories:[]}
     ]};
 }
 
@@ -430,7 +444,7 @@ function pageJob(id, stories){
 }
 
 function seed(){
-  return {repo:"", seeded:["agent-build","page-jobs-1","nav-story-1","nav-story-2"], jobs:[{
+  return {repo:"", seeded:["agent-build","page-jobs-1","nav-story-1","nav-story-2","nav-story-3"], jobs:[{
     kind:"jtbd", id:"j-root", level:1, status:"accepted", source:"chris",
     role:SPINE["j-root"].role,
     need:SPINE["j-root"].need,
@@ -461,7 +475,8 @@ function seed(){
        ]},
 
       agentBuildBranch(),
-      navStory()
+      navStory(),
+      minimizeStory()
     ]
   }]};
 }
@@ -676,6 +691,20 @@ function migrate(m){
       if(!st.children.some(c => c.id === "j-nav-e")) st.children.push(fresh.children[4]);
     }));
     m.seeded.push("nav-story-2");
+  }
+  if(m.seeded.indexOf("nav-story-3") === -1){
+    const fresh = navStory();
+    const wording = {};
+    fresh.children.forEach(c => { wording[c.id] = c.need; });
+    (m.jobs || []).forEach(job => {
+      job.stories.forEach(st => {
+        if(st.id !== "s-nav") return;
+        st.children.forEach(c => { if(c.id === "j-nav-b" || c.id === "j-nav-d") c.need = wording[c.id]; });
+      });
+      const at = job.stories.findIndex(st => st.id === "s-nav");
+      if(at !== -1 && !job.stories.some(st => st.id === "s-min")) job.stories.splice(at + 1, 0, minimizeStory());
+    });
+    m.seeded.push("nav-story-3");
   }
   /* the fill-1 batch of proposed stories was reverted; take it back out of a tree that got it */
   if(m.seeded.indexOf("fill-1-undo") === -1){
