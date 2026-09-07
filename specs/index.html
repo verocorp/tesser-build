@@ -347,6 +347,22 @@ function agentBuildBranch(){
     }]};
 }
 
+/* finding your way around a full specification — part of iterating on it */
+function navStory(){
+  const page = (id, need) => ({kind:"jtbd", id:id, level:2, status:"accepted", source:"chris",
+    role:"the product specification page", need:need, soThat:"S1.3 is fulfilled", stories:[]});
+  return {kind:"story", id:"s-nav", status:"accepted", source:"chris",
+    given:"I am on the product specification page and there is a full specification with many jtbds and stories at every level",
+    when:"I go to change something deep in it",
+    then:"I am there in one click, knowing exactly where I am",
+    children:[
+      page("j-nav-a", "show every card's identifier, its level, and the chain of identifiers above it"),
+      page("j-nav-b", "collapse to any level on one click, saying how much each cut node hides"),
+      page("j-nav-c", "make every so-that that names a story a link to that story"),
+      page("j-nav-d", "take a typed identifier or word to the first node that matches")
+    ]};
+}
+
 function pageJob(id, stories){
   const t = SPINE[id];
   return {kind:"jtbd", id:id, level:2, status:"accepted", source:"chris",
@@ -354,7 +370,7 @@ function pageJob(id, stories){
 }
 
 function seed(){
-  return {repo:"", seeded:["agent-build","page-jobs-1"], jobs:[{
+  return {repo:"", seeded:["agent-build","page-jobs-1","nav-story-1"], jobs:[{
     kind:"jtbd", id:"j-root", level:1, status:"accepted", source:"chris",
     role:SPINE["j-root"].role,
     need:SPINE["j-root"].need,
@@ -384,7 +400,8 @@ function seed(){
          pageJob("j-page-d")
        ]},
 
-      agentBuildBranch()
+      agentBuildBranch(),
+      navStory()
     ]
   }]};
 }
@@ -485,6 +502,13 @@ function migrate(m){
     };
     (m.jobs || []).forEach(j => (j.stories || []).forEach(split));
     m.seeded.push("page-jobs-1");
+  }
+  if(m.seeded.indexOf("nav-story-1") === -1){
+    (m.jobs || []).forEach(job => {
+      const i = job.stories.findIndex(st => st.id === "s-mtrmayx6-8");
+      if(i !== -1) job.stories.splice(i, 1, navStory());
+    });
+    m.seeded.push("nav-story-1");
   }
   if(m.seeded.indexOf("agent-build") === -1){
     const root = m.jobs && m.jobs[0];
