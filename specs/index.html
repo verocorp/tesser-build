@@ -520,6 +520,12 @@ function migrate(m){
     }));
     m.seeded.push("nav-story-2");
   }
+  /* the fill-1 batch of proposed stories was reverted; take it back out of a tree that got it */
+  if(m.seeded.indexOf("fill-1-undo") === -1){
+    const gone = new Set(["s-4","s-5b","s-6","s-7","s-8","s-9","s-10","s-11"]);
+    (m.jobs || []).forEach(job => { job.stories = job.stories.filter(st => !gone.has(st.id)); });
+    m.seeded.push("fill-1-undo");
+  }
   if(m.seeded.indexOf("agent-build") === -1){
     const root = m.jobs && m.jobs[0];
     if(root && Array.isArray(root.stories)) root.stories.push(agentBuildBranch());
