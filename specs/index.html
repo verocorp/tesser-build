@@ -203,6 +203,51 @@ main{padding:var(--s5) var(--s5) var(--s7);max-width:1000px;margin:0 auto}
 .seg button#depth-2[aria-pressed="true"]{background:color-mix(in srgb, var(--l2) 15%, transparent);color:var(--l2)}
 .seg button#depth-3[aria-pressed="true"]{background:color-mix(in srgb, var(--l3) 15%, transparent);color:var(--l3)}
 .toggle[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+/* J1.3e — everything outside focus collapses to one line that still says what and where it is */
+.row{
+  display:grid;grid-template-columns:auto auto 1fr auto;column-gap:var(--s3);align-items:baseline;
+  padding:5px var(--s4);border:1px solid var(--line);border-left:3px solid var(--lv);
+  border-radius:3px;background:var(--surface);cursor:pointer;
+}
+.row.story{border-left-color:color-mix(in srgb, var(--lv) 38%, var(--line));background:color-mix(in srgb, var(--lv) 4%, var(--surface-2))}
+.row:hover{border-color:var(--lv)}
+.row.ancestor{background:color-mix(in srgb, var(--lv) 7%, var(--surface));border-style:dashed}
+.row .tag{padding-top:0}
+.row .kw{font:500 10.5px/1.7 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.row .snip{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
+.row.story .snip{font:400 13px/1.5 var(--mono)}
+.row .beneath{font:400 11px/1.6 var(--mono);color:var(--faint);white-space:nowrap}
+.node > .row + .kids{margin-top:var(--s2)}
+
+/* J1.3a — the chain of identifiers above a card, each a link */
+.crumbs{grid-column:2;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin:0 0 4px;font:500 11px/1.6 var(--mono)}
+.crumbs a{color:var(--faint);text-decoration:none;border-bottom:1px dotted var(--line-strong)}
+.crumbs a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.crumbs .sep{color:var(--line-strong)}
+
+/* J1.3c — a so-that that names a story becomes a link to it */
+.chips{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 0}
+.chip{
+  font:500 11px/1.7 var(--mono);letter-spacing:.03em;color:var(--accent);
+  background:var(--accent-soft);padding:0 7px;border-radius:2px;text-decoration:none;cursor:pointer;
+}
+.chip:hover{filter:brightness(.92)}
+.chip.dead{color:var(--faint);background:transparent;border:1px dashed var(--line-strong);cursor:default}
+
+/* J1.3d — jump */
+.jump{display:flex;align-items:center;gap:6px}
+.jump input{
+  width:20ch;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:3px;
+  padding:5px 9px;font:400 13px var(--mono);
+}
+.jump input:focus{border-color:var(--accent);outline:none}
+.focusbar{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.focusbar b{font:500 12px/1.6 var(--mono);color:var(--accent)}
+
+.flash{animation:flash 1.6s ease-out 1}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 3px transparent}}
+@media (prefers-reduced-motion: reduce){.flash{animation:none;box-shadow:0 0 0 3px var(--accent)}}
+
 .summary{
   grid-column:2;margin:5px 0 0;font:400 11.5px/1.6 var(--mono);
   color:var(--faint);letter-spacing:.02em;
@@ -233,6 +278,13 @@ footer{max-width:1000px;margin:0 auto;padding:0 var(--s5) var(--s6);color:var(--
       <button id="depth-3" type="button" aria-pressed="true"  title="Show down to the service level">service</button>
     </div>
     <button class="btn toggle" id="storiesBtn" type="button" aria-pressed="true" title="Show or hide every story, leaving the jtbd spine">stories</button>
+    <form class="jump" id="jumpForm" title="Type an identifier like S1.1c.1 or a word, then Enter — or press / to get here">
+      <input id="jumpInput" type="search" placeholder="jump: S1.1c.1 or a word" spellcheck="false" autocomplete="off">
+    </form>
+    <div class="focusbar" id="focusBar" hidden>
+      <span>focused on <b id="focusLabel"></b></span>
+      <button class="btn btn-quiet" id="focusClear" type="button" title="Show everything again (Esc)">show all</button>
+    </div>
     <button class="btn" id="exportBtn">Export JSON</button>
     <button class="btn" id="importBtn">Import JSON</button>
     <button class="btn" id="resetBtn">Reset to seed</button>
@@ -410,7 +462,71 @@ function seed(){
 /* ---------------- state ---------------- */
 let model = load();
 const sketchOpen = new Set(["j-svc", "j-buildsvc"]);
-const view = {depth:3, stories:true};
+const view = {depth:3, stories:true, focus:null};
+try{ view.focus = localStorage.getItem(STORE_KEY + ":focus") || null; }catch(e){ /* no focus remembered */ }
+function setFocus(id){
+  view.focus = id;
+  try{ id ? localStorage.setItem(STORE_KEY + ":focus", id) : localStorage.removeItem(STORE_KEY + ":focus"); }catch(e){ /* fine */ }
+  render();
+}
+
+/* every node's label (J1.1c, S1.1c.1), its level, and the labels above it — computed over the whole
+   model regardless of what is shown, so links and jumps resolve into collapsed branches too */
+let index = new Map();
+function indexLabels(){
+  index = new Map();
+  const vj = (job, path, chain) => {
+    const label = "J" + path;
+    index.set(label, {label:label, node:job, kind:"jtbd", level:job.level, chain:chain, path:path});
+    job.stories.forEach((st, i) => {
+      const sp = path + "." + (i + 1);
+      const sl = "S" + sp;
+      index.set(sl, {label:sl, node:st, kind:"story", level:job.level, chain:chain.concat([label]), path:sp});
+      st.children.forEach((c, k) => vj(c, sp + letter(k), chain.concat([label, sl])));
+    });
+  };
+  model.jobs.forEach((j, i) => vj(j, String(i + 1), []));
+}
+function entryFor(id){
+  for(const e of index.values()) if(e.node.id === id) return e;
+  return null;
+}
+const REF = /\b([JS]\d+(?:\.\d+|[a-z])*)\b/g;
+function refsIn(text){
+  const out = [];
+  String(text || "").replace(REF, m => { if(out.indexOf(m) === -1) out.push(m); return m; });
+  return out;
+}
+
+/* J1.3c/d — go to a node by label or by the first word match; open whatever hides it */
+function jumpTo(query){
+  const q = String(query || "").trim();
+  if(!q) return false;
+  let e = index.get(q.toUpperCase().replace(/([JS])(\d)/, "$1$2"));
+  if(!e){
+    const key = q.toUpperCase();
+    for(const cand of index.values()){ if(cand.label.toUpperCase() === key){ e = cand; break; } }
+  }
+  if(!e){
+    const w = q.toLowerCase();
+    for(const cand of index.values()){
+      const n = cand.node;
+      const hay = [n.role, n.need, n.soThat, n.given, n.when, n.then, n.pseudocode].join(" ").toLowerCase();
+      if(hay.indexOf(w) !== -1){ e = cand; break; }
+    }
+  }
+  if(!e) return false;
+  if(e.level > view.depth) view.depth = e.level;
+  if(e.kind === "story") view.stories = true;
+  /* focus on the target so it renders fully with its chain above it */
+  setFocus(e.node.id);
+  const el = tree.querySelector('[data-label="' + e.label + '"]');
+  if(el){
+    el.scrollIntoView({block:"center"});
+    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+  }
+  return true;
+}
 let seq = 0;
 const uid = p => p + "-" + Date.now().toString(36) + "-" + (seq++).toString(36);
 
@@ -703,6 +819,7 @@ function line(node, spec){
     node[spec.field] = val.textContent;
     save();
   });
+  if(spec.field === "soThat") val.addEventListener("blur", () => render());
   val.addEventListener("keydown", e => {
     if(e.key === "Enter"){ e.preventDefault(); val.blur(); }
   });
@@ -726,6 +843,8 @@ function line(node, spec){
 const tree = document.getElementById("tree");
 
 function render(){
+  indexLabels();
+  if(view.focus && !entryFor(view.focus)) view.focus = null;
   tree.innerHTML = "";
   if(!model.jobs.length){
     const p = document.createElement("p");
@@ -733,7 +852,13 @@ function render(){
     p.textContent = "No jtbds yet. New jtbd starts one.";
     tree.appendChild(p);
   }
-  model.jobs.forEach((job, i) => tree.appendChild(jobNode(job, String(i+1), model.jobs, i)));
+  const focusPath = new Set();
+  if(view.focus){
+    const e = entryFor(view.focus);
+    e.chain.forEach(l => focusPath.add(index.get(l).node.id));
+    focusPath.add(view.focus);
+  }
+  model.jobs.forEach((job, i) => tree.appendChild(jobAny(job, String(i+1), model.jobs, i, focusPath)));
   const counts = {jtbd:0, story:0, proposed:0};
   walk(n => { counts[n.kind]++; if(n.status === "proposed") counts.proposed++; });
   syncControls();
@@ -741,6 +866,114 @@ function render(){
     counts.jtbd + " jtbds · " + counts.story + " stories · " + counts.proposed +
     " proposed · saved in this browser, export to keep it";
   save();
+}
+
+/* J1.3e — with a focus set, a node is rendered in full only inside the focused subtree; the nodes
+   above it collapse to dashed rows (the chain), everything beside the chain collapses to a row */
+function jobAny(job, path, siblings, i, focusPath){
+  if(!view.focus || job.id === view.focus) return jobNode(job, path, siblings, i);
+  if(!focusPath.has(job.id)) return compactRow("jtbd", job, path, job.level, "collapsed");
+  const wrap = document.createElement("div");
+  wrap.className = "node l" + job.level;
+  wrap.appendChild(compactRow("jtbd", job, path, job.level, "ancestor", true));
+  const kids = document.createElement("div");
+  kids.className = "kids";
+  job.stories.forEach((st, k) => kids.appendChild(storyAny(st, job, k, path + "." + (k + 1), focusPath)));
+  wrap.appendChild(kids);
+  return wrap;
+}
+function storyAny(st, job, i, path, focusPath){
+  if(!view.focus || st.id === view.focus) return storyNode(st, job, i, path);
+  if(!focusPath.has(st.id)) return compactRow("story", st, path, job.level, "collapsed");
+  const wrap = document.createElement("div");
+  wrap.className = "node l" + job.level;
+  wrap.appendChild(compactRow("story", st, path, job.level, "ancestor", true));
+  const kids = document.createElement("div");
+  kids.className = "kids";
+  st.children.forEach((c, k) => kids.appendChild(jobAny(c, path + letter(k), st.children, k, focusPath)));
+  wrap.appendChild(kids);
+  return wrap;
+}
+function compactRow(kind, n, path, level, mode, bare){
+  const label = (kind === "jtbd" ? "J" : "S") + path;
+  const row = document.createElement("div");
+  row.className = "row " + (kind === "jtbd" ? "jtbd" : "story") + (mode === "ancestor" ? " ancestor" : "");
+  row.dataset.label = label;
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.title = mode === "ancestor" ? "Above what you are focused on — click to focus here" : "Click to focus here";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = label;
+  row.appendChild(tag);
+
+  const kw = document.createElement("span");
+  kw.className = "kw";
+  kw.textContent = kind === "jtbd" ? (LEVELS[level] || {name:"?"}).name : "given";
+  row.appendChild(kw);
+
+  const snip = document.createElement("span");
+  snip.className = "snip";
+  snip.textContent = kind === "jtbd" ? (n.role || "·") + " — " + (n.need || "·") : (n.given || "·");
+  row.appendChild(snip);
+
+  const beneath = document.createElement("span");
+  beneath.className = "beneath";
+  let count = 0;
+  if(kind === "jtbd") count = countUnder(n);
+  else n.children.forEach(c => { count += 1 + countUnder(c); });
+  beneath.textContent = mode === "collapsed" && count ? count + " beneath" : "";
+  row.appendChild(beneath);
+
+  const go = () => setFocus(n.id);
+  row.addEventListener("click", go);
+  row.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
+
+  if(bare) return row;
+  const wrap = document.createElement("div");
+  wrap.className = "node l" + level;
+  wrap.appendChild(row);
+  return wrap;
+}
+
+/* J1.3a — the chain of identifiers above a card, shown while a focus is set */
+function crumbs(label){
+  const e = index.get(label);
+  if(!view.focus || !e || !e.chain.length) return null;
+  const c = document.createElement("div");
+  c.className = "crumbs";
+  e.chain.forEach((l, i) => {
+    if(i){ const s = document.createElement("span"); s.className = "sep"; s.textContent = "›"; c.appendChild(s); }
+    const a = document.createElement("a");
+    a.href = "#"; a.textContent = l;
+    a.addEventListener("click", ev => { ev.preventDefault(); jumpTo(l); });
+    c.appendChild(a);
+  });
+  return c;
+}
+
+/* J1.3c — the identifiers a so-that names, as links */
+function chips(text){
+  const refs = refsIn(text);
+  if(!refs.length) return null;
+  const c = document.createElement("div");
+  c.className = "chips";
+  refs.forEach(r => {
+    const a = document.createElement("a");
+    const e = index.get(r);
+    a.className = "chip" + (e ? "" : " dead");
+    a.textContent = "→ " + r;
+    if(e){
+      a.href = "#";
+      a.title = "Go to " + r;
+      a.addEventListener("click", ev => { ev.preventDefault(); jumpTo(r); });
+    } else {
+      a.title = "Nothing in the tree is called " + r;
+    }
+    c.appendChild(a);
+  });
+  return c;
 }
 
 function badges(node, isJob){
@@ -789,14 +1022,20 @@ function jobNode(job, path, siblings, index){
   const card = document.createElement("div");
   card.className = "card jtbd";
 
+  card.dataset.label = "J" + path;
   const tag = document.createElement("span");
   tag.className = "tag";
   tag.textContent = "J" + path;
+  tag.title = "Focus on this jtbd — everything else collapses";
+  tag.style.cursor = "pointer";
+  tag.addEventListener("click", () => setFocus(job.id));
   card.appendChild(tag);
 
   const lines = document.createElement("div");
   lines.className = "lines";
+  const cr = crumbs("J" + path); if(cr) lines.appendChild(cr);
   JOB_LINES.forEach(spec => lines.appendChild(line(job, spec)));
+  const ch = chips(job.soThat); if(ch) lines.appendChild(ch);
   if(!view.stories && job.level < 3 && job.stories.length){
     const s = document.createElement("p");
     s.className = "summary";
@@ -885,13 +1124,18 @@ function storyNode(st, job, index, path){
   const card = document.createElement("div");
   card.className = "card story";
 
+  card.dataset.label = "S" + path;
   const tag = document.createElement("span");
   tag.className = "tag";
   tag.textContent = "S" + path;
+  tag.title = "Focus on this story — everything else collapses";
+  tag.style.cursor = "pointer";
+  tag.addEventListener("click", () => setFocus(st.id));
   card.appendChild(tag);
 
   const lines = document.createElement("div");
   lines.className = "lines";
+  const cr = crumbs("S" + path); if(cr) lines.appendChild(cr);
   STORY_LINES.forEach(spec => lines.appendChild(line(st, spec)));
   const cut = st.children.filter(c => c.level > view.depth).length;
   if(cut){
@@ -1070,7 +1314,24 @@ document.getElementById("storiesBtn").addEventListener("click", () => {
 const repoInput = document.getElementById("repoInput");
 repoInput.addEventListener("input", () => { model.repo = repoInput.value; save(); });
 
+const jumpInput = document.getElementById("jumpInput");
+document.getElementById("jumpForm").addEventListener("submit", e => {
+  e.preventDefault();
+  if(jumpTo(jumpInput.value)) jumpInput.select();
+  else { jumpInput.classList.add("flash"); setTimeout(() => jumpInput.classList.remove("flash"), 1600); }
+});
+document.getElementById("focusClear").addEventListener("click", () => setFocus(null));
+document.addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+  if(e.key === "Escape" && view.focus){ setFocus(null); return; }
+  if(e.key === "/" && !typing){ e.preventDefault(); jumpInput.focus(); jumpInput.select(); }
+});
+
 function syncControls(){
+  const bar = document.getElementById("focusBar");
+  const e = view.focus ? entryFor(view.focus) : null;
+  bar.hidden = !e;
+  if(e) document.getElementById("focusLabel").textContent = e.label;
   if(document.activeElement !== repoInput) repoInput.value = model.repo || "";
   [1,2,3].forEach(d => {
     document.getElementById("depth-" + d)
