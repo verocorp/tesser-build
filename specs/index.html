@@ -471,13 +471,19 @@ function setFocus(id){
   if(id) reveal(id);
 }
 
-/* after a re-render the focused card may be anywhere: bring it to just below the masthead and flash it */
+/* after a re-render the focused card may be anywhere: scroll so its chain of parents starts just below
+   the masthead and the card follows; if the card would still fall off the bottom, nudge it into view */
 function reveal(id){
   const e = entryFor(id);
   const el = e && tree.querySelector('[data-label="' + e.label + '"]');
   if(!el) return;
-  el.style.scrollMarginTop = (document.querySelector(".masthead").offsetHeight + 12) + "px";
-  el.scrollIntoView({block:"start"});
+  const head = document.querySelector(".masthead").offsetHeight + 12;
+  const top = tree.querySelector('[data-label="' + (e.chain[0] || e.label) + '"]') || el;
+  window.scrollTo({top: top.getBoundingClientRect().top + window.scrollY - head});
+  /* the parents win over the card: only the card's opening lines must be on screen */
+  const room = window.innerHeight - 160;
+  const cardTop = el.getBoundingClientRect().top;
+  if(cardTop > room) window.scrollBy({top: cardTop - room});
   el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
 }
 
