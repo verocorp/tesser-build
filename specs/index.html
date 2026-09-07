@@ -364,144 +364,6 @@ function navStory(){
     ]};
 }
 
-/* the rest of "iterate on the application specification", proposed by claude —
-   every node below carries status "proposed" so it can be accepted or rejected in place */
-function proposedStories(){
-  const P = {status:"proposed", source:"claude"};
-  const page = "the product specification page";
-  const story = (id, given, when, then, children) =>
-    Object.assign({kind:"story", id:id, given:given, when:when, then:then, children:children || []}, P);
-  const leaf = (id, need, soThat) =>
-    Object.assign({kind:"jtbd", id:id, level:2, role:page, need:need, soThat:soThat, stories:[]}, P);
-  const call = (id, need, soThat, st) =>
-    Object.assign({kind:"jtbd", id:id, level:2, role:page, need:need, soThat:soThat, stories:[st]}, P);
-  const svc = (id, need, soThat) =>
-    Object.assign({kind:"jtbd", id:id, level:3, role:"the product specs service", need:need, soThat:soThat,
-                   stories:[], build:BUILD("specs", ""), pseudocode:""}, P);
-
-  return [
-    story("s-4",
-      "I am on the product specification page",
-      "I click new jtbd, fill in as, I need to and so that, and click save",
-      "I see it as a root of the specification with its identifier and its user level, ready to take stories",
-      [
-        leaf("j-4a", "show a new jtbd button", "S1.4 is fulfilled"),
-        leaf("j-4b", "show as, I need to and so that inputs and a save when new jtbd is clicked", "S1.4 is fulfilled"),
-        call("j-4c", "create the jtbd when save is clicked", "S1.4 is fulfilled",
-          story("s-4c-1",
-            "a filled-in as, I need to and so that",
-            "I POST to jtbd with them",
-            "I get back the jtbd's id and its position among the roots",
-            [svc("j-4svc", "create a root jtbd at the user level and persist it", "S1.4c.1 is fulfilled")])),
-        leaf("j-4d", "show the returned jtbd as a root with its identifier and its level color", "S1.4 is fulfilled")
-      ]),
-
-    story("s-5b",
-      "I am on the product specification page and a story exists whose owner is above the service level",
-      "I click add job on it, fill in as, I need to and so that, and click save",
-      "I see the job lettered under the story at the next level, colored for that level, with its so that naming the story",
-      [
-        leaf("j-5a", "show an add job link on each story above the service level, named for the level it creates", "S1.5 is fulfilled"),
-        leaf("j-5b", "show as, I need to and so that inputs and a save when add job is clicked", "S1.5 is fulfilled"),
-        call("j-5c", "create the job under that story when save is clicked", "S1.5 is fulfilled",
-          story("s-5c-1",
-            "a story's identifier and a filled-in as, I need to and so that",
-            "I POST to stories/{id}/jtbd with them",
-            "I get back the jtbd's id, its level and its position under that story",
-            [svc("j-5svc", "attach a jtbd to an existing story, one level below the story's owner, and persist it", "S1.5c.1 is fulfilled")])),
-        leaf("j-5d", "show the returned jtbd lettered under its story with its level color", "S1.5 is fulfilled")
-      ]),
-
-    story("s-6",
-      "any jtbd or story is on the page",
-      "I click one of its lines, change the text, and click away",
-      "the line reads as I typed it, and still does when I come back",
-      [
-        leaf("j-6a", "make every line editable in place with its prefix fixed", "S1.6 is fulfilled"),
-        call("j-6b", "save the changed line when I leave it", "S1.6 is fulfilled",
-          story("s-6b-1",
-            "a node's identifier, which line changed, and its new text",
-            "I PUT to jtbd/{id} or stories/{id} with it",
-            "I get back the node as saved",
-            [svc("j-6svc", "change one line of a jtbd or story and persist it", "S1.6b.1 is fulfilled")]))
-      ]),
-
-    story("s-7",
-      "a jtbd or story with siblings is on the page",
-      "I click its move up or move down link",
-      "it swaps places with its neighbour and every identifier in the branch renumbers",
-      [
-        leaf("j-7a", "show move up and move down links on every node that has siblings, disabled at the ends", "S1.7 is fulfilled"),
-        call("j-7b", "move the node when a link is clicked", "S1.7 is fulfilled",
-          story("s-7b-1",
-            "a node's identifier and the direction",
-            "I POST to jtbd/{id}/move or stories/{id}/move with it",
-            "I get back the new order of its siblings",
-            [svc("j-7svc", "move a jtbd or story one place among its siblings, keeping the others' order, and persist it", "S1.7b.1 is fulfilled")])),
-        leaf("j-7c", "renumber every identifier in the branch from the returned order", "S1.7 is fulfilled")
-      ]),
-
-    story("s-8",
-      "a jtbd or story is on the page, possibly with things under it",
-      "I click its remove link",
-      "I am told how many nodes go with it, and after I confirm it is gone and its siblings close the gap",
-      [
-        leaf("j-8a", "show a remove link on every node", "S1.8 is fulfilled"),
-        leaf("j-8b", "ask for confirmation naming how many nodes are beneath, when remove is clicked", "S1.8 is fulfilled"),
-        call("j-8c", "remove the node when confirmed", "S1.8 is fulfilled",
-          story("s-8c-1",
-            "a node's identifier",
-            "I DELETE jtbd/{id} or stories/{id}",
-            "I get back how many nodes were removed",
-            [svc("j-8svc", "remove a jtbd or story and everything beneath it, and persist it", "S1.8c.1 is fulfilled")])),
-        leaf("j-8d", "close the gap among its siblings and renumber", "S1.8 is fulfilled")
-      ]),
-
-    story("s-9",
-      "a service jtbd is on the page",
-      "I type scratch pseudocode into it",
-      "it is kept exactly as I typed it, indentation included, and is there when I come back",
-      [
-        leaf("j-9a", "show a pseudocode box on every service jtbd, with Tab indenting", "S1.9 is fulfilled"),
-        call("j-9b", "save the pseudocode when I leave the box", "S1.9 is fulfilled",
-          story("s-9b-1",
-            "a service's identifier and its pseudocode",
-            "I PUT to jtbd/{id}/pseudocode with it",
-            "I get back the service as saved",
-            [svc("j-9svc", "keep a service jtbd's scratch pseudocode as written and persist it", "S1.9b.1 is fulfilled")]))
-      ]),
-
-    story("s-10",
-      "an agent has proposed jtbds or stories I did not write",
-      "I open the page",
-      "each is marked proposed with who proposed it, and I can accept it as mine or reject it, one click each",
-      [
-        leaf("j-10a", "mark every proposed node with a badge naming who proposed it", "S1.10 is fulfilled"),
-        leaf("j-10b", "show accept and reject links on every proposed node", "S1.10 is fulfilled"),
-        call("j-10c", "accept or reject the node when clicked", "S1.10 is fulfilled",
-          story("s-10c-1",
-            "a proposed node's identifier and my decision",
-            "I POST to jtbd/{id}/review or stories/{id}/review with it",
-            "I get back the node as accepted, or how many nodes were removed",
-            [svc("j-10svc", "accept a proposed jtbd or story as the owner's, or remove it and everything beneath it, and persist it", "S1.10c.1 is fulfilled")]))
-      ]),
-
-    story("s-11",
-      "a specification I have worked on",
-      "I open the product specification page again",
-      "it is exactly as I left it",
-      [
-        call("j-11a", "load the specification when the page opens", "S1.11 is fulfilled",
-          story("s-11a-1",
-            "the page opening",
-            "I GET spec",
-            "I get back every jtbd and story, in order, with every service's pseudocode",
-            [svc("j-11svc", "read the whole specification from the directory, in order", "S1.11a.1 is fulfilled")])),
-        leaf("j-11b", "show it as the tree", "S1.11 is fulfilled")
-      ])
-  ];
-}
-
 function pageJob(id, stories){
   const t = SPINE[id];
   return {kind:"jtbd", id:id, level:2, status:"accepted", source:"chris",
@@ -509,7 +371,7 @@ function pageJob(id, stories){
 }
 
 function seed(){
-  return {repo:"", seeded:["agent-build","page-jobs-1","nav-story-1","nav-story-2","fill-1"], jobs:[{
+  return {repo:"", seeded:["agent-build","page-jobs-1","nav-story-1","nav-story-2"], jobs:[{
     kind:"jtbd", id:"j-root", level:1, status:"accepted", source:"chris",
     role:SPINE["j-root"].role,
     need:SPINE["j-root"].need,
@@ -541,7 +403,7 @@ function seed(){
 
       agentBuildBranch(),
       navStory()
-    ].concat(proposedStories())
+    ]
   }]};
 }
 
@@ -657,14 +519,6 @@ function migrate(m){
       if(!st.children.some(c => c.id === "j-nav-e")) st.children.push(fresh.children[4]);
     }));
     m.seeded.push("nav-story-2");
-  }
-  if(m.seeded.indexOf("fill-1") === -1){
-    const root = m.jobs && m.jobs[0];
-    if(root){
-      const have = new Set(root.stories.map(st => st.id));
-      proposedStories().forEach(st => { if(!have.has(st.id)) root.stories.push(st); });
-    }
-    m.seeded.push("fill-1");
   }
   if(m.seeded.indexOf("agent-build") === -1){
     const root = m.jobs && m.jobs[0];
