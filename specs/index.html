@@ -219,7 +219,7 @@ footer{max-width:1000px;margin:0 auto;padding:0 var(--s5) var(--s6);color:var(--
 <header class="masthead">
   <div>
     <h1>Product Specification</h1>
-    <p class="sub"><strong>user</strong> &rarr; <strong>interface</strong> &rarr; <strong>service</strong>. A jtbd holds ordered stories; a story is owed by one thing at the next level, which gets a jtbd of its own. Ports and aggregates stay in the sketch.</p>
+    <p class="sub"><strong>user</strong> &rarr; <strong>interface</strong> &rarr; <strong>service</strong>. A jtbd holds ordered stories; a story is owed by the next level, which takes one or more jtbds of its own, in order, to discharge it. Ports and aggregates stay in the sketch.</p>
     <div class="repo">
       <label for="repoInput">repo</label>
       <input id="repoInput" type="text" spellcheck="false"
@@ -282,9 +282,21 @@ const SPINE = {
     given:"I am on the product specification page and a jtbd exists",
     when:"I click add story on it, fill in given, when and then, and click save",
     then:"I see the story nested under the jtbd with its identifier and its level, colored for its level, with links to move it up or down and a link to remove it"},
-  "j-page":{
+  "j-page-a":{
     role:"the product specification page",
-    need:"provide an add story link on each jtbd, the given, when and then inputs and a save, and show each story with its identifier, its level color, links to move it up or down, and a link to remove it",
+    need:"show an add story link on each jtbd",
+    soThat:"S1 is fulfilled"},
+  "j-page-b":{
+    role:"the product specification page",
+    need:"show given, when and then inputs and a save when add story is clicked",
+    soThat:"S1 is fulfilled"},
+  "j-page-c":{
+    role:"the product specification page",
+    need:"create the story for that jtbd when save is clicked",
+    soThat:"S1 is fulfilled"},
+  "j-page-d":{
+    role:"the product specification page",
+    need:"show the returned story nested under its jtbd with its id, its level color, and links to move it up or down and to remove it",
     soThat:"S1 is fulfilled"},
   "s-1-1":{
     given:"a jtbd's identifier and a filled-in given, when and then",
@@ -302,7 +314,7 @@ function agentBuildBranch(){
     given:"a service whose pseudocode is a rough sketch",
     when:"I submit it to an agent",
     then:"actual conforming code comes back, and I can see what it renamed and what cases it says I have not covered",
-    child:{
+    children:[{
       kind:"jtbd", id:"j-build", level:2, status:"accepted", source:"chris",
       role:"the design page",
       need:"hand a service's scratch pseudocode and the obligation above it to an agent, and show what comes back",
@@ -312,7 +324,7 @@ function agentBuildBranch(){
          given:"a service with pseudocode, a context and a target",
          when:"I submit it",
          then:"the agent has the scratch as written, the whole obligation chain above it, and where to write, and the service is marked handed off",
-         child:{
+         children:[{
            kind:"jtbd", id:"j-buildsvc", level:3, status:"accepted", source:"chris",
            role:"",
            need:"",
@@ -320,23 +332,29 @@ function agentBuildBranch(){
            stories:[],
            build:BUILD("", ""),
            pseudocode:""
-         }},
+         }]},
         {kind:"story", id:"s-5-2", status:"accepted", source:"chris",
          given:"an agent that has finished",
          when:"I open the service",
          then:"I see the files it wrote and the names it changed from my sketch",
-         child:null},
+         children:[]},
         {kind:"story", id:"s-5-3", status:"accepted", source:"chris",
          given:"an agent that found cases my tree does not cover",
          when:"I open the service",
          then:"its suggestions are waiting as proposed stories I can accept or reject",
-         child:null}
+         children:[]}
       ]
-    }};
+    }]};
+}
+
+function pageJob(id, stories){
+  const t = SPINE[id];
+  return {kind:"jtbd", id:id, level:2, status:"accepted", source:"chris",
+          role:t.role, need:t.need, soThat:t.soThat, stories:stories || []};
 }
 
 function seed(){
-  return {repo:"", seeded:["agent-build"], jobs:[{
+  return {repo:"", seeded:["agent-build","page-jobs-1"], jobs:[{
     kind:"jtbd", id:"j-root", level:1, status:"accepted", source:"chris",
     role:SPINE["j-root"].role,
     need:SPINE["j-root"].need,
@@ -344,13 +362,13 @@ function seed(){
     stories:[
       {kind:"story", id:"s-1", status:"accepted", source:"chris",
        given:SPINE["s-1"].given, when:SPINE["s-1"].when, then:SPINE["s-1"].then,
-       child:{
-         kind:"jtbd", id:"j-page", level:2, status:"accepted", source:"chris",
-         role:SPINE["j-page"].role, need:SPINE["j-page"].need, soThat:SPINE["j-page"].soThat,
-         stories:[
+       children:[
+         pageJob("j-page-a"),
+         pageJob("j-page-b"),
+         pageJob("j-page-c", [
            {kind:"story", id:"s-1-1", status:"accepted", source:"chris",
             given:SPINE["s-1-1"].given, when:SPINE["s-1-1"].when, then:SPINE["s-1-1"].then,
-            child:{
+            children:[{
               kind:"jtbd", id:"j-svc", level:3, status:"accepted", source:"chris",
               role:SPINE["j-svc"].role, need:SPINE["j-svc"].need, soThat:SPINE["j-svc"].soThat,
               stories:[],
@@ -361,9 +379,10 @@ function seed(){
 "  s = domain.Story(MapToSpec(j, r))",
 "  create_response = DesigRepo.create_story(MaptoR)",
 "  return MapToReponse"].join("\n")
-            }}
-         ]
-       }},
+            }]}
+         ]),
+         pageJob("j-page-d")
+       ]},
 
       agentBuildBranch()
     ]
@@ -388,6 +407,16 @@ function load(){
 /* a service writes pseudocode instead of stories: fold any stories a level-3 job
    still carries into the code, once, so nothing written earlier is lost */
 function migrate(m){
+  /* a story used to own one job; now it owns an ordered list */
+  const normalize = job => {
+    (job.stories || []).forEach(st => {
+      if(!Array.isArray(st.children)) st.children = st.child ? [st.child] : [];
+      delete st.child;
+      st.children.forEach(normalize);
+    });
+  };
+  (m.jobs || []).forEach(normalize);
+
   const visitJob = job => {
     const stories = job.stories || [];
     if(job.level === 3){
@@ -402,7 +431,7 @@ function migrate(m){
         job.stories = [];
       }
     }
-    stories.forEach(st => { if(st.child) visitJob(st.child); });
+    stories.forEach(st => st.children.forEach(visitJob));
   };
   if(typeof m.repo !== "string") m.repo = "";
   m.seeded = Array.isArray(m.seeded) ? m.seeded : [];
@@ -410,7 +439,7 @@ function migrate(m){
     const fill = node => {
       const text = SPINE[node.id];
       if(text) Object.keys(text).forEach(k => { if(!node[k]) node[k] = text[k]; });
-      (node.stories || []).forEach(st => { fill(st); if(st.child) fill(st.child); });
+      (node.stories || []).forEach(st => { fill(st); st.children.forEach(fill); });
     };
     (m.jobs || []).forEach(fill);
     m.seeded.push("spine-text");
@@ -420,7 +449,7 @@ function migrate(m){
     const fill = node => {
       const text = SPINE[node.id];
       if(text) Object.keys(text).forEach(k => { if(isTodo(node[k])) node[k] = text[k]; });
-      (node.stories || []).forEach(st => { fill(st); if(st.child) fill(st.child); });
+      (node.stories || []).forEach(st => { fill(st); st.children.forEach(fill); });
     };
     (m.jobs || []).forEach(fill);
     m.seeded.push("todo-fills");
@@ -428,9 +457,9 @@ function migrate(m){
   if(m.seeded.indexOf("branch-invariants-1") === -1){
     const set = node => {
       if(node.id === "s-1")   Object.assign(node, SPINE["s-1"]);
-      if(node.id === "j-page") node.need = SPINE["j-page"].need;
+      if(node.id === "j-page" && SPINE["j-page"]) node.need = SPINE["j-page"].need;
       if(node.id === "s-1-1") node.given = SPINE["s-1-1"].given;
-      (node.stories || []).forEach(st => { set(st); if(st.child) set(st.child); });
+      (node.stories || []).forEach(st => { set(st); st.children.forEach(set); });
     };
     (m.jobs || []).forEach(set);
     m.seeded.push("branch-invariants-1");
@@ -438,10 +467,24 @@ function migrate(m){
   if(m.seeded.indexOf("s-1-1-desmear") === -1){
     const fix = node => {
       if(node.id === "s-1-1") Object.assign(node, SPINE["s-1-1"]);
-      (node.stories || []).forEach(st => { fix(st); if(st.child) fix(st.child); });
+      (node.stories || []).forEach(st => { fix(st); st.children.forEach(fix); });
     };
     (m.jobs || []).forEach(fix);
     m.seeded.push("s-1-1-desmear");
+  }
+  if(m.seeded.indexOf("page-jobs-1") === -1){
+    const split = story => {
+      const i = story.children.findIndex(j => j.id === "j-page");
+      if(i !== -1){
+        const old = story.children[i];
+        story.children.splice(i, 1,
+          pageJob("j-page-a"), pageJob("j-page-b"),
+          pageJob("j-page-c", old.stories || []), pageJob("j-page-d"));
+      }
+      story.children.forEach(j => (j.stories || []).forEach(split));
+    };
+    (m.jobs || []).forEach(j => (j.stories || []).forEach(split));
+    m.seeded.push("page-jobs-1");
   }
   if(m.seeded.indexOf("agent-build") === -1){
     const root = m.jobs && m.jobs[0];
@@ -473,7 +516,7 @@ function className(role){
 function walk(fn){
   const visitJob = (job, parent) => {
     fn(job, parent);
-    job.stories.forEach(st => { fn(st, job); if(st.child) visitJob(st.child, st); });
+    job.stories.forEach(st => { fn(st, job); st.children.forEach(j => visitJob(j, st)); });
   };
   model.jobs.forEach(j => visitJob(j, null));
 }
@@ -504,7 +547,7 @@ function pathTo(targetId){
     const here = trail.concat([{kind:"jtbd", node:job}]);
     if(job.id === targetId){ result = here; return; }
     job.stories.forEach(st => {
-      if(st.child) visit(st.child, here.concat([{kind:"story", node:st}]));
+      st.children.forEach(j => visit(j, here.concat([{kind:"story", node:st}])));
     });
   };
   model.jobs.forEach(j => visit(j, []));
@@ -583,13 +626,14 @@ function slug(s){
     .replace(/^-|-$/g, "") || "service";
 }
 
+function letter(i){ return i < 26 ? String.fromCharCode(97 + i) : "-" + (i + 1); }
 function plural(n, word){
   if(word === "story") return n + (n === 1 ? " story" : " stories");
   return n + " " + word + (n === 1 ? "" : "s");
 }
 function countUnder(job){
   let n = 0;
-  const visit = j => j.stories.forEach(st => { n++; if(st.child){ n++; visit(st.child); } });
+  const visit = j => j.stories.forEach(st => { n++; st.children.forEach(c => { n++; visit(c); }); });
   visit(job);
   return n;
 }
@@ -649,7 +693,7 @@ function render(){
     p.textContent = "No jtbds yet. New jtbd starts one.";
     tree.appendChild(p);
   }
-  model.jobs.forEach((job, i) => tree.appendChild(jobNode(job, String(i+1))));
+  model.jobs.forEach((job, i) => tree.appendChild(jobNode(job, String(i+1), model.jobs, i)));
   const counts = {jtbd:0, story:0, proposed:0};
   walk(n => { counts[n.kind]++; if(n.status === "proposed") counts.proposed++; });
   syncControls();
@@ -698,7 +742,7 @@ function statusButton(node){
   return b;
 }
 
-function jobNode(job, path){
+function jobNode(job, path, siblings, index){
   const wrap = document.createElement("div");
   wrap.className = "node l" + job.level;
 
@@ -731,7 +775,7 @@ function jobNode(job, path){
     addStory.textContent = "+ story";
     addStory.addEventListener("click", () => {
       job.stories.push({kind:"story", id:uid("s"), status:"accepted", source:"chris",
-                        given:"", when:"", then:"", child:null});
+                        given:"", when:"", then:"", children:[]});
       render();
     });
     act.appendChild(addStory);
@@ -748,6 +792,20 @@ function jobNode(job, path){
     act.appendChild(sk);
   }
 
+  const up = document.createElement("button");
+  up.className = "btn btn-quiet"; up.textContent = "↑"; up.title = "Move earlier";
+  up.disabled = index === 0;
+  up.addEventListener("click", () => {
+    [siblings[index-1], siblings[index]] = [siblings[index], siblings[index-1]]; render();
+  });
+  const down = document.createElement("button");
+  down.className = "btn btn-quiet"; down.textContent = "↓"; down.title = "Move later";
+  down.disabled = index === siblings.length - 1;
+  down.addEventListener("click", () => {
+    [siblings[index+1], siblings[index]] = [siblings[index], siblings[index+1]]; render();
+  });
+  act.appendChild(up); act.appendChild(down);
+
   act.appendChild(statusButton(job));
   const sp = document.createElement("div"); sp.className = "spacer"; act.appendChild(sp);
 
@@ -757,9 +815,7 @@ function jobNode(job, path){
   del.addEventListener("click", () => {
     const n = countUnder(job);
     if(n && !confirm("Delete this jtbd and " + n + " node" + (n === 1 ? "" : "s") + " beneath it?")) return;
-    const parentStory = findJobParentStory(job.id);
-    if(parentStory) parentStory.child = null;
-    else model.jobs = model.jobs.filter(j => j.id !== job.id);
+    siblings.splice(index, 1);
     render();
   });
   act.appendChild(del);
@@ -774,7 +830,9 @@ function jobNode(job, path){
   if(job.level < 3) job.stories.forEach((st, i) => {
     const p = path + "." + (i + 1);
     if(view.stories) kids.appendChild(storyNode(st, job, i, p));
-    else if(st.child && st.child.level <= view.depth) kids.appendChild(jobNode(st.child, p));
+    else st.children.forEach((c, k) => {
+      if(c.level <= view.depth) kids.appendChild(jobNode(c, p + letter(k), st.children, k));
+    });
   });
   if(kids.children.length) wrap.appendChild(kids);
   return wrap;
@@ -795,10 +853,11 @@ function storyNode(st, job, index, path){
   const lines = document.createElement("div");
   lines.className = "lines";
   STORY_LINES.forEach(spec => lines.appendChild(line(st, spec)));
-  if(st.child && st.child.level > view.depth){
+  const cut = st.children.filter(c => c.level > view.depth).length;
+  if(cut){
     const s = document.createElement("p");
     s.className = "summary";
-    s.textContent = plural(1, LEVELS[st.child.level].name) + " hidden";
+    s.textContent = plural(cut, LEVELS[job.level + 1].name) + " hidden";
     lines.appendChild(s);
   }
   card.appendChild(lines);
@@ -807,24 +866,22 @@ function storyNode(st, job, index, path){
   const act = document.createElement("div");
   act.className = "actions";
 
-  if(!st.child && job.level < 3){
+  if(job.level < 3){
     const addChild = document.createElement("button");
     addChild.className = "btn";
-    addChild.textContent = "+ " + LEVELS[job.level + 1].name + " — who owes this?";
-    addChild.title = LEVELS[job.level + 1].full;
+    addChild.textContent = "+ " + LEVELS[job.level + 1].name + " job";
+    addChild.title = "Another job this story needs from the " + LEVELS[job.level + 1].name +
+                     " level, in order — " + LEVELS[job.level + 1].full;
     addChild.addEventListener("click", () => {
-      st.child = {kind:"jtbd", id:uid("j"), level:job.level + 1, status:"accepted",
-                  source:"chris", role:"", need:"", soThat:"", stories:[]};
-      if(st.child.level === 3){
-        st.child.pseudocode = "";
-        st.child.build = BUILD("", "");
-        sketchOpen.add(st.child.id);
-      }
-      if(st.child.level > view.depth) view.depth = st.child.level;
+      const c = {kind:"jtbd", id:uid("j"), level:job.level + 1, status:"accepted",
+                 source:"chris", role:"", need:"", soThat:"", stories:[]};
+      if(c.level === 3){ c.pseudocode = ""; c.build = BUILD("", ""); sketchOpen.add(c.id); }
+      st.children.push(c);
+      if(c.level > view.depth) view.depth = c.level;
       render();
     });
     act.appendChild(addChild);
-  } else if(!st.child && job.level === 3){
+  } else {
     const note = document.createElement("span");
     note.className = "hint";
     note.textContent = "Ports and aggregates live in the sketch, not as a node.";
@@ -852,7 +909,8 @@ function storyNode(st, job, index, path){
   del.className = "btn btn-quiet btn-danger";
   del.textContent = "Delete";
   del.addEventListener("click", () => {
-    const n = st.child ? countUnder(st.child) + 1 : 0;
+    let n = 0;
+    st.children.forEach(c => { n += 1 + countUnder(c); });
     const msg = n ? "Delete this story and " + n + " node" + (n === 1 ? "" : "s") + " beneath it?"
                   : "Delete this story?";
     if(!confirm(msg)) return;
@@ -864,10 +922,13 @@ function storyNode(st, job, index, path){
 
   wrap.appendChild(card);
 
-  if(st.child && st.child.level <= view.depth){
+  const shown = st.children.filter(c => c.level <= view.depth);
+  if(shown.length){
     const kids = document.createElement("div");
     kids.className = "kids";
-    kids.appendChild(jobNode(st.child, path));
+    st.children.forEach((c, k) => {
+      if(c.level <= view.depth) kids.appendChild(jobNode(c, path + letter(k), st.children, k));
+    });
     wrap.appendChild(kids);
   }
   return wrap;
