@@ -843,6 +843,12 @@ function describeUnder(node){
   if(k.jtbd) parts.push(k.jtbd + (k.jtbd === 1 ? " jtbd" : " jtbds"));
   return parts.join(" · ");
 }
+/* a row names only the level directly under it: a jtbd holds stories, a story holds jtbds */
+function describeDirect(node){
+  const n = node.kind === "jtbd" ? node.stories.length : node.children.length;
+  if(!n) return "";
+  return node.kind === "jtbd" ? n + (n === 1 ? " story" : " stories") : n + (n === 1 ? " jtbd" : " jtbds");
+}
 
 /* ---------------- editable line ---------------- */
 function line(node, spec){
@@ -975,7 +981,7 @@ function compactRow(kind, n, path, level, mode, bare){
 
   const beneath = document.createElement("span");
   beneath.className = "beneath";
-  beneath.textContent = mode !== "ancestor" ? describeUnder(n) : "";
+  beneath.textContent = mode !== "ancestor" ? describeDirect(n) : "";
   row.appendChild(beneath);
 
   const go = () => mode === "minimized" ? expand(n.id) : setFocus(n.id);
