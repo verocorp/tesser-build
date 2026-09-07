@@ -574,6 +574,64 @@ response, its `add` transitions).
   `examples/asyncpg/{alpha,beta}/application/test_*_service.py` as
   `FakeCommitted*Store` / `FakeUnavailable*Store`. Not yet in `testing.md`, and
   no checker.
+- [ ] **A value object is exported so a round-trip test can name it, and
+  nothing else reads it.** Chris, 2026-09-06, reading #172. In
+  `examples/durable-execution`, `ordering/domain/__init__.py` exports seven
+  names. `Order`, `OrderSpec`, `Sku`, `Price`, and `PriceSpec` are read by
+  real code outside the domain (`order_actions.py`, `order_orchestrator.py`).
+  `OrderId` and `Quantity` are read outside the domain by nothing but two
+  round-trip tests, which assert a snapshot returns each field by value:
+  `assert back.sku == domain.Sku("gadget")`. Adding a required field in #172
+  made `Note` the third. Measured, on that branch: rewrite those assertions to
+  compare against the object that was sent (`back.sku == order.sku`) and the
+  analyzer reports `TB042` on `OrderId` and `Quantity` in the same run —
+  the export list is held up entirely by the assertions, and the analyzer
+  says so the moment they stop naming the types. `mypy --strict` clean,
+  70 passed.
+  Two ways out, and one that turned out to be a bypass:
+  1. **Export, as today.** One line per value object, and `TB042` keeps the
+     list honest — an export nothing reads is a finding. Cost: #172 counts
+     that line as one of the places a required field lands. Under the ruling
+     below this stops being a test artifact and becomes the honest surface:
+     the test depends on the type either way, and the export is what says so.
+  2. **Compare through the canonical exit** (`str(back.note) == "fragile"`),
+     which `ordering/domain/test_order.py` already does one file over. No
+     export, legal (`stringequality` fires only when both sides are `.String()`
+     calls, so a literal compare is left alone by design), but it compares
+     representations, which convention 3 pushes against for value comparison.
+  - **Not a way out: comparing against the object that was sent**
+    (`back.sku == order.sku`). Chris ruled 2026-09-06 that an assertion like
+    that should only be possible when the type is exported, and the reason it
+    is possible today is a hole, not a permission. `package_read_violations`
+    (`domain/checks.py:7989`) counts a read only when an attribute node's value
+    is a **package alias** — `if package is None: continue` — so `order.sku`,
+    whose value is an object local, is not a read of `Sku` in either `TB042`
+    direction: not for "reads a name the package does not export", and not for
+    "re-exports a name no module outside the role reads". The assertion
+    exercises `Sku.__eq__` from another role while the domain never declares
+    `Sku` on its surface. Same shape as the `domain.widget.Clearance` hiding
+    bypass closed by #167 (v0.0.99.0): a dependency the analyzer's notion of a
+    read does not cover is a silent pass. Measured: the rewrite drops `Note`,
+    `OrderId`, and `Quantity` out of the export list with `mypy --strict`
+    clean and 70 passing, which is exactly the outcome the ruling says should
+    not be reachable. Closing it means resolving `order.sku` to `Order.sku`'s
+    return annotation and counting that as a read of `Sku` — the same
+    machinery `TB085` already uses to name a local from the return annotation
+    of the call it was bound from, one hop further. **Measure first**: how many
+    existing assertions across the eleven gated trees compare two objects'
+    fields where the field's type is not exported, because each becomes a new
+    finding.
+  Not an option: asserting the aggregate whole. `Entity.__eq__` compares
+  `identity` only and `Entity.__init_subclass__` raises `TypeError` if a
+  subclass declares `__eq__` or `__hash__`, so `back == order` passes with
+  every field but the id dropped, and an aggregate cannot be opted into field
+  equality even deliberately.
+  Bears on `CLAUDE.md` convention 2, whose 2026-09-06 narrowing reads "a value
+  object the package `__init__` does not re-export is reachable only through
+  the object that owns it and is tested there" — a round-trip test over an
+  aggregate is exactly the case where a sibling wants the type name, and the
+  narrowing does not say whether that counts as a module outside the role
+  reading it. Rule that, and `TB042` follows.
 
 ## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
 
@@ -616,6 +674,28 @@ where it lands.
   of those types. Needs a design: what crosses the `Client` on failure (an
   outcome on the response? a single edge-facing rejection?), what the
   handler returns, and what — if anything — the host still maps.
+- [ ] **The wording of a public error belongs to the application, not the
+  handler.** Chris, 2026-09-06, reading #172. `Handler.place_order` in
+  `examples/durable-execution` reads the body one field at a time
+  (`http_request.text("order_id")`, `.integer("quantity")`), and each read is
+  what produces the message the API answers with: `400 {"detail": "sku must
+  be a string"}` is raised by `protocol/http.py`'s `text()`, called from an
+  adapter. So both the field list and the wording of a public rejection sit
+  in `adapters/handlers/`. Every relay message by contrast has a snapshot in
+  `application/relays/` that owns its encoding, and no module under
+  `adapters/runtimes/` or `adapters/runners/` names a field at all — same
+  job, two mechanisms, and only the internal one keeps the field list in the
+  application. **Rule this with the entry above** ("the host should not know
+  the error types"): that one asks what the application decides to surface
+  and what the host may know, this one asks the same of the handler, and a
+  service that owns what is surfaced also owns how it reads. Bears on the
+  wire-payload helper kind (ruling 4 of the field-cost list): a
+  `PlaceOrderRequestSnapshot` beside the client DTO would move the field
+  list and its messages out of `adapters/`, at the cost of `json` in
+  `ordering/client/` — the `TB062` marker
+  `relays/order_orchestrator_runner.py` already carries — and a sibling test
+  the package does not have today. Evidence: #172 counts 11 places a
+  required field lands, and this handler is one of them.
 - [x] **Adapter-side mappers have no home in the rulebook.** Ruled (Chris,
   2026-08-30) and shipped: `tesser.adapters.Mapper` carries the same contract
   as `tesser.application.Mapper` (a mapper is its target), and `KIND_EXTRA_ROLES`
