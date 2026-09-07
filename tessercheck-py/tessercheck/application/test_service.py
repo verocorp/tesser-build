@@ -70,6 +70,214 @@ class FakePreparedReader(ports.SourceReader):
         return self.read_sources_response
 
 
+@ts.fake
+class FakeScriptedReader(ports.SourceReader):
+    def __init__(self, *responses: ports.ReadSourcesResponse) -> None:
+        self.responses = responses
+        self.reads = 0
+
+    def sources(
+        self, read_sources_request: ports.ReadSourcesRequest
+    ) -> ports.ReadSourcesResponse:
+        self.reads += 1
+        return self.responses[min(self.reads, len(self.responses)) - 1]
+
+
+@ts.helper
+def _tree_of(text: str = "import os\n") -> ports.ReadSourcesResponse:
+    return ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/domain/thing.py",
+                name="shop.domain.thing",
+                text=text,
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=("os",),
+        pure_stdlib=(),
+    )
+
+
+@ts.helper
+def _renameable_tree() -> ports.ReadSourcesResponse:
+    return ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/__init__.py",
+                name="shop",
+                text="",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.PACKAGE,
+            ),
+            ports.SourceFile(
+                path="shop/domain/__init__.py",
+                name="shop.domain",
+                text=(
+                    "from shop.domain.tag import Tag as Tag\n"
+                    "from shop.domain.tag import TagSpec as TagSpec\n"
+                ),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.PACKAGE,
+            ),
+            ports.SourceFile(
+                path="shop/domain/tag.py",
+                name="shop.domain.tag",
+                text=(
+                    "import tesser.domain as ts\n"
+                    "class TagSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class Tag(ts.ValueObject):\n"
+                    "    def __init__(self, spec: TagSpec) -> None:\n"
+                    "        object.__setattr__(self, '_text', spec.text)\n"
+                ),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+            ports.SourceFile(
+                path="shop/domain/test_tag.py",
+                name="shop.domain.test_tag",
+                text=(
+                    "import shop.domain as domain\n"
+                    "def test_a_tag_is_built_from_its_spec() -> None:\n"
+                    "    made = domain.TagSpec('a')\n"
+                    "    assert domain.Tag(made) is not None\n"
+                ),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+
+
+def test_a_rename_hands_the_writer_the_module_the_renaming_rewrote() -> None:
+    fake_source_writer = FakeSourceWriter()
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(_renameable_tree()),
+        fake_source_writer,
+        FakeRulebookSources(""),
+    )
+    rename_response = tessercheck_service.rename(client.RenameRequest(tree="."))
+    assert rename_response.files == 1
+    assert len(fake_source_writer.written) == 1
+    path, text = fake_source_writer.written[0]
+    assert path == "shop/domain/test_tag.py"
+    assert "tag_spec = domain.TagSpec('a')" in text
+    assert "domain.Tag(tag_spec) is not None" in text
+
+
+def test_a_mark_hands_the_writer_the_line_the_finding_names() -> None:
+    fake_source_writer = FakeSourceWriter()
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(_tree_of("import os\n")),
+        fake_source_writer,
+        FakeRulebookSources(""),
+    )
+    tessercheck_service.mark(client.MarkRequest(tree="."))
+    assert len(fake_source_writer.written) == 1
+    path, text = fake_source_writer.written[0]
+    assert path == "shop/domain/thing.py"
+    assert text.startswith("import os  # tesser:debt TB0")
+
+
+def test_what_a_mark_reports_as_remaining_is_what_a_check_would_report_after_it() -> None:
+    read_sources_response = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    fake_scripted_reader = FakeScriptedReader(
+        _tree_of("import os\n"), read_sources_response
+    )
+    tessercheck_service = application.TessercheckService(
+        fake_scripted_reader, FakeSourceWriter(), FakeRulebookSources("")
+    )
+    mark_response = tessercheck_service.mark(client.MarkRequest(tree="."))
+    assert fake_scripted_reader.reads == 2
+    assert mark_response.files == 1
+    assert mark_response.remaining == ()
+
+
+def test_a_tree_declaration_finding_is_reported_rather_than_marked() -> None:
+    fake_source_writer = FakeSourceWriter()
+    tessercheck_service = application.TessercheckService(
+        FakeSourceReader(ports.RootForm.MISSING), fake_source_writer, FakeRulebookSources("")
+    )
+    mark_response = tessercheck_service.mark(client.MarkRequest(tree="."))
+    assert fake_source_writer.written == []
+    assert mark_response.files == 0
+    assert len(mark_response.remaining) == 1
+    assert "TB044" in mark_response.remaining[0]
+
+
+def test_a_symlinked_directory_is_reported_rather_than_marked() -> None:
+    fake_source_writer = FakeSourceWriter()
+    read_sources_response = ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=("app/vendored",),
+        sources=(),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(read_sources_response),
+        fake_source_writer,
+        FakeRulebookSources(""),
+    )
+    mark_response = tessercheck_service.mark(client.MarkRequest(tree="."))
+    assert fake_source_writer.written == []
+    assert any("TB045" in finding for finding in mark_response.remaining)
+
+
+def test_a_module_that_does_not_parse_is_reported_rather_than_written_to() -> None:
+    fake_source_writer = FakeSourceWriter()
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(_tree_of("held =\n")),
+        fake_source_writer,
+        FakeRulebookSources(""),
+    )
+    mark_response = tessercheck_service.mark(client.MarkRequest(tree="."))
+    assert fake_source_writer.written == []
+    assert mark_response.files == 0
+    assert any("TB043" in finding for finding in mark_response.remaining)
+
+
+def test_a_stale_marker_is_reported_rather_than_marked_again() -> None:
+    fake_source_writer = FakeSourceWriter()
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(_tree_of("held = 1  # tesser:debt TB023\n")),
+        fake_source_writer,
+        FakeRulebookSources(""),
+    )
+    mark_response = tessercheck_service.mark(client.MarkRequest(tree="."))
+    _, text = fake_source_writer.written[0]
+    assert "TB023" in text
+    assert "TB090" not in text
+    assert any("TB090" in finding for finding in mark_response.remaining)
+
+
 def test_the_requested_root_reaches_the_source_reader() -> None:
     fake_source_reader = FakeSourceReader(ports.RootForm.APP)
     tessercheck_service = application.TessercheckService(fake_source_reader, FakeSourceWriter(), FakeRulebookSources(""))

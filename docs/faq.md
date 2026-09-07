@@ -169,6 +169,18 @@ whose new name is already bound in that function. A **parameter** name is part
 of the call contract, so a parameter finding carries no repair and is left for
 a person.
 
+A finding you mean to **excuse** rather than fix does not need editing by hand
+either: `python -m srv.cli.mark path/to/tree` (or `tessercheck-mark`) writes a
+`# tesser:debt` marker for every finding whose line can carry one, gathering
+every code reported on a line into one marker and merging into the marker a
+line already has. It works from the module's tokens, so it refuses a line it
+would corrupt — inside a triple-quoted string, ended by a backslash, carrying
+another directive — and it never touches `TB044`, `TB045` or `TB090`, which no
+marker can excuse. It reports what it could not mark and exits 1 if anything is
+left, and what it reports is what a `check` finds after it, because it re-reads
+the tree. **Deciding to excuse a finding is still yours** — run it on the
+findings you have already agreed to defer, not as a way past a red gate.
+
 ## 13. Where does business logic go — the service, or the domain?
 
 The domain, always. An **application service coordinates a use case** and holds
