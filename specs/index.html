@@ -279,15 +279,15 @@ const SPINE = {
     need:"iterate on the application specification",
     soThat:"agents implement and update the application so it's not over scoped nor over engineered and remains fast to change tomorrow with minimal fire drills"},
   "s-1":{
-    given:"I am on the product specification page and a job exists",
-    when:"I add a story to it",
-    then:"I see the story nested under the job and I know what its identifier is and what level its in with the ability to change its ordering and remote it. "},
+    given:"I am on the product specification page and a jtbd exists",
+    when:"I click add story on it, fill in given, when and then, and click save",
+    then:"I see the story nested under the jtbd with its identifier and its level, colored for its level, with links to move it up or down and a link to remove it"},
   "j-page":{
     role:"the product specification page",
-    need:"provide a link to add a story on the jtbd, then display the story with given, when, then inputs and show the story with the correct identifier, coloring, links to move up or down, link to delete",
+    need:"provide an add story link on each jtbd, the given, when and then inputs and a save, and show each story with its identifier, its level color, links to move it up or down, and a link to remove it",
     soThat:"S1 is fulfilled"},
   "s-1-1":{
-    given:"a jtbd's identifier and the given, when and then a user filled in",
+    given:"a jtbd's identifier and a filled-in given, when and then",
     when:"I POST to jtbd/{id}/stories with them",
     then:"I get back the story's id, its level and its position"},
   "j-svc":{
@@ -424,6 +424,16 @@ function migrate(m){
     };
     (m.jobs || []).forEach(fill);
     m.seeded.push("todo-fills");
+  }
+  if(m.seeded.indexOf("branch-invariants-1") === -1){
+    const set = node => {
+      if(node.id === "s-1")   Object.assign(node, SPINE["s-1"]);
+      if(node.id === "j-page") node.need = SPINE["j-page"].need;
+      if(node.id === "s-1-1") node.given = SPINE["s-1-1"].given;
+      (node.stories || []).forEach(st => { set(st); if(st.child) set(st.child); });
+    };
+    (m.jobs || []).forEach(set);
+    m.seeded.push("branch-invariants-1");
   }
   if(m.seeded.indexOf("s-1-1-desmear") === -1){
     const fix = node => {
