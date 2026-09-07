@@ -468,6 +468,17 @@ function setFocus(id){
   view.focus = id;
   try{ id ? localStorage.setItem(STORE_KEY + ":focus", id) : localStorage.removeItem(STORE_KEY + ":focus"); }catch(e){ /* fine */ }
   render();
+  if(id) reveal(id);
+}
+
+/* after a re-render the focused card may be anywhere: bring it to just below the masthead and flash it */
+function reveal(id){
+  const e = entryFor(id);
+  const el = e && tree.querySelector('[data-label="' + e.label + '"]');
+  if(!el) return;
+  el.style.scrollMarginTop = (document.querySelector(".masthead").offsetHeight + 12) + "px";
+  el.scrollIntoView({block:"start"});
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
 }
 
 /* every node's label (J1.1c, S1.1c.1), its level, and the labels above it — computed over the whole
@@ -518,13 +529,8 @@ function jumpTo(query){
   if(!e) return false;
   if(e.level > view.depth) view.depth = e.level;
   if(e.kind === "story") view.stories = true;
-  /* focus on the target so it renders fully with its chain above it */
+  /* focus on the target so it renders fully with its chain above it, then reveal() brings it into view */
   setFocus(e.node.id);
-  const el = tree.querySelector('[data-label="' + e.label + '"]');
-  if(el){
-    el.scrollIntoView({block:"center"});
-    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
-  }
   return true;
 }
 let seq = 0;
