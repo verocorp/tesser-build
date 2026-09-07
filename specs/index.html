@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Specification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#eef1f0;
+  --surface:#ffffff;
+  --surface-2:#f7f9f8;
+  --ink:#141a1b;
+  --muted:#5c6b6d;
+  --faint:#8b9a9b;
+  --line:#d7dedd;
+  --line-strong:#bcc7c6;
+  --accent:#0f766e;
+  --accent-soft:#d3e8e5;
+  --on-accent:#ffffff;
+  --propose:#9a6410;
+  --propose-soft:#f6e8cf;
+  --danger:#a33a2e;
+  --focus:#0f766e;
+  --l1:#0f766e;
+  --l2:#3f5f92;
+  --l3:#6b4f7d;
+
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --sans:"IBM Plex Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0e1213; --surface:#161c1d; --surface-2:#1b2223;
+    --ink:#e3eae9; --muted:#9aabab; --faint:#6c7d7e;
+    --line:#283132; --line-strong:#3a4547;
+    --accent:#5eead4; --accent-soft:#173a37; --on-accent:#0e1213;
+    --propose:#e0b263; --propose-soft:#3a2d13;
+    --danger:#e08376; --focus:#5eead4;
+    --l1:#5eead4; --l2:#93b4ea; --l3:#c9a8dd;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0e1213; --surface:#161c1d; --surface-2:#1b2223;
+  --ink:#e3eae9; --muted:#9aabab; --faint:#6c7d7e;
+  --line:#283132; --line-strong:#3a4547;
+  --accent:#5eead4; --accent-soft:#173a37; --on-accent:#0e1213;
+  --propose:#e0b263; --propose-soft:#3a2d13;
+  --danger:#e08376; --focus:#5eead4;
+  --l1:#5eead4; --l2:#93b4ea; --l3:#c9a8dd;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 15px/1.55 var(--sans)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:2px}
+
+.masthead{
+  position:sticky;top:0;z-index:20;background:var(--surface);
+  border-bottom:1px solid var(--line);padding:var(--s4) var(--s5);
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s4) var(--s5);
+}
+.masthead h1{margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.masthead .sub{color:var(--muted);font-size:13px;max-width:60ch;margin:2px 0 0}
+.tools{margin-left:auto;display:flex;flex-wrap:wrap;gap:var(--s2)}
+
+.btn{
+  background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);
+  padding:5px 11px;border-radius:3px;cursor:pointer;font-size:13px;line-height:1.4;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn:disabled:hover{border-color:var(--line-strong);color:var(--ink)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn-primary:hover{filter:brightness(1.08);color:var(--on-accent);border-color:var(--accent)}
+.btn-quiet{background:transparent;border-color:transparent;color:var(--muted);padding:3px 7px}
+.btn-quiet:hover{color:var(--accent);border-color:var(--line)}
+.btn-danger:hover{color:var(--danger);border-color:var(--danger)}
+
+main{padding:var(--s5) var(--s5) var(--s7);max-width:1000px;margin:0 auto}
+.node{margin-bottom:var(--s3)}
+.kids{margin-left:var(--s5);padding-left:var(--s4);border-left:1px solid color-mix(in srgb, var(--lv) 30%, var(--line))}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-left-width:3px;border-radius:3px;
+  display:grid;grid-template-columns:auto 1fr auto;
+  column-gap:var(--s3);align-items:start;
+  padding:var(--s3) var(--s4);
+}
+.node{--lv:var(--line-strong)}
+.node.l1{--lv:var(--l1)}
+.node.l2{--lv:var(--l2)}
+.node.l3{--lv:var(--l3)}
+.card.jtbd{border-left-color:var(--lv)}
+.card.story{
+  border-left-color:color-mix(in srgb, var(--lv) 38%, var(--line));
+  background:color-mix(in srgb, var(--lv) 4%, var(--surface-2));
+}
+.card:focus-within{border-color:var(--lv)}
+
+.tag{
+  grid-column:1;font:500 11px/1.9 var(--mono);letter-spacing:.04em;
+  white-space:nowrap;padding-top:1px;
+}
+.card.jtbd .tag{
+  color:var(--lv);font-weight:600;
+  background:color-mix(in srgb, var(--lv) 12%, transparent);
+  border-radius:2px;padding:1px 5px;margin:0 -1px;
+}
+.card.story .tag{color:var(--faint)}
+.badges{grid-column:3;display:flex;gap:6px;align-items:center;flex-shrink:0;padding-top:2px}
+.badge{
+  font:500 10.5px/1.7 var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  padding:0 6px;border-radius:2px;white-space:nowrap;
+}
+.badge.proposed{background:var(--propose-soft);color:var(--propose)}
+.badge.level{background:color-mix(in srgb, var(--lv) 13%, transparent);color:var(--lv)}
+
+/* the three lines: prefix set in place, text typed inline after it */
+.lines{grid-column:2;display:grid;gap:2px;min-width:0}
+.ln{display:grid;grid-template-columns:5.6em 1fr;column-gap:10px;align-items:baseline}
+.pre{
+  font:500 11px/1.75 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);white-space:nowrap;-webkit-user-select:none;user-select:none;
+}
+.val{
+  min-width:0;outline:none;border-radius:2px;padding:1px 3px;margin:-1px -3px;
+  overflow-wrap:anywhere;
+}
+.val:hover{background:color-mix(in srgb, var(--accent) 6%, transparent)}
+.val:focus{background:var(--ground);box-shadow:0 0 0 2px var(--accent-soft)}
+.val.empty::before{content:attr(data-ph);color:var(--faint);font-style:italic}
+.card.jtbd .val{font-size:14.5px}
+.card.jtbd .val.role{font-weight:600}
+.card.jtbd .val.sothat{color:var(--muted)}
+.card.story .val{font:400 13.5px/1.55 var(--mono)}
+
+.actions{
+  grid-column:1 / -1;display:none;flex-wrap:wrap;gap:var(--s2);
+  align-items:center;padding-top:var(--s3);margin-top:var(--s2);
+  border-top:1px solid var(--line);
+}
+.card:hover > .actions,.card:focus-within > .actions{display:flex}
+.spacer{flex:1}
+.hint{color:var(--faint);font-size:12px}
+
+.sketch{
+  grid-column:1 / -1;margin-top:var(--s3);
+  background:var(--ground);border:1px solid var(--line);border-radius:2px;overflow-x:auto;
+}
+.sketch h4{
+  margin:0;padding:6px var(--s3);font:500 10.5px/1.7 var(--mono);
+  letter-spacing:.07em;text-transform:uppercase;color:var(--faint);
+  border-bottom:1px solid var(--line);
+}
+.sketch pre{margin:0;padding:var(--s3);font:400 12.5px/1.65 var(--mono);white-space:pre}
+.sketch textarea{
+  display:block;width:100%;border:0;background:transparent;color:var(--ink);
+  padding:var(--s3);font:400 12.5px/1.65 var(--mono);resize:vertical;outline:none;
+}
+.sketch textarea:focus{background:color-mix(in srgb, var(--lv) 5%, transparent)}
+.sketch textarea::placeholder{color:var(--faint);font-style:italic}
+.pfoot{
+  display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);align-items:center;
+  padding:8px var(--s3);border-top:1px solid var(--line);
+}
+.pfoot .pair{display:flex;align-items:center;gap:6px}
+.pfoot label{
+  font:500 10.5px/1.7 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+}
+.pfoot input{
+  background:var(--surface);border:1px solid var(--line);border-radius:2px;
+  padding:3px 6px;font:400 12.5px var(--mono);min-width:10ch;
+}
+.pfoot input:focus{border-color:var(--lv);outline:none}
+.badge.build{background:color-mix(in srgb, var(--propose) 18%, transparent);color:var(--propose)}
+.repo{display:flex;align-items:center;gap:8px;margin-top:7px}
+.repo label{
+  font:500 10.5px/1.7 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+}
+.repo input{
+  flex:1;max-width:44ch;background:var(--surface);border:1px solid var(--line);
+  border-radius:2px;padding:3px 7px;font:400 12.5px var(--mono);
+}
+.repo input:focus{border-color:var(--accent);outline:none}
+.sketch .c{color:var(--faint)}
+.sketch .k{color:var(--accent)}
+
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:3px;overflow:hidden}
+.seg button{
+  border:0;border-right:1px solid var(--line-strong);background:var(--surface-2);
+  color:var(--muted);padding:5px 11px;font-size:13px;line-height:1.4;cursor:pointer;
+}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{font-weight:500}
+.seg button#depth-1[aria-pressed="true"]{background:color-mix(in srgb, var(--l1) 15%, transparent);color:var(--l1)}
+.seg button#depth-2[aria-pressed="true"]{background:color-mix(in srgb, var(--l2) 15%, transparent);color:var(--l2)}
+.seg button#depth-3[aria-pressed="true"]{background:color-mix(in srgb, var(--l3) 15%, transparent);color:var(--l3)}
+.toggle[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.summary{
+  grid-column:2;margin:5px 0 0;font:400 11.5px/1.6 var(--mono);
+  color:var(--faint);letter-spacing:.02em;
+}
+.addrow{padding-top:var(--s2)}
+.empty-state{color:var(--muted);font-size:13px;padding:var(--s4)}
+footer{max-width:1000px;margin:0 auto;padding:0 var(--s5) var(--s6);color:var(--faint);font-size:12px}
+[hidden]{display:none !important}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div>
+    <h1>Product Specification</h1>
+    <p class="sub"><strong>user</strong> &rarr; <strong>interface</strong> &rarr; <strong>service</strong>. A jtbd holds ordered stories; a story is owed by one thing at the next level, which gets a jtbd of its own. Ports and aggregates stay in the sketch.</p>
+    <div class="repo">
+      <label for="repoInput">repo</label>
+      <input id="repoInput" type="text" spellcheck="false"
+             placeholder="path the agent builds into, e.g. ~/workspace/vero/go-ddd">
+    </div>
+  </div>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="Show down to level">
+      <button id="depth-1" type="button" aria-pressed="false" title="Show only user jtbds">user</button>
+      <button id="depth-2" type="button" aria-pressed="false" title="Show down to the interface level">interface</button>
+      <button id="depth-3" type="button" aria-pressed="true"  title="Show down to the service level">service</button>
+    </div>
+    <button class="btn toggle" id="storiesBtn" type="button" aria-pressed="true" title="Show or hide every story, leaving the jtbd spine">stories</button>
+    <button class="btn" id="exportBtn">Export JSON</button>
+    <button class="btn" id="importBtn">Import JSON</button>
+    <button class="btn" id="resetBtn">Reset to seed</button>
+    <button class="btn btn-primary" id="addRoot">New jtbd</button>
+  </div>
+</header>
+
+<main id="tree"></main>
+<footer id="foot"></footer>
+<input type="file" id="fileInput" accept="application/json,.json" hidden>
+
+<script>
+"use strict";
+
+const STORE_KEY = "obligation-tree-v1";
+
+const JOB_LINES = [
+  {field:"role",   pre:"as",        cls:"role",   ph:"a tesser maintainer"},
+  {field:"need",   pre:"I need to", cls:"need",   ph:"do the thing this jtbd is for"},
+  {field:"soThat", pre:"so that",   cls:"sothat", ph:"the story above is fulfilled"}
+];
+const STORY_LINES = [
+  {field:"given", pre:"given", cls:"given", ph:"the current state"},
+  {field:"when",  pre:"when",  cls:"when",  ph:"I take this action"},
+  {field:"then",  pre:"then",  cls:"then",  ph:"I get this value"}
+];
+
+const LEVELS = {
+  1:{name:"user",      full:"user or customer"},
+  2:{name:"interface", full:"user | application interface — the frontend and the API calls it makes"},
+  3:{name:"service",   full:"service — application services, orchestrators, actions"},
+  4:{name:"port",      full:"port / aggregate — lives in the sketch, never as a node"}
+};
+
+/* ---------------- seed: this tool's own design ---------------- */
+function BUILD(context, target){
+  return {status:"draft", context:context, target:target,
+          handedOffAt:null, handedOffBy:null, result:""};
+}
+/* the chain above the add_story scratch — one place, used by the seed and the backfill */
+const SPINE = {
+  "j-root":{
+    role:"a technical product owner of a B2B AI SaaS application",
+    need:"iterate on the application specification",
+    soThat:"agents implement and update the application so it's not over scoped nor over engineered and remains fast to change tomorrow with minimal fire drills"},
+  "s-1":{
+    given:"I am on the product specification page and a job exists",
+    when:"I add a story to it",
+    then:"I see the story nested under the job and I know what its identifier is and what level its in with the ability to change its ordering and remote it. "},
+  "j-page":{
+    role:"the product specification page",
+    need:"provide a link to add a story on the jtbd, then display the story with given, when, then inputs and show the story with the correct identifier, coloring, links to move up or down, link to delete",
+    soThat:"S1 is fulfilled"},
+  "s-1-1":{
+    given:"a jtbd's identifier and the given, when and then a user filled in",
+    when:"I POST to jtbd/{id}/stories with them",
+    then:"I get back the story's id, its level and its position"},
+  "j-svc":{
+    role:"the product specs service",
+    need:"attach a story to an existing jtbd, assign its identifier and level, and persist it",
+    soThat:"S1.1 is fulfilled"}
+};
+
+/* submitting scratch pseudocode and getting real code back */
+function agentBuildBranch(){
+  return {kind:"story", id:"s-5", status:"accepted", source:"chris",
+    given:"a service whose pseudocode is a rough sketch",
+    when:"I submit it to an agent",
+    then:"actual conforming code comes back, and I can see what it renamed and what cases it says I have not covered",
+    child:{
+      kind:"jtbd", id:"j-build", level:2, status:"accepted", source:"chris",
+      role:"the design page",
+      need:"hand a service's scratch pseudocode and the obligation above it to an agent, and show what comes back",
+      soThat:"S5 is fulfilled",
+      stories:[
+        {kind:"story", id:"s-5-1", status:"accepted", source:"chris",
+         given:"a service with pseudocode, a context and a target",
+         when:"I submit it",
+         then:"the agent has the scratch as written, the whole obligation chain above it, and where to write, and the service is marked handed off",
+         child:{
+           kind:"jtbd", id:"j-buildsvc", level:3, status:"accepted", source:"chris",
+           role:"",
+           need:"",
+           soThat:"S5.1 is fulfilled",
+           stories:[],
+           build:BUILD("", ""),
+           pseudocode:""
+         }},
+        {kind:"story", id:"s-5-2", status:"accepted", source:"chris",
+         given:"an agent that has finished",
+         when:"I open the service",
+         then:"I see the files it wrote and the names it changed from my sketch",
+         child:null},
+        {kind:"story", id:"s-5-3", status:"accepted", source:"chris",
+         given:"an agent that found cases my tree does not cover",
+         when:"I open the service",
+         then:"its suggestions are waiting as proposed stories I can accept or reject",
+         child:null}
+      ]
+    }};
+}
+
+function seed(){
+  return {repo:"", seeded:["agent-build"], jobs:[{
+    kind:"jtbd", id:"j-root", level:1, status:"accepted", source:"chris",
+    role:SPINE["j-root"].role,
+    need:SPINE["j-root"].need,
+    soThat:SPINE["j-root"].soThat,
+    stories:[
+      {kind:"story", id:"s-1", status:"accepted", source:"chris",
+       given:SPINE["s-1"].given, when:SPINE["s-1"].when, then:SPINE["s-1"].then,
+       child:{
+         kind:"jtbd", id:"j-page", level:2, status:"accepted", source:"chris",
+         role:SPINE["j-page"].role, need:SPINE["j-page"].need, soThat:SPINE["j-page"].soThat,
+         stories:[
+           {kind:"story", id:"s-1-1", status:"accepted", source:"chris",
+            given:SPINE["s-1-1"].given, when:SPINE["s-1-1"].when, then:SPINE["s-1-1"].then,
+            child:{
+              kind:"jtbd", id:"j-svc", level:3, status:"accepted", source:"chris",
+              role:SPINE["j-svc"].role, need:SPINE["j-svc"].need, soThat:SPINE["j-svc"].soThat,
+              stories:[],
+              build:BUILD("specs", ""),
+              pseudocode:[
+"TesserDesignService.add_story",
+"  j = DesignRepo.find_job",
+"  s = domain.Story(MapToSpec(j, r))",
+"  create_response = DesigRepo.create_story(MaptoR)",
+"  return MapToReponse"].join("\n")
+            }}
+         ]
+       }},
+
+      agentBuildBranch()
+    ]
+  }]};
+}
+
+/* ---------------- state ---------------- */
+let model = load();
+const sketchOpen = new Set(["j-svc", "j-buildsvc"]);
+const view = {depth:3, stories:true};
+let seq = 0;
+const uid = p => p + "-" + Date.now().toString(36) + "-" + (seq++).toString(36);
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ const m = JSON.parse(raw); if(m && Array.isArray(m.jobs)) return migrate(m); }
+  }catch(e){ /* unreadable store: start from the seed */ }
+  return seed();
+}
+
+/* a service writes pseudocode instead of stories: fold any stories a level-3 job
+   still carries into the code, once, so nothing written earlier is lost */
+function migrate(m){
+  const visitJob = job => {
+    const stories = job.stories || [];
+    if(job.level === 3){
+      if(typeof job.pseudocode !== "string") job.pseudocode = "";
+      if(!job.build) job.build = BUILD("", "");
+      if(typeof job.build.status !== "string") job.build.status = "draft";
+      if(typeof job.build.context !== "string") job.build.context = "";
+      if(typeof job.build.target !== "string") job.build.target = "";
+      if(typeof job.build.result !== "string") job.build.result = "";
+      if(stories.length){
+        if(!job.pseudocode.trim()) job.pseudocode = derivePseudocode(job);
+        job.stories = [];
+      }
+    }
+    stories.forEach(st => { if(st.child) visitJob(st.child); });
+  };
+  if(typeof m.repo !== "string") m.repo = "";
+  m.seeded = Array.isArray(m.seeded) ? m.seeded : [];
+  if(m.seeded.indexOf("spine-text") === -1){
+    const fill = node => {
+      const text = SPINE[node.id];
+      if(text) Object.keys(text).forEach(k => { if(!node[k]) node[k] = text[k]; });
+      (node.stories || []).forEach(st => { fill(st); if(st.child) fill(st.child); });
+    };
+    (m.jobs || []).forEach(fill);
+    m.seeded.push("spine-text");
+  }
+  if(m.seeded.indexOf("todo-fills") === -1){
+    const isTodo = v => String(v || "").trim().toLowerCase() === "todo";
+    const fill = node => {
+      const text = SPINE[node.id];
+      if(text) Object.keys(text).forEach(k => { if(isTodo(node[k])) node[k] = text[k]; });
+      (node.stories || []).forEach(st => { fill(st); if(st.child) fill(st.child); });
+    };
+    (m.jobs || []).forEach(fill);
+    m.seeded.push("todo-fills");
+  }
+  if(m.seeded.indexOf("s-1-1-desmear") === -1){
+    const fix = node => {
+      if(node.id === "s-1-1") Object.assign(node, SPINE["s-1-1"]);
+      (node.stories || []).forEach(st => { fix(st); if(st.child) fix(st.child); });
+    };
+    (m.jobs || []).forEach(fix);
+    m.seeded.push("s-1-1-desmear");
+  }
+  if(m.seeded.indexOf("agent-build") === -1){
+    const root = m.jobs && m.jobs[0];
+    if(root && Array.isArray(root.stories)) root.stories.push(agentBuildBranch());
+    m.seeded.push("agent-build");
+  }
+  (m.jobs || []).forEach(visitJob);
+  return m;
+}
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(model)); }
+  catch(e){ /* private window or full quota: export to keep the tree */ }
+}
+
+/* ---------------- helpers ---------------- */
+const STOP = new Set(["i","it","the","a","an","is","are","and","of","to","that","this","them",
+  "they","when","then","given","my","me","its","with","for","in","on","be","have","has"]);
+function methodName(when){
+  const words = String(when||"").toLowerCase().replace(/[^a-z0-9\s]/g," ").split(/\s+/)
+    .filter(w => w && !STOP.has(w)).slice(0,4);
+  return words.length ? words.join("_") : "step";
+}
+function className(role){
+  const words = String(role||"").replace(/[^A-Za-z0-9\s]/g," ").split(/\s+/)
+    .filter(w => w && w.toLowerCase() !== "the");
+  const name = words.map(w => w[0].toUpperCase() + w.slice(1).toLowerCase()).join("");
+  return name || "Service";
+}
+function walk(fn){
+  const visitJob = (job, parent) => {
+    fn(job, parent);
+    job.stories.forEach(st => { fn(st, job); if(st.child) visitJob(st.child, st); });
+  };
+  model.jobs.forEach(j => visitJob(j, null));
+}
+function findJobParentStory(id){
+  let found = null;
+  walk((node, parent) => { if(node.kind === "jtbd" && node.id === id) found = parent; });
+  return found;
+}
+function derivePseudocode(job){
+  const cls = className(job.role);
+  const base = cls.replace(/Service$/, "") || "Design";
+  const out = ["class " + cls + "(ts.ApplicationService):"];
+  job.stories.forEach(st => {
+    out.push("");
+    out.push("    def " + methodName(st.when) + "(self, request: client." + base +
+             "Request) -> client." + base + "Response:");
+    if(st.given) out.push("        # given " + st.given);
+    if(st.then)  out.push("        # then  " + st.then);
+    out.push("        ...");
+  });
+  return out.join("\n") + "\n";
+}
+/* the chain from a root down to this job — the obligation the code has to meet */
+function pathTo(targetId){
+  let result = null;
+  const visit = (job, trail) => {
+    if(result) return;
+    const here = trail.concat([{kind:"jtbd", node:job}]);
+    if(job.id === targetId){ result = here; return; }
+    job.stories.forEach(st => {
+      if(st.child) visit(st.child, here.concat([{kind:"story", node:st}]));
+    });
+  };
+  model.jobs.forEach(j => visit(j, []));
+  return result || [{kind:"jtbd", node:{}}];
+}
+
+function buildBrief(job){
+  const chain = pathTo(job.id);
+  const b = job.build || {};
+  const out = [];
+  out.push("# Build brief — " + (job.role || "unnamed service"));
+  out.push("");
+  out.push("Written from an obligation tree. The scratch pseudocode below is a sketch,");
+  out.push("not source: normalize the names, fill the types, and make it conform.");
+  out.push("");
+  out.push("## Where");
+  out.push("");
+  out.push("- repo: " + (model.repo || "(not set)"));
+  out.push("- context: " + (b.context || "(not set)"));
+  out.push("- writes to: " + (b.target || "(not set)"));
+  out.push("");
+  out.push("## The obligation this serves");
+  out.push("");
+  chain.forEach(step => {
+    const n = step.node;
+    if(step.kind === "jtbd"){
+      out.push("- **as** " + (n.role || "?") +
+               " / **I need to** " + (n.need || "?") +
+               " / **so that** " + (n.soThat || "?"));
+    } else {
+      out.push("  - **given** " + (n.given || "?") +
+               " **when** " + (n.when || "?") +
+               " **then** " + (n.then || "?"));
+    }
+  });
+  out.push("");
+  out.push("## Scratch pseudocode, as written");
+  out.push("");
+  out.push("```");
+  out.push((job.pseudocode || "").replace(/\s+$/, ""));
+  out.push("```");
+  out.push("");
+  out.push("## What to produce");
+  out.push("");
+  out.push("Real code conforming to `skills/tesser-build` and passing `scripts/verify`:");
+  out.push("the application service, its ports, the domain objects and outcomes the");
+  out.push("sketch names, the mappers between them, and a sibling test per module.");
+  out.push("Names in the sketch are provisional — where one is wrong or misspelled,");
+  out.push("use the term the obligation above uses and say what you renamed.");
+  out.push("");
+  out.push("Report back: the files written, anything the sketch left undecided, and");
+  out.push("any story the obligation needs that is not covered yet.");
+  out.push("");
+  return out.join("\n");
+}
+
+/* clipboard first; a file:// page is not always allowed one, so fall back to a download */
+function handOff(text, filename){
+  const done = () => true;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, () => download(text, filename));
+  } else {
+    download(text, filename);
+  }
+}
+function download(text, filename){
+  const blob = new Blob([text], {type:"text/markdown"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function slug(s){
+  return String(s || "service").toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "service";
+}
+
+function plural(n, word){
+  if(word === "story") return n + (n === 1 ? " story" : " stories");
+  return n + " " + word + (n === 1 ? "" : "s");
+}
+function countUnder(job){
+  let n = 0;
+  const visit = j => j.stories.forEach(st => { n++; if(st.child){ n++; visit(st.child); } });
+  visit(job);
+  return n;
+}
+
+/* ---------------- editable line ---------------- */
+function line(node, spec){
+  const row = document.createElement("div");
+  row.className = "ln";
+
+  const pre = document.createElement("span");
+  pre.className = "pre";
+  pre.textContent = spec.pre;
+
+  const val = document.createElement("div");
+  val.className = "val " + spec.cls;
+  val.contentEditable = "plaintext-only";
+  val.spellcheck = true;
+  val.setAttribute("role","textbox");
+  val.setAttribute("aria-label", spec.pre);
+  val.dataset.ph = spec.ph;
+  val.textContent = node[spec.field] || "";
+  if(!val.textContent) val.classList.add("empty");
+
+  val.addEventListener("input", () => {
+    if(val.textContent === ""){ val.innerHTML = ""; val.classList.add("empty"); }
+    else val.classList.remove("empty");
+    node[spec.field] = val.textContent;
+    save();
+  });
+  val.addEventListener("keydown", e => {
+    if(e.key === "Enter"){ e.preventDefault(); val.blur(); }
+  });
+  val.addEventListener("paste", e => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g," ");
+    const sel = window.getSelection();
+    if(!sel || !sel.rangeCount) return;
+    sel.deleteFromDocument();
+    sel.getRangeAt(0).insertNode(document.createTextNode(text));
+    sel.collapseToEnd();
+    val.dispatchEvent(new Event("input"));
+  });
+
+  row.appendChild(pre);
+  row.appendChild(val);
+  return row;
+}
+
+/* ---------------- render ---------------- */
+const tree = document.getElementById("tree");
+
+function render(){
+  tree.innerHTML = "";
+  if(!model.jobs.length){
+    const p = document.createElement("p");
+    p.className = "empty-state";
+    p.textContent = "No jtbds yet. New jtbd starts one.";
+    tree.appendChild(p);
+  }
+  model.jobs.forEach((job, i) => tree.appendChild(jobNode(job, String(i+1))));
+  const counts = {jtbd:0, story:0, proposed:0};
+  walk(n => { counts[n.kind]++; if(n.status === "proposed") counts.proposed++; });
+  syncControls();
+  document.getElementById("foot").textContent =
+    counts.jtbd + " jtbds · " + counts.story + " stories · " + counts.proposed +
+    " proposed · saved in this browser, export to keep it";
+  save();
+}
+
+function badges(node, isJob){
+  const b = document.createElement("div");
+  b.className = "badges";
+  if(node.status === "proposed"){
+    const s = document.createElement("span");
+    s.className = "badge proposed";
+    s.textContent = "proposed · " + (node.source || "?");
+    b.appendChild(s);
+  }
+  if(isJob && node.build && node.build.status && node.build.status !== "draft"){
+    const s = document.createElement("span");
+    s.className = "badge build";
+    s.textContent = node.build.status;
+    if(node.build.handedOffAt) s.title = "handed off " + node.build.handedOffAt;
+    b.appendChild(s);
+  }
+  if(isJob){
+    const meta = LEVELS[node.level] || {name:"?", full:"unknown level"};
+    const l = document.createElement("span");
+    l.className = "badge level";
+    l.textContent = "L" + node.level + " · " + meta.name;
+    l.title = meta.full;
+    b.appendChild(l);
+  }
+  return b;
+}
+
+function statusButton(node){
+  const b = document.createElement("button");
+  b.className = "btn btn-quiet";
+  b.textContent = node.status === "proposed" ? "Accept" : "Mark proposed";
+  b.addEventListener("click", () => {
+    node.status = node.status === "proposed" ? "accepted" : "proposed";
+    if(node.status === "proposed" && !node.source) node.source = "claude";
+    render();
+  });
+  return b;
+}
+
+function jobNode(job, path){
+  const wrap = document.createElement("div");
+  wrap.className = "node l" + job.level;
+
+  const card = document.createElement("div");
+  card.className = "card jtbd";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = "J" + path;
+  card.appendChild(tag);
+
+  const lines = document.createElement("div");
+  lines.className = "lines";
+  JOB_LINES.forEach(spec => lines.appendChild(line(job, spec)));
+  if(!view.stories && job.level < 3 && job.stories.length){
+    const s = document.createElement("p");
+    s.className = "summary";
+    s.textContent = plural(job.stories.length, "story") + " hidden";
+    lines.appendChild(s);
+  }
+  card.appendChild(lines);
+  card.appendChild(badges(job, true));
+
+  const act = document.createElement("div");
+  act.className = "actions";
+
+  if(view.stories && job.level < 3){
+    const addStory = document.createElement("button");
+    addStory.className = "btn btn-quiet";
+    addStory.textContent = "+ story";
+    addStory.addEventListener("click", () => {
+      job.stories.push({kind:"story", id:uid("s"), status:"accepted", source:"chris",
+                        given:"", when:"", then:"", child:null});
+      render();
+    });
+    act.appendChild(addStory);
+  }
+
+  if(job.level === 3){
+    const sk = document.createElement("button");
+    sk.className = "btn btn-quiet";
+    sk.textContent = sketchOpen.has(job.id) ? "Hide pseudocode" : "Show pseudocode";
+    sk.addEventListener("click", () => {
+      sketchOpen.has(job.id) ? sketchOpen.delete(job.id) : sketchOpen.add(job.id);
+      render();
+    });
+    act.appendChild(sk);
+  }
+
+  act.appendChild(statusButton(job));
+  const sp = document.createElement("div"); sp.className = "spacer"; act.appendChild(sp);
+
+  const del = document.createElement("button");
+  del.className = "btn btn-quiet btn-danger";
+  del.textContent = "Delete";
+  del.addEventListener("click", () => {
+    const n = countUnder(job);
+    if(n && !confirm("Delete this jtbd and " + n + " node" + (n === 1 ? "" : "s") + " beneath it?")) return;
+    const parentStory = findJobParentStory(job.id);
+    if(parentStory) parentStory.child = null;
+    else model.jobs = model.jobs.filter(j => j.id !== job.id);
+    render();
+  });
+  act.appendChild(del);
+  card.appendChild(act);
+
+  if(job.level === 3 && sketchOpen.has(job.id)) card.appendChild(pseudoBlock(job));
+
+  wrap.appendChild(card);
+
+  const kids = document.createElement("div");
+  kids.className = "kids";
+  if(job.level < 3) job.stories.forEach((st, i) => {
+    const p = path + "." + (i + 1);
+    if(view.stories) kids.appendChild(storyNode(st, job, i, p));
+    else if(st.child && st.child.level <= view.depth) kids.appendChild(jobNode(st.child, p));
+  });
+  if(kids.children.length) wrap.appendChild(kids);
+  return wrap;
+}
+
+function storyNode(st, job, index, path){
+  const wrap = document.createElement("div");
+  wrap.className = "node l" + job.level;
+
+  const card = document.createElement("div");
+  card.className = "card story";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = "S" + path;
+  card.appendChild(tag);
+
+  const lines = document.createElement("div");
+  lines.className = "lines";
+  STORY_LINES.forEach(spec => lines.appendChild(line(st, spec)));
+  if(st.child && st.child.level > view.depth){
+    const s = document.createElement("p");
+    s.className = "summary";
+    s.textContent = plural(1, LEVELS[st.child.level].name) + " hidden";
+    lines.appendChild(s);
+  }
+  card.appendChild(lines);
+  card.appendChild(badges(st, false));
+
+  const act = document.createElement("div");
+  act.className = "actions";
+
+  if(!st.child && job.level < 3){
+    const addChild = document.createElement("button");
+    addChild.className = "btn";
+    addChild.textContent = "+ " + LEVELS[job.level + 1].name + " — who owes this?";
+    addChild.title = LEVELS[job.level + 1].full;
+    addChild.addEventListener("click", () => {
+      st.child = {kind:"jtbd", id:uid("j"), level:job.level + 1, status:"accepted",
+                  source:"chris", role:"", need:"", soThat:"", stories:[]};
+      if(st.child.level === 3){
+        st.child.pseudocode = "";
+        st.child.build = BUILD("", "");
+        sketchOpen.add(st.child.id);
+      }
+      if(st.child.level > view.depth) view.depth = st.child.level;
+      render();
+    });
+    act.appendChild(addChild);
+  } else if(!st.child && job.level === 3){
+    const note = document.createElement("span");
+    note.className = "hint";
+    note.textContent = "Ports and aggregates live in the sketch, not as a node.";
+    act.appendChild(note);
+  }
+
+  const up = document.createElement("button");
+  up.className = "btn btn-quiet"; up.textContent = "↑"; up.title = "Move earlier";
+  up.disabled = index === 0;
+  up.addEventListener("click", () => {
+    const a = job.stories; [a[index-1], a[index]] = [a[index], a[index-1]]; render();
+  });
+  const down = document.createElement("button");
+  down.className = "btn btn-quiet"; down.textContent = "↓"; down.title = "Move later";
+  down.disabled = index === job.stories.length - 1;
+  down.addEventListener("click", () => {
+    const a = job.stories; [a[index+1], a[index]] = [a[index], a[index+1]]; render();
+  });
+  act.appendChild(up); act.appendChild(down);
+  act.appendChild(statusButton(st));
+
+  const sp = document.createElement("div"); sp.className = "spacer"; act.appendChild(sp);
+
+  const del = document.createElement("button");
+  del.className = "btn btn-quiet btn-danger";
+  del.textContent = "Delete";
+  del.addEventListener("click", () => {
+    const n = st.child ? countUnder(st.child) + 1 : 0;
+    const msg = n ? "Delete this story and " + n + " node" + (n === 1 ? "" : "s") + " beneath it?"
+                  : "Delete this story?";
+    if(!confirm(msg)) return;
+    job.stories = job.stories.filter(x => x.id !== st.id);
+    render();
+  });
+  act.appendChild(del);
+  card.appendChild(act);
+
+  wrap.appendChild(card);
+
+  if(st.child && st.child.level <= view.depth){
+    const kids = document.createElement("div");
+    kids.className = "kids";
+    kids.appendChild(jobNode(st.child, path));
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+
+/* ---------------- derived sketch ---------------- */
+function esc(s){
+  return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function pseudoBlock(job){
+  const box = document.createElement("div");
+  box.className = "sketch";
+  const head = document.createElement("h4");
+  head.textContent = "pseudocode";
+  box.appendChild(head);
+
+  const ta = document.createElement("textarea");
+  ta.value = job.pseudocode || "";
+  ta.wrap = "off";
+  ta.spellcheck = false;
+  ta.setAttribute("aria-label", "pseudocode for " + (job.role || "this service"));
+  ta.placeholder = "class SomethingService(ts.ApplicationService):\n\n    def do_the_thing(self, request: client.Request) -> client.Response:\n        ...";
+  const fit = () => { ta.rows = Math.max(6, ta.value.split("\n").length + 1); };
+  fit();
+  ta.addEventListener("input", () => { job.pseudocode = ta.value; fit(); save(); });
+  ta.addEventListener("keydown", e => {
+    if(e.key === "Tab"){
+      e.preventDefault();
+      const s = ta.selectionStart, t = ta.selectionEnd;
+      ta.value = ta.value.slice(0, s) + "    " + ta.value.slice(t);
+      ta.selectionStart = ta.selectionEnd = s + 4;
+      ta.dispatchEvent(new Event("input"));
+    }
+  });
+  box.appendChild(ta);
+
+  const b = job.build || (job.build = BUILD("", ""));
+  const foot = document.createElement("div");
+  foot.className = "pfoot";
+
+  const pair = (labelText, value, ph, onInput) => {
+    const w = document.createElement("div");
+    w.className = "pair";
+    const l = document.createElement("label");
+    l.textContent = labelText;
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.spellcheck = false;
+    inp.value = value || "";
+    inp.placeholder = ph;
+    inp.addEventListener("input", () => { onInput(inp.value); save(); });
+    const id = "bf" + (seq++);
+    inp.id = id; l.htmlFor = id;
+    w.appendChild(l); w.appendChild(inp);
+    return w;
+  };
+  foot.appendChild(pair("context", b.context, "design", v => b.context = v));
+  foot.appendChild(pair("writes to", b.target, "design/", v => b.target = v));
+
+  const sp = document.createElement("div"); sp.className = "spacer"; foot.appendChild(sp);
+
+  if(b.status !== "draft"){
+    const mark = document.createElement("button");
+    mark.className = "btn btn-quiet";
+    mark.textContent = b.status === "built" ? "Reopen" : "Mark built";
+    mark.addEventListener("click", () => {
+      b.status = b.status === "built" ? "handed off" : "built";
+      render();
+    });
+    foot.appendChild(mark);
+  }
+
+  const send = document.createElement("button");
+  send.className = "btn";
+  send.textContent = "Copy build brief";
+  send.title = "Copies a markdown brief for an agent — obligation chain, scratch, and what to produce";
+  send.addEventListener("click", () => {
+    handOff(buildBrief(job), "build-" + slug(job.role) + ".md");
+    b.status = "handed off";
+    b.handedOffAt = new Date().toISOString().slice(0, 16).replace("T", " ");
+    b.handedOffBy = "chris";
+    render();
+  });
+  foot.appendChild(send);
+
+  box.appendChild(foot);
+  return box;
+}
+
+/* ---------------- toolbar ---------------- */
+[1,2,3].forEach(d => {
+  document.getElementById("depth-" + d).addEventListener("click", () => {
+    view.depth = d; render();
+  });
+});
+document.getElementById("storiesBtn").addEventListener("click", () => {
+  view.stories = !view.stories; render();
+});
+const repoInput = document.getElementById("repoInput");
+repoInput.addEventListener("input", () => { model.repo = repoInput.value; save(); });
+
+function syncControls(){
+  if(document.activeElement !== repoInput) repoInput.value = model.repo || "";
+  [1,2,3].forEach(d => {
+    document.getElementById("depth-" + d)
+      .setAttribute("aria-pressed", String(view.depth === d));
+  });
+  document.getElementById("storiesBtn")
+    .setAttribute("aria-pressed", String(view.stories));
+}
+
+document.getElementById("addRoot").addEventListener("click", () => {
+  model.jobs.push({kind:"jtbd", id:uid("j"), level:1, status:"accepted", source:"chris",
+                   role:"", need:"", soThat:"", stories:[]});
+  render();
+  window.scrollTo({top:document.body.scrollHeight});
+});
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(model, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "obligation-tree.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+const fileInput = document.getElementById("fileInput");
+document.getElementById("importBtn").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  const f = fileInput.files && fileInput.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const m = JSON.parse(String(r.result));
+      if(!m || !Array.isArray(m.jobs)) throw new Error("no jobs array");
+      model = m; render();
+    }catch(e){
+      alert("That file isn't an obligation tree. Expected JSON with a top-level \"jobs\" array.");
+    }
+    fileInput.value = "";
+  };
+  r.readAsText(f);
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if(!confirm("Replace the current tree with the seed? Edits are lost unless you exported them.")) return;
+  model = seed(); render();
+});
+
+render();
+</script>
+</body>
+</html>
