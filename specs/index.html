@@ -406,6 +406,41 @@ function agentBuildBranch(){
     }]};
 }
 
+/* adding a jtbd under a story — the mirror of S1.1, level for level */
+function jtbdStory(){
+  const page = (id, need) => ({kind:"jtbd", id:id, level:2, status:"accepted", source:"chris",
+    role:"the product specification page", need:need, soThat:"S1.4 is fulfilled", stories:[]});
+  const create = page("j-jtbd-c", "create the jtbd for that story when save is clicked");
+  create.stories = [{kind:"story", id:"s-jtbd-c-1", status:"accepted", source:"chris",
+    given:"a story's identifier and a filled-in as, I need to and so that",
+    when:"I POST to stories/{id}/jtbd with them",
+    then:"I get back the jtbd's id, its level and its position",
+    children:[{
+      kind:"jtbd", id:"j-jtbdsvc", level:3, status:"accepted", source:"chris",
+      role:"the product specs service",
+      need:"attach a jtbd to an existing story, assign its identifier and level, and persist it",
+      soThat:"S1.4c.1 is fulfilled",
+      stories:[],
+      build:BUILD("specs", ""),
+      pseudocode:[
+"TesserDesignService.add_jtbd",
+"  s = DesignRepo.find_story",
+"  j = domain.Jtbd(MapToSpec(s, r))",
+"  create_response = DesignRepo.create_jtbd(MapToR)",
+"  return MapToResponse"].join("\n")
+    }]}];
+  return {kind:"story", id:"s-jtbd", status:"accepted", source:"chris",
+    given:"I am on the product specification page and a story exists",
+    when:"I click add job on it, fill in as, I need to and so that, and click save",
+    then:"I see the jtbd lettered under the story with its identifier and its level, colored for its level, with links to move it up or down and a link to remove it",
+    children:[
+      page("j-jtbd-a", "show an add job link on each story, named for the level it creates"),
+      page("j-jtbd-b", "show as, I need to and so that inputs and a save when add job is clicked"),
+      create,
+      page("j-jtbd-d", "show the returned jtbd lettered under its story with its id, its level color, and links to move it up or down and to remove it")
+    ]};
+}
+
 /* finding your way around a full specification — part of iterating on it */
 function navStory(){
   const page = (id, need) => ({kind:"jtbd", id:id, level:2, status:"accepted", source:"chris",
@@ -431,7 +466,7 @@ function pageJob(id, stories){
 }
 
 function seed(){
-  return {repo:"", seeded:["agent-build","page-jobs-1","nav-story-1","nav-story-2","nav-story-3","nav-story-4"], jobs:[{
+  return {repo:"", seeded:["agent-build","page-jobs-1","nav-story-1","nav-story-2","nav-story-3","nav-story-4","jtbd-story-1"], jobs:[{
     kind:"jtbd", id:"j-root", level:1, status:"accepted", source:"chris",
     role:SPINE["j-root"].role,
     need:SPINE["j-root"].need,
@@ -462,14 +497,15 @@ function seed(){
        ]},
 
       agentBuildBranch(),
-      navStory()
+      navStory(),
+      jtbdStory()
     ]
   }]};
 }
 
 /* ---------------- state ---------------- */
 let model = load();
-const sketchOpen = new Set(["j-svc", "j-buildsvc"]);
+const sketchOpen = new Set(["j-svc", "j-buildsvc", "j-jtbdsvc"]);
 const view = {depth:3, stories:true, focus:null};
 try{ view.focus = localStorage.getItem(STORE_KEY + ":focus") || null; }catch(e){ /* no focus remembered */ }
 /* nodes the user minimized to one line by hand, kept across reloads */
@@ -704,6 +740,12 @@ function migrate(m){
       });
     });
     m.seeded.push("nav-story-4");
+  }
+  if(m.seeded.indexOf("jtbd-story-1") === -1){
+    (m.jobs || []).forEach(job => {
+      if(job.id === "j-root" && !job.stories.some(st => st.id === "s-jtbd")) job.stories.push(jtbdStory());
+    });
+    m.seeded.push("jtbd-story-1");
   }
   /* the fill-1 batch of proposed stories was reverted; take it back out of a tree that got it */
   if(m.seeded.indexOf("fill-1-undo") === -1){
