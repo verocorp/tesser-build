@@ -828,11 +828,20 @@ function plural(n, word){
   if(word === "story") return n + (n === 1 ? " story" : " stories");
   return n + " " + word + (n === 1 ? "" : "s");
 }
-function countUnder(job){
-  let n = 0;
-  const visit = j => j.stories.forEach(st => { n++; st.children.forEach(c => { n++; visit(c); }); });
-  visit(job);
-  return n;
+/* what a node has beneath it, by kind: a jtbd holds stories, a story holds jtbds, and so on down */
+function kindsUnder(node){
+  const k = {jtbd:0, story:0};
+  const visitJob = j => j.stories.forEach(st => { k.story++; visitStory(st); });
+  const visitStory = st => st.children.forEach(c => { k.jtbd++; visitJob(c); });
+  if(node.kind === "jtbd") visitJob(node); else visitStory(node);
+  return k;
+}
+function describeUnder(node){
+  const k = kindsUnder(node);
+  const parts = [];
+  if(k.story) parts.push(k.story + (k.story === 1 ? " story" : " stories"));
+  if(k.jtbd) parts.push(k.jtbd + (k.jtbd === 1 ? " jtbd" : " jtbds"));
+  return parts.join(" · ");
 }
 
 /* ---------------- editable line ---------------- */
@@ -966,10 +975,7 @@ function compactRow(kind, n, path, level, mode, bare){
 
   const beneath = document.createElement("span");
   beneath.className = "beneath";
-  let count = 0;
-  if(kind === "jtbd") count = countUnder(n);
-  else n.children.forEach(c => { count += 1 + countUnder(c); });
-  beneath.textContent = mode !== "ancestor" && count ? count + " beneath" : "";
+  beneath.textContent = mode !== "ancestor" ? describeUnder(n) : "";
   row.appendChild(beneath);
 
   const go = () => mode === "minimized" ? expand(n.id) : setFocus(n.id);
@@ -1153,8 +1159,8 @@ function jobNode(job, path, siblings, index){
   del.className = "btn btn-quiet btn-danger";
   del.textContent = "Delete";
   del.addEventListener("click", () => {
-    const n = countUnder(job);
-    if(n && !confirm("Delete this jtbd and " + n + " node" + (n === 1 ? "" : "s") + " beneath it?")) return;
+    const under = describeUnder(job);
+    if(under && !confirm("Delete this jtbd and the " + under + " beneath it?")) return;
     siblings.splice(index, 1);
     render();
   });
@@ -1254,10 +1260,8 @@ function storyNode(st, job, index, path){
   del.className = "btn btn-quiet btn-danger";
   del.textContent = "Delete";
   del.addEventListener("click", () => {
-    let n = 0;
-    st.children.forEach(c => { n += 1 + countUnder(c); });
-    const msg = n ? "Delete this story and " + n + " node" + (n === 1 ? "" : "s") + " beneath it?"
-                  : "Delete this story?";
+    const under = describeUnder(st);
+    const msg = under ? "Delete this story and the " + under + " beneath it?" : "Delete this story?";
     if(!confirm(msg)) return;
     job.stories = job.stories.filter(x => x.id !== st.id);
     render();
