@@ -120,6 +120,11 @@ main{padding:var(--s5) var(--s5) var(--s7);max-width:1000px;margin:0 auto}
 }
 .badge.proposed{background:var(--propose-soft);color:var(--propose)}
 .badge.level{background:color-mix(in srgb, var(--lv) 13%, transparent);color:var(--lv)}
+.min{
+  font:500 12px/1.4 var(--mono);color:var(--faint);background:none;
+  border:1px solid var(--line);border-radius:2px;padding:0 6px;cursor:pointer;order:9;
+}
+.min:hover{color:var(--lv);border-color:var(--lv)}
 
 /* the three lines: prefix set in place, text typed inline after it */
 .lines{grid-column:2;display:grid;gap:2px;min-width:0}
@@ -212,6 +217,8 @@ main{padding:var(--s5) var(--s5) var(--s7);max-width:1000px;margin:0 auto}
 .row.story{border-left-color:color-mix(in srgb, var(--lv) 38%, var(--line));background:color-mix(in srgb, var(--lv) 4%, var(--surface-2))}
 .row:hover{border-color:var(--lv)}
 .row.ancestor{background:color-mix(in srgb, var(--lv) 7%, var(--surface));border-style:dashed}
+.row.minimized{border-style:dotted}
+.row.minimized .beneath::before{content:"minimized · "}
 .row .tag{padding-top:0}
 .row .kw{font:500 10.5px/1.7 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .row .snip{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
@@ -464,7 +471,29 @@ let model = load();
 const sketchOpen = new Set(["j-svc", "j-buildsvc"]);
 const view = {depth:3, stories:true, focus:null};
 try{ view.focus = localStorage.getItem(STORE_KEY + ":focus") || null; }catch(e){ /* no focus remembered */ }
+/* nodes the user minimized to one line by hand, kept across reloads */
+const collapsed = new Set();
+try{ JSON.parse(localStorage.getItem(STORE_KEY + ":collapsed") || "[]").forEach(id => collapsed.add(id)); }catch(e){ /* none remembered */ }
+function saveCollapsed(){
+  try{ localStorage.setItem(STORE_KEY + ":collapsed", JSON.stringify([...collapsed])); }catch(e){ /* fine */ }
+}
+function minimize(id){ collapsed.add(id); saveCollapsed(); render(); }
+function expand(id){
+  collapsed.delete(id); saveCollapsed();
+  if(view.focus) setFocus(id); else render();
+}
+
 function setFocus(id){
+  /* focusing something under a minimized node opens the way down to it */
+  if(id){
+    indexLabels();
+    const e = entryFor(id);
+    if(e){
+      collapsed.delete(id);
+      e.chain.forEach(l => { const a = index.get(l); if(a) collapsed.delete(a.node.id); });
+      saveCollapsed();
+    }
+  }
   view.focus = id;
   try{ id ? localStorage.setItem(STORE_KEY + ":focus", id) : localStorage.removeItem(STORE_KEY + ":focus"); }catch(e){ /* fine */ }
   render();
@@ -883,6 +912,7 @@ function render(){
 /* J1.3e — with a focus set, a node is rendered in full only inside the focused subtree; the nodes
    above it collapse to dashed rows (the chain), everything beside the chain collapses to a row */
 function jobAny(job, path, siblings, i, focusPath){
+  if(collapsed.has(job.id)) return compactRow("jtbd", job, path, job.level, "minimized");
   if(!view.focus || job.id === view.focus) return jobNode(job, path, siblings, i);
   if(!focusPath.has(job.id)) return compactRow("jtbd", job, path, job.level, "collapsed");
   const wrap = document.createElement("div");
@@ -895,6 +925,7 @@ function jobAny(job, path, siblings, i, focusPath){
   return wrap;
 }
 function storyAny(st, job, i, path, focusPath){
+  if(collapsed.has(st.id)) return compactRow("story", st, path, job.level, "minimized");
   if(!view.focus || st.id === view.focus) return storyNode(st, job, i, path);
   if(!focusPath.has(st.id)) return compactRow("story", st, path, job.level, "collapsed");
   const wrap = document.createElement("div");
@@ -909,11 +940,14 @@ function storyAny(st, job, i, path, focusPath){
 function compactRow(kind, n, path, level, mode, bare){
   const label = (kind === "jtbd" ? "J" : "S") + path;
   const row = document.createElement("div");
-  row.className = "row " + (kind === "jtbd" ? "jtbd" : "story") + (mode === "ancestor" ? " ancestor" : "");
+  row.className = "row " + (kind === "jtbd" ? "jtbd" : "story") +
+    (mode === "ancestor" ? " ancestor" : mode === "minimized" ? " minimized" : "");
   row.dataset.label = label;
   row.tabIndex = 0;
   row.setAttribute("role", "button");
-  row.title = mode === "ancestor" ? "Above what you are focused on — click to focus here" : "Click to focus here";
+  row.title = mode === "ancestor" ? "Above what you are focused on — click to focus here"
+            : mode === "minimized" ? "Minimized — click to open it again"
+            : "Click to focus here";
 
   const tag = document.createElement("span");
   tag.className = "tag";
@@ -935,10 +969,10 @@ function compactRow(kind, n, path, level, mode, bare){
   let count = 0;
   if(kind === "jtbd") count = countUnder(n);
   else n.children.forEach(c => { count += 1 + countUnder(c); });
-  beneath.textContent = mode === "collapsed" && count ? count + " beneath" : "";
+  beneath.textContent = mode !== "ancestor" && count ? count + " beneath" : "";
   row.appendChild(beneath);
 
-  const go = () => setFocus(n.id);
+  const go = () => mode === "minimized" ? expand(n.id) : setFocus(n.id);
   row.addEventListener("click", go);
   row.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
 
@@ -991,6 +1025,13 @@ function chips(text){
 function badges(node, isJob){
   const b = document.createElement("div");
   b.className = "badges";
+  const m = document.createElement("button");
+  m.type = "button";
+  m.className = "min";
+  m.textContent = "−";
+  m.title = "Minimize to one line";
+  m.addEventListener("click", () => minimize(node.id));
+  b.appendChild(m);
   if(node.status === "proposed"){
     const s = document.createElement("span");
     s.className = "badge proposed";
@@ -1025,6 +1066,14 @@ function statusButton(node){
     render();
   });
   return b;
+}
+
+/* a full card draws its children in full too — unless the user minimized one of them */
+function jobOrRow(job, path, siblings, k){
+  return collapsed.has(job.id) ? compactRow("jtbd", job, path, job.level, "minimized") : jobNode(job, path, siblings, k);
+}
+function storyOrRow(st, job, k, path){
+  return collapsed.has(st.id) ? compactRow("story", st, path, job.level, "minimized") : storyNode(st, job, k, path);
 }
 
 function jobNode(job, path, siblings, index){
@@ -1120,9 +1169,9 @@ function jobNode(job, path, siblings, index){
   kids.className = "kids";
   if(job.level < 3) job.stories.forEach((st, i) => {
     const p = path + "." + (i + 1);
-    if(view.stories) kids.appendChild(storyNode(st, job, i, p));
+    if(view.stories) kids.appendChild(storyOrRow(st, job, i, p));
     else st.children.forEach((c, k) => {
-      if(c.level <= view.depth) kids.appendChild(jobNode(c, p + letter(k), st.children, k));
+      if(c.level <= view.depth) kids.appendChild(jobOrRow(c, p + letter(k), st.children, k));
     });
   });
   if(kids.children.length) wrap.appendChild(kids);
@@ -1223,7 +1272,7 @@ function storyNode(st, job, index, path){
     const kids = document.createElement("div");
     kids.className = "kids";
     st.children.forEach((c, k) => {
-      if(c.level <= view.depth) kids.appendChild(jobNode(c, path + letter(k), st.children, k));
+      if(c.level <= view.depth) kids.appendChild(jobOrRow(c, path + letter(k), st.children, k));
     });
     wrap.appendChild(kids);
   }
