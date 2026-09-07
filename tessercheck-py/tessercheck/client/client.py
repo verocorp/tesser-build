@@ -15,6 +15,19 @@ class CheckResponse(ts.Response):
         self.findings = findings
 
 
+class MarkRequest(ts.Request):
+
+    def __init__(self, tree: str) -> None:
+        self.tree = tree
+
+
+class MarkResponse(ts.Response):
+
+    def __init__(self, files: int, remaining: tuple[str, ...]) -> None:
+        self.files = files
+        self.remaining = remaining
+
+
 class RulebookRequest(ts.Request):
 
     def __init__(self, tree: str) -> None:
@@ -43,6 +56,8 @@ class RenameResponse(ts.Response):
 class TessercheckClient(ts.Client, typing.Protocol):
 
     def check(self, check_request: CheckRequest) -> CheckResponse: ...
+
+    def mark(self, mark_request: MarkRequest) -> MarkResponse: ...
 
     def rename(self, rename_request: RenameRequest) -> RenameResponse: ...
 

@@ -16092,6 +16092,153 @@ def test_a_renaming_naming_no_module_it_holds_rewrites_nothing() -> None:
     assert renaming.rewritten() == ()
 
 
+def test_a_marked_line_carries_the_codes_the_findings_named() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\nx = 1\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050\nx = 1\n"
+
+
+def test_a_marked_line_carries_every_code_reported_on_it_in_one_marker() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\n", marks=((1, ("TB062", "TB050")),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marked_line_merges_into_the_marker_it_already_carries() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marked_line_that_already_names_the_code_is_left_alone() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt TB050\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050\n"
+
+
+def test_a_line_carrying_another_directive_is_refused_rather_than_corrupted() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # type: ignore\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # type: ignore\n"
+
+
+def test_a_line_carrying_a_file_marker_is_refused_rather_than_corrupted() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt-file TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt-file TB050\n"
+
+
+def test_a_line_carrying_a_malformed_marker_is_refused_rather_than_corrupted() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt nonsense\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt nonsense\n"
+
+
+def test_a_comment_of_its_own_never_takes_a_marker_appended_to_it() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="# tesser:debt TB050\nimport os\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "# tesser:debt TB050\nimport os\n"
+
+
+def test_a_line_inside_a_triple_quoted_string_is_refused() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text='text = """\nheld\n"""\n', marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == 'text = """\nheld\n"""\n'
+
+
+def test_the_last_line_of_a_multi_line_string_still_takes_a_marker() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text='text = """\nheld\n"""\n', marks=((3, ("TB050",)),)
+    ))
+    assert str(marked) == 'text = """\nheld\n"""  # tesser:debt TB050\n'
+
+
+def test_a_line_ended_by_a_backslash_continuation_is_refused() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="total = 1 + \\\n    2\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "total = 1 + \\\n    2\n"
+
+
+def test_a_line_inside_brackets_takes_a_marker_because_python_allows_it() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="held = (\n    1,\n)\n", marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == "held = (\n    1,  # tesser:debt TB050\n)\n"
+
+
+def test_a_marker_past_a_multibyte_character_keeps_the_line_intact() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="text = 'xǁy'  # tesser:debt TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "text = 'xǁy'  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marker_counts_columns_the_way_tokenize_does_in_characters() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="text = 'ǁ'# tesser:debt TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "text = 'ǁ'  # tesser:debt TB050 TB062\n"
+
+
+def test_a_mark_naming_no_line_the_module_holds_changes_nothing() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\n", marks=((9, ("TB050",)),)
+    ))
+    assert str(marked) == "import os\n"
+
+
+def test_a_module_that_does_not_parse_is_left_exactly_as_it_is() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="def broken(\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "def broken(\n"
+
+
+def test_a_marking_marks_only_the_modules_a_finding_names() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os\n"), ("mod/b.py", "import os\n")),
+        marks=(("mod/a.py", 1, "TB050"),),
+    ))
+    rewritten = marking.rewritten()
+    assert len(rewritten) == 1
+    assert str(rewritten[0].path()) == "mod/a.py"
+    assert str(rewritten[0].text()) == "import os  # tesser:debt TB050\n"
+
+
+def test_a_marking_gathers_every_code_on_one_line_into_one_marker() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os\n"),),
+        marks=(("mod/a.py", 1, "TB062"), ("mod/a.py", 1, "TB050")),
+    ))
+    assert str(marking.rewritten()[0].text()) == "import os  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marking_naming_no_module_it_holds_marks_nothing() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os\n"),),
+        marks=(("mod/gone.py", 1, "TB050"),),
+    ))
+    assert marking.rewritten() == ()
+
+
+def test_a_marking_that_changes_no_text_rewrites_no_module() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os  # tesser:debt TB050\n"),),
+        marks=(("mod/a.py", 1, "TB050"),),
+    ))
+    assert marking.rewritten() == ()
+
+
 def test_a_rewritten_module_carries_the_path_and_the_text() -> None:
     rewritten_module = domain.RewrittenModule(
         domain.RewrittenModuleSpec("mod/a.py", "made = 1\n")

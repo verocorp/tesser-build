@@ -2,6 +2,40 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the marker writer (2026-09-07, v0.0.104.0)
+
+- [ ] **Nothing removes a stale marker.** `tessercheck-mark` writes markers; it
+  never deletes one. A `TB090` finding (a marker suppressing nothing) is
+  therefore reported as unmarkable and stays reported forever until a person
+  edits the line, which means a tree that has drifted cannot be brought back to
+  green by the tool alone. Removal is as mechanical as writing — a stale code
+  is by definition one no finding on that line names, so dropping it (and the
+  marker with it, when nothing is left) is decidable from the same data. The
+  reason it is not in this change is scope, not doubt: writing and deleting are
+  different risk profiles, and #170 set the precedent of shipping one repair at
+  a time. The measured shape of the gap: stripping all markers from six trees
+  and re-marking returns every one to zero findings, so the write half is
+  complete; it is only an *already-stale* marker that needs the other half.
+- [ ] **File scope is not reconstructible, and that is now load-bearing.**
+  `tesser:debt-file` says "this whole module is excused for this code," which no
+  finding list implies — the same findings are equally consistent with one line
+  marker per site. The tool refuses to touch a line carrying a file marker, so
+  an existing one survives; but a tree whose file markers were stripped comes
+  back line-scoped. Measured on `examples/python-app`: 2 of its 8 markers
+  (`tests/discovery.py`, `tests/support.py`, both `TB041`) are file-scope and
+  are the only sites in six trees where the round trip is not byte-identical.
+  Open question: is file scope worth keeping at all, given that a line marker
+  is strictly more precise and now free to write?
+- [ ] **A line carrying another directive cannot be marked.** `# type: ignore`,
+  `# noqa` and friends occupy the one comment a line gets, and appending a
+  second `#` yields a marker the parser reads as malformed — so the tool
+  refuses. There are **no such sites in the repo today**, so nothing is blocked;
+  the question is what the answer should be when one appears. Candidates: a
+  marker before the other directive on its own line above (changes line
+  numbers, so every other mark in the module would need re-anchoring), or
+  teaching the debt parser to read a marker anywhere in the comment rather than
+  only at its head.
+
 ## Left open by the relay wave (2026-09-06, v0.0.102.0)
 
 - [ ] **Register the relay shape in the analyzer.** `examples/durable-execution`

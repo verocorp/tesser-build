@@ -14,6 +14,10 @@ from tessercheck.domain.checks import KIND_NAME as KIND_NAME
 from tessercheck.domain.checks import KIND_ROLE as KIND_ROLE
 from tessercheck.domain.checks import KindTable as KindTable
 from tessercheck.domain.checks import KindTableSpec as KindTableSpec
+from tessercheck.domain.checks import Marked as Marked
+from tessercheck.domain.checks import MarkedSpec as MarkedSpec
+from tessercheck.domain.checks import Marking as Marking
+from tessercheck.domain.checks import MarkingSpec as MarkingSpec
 from tessercheck.domain.checks import Names as Names
 from tessercheck.domain.checks import PROTOCOL_TIER as PROTOCOL_TIER
 from tessercheck.domain.checks import Placement as Placement

@@ -5,6 +5,61 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.104.0] - 2026-09-07
+
+The analyzer writes the debt markers it can. `tessercheck-mark` (`python -m
+srv.cli.mark` from a checkout) writes a `# tesser:debt` marker for every finding
+whose line can carry one, so the marker pass of a conformance wave stops being
+agents editing files by hand.
+
+Measured before it was built, and again after: stripping all 135 markers from
+`tessercheck-py` and `examples/durable-execution` and regenerating them with
+this command returns both trees to zero findings with a **byte-identical**
+diff. Repeated across six trees (`durable-execution`, `asyncpg`, `llmport`,
+`python-app`, `layout`, `tesser-py`) — 127 markers stripped, zero findings left
+in every one. Marker placement carried no information the analyzer did not
+already have.
+
+### Added
+- **A finding says whether a marker can excuse it.** `Violation.mark()` answers
+  a `Mark` value object or `None`, mirroring `Violation.rename()`. `TB044`
+  (the tree's declaration), `TB045` (a symlinked directory) and `TB090` (a
+  marker that suppresses nothing) answer `None`: the first two report on files
+  that cannot carry a Python comment and run before the suppression filter, and
+  a marker for the third would be a marker excusing itself. As with the
+  renamer, the tool holds no policy — what a marker can excuse is the
+  analyzer's decision.
+- **`Marked` and `Marking`** (`tessercheck/domain/checks.py`), the marker
+  analogue of `Rewrite` and `Renaming`. `Marked` writes markers into one
+  module's text from its **tokens**, so it refuses a line it cannot append a
+  comment to: a line interior to a triple-quoted string, a line ended by a
+  backslash continuation, a blank line, a line the module has not got, and a
+  module that does not parse. `Marking` groups marks by module, gathers every
+  code reported on one line into one marker, and answers the rewritten modules.
+- **`tessercheck-mark` / `python -m srv.cli.mark`.** Reports what it could not
+  mark and exits 1 when anything is left, exactly as `tessercheck-rename` does.
+  `scripts/verify-packaging` now runs it against a tree with a markable
+  finding, asserts the marker was written, and re-runs `tessercheck-check` to
+  assert the marked tree comes back green — a marker that suppresses nothing
+  would pass the first check and fail the second.
+
+### Changed
+- **A marker is widened, never repeated or narrowed.** A line already carrying
+  a well-formed `tesser:debt` marker gets the new codes merged into it, sorted.
+  A line carrying anything else — another directive, a malformed marker, a
+  `tesser:debt-file` marker, or a comment of its own — is refused rather than
+  corrupted, because appending a second `#` to either form yields a marker that
+  parses as malformed and suppresses nothing. **File scope is the one thing the
+  analyzer cannot reconstruct**: a `tesser:debt-file` marker is left exactly as
+  it is, and a stripped one comes back line-scoped.
+- **`MapToWriteSourcesRequest` takes the rewritten modules** rather than a
+  `Renaming`, because a mapper is named for its target and there is one target
+  here. Both `rename` and `mark` build it the same way.
+- **What `mark` reports as remaining is what a `check` would report after it.**
+  The service re-reads the tree after writing and reports the surviving
+  findings, so the exit code means the tree is green rather than that the
+  command believes it is.
+
 ## [0.0.103.0] - 2026-09-06
 
 The analyzer repairs the names it can. `tessercheck-rename` (`python -m
