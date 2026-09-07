@@ -43,6 +43,39 @@ already have.
   assert the marked tree comes back green — a marker that suppresses nothing
   would pass the first check and fail the second.
 
+### Fixed
+- **A marker landed on the wrong line in any module holding a form feed.**
+  `Marked` indexed lines with `str.splitlines(keepends=True)`, which splits on
+  `\v \f \x1c \x1d \x1e \x85    ` as well as `\n`; `tokenize` and the
+  analyzer's own line numbers split on `\n` alone. One form feed — legal and
+  conventional as a page separator in Python source — shifted every later line
+  by one, so `value = 123456` came back as `value = 12` and **still parsed**.
+  Lines are now read through `io.StringIO(text).readline`, the same source
+  `tokenize` consumes, so the two agree by construction. Found by the Codex
+  adversarial pass, reproduced end to end, and the regression test was verified
+  to fail against the old splitting.
+- **A marker could be written inside a multi-line f-string or t-string.** The
+  interior-line set was built from tokens that span rows, but since PEP 701 an
+  f-string's expression is tokenized as ordinary single-row tokens between
+  `FSTRING_START` and `FSTRING_END`, so no token spans the rows and the line
+  looked commentable. Marking `f"""{1 +\n2=}"""` changed the string's value.
+  Interiors are now tracked from the start/end token pair, matched by token
+  *name*, so PEP 750 template strings (`TSTRING_START`/`TSTRING_END`, 3.14) are
+  covered by the same code on an interpreter that has them.
+- **An unparseable module was rewritten pointlessly.** Tokenizing is not
+  parsing: `x =` tokenizes cleanly, so `TB043` ("does not parse") was treated as
+  markable and a marker was written into a file that still did not parse and
+  whose finding the marker could not suppress — a destructive write to what is
+  usually an unfinished editor buffer. `TB043` joins `TB044`, `TB045` and
+  `TB090` as unmarkable.
+- **`Marked` refuses anything the tokenizer refuses.** The guard caught only
+  `(tokenize.TokenError, IndentationError)`; a lone surrogate raises
+  `UnicodeEncodeError` straight through. A tool that rewrites source fails
+  closed, so any tokenizer failure now leaves the module exactly as it is.
+- **A line's own ending is preserved.** The marker was appended after
+  `rstrip("\n")` and re-terminated with `\n`, which left a stray `\r` before the
+  marker on a CRLF line and added a trailing newline to a file that had none.
+
 ### Changed
 - **A marker is widened, never repeated or narrowed.** A line already carrying
   a well-formed `tesser:debt` marker gets the new codes merged into it, sorted.

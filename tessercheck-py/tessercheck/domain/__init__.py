@@ -20,6 +20,8 @@ from tessercheck.domain.checks import Marking as Marking
 from tessercheck.domain.checks import MarkingSpec as MarkingSpec
 from tessercheck.domain.checks import Names as Names
 from tessercheck.domain.checks import PROTOCOL_TIER as PROTOCOL_TIER
+from tessercheck.domain.checks import QUOTE_CLOSES as QUOTE_CLOSES
+from tessercheck.domain.checks import QUOTE_OPENS as QUOTE_OPENS
 from tessercheck.domain.checks import Placement as Placement
 from tessercheck.domain.checks import PlacementSpec as PlacementSpec
 from tessercheck.domain.checks import ROLES as ROLES

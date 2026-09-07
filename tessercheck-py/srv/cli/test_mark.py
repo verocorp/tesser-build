@@ -144,3 +144,18 @@ def test_an_undeclared_tree_is_reported_and_nothing_is_written(
     assert "marked 0 file(s)" in captured.out
     assert "TB044" in captured.out
     assert marked.read_text(encoding="utf-8") == "import mod.domain.tag as tag\n"
+
+
+def test_the_host_never_leaks_internals_on_the_unexpected_path(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / ".tesser-root").write_text("app\n", encoding="utf-8")
+    (tmp_path / "mod").mkdir()
+    marked = tmp_path / "mod" / "__init__.py"
+    marked.write_text("import mod.domain.tag as tag\n", encoding="utf-8")
+    assert cli.MarkHost().run([f"{tmp_path}/"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "trailing separator" not in captured.err
+    assert captured.err == "unexpected error\n"
+    assert marked.read_text(encoding="utf-8") == "import mod.domain.tag as tag\n"

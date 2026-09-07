@@ -26,6 +26,39 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   are the only sites in six trees where the round trip is not byte-identical.
   Open question: is file scope worth keeping at all, given that a line marker
   is strictly more precise and now free to write?
+- [ ] **The writer has no conflict detection, no atomic replace, and no
+  containment check.** Surfaced by the v0.0.104.0 ship review (Codex
+  adversarial), all four pre-existing in `FilesystemSourceWriter` since
+  v0.0.103.0 and inherited rather than introduced by `mark` — but `mark` is the
+  first command a conformance wave will run across every tree, so it is the one
+  that makes them matter. (1) `write_text` truncates in place, so a crash or a
+  full disk leaves an empty file, and an empty Python file still parses.
+  (2) The loop commits earlier files before attempting later ones, so a
+  mid-batch failure leaves a partially rewritten tree with no rollback and no
+  record of what got through. (3) The write request carries no expected
+  original bytes, so an editor save between the read and the write is silently
+  discarded — `black`, `ruff --fix` and `gofmt` have the same exposure, which is
+  an argument for the shape being normal, not for it being right. (4) The
+  reader rejects a symlinked *directory* (`TB045`) but never checks a symlinked
+  *file*, so a source file that is a symlink is read and then written through
+  the link, outside the declared tree. Fix (1) and (2) with stage-then-atomic-
+  replace per file; (3) with a content hash carried into the write request;
+  (4) by rejecting symlinked files in the walk, which is a `TB045` widening and
+  wants a ruling rather than a patch.
+- [ ] **Marking normalizes bytes it was not asked to touch.** The source reader
+  decodes with `utf-8-sig` and universal newlines, so a BOM is stripped and
+  CRLF becomes LF before the domain ever sees the text; writing back cannot
+  restore either. Marking one line therefore rewrites every line ending in the
+  file and drops the BOM. `Marked` itself now preserves whatever ending each
+  line arrived with, so this is entirely an adapter-level round-trip gap.
+  No tree in this repo has a BOM or CRLF, so nothing is broken today.
+- [ ] **A trailing separator on the tree argument reports `unexpected error`.**
+  `TreeRoot` rejects `path/` deliberately, but the host maps the `ValueError`
+  to the catch-all arm, so `tessercheck-mark path/` — which is exactly what
+  shell tab-completion produces for a directory — prints `unexpected error` and
+  nothing else. Pre-existing and identical on `check` and `rename`;
+  `srv/cli/test_mark.py` now locks the no-internal-leak half of that behavior.
+  The fix is a usage-error arm, not a wider `TreeRoot`.
 - [ ] **A line carrying another directive cannot be marked.** `# type: ignore`,
   `# noqa` and friends occupy the one comment a line gets, and appending a
   second `#` yields a marker the parser reads as malformed — so the tool

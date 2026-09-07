@@ -150,6 +150,10 @@ def test_a_tag_holds_its_value() -> None:
     assert domain.Tag("a") is not None
 TEST
 (cd "$VENV" && "$VENV/venv/bin/tessercheck-mark" "$MARKABLE" >/dev/null 2>&1)
+if [ $? -ne 0 ]; then
+  echo "tessercheck-mark exited non-zero on a tree it can mark completely" >&2
+  exit 1
+fi
 if ! grep -q '# tesser:debt TB042 TB060' "$MARKABLE/mod/__init__.py"; then
   echo "tessercheck-mark did not write the marker the findings name" >&2
   exit 1
@@ -157,6 +161,14 @@ fi
 (cd "$VENV" && "$VENV/venv/bin/tessercheck-check" "$MARKABLE" >/dev/null 2>&1)
 if [ $? -ne 0 ]; then
   echo "a tree tessercheck-mark marked did not come back green" >&2
+  exit 1
+fi
+# A second run must be a byte-for-byte no-op, or the command is not idempotent
+# and repeated conformance passes would stack markers.
+cp "$MARKABLE/mod/__init__.py" "$VENV/markable-once"
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-mark" "$MARKABLE" >/dev/null 2>&1)
+if ! cmp -s "$VENV/markable-once" "$MARKABLE/mod/__init__.py"; then
+  echo "a second tessercheck-mark run changed a tree it had already marked" >&2
   exit 1
 fi
 

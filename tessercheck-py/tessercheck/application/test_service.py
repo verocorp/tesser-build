@@ -105,6 +105,81 @@ def _tree_of(text: str = "import os\n") -> ports.ReadSourcesResponse:
     )
 
 
+@ts.helper
+def _renameable_tree() -> ports.ReadSourcesResponse:
+    return ports.ReadSourcesResponse(
+        root=ports.RootForm.APP,
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="shop/__init__.py",
+                name="shop",
+                text="",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.PACKAGE,
+            ),
+            ports.SourceFile(
+                path="shop/domain/__init__.py",
+                name="shop.domain",
+                text=(
+                    "from shop.domain.tag import Tag as Tag\n"
+                    "from shop.domain.tag import TagSpec as TagSpec\n"
+                ),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.PACKAGE,
+            ),
+            ports.SourceFile(
+                path="shop/domain/tag.py",
+                name="shop.domain.tag",
+                text=(
+                    "import tesser.domain as ts\n"
+                    "class TagSpec(ts.Spec):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class Tag(ts.ValueObject):\n"
+                    "    def __init__(self, spec: TagSpec) -> None:\n"
+                    "        object.__setattr__(self, '_text', spec.text)\n"
+                ),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+            ports.SourceFile(
+                path="shop/domain/test_tag.py",
+                name="shop.domain.test_tag",
+                text=(
+                    "import shop.domain as domain\n"
+                    "def test_a_tag_is_built_from_its_spec() -> None:\n"
+                    "    made = domain.TagSpec('a')\n"
+                    "    assert domain.Tag(made) is not None\n"
+                ),
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=(),
+        pure_stdlib=(),
+    )
+
+
+def test_a_rename_hands_the_writer_the_module_the_renaming_rewrote() -> None:
+    fake_source_writer = FakeSourceWriter()
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(_renameable_tree()),
+        fake_source_writer,
+        FakeRulebookSources(""),
+    )
+    rename_response = tessercheck_service.rename(client.RenameRequest(tree="."))
+    assert rename_response.files == 1
+    assert len(fake_source_writer.written) == 1
+    path, text = fake_source_writer.written[0]
+    assert path == "shop/domain/test_tag.py"
+    assert "tag_spec = domain.TagSpec('a')" in text
+    assert "domain.Tag(tag_spec) is not None" in text
+
+
 def test_a_mark_hands_the_writer_the_line_the_finding_names() -> None:
     fake_source_writer = FakeSourceWriter()
     tessercheck_service = application.TessercheckService(

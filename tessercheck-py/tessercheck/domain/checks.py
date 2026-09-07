@@ -927,7 +927,11 @@ class Rename(ts.ValueObject):
         return self._derived
 
 
-UNMARKABLE: typing.Final[tuple[str, ...]] = ("TB044", "TB045", "TB090")
+UNMARKABLE: typing.Final[tuple[str, ...]] = ("TB043", "TB044", "TB045", "TB090")
+
+QUOTE_OPENS: typing.Final[frozenset[str]] = frozenset(("FSTRING_START", "TSTRING_START"))
+
+QUOTE_CLOSES: typing.Final[frozenset[str]] = frozenset(("FSTRING_END", "TSTRING_END"))
 
 
 class Mark(ts.ValueObject):
@@ -1130,22 +1134,37 @@ class Marked(ts.ValueObject):
     def __init__(self, spec: MarkedSpec) -> None:
         try:
             tokens = list(tokenize.generate_tokens(io.StringIO(spec.text).readline))
-        except (tokenize.TokenError, IndentationError):
+        except Exception:
             object.__setattr__(self, "_value", spec.text)
             return None
         interior: set[int] = set()
         commented: dict[int, tuple[int, str]] = {}
+        opened: list[int] = []
         for token in tokens:
-            if token.start[0] != token.end[0]:
+            named = tokenize.tok_name[token.type]
+            if named in QUOTE_OPENS:
+                opened.append(token.start[0])
+            elif named in QUOTE_CLOSES:
+                if opened:
+                    interior.update(range(opened.pop(), token.end[0]))
+            elif token.start[0] != token.end[0]:
                 interior.update(range(token.start[0], token.end[0]))
             if token.type == tokenize.COMMENT:
                 commented[token.start[0]] = (token.start[1], token.string)
-        lines = spec.text.splitlines(keepends=True)
+        lines: list[str] = []
+        reader = io.StringIO(spec.text)
+        while True:
+            row = reader.readline()
+            if not row:
+                break
+            lines.append(row)
         written: list[tuple[int, str]] = []
         for line, codes in spec.marks:
             if not codes or line < 1 or line > len(lines) or line in interior:
                 continue
-            row = lines[line - 1].rstrip("\n")
+            held = lines[line - 1]
+            ending = "\r\n" if held.endswith("\r\n") else ("\n" if held.endswith("\n") else "")
+            row = held[: len(held) - len(ending)]
             if not row.strip() or row.rstrip().endswith("\\"):
                 continue
             carried: tuple[str, ...] = ()
@@ -1167,7 +1186,7 @@ class Marked(ts.ValueObject):
                     continue
                 row = row.rstrip()
             merged = " ".join(sorted(set(carried) | set(codes)))
-            written.append((line, f"{row}  # {DEBT_MARKER} {merged}\n"))
+            written.append((line, f"{row}  # {DEBT_MARKER} {merged}{ending}"))
         for line, row in written:
             lines[line - 1] = row
         object.__setattr__(self, "_value", "".join(lines))
