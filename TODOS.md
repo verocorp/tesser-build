@@ -74,20 +74,35 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   record of what got through. (3) The write request carries no expected
   original bytes, so an editor save between the read and the write is silently
   discarded — `black`, `ruff --fix` and `gofmt` have the same exposure, which is
-  an argument for the shape being normal, not for it being right. (4) The
-  reader rejects a symlinked *directory* (`TB045`) but never checks a symlinked
-  *file*, so a source file that is a symlink is read and then written through
-  the link, outside the declared tree. Fix (1) and (2) with stage-then-atomic-
-  replace per file; (3) with a content hash carried into the write request;
-  (4) by rejecting symlinked files in the walk, which is a `TB045` widening and
-  wants a ruling rather than a patch.
+  an argument for the shape being normal, not for it being right. Fix (1) and
+  (2) with stage-then-atomic-replace per file, (3) with a content hash carried
+  into the write request.
+- [ ] **A symlinked source file is still read, and still analyzed, it is just
+  no longer written to.** `TB045` makes a symlinked *directory* a finding; a
+  symlinked *file* is not covered, so the walk reads it and the analyzer judges
+  it as though it belonged to the tree. The write half is closed as of
+  v0.0.104.0 — the ship review demonstrated `mark` appending a marker to a file
+  outside the tree through `mod/__init__.py -> ../../outside/victim.py`, and
+  `FilesystemSourceWriter` now refuses a symlinked path and any path that does
+  not resolve under the tree root, which covers `rename` too. What is left is
+  the *reading* half: whether a symlinked file should be a `TB045` finding
+  (making the escape loud rather than merely blocked) or silently skipped by
+  the walk. That is a rule change and wants a ruling; the containment check in
+  the adapter was not, which is why it shipped without one.
 - [ ] **Marking normalizes bytes it was not asked to touch.** The source reader
   decodes with `utf-8-sig` and universal newlines, so a BOM is stripped and
-  CRLF becomes LF before the domain ever sees the text; writing back cannot
-  restore either. Marking one line therefore rewrites every line ending in the
-  file and drops the BOM. `Marked` itself now preserves whatever ending each
-  line arrived with, so this is entirely an adapter-level round-trip gap.
-  No tree in this repo has a BOM or CRLF, so nothing is broken today.
+  CRLF becomes LF before the domain ever sees the text; the writer emits UTF-8
+  with `newline=None` and cannot restore either. Marking one line therefore
+  rewrites every line ending in the file and drops the BOM. Demonstrated by the
+  ship review: `b'\xef\xbb\xbfimport mod.domain.tag as tag\r\nX = 1\r\n'` came
+  back as `b'import mod.domain.tag as tag  # tesser:debt TB042 TB060\nX = 1  #
+  tesser:debt TB042\n'`. `Marking`'s `if str(marked) == text: continue` guard
+  cannot catch it, because both sides are already normalized by the time the
+  domain sees them. `Marked` itself now preserves whatever ending each line
+  arrived with, so this is entirely an adapter round-trip gap: read with
+  `newline=""`, record whether a BOM was present, write back the same way.
+  It affects `rename` identically. No tree in this repo has a BOM or CRLF, so
+  nothing is broken today.
 - [ ] **A trailing separator on the tree argument reports `unexpected error`.**
   `TreeRoot` rejects `path/` deliberately, but the host maps the `ValueError`
   to the catch-all arm, so `tessercheck-mark path/` — which is exactly what

@@ -75,6 +75,17 @@ already have.
 - **A line's own ending is preserved.** The marker was appended after
   `rstrip("\n")` and re-terminated with `\n`, which left a stray `\r` before the
   marker on a CRLF line and added a trailing newline to a file that had none.
+- **The writer wrote outside the tree it was given.** `FilesystemSourceWriter`
+  joined the tree root to each path and called `write_text`, following any
+  symlink it landed on. The ship review demonstrated it end to end: a tree whose
+  `mod/__init__.py` is a symlink to `../../outside/victim.py` had the marker
+  appended to `victim.py`, outside the directory the command was pointed at.
+  The writer now refuses a symlinked path and any path that does not resolve
+  under the tree root; the finding is then reported as one it could not mark
+  rather than silently dropped. `rename` shares the writer and is covered by the
+  same fix. Rejecting a symlinked *file* during the walk — so the escape is a
+  `TB045` finding rather than merely blocked — is a rule change and is left for
+  a ruling.
 
 ### Changed
 - **A marker is widened, never repeated or narrowed.** A line already carrying
