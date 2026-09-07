@@ -1171,14 +1171,12 @@ class Marked(ts.ValueObject):
             comment = commented.get(line)
             if comment is not None:
                 rest = comment[1].lstrip("#").strip()
-                if not rest.startswith(DEBT_MARKER):
+                if rest.startswith(DEBT_FILE_MARKER) or not rest.startswith(DEBT_MARKER):
                     continue
                 tail = rest[len(DEBT_MARKER) :]
                 if tail and tail[0] not in " \t":
                     continue
-                carried = tuple(
-                    part for part in tail.replace(",", " ").split() if part
-                )
+                carried = tuple(tail.replace(",", " ").split())
                 if any(not CODE_SHAPE.match(part) for part in carried):
                     continue
                 row = lines[line - 1][: comment[0]]

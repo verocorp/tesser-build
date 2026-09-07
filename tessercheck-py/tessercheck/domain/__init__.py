@@ -7,6 +7,8 @@ from tessercheck.domain.checks import DECLARED_APP as DECLARED_APP
 from tessercheck.domain.checks import DECLARED_MISSING as DECLARED_MISSING
 from tessercheck.domain.checks import DECLARED_UNREADABLE as DECLARED_UNREADABLE
 from tessercheck.domain.checks import DECLARED_UNRECOGNIZED as DECLARED_UNRECOGNIZED
+from tessercheck.domain.checks import DEBT_FILE_MARKER as DEBT_FILE_MARKER
+from tessercheck.domain.checks import DEBT_MARKER as DEBT_MARKER
 from tessercheck.domain.checks import ImportEdge as ImportEdge
 from tessercheck.domain.checks import ImportEdgeSpec as ImportEdgeSpec
 from tessercheck.domain.checks import KERNEL_PACKAGE as KERNEL_PACKAGE
@@ -41,6 +43,7 @@ from tessercheck.domain.checks import SpecShape as SpecShape
 from tessercheck.domain.checks import Symbol as Symbol
 from tessercheck.domain.checks import SymbolSpec as SymbolSpec
 from tessercheck.domain.checks import TESSER as TESSER
+from tessercheck.domain.checks import UNMARKABLE as UNMARKABLE
 from tessercheck.domain.checks import TESSER_BASE_BLOCKS as TESSER_BASE_BLOCKS
 from tessercheck.domain.checks import TESSER_DECORATORS as TESSER_DECORATORS
 from tessercheck.domain.checks import TESSER_NAMESPACES as TESSER_NAMESPACES

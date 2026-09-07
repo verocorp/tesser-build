@@ -26,6 +26,42 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   are the only sites in six trees where the round trip is not byte-identical.
   Open question: is file scope worth keeping at all, given that a line marker
   is strictly more precise and now free to write?
+- [ ] **`mark` costs twice what `check` does, and the cheap fix collides with
+  `TB082`.** Measured by the ship review's performance pass on this repo's own
+  `tessercheck-py` tree (58 files, ~32.8K lines): `check` 8.49s, `mark` 16.79s.
+  The doubling is the second full analysis in `MapToMarkResponse`, not disk I/O
+  (~1.5MB reads in milliseconds). It buys the honesty guarantee — what `mark`
+  reports as remaining is what a `check` would report after it, rather than what
+  the command believes — so it is a deliberate trade, not an oversight, and the
+  guarantee is the more valuable half for a tool that rewrites source. The cheap
+  win is to skip the re-analysis when nothing was written, which is the common
+  case (an already-green tree, and every second run): `if not
+  rewritten_modules` in the service method. **`TB082` forbids exactly that** — a
+  public service method branches only by matching an outcome, so a plain `if`
+  on an empty tuple is a finding. Either the domain answers a `ts.Outcome`
+  ("nothing was written" / "these modules were") that the service matches on, or
+  the trade stands. The rule is doing its job here; the shape it is asking for
+  is a real one. Two measurements ruled out by the same pass, so nobody
+  re-derives them: `interior.update(range(...))` is linear (a synthetic
+  200,000-line triple-quoted string builds the set in 0.005s, and
+  `test_checks.py`'s 699KB produces zero multi-line tokens), and the
+  `splitlines`/`join` pass is O(file size) and not a hotspot.
+- [ ] **The debt-marker grammar has two implementations.** `Module.__init__`
+  parses it (branching on `DEBT_FILE_MARKER` first) and `Marked.__init__` now
+  parses it again to merge into an existing marker. Two copies of one grammar
+  must agree or the writer emits markers the reader rejects. The immediate hole
+  is closed — `Marked` refuses a file-scope marker by name rather than by the
+  accident that `-` is not whitespace, which is what the review found — but the
+  duplication stands. One owner: a value object taking the raw comment string
+  and answering scope, codes, and well-formedness, read by both. Same module, so
+  no `TB060` issue, and it takes one primitive, so `TB080` holds.
+- [ ] **The finding line is formatted in three places.** `MapToCheckResponse`,
+  `MapToMarkResponse` and `MapToRenameResponse` each build
+  `f"{path}:{line}: {code} {text}"`. `docs/faq.md` and the CHANGELOG both claim
+  what `mark` reports is what `check` reports, which is true only while three
+  copies stay byte-identical, and nothing tests that they do. `Violation.__str__`
+  is the sanctioned display exit for a value object, so moving the rendering
+  onto the domain object breaks no rule and makes the claim structural.
 - [ ] **The writer has no conflict detection, no atomic replace, and no
   containment check.** Surfaced by the v0.0.104.0 ship review (Codex
   adversarial), all four pre-existing in `FilesystemSourceWriter` since

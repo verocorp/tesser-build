@@ -16223,6 +16223,23 @@ def test_the_last_line_of_a_multi_line_f_string_still_takes_a_marker() -> None:
     assert str(marked) == 'result = f"""{1 +\n2=}"""  # tesser:debt TB050\n'
 
 
+def test_every_code_no_marker_can_reach_is_named_unmarkable() -> None:
+    source = pathlib.Path(inspect.getfile(domain.Codebase)).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    declaration_codes: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef) or node.name != "Declaration":
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                if len(inner.value) == 5 and inner.value.startswith("TB"):
+                    declaration_codes.add(inner.value)
+    assert declaration_codes
+    assert declaration_codes <= set(domain.UNMARKABLE), declaration_codes
+    assert "TB090" in domain.UNMARKABLE
+    assert "TB043" in domain.UNMARKABLE
+
+
 def test_a_quoted_interior_is_recognised_by_token_name_so_a_new_kind_is_covered() -> None:
     assert domain.QUOTE_OPENS == frozenset(("FSTRING_START", "TSTRING_START"))
     assert domain.QUOTE_CLOSES == frozenset(("FSTRING_END", "TSTRING_END"))
@@ -16237,7 +16254,7 @@ def test_a_line_inside_a_multi_line_template_string_is_refused() -> None:
     except Exception:
         names = set()
     if "TSTRING_START" not in names:
-        return None
+        pytest.skip("template strings need an interpreter that tokenizes them")
     marked = domain.Marked(domain.MarkedSpec(text=text, marks=((1, ("TB050",)),)))
     assert str(marked) == text
 
@@ -16261,6 +16278,21 @@ def test_a_last_line_without_a_newline_keeps_having_none() -> None:
         text="held = 1", marks=((1, ("TB050",)),)
     ))
     assert str(marked) == "held = 1  # tesser:debt TB050"
+
+
+def test_a_module_whose_indentation_does_not_close_is_left_exactly_as_it_is() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="if 1:\n    held = 1\n  value = 2\n", marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == "if 1:\n    held = 1\n  value = 2\n"
+
+
+def test_a_file_scope_marker_is_refused_because_it_is_named_not_because_of_its_dash() -> None:
+    assert domain.DEBT_FILE_MARKER.startswith(domain.DEBT_MARKER)
+    marked = domain.Marked(domain.MarkedSpec(
+        text=f"import os  # {domain.DEBT_FILE_MARKER} TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == f"import os  # {domain.DEBT_FILE_MARKER} TB050\n"
 
 
 def test_a_module_the_tokenizer_refuses_outright_is_left_exactly_as_it_is() -> None:

@@ -251,6 +251,19 @@ def test_a_symlinked_directory_is_reported_rather_than_marked() -> None:
     assert any("TB045" in finding for finding in mark_response.remaining)
 
 
+def test_a_module_that_does_not_parse_is_reported_rather_than_written_to() -> None:
+    fake_source_writer = FakeSourceWriter()
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(_tree_of("held =\n")),
+        fake_source_writer,
+        FakeRulebookSources(""),
+    )
+    mark_response = tessercheck_service.mark(client.MarkRequest(tree="."))
+    assert fake_source_writer.written == []
+    assert mark_response.files == 0
+    assert any("TB043" in finding for finding in mark_response.remaining)
+
+
 def test_a_stale_marker_is_reported_rather_than_marked_again() -> None:
     fake_source_writer = FakeSourceWriter()
     tessercheck_service = application.TessercheckService(
