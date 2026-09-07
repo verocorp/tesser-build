@@ -666,6 +666,50 @@ response, its `add` transitions).
   aggregate is exactly the case where a sibling wants the type name, and the
   narrowing does not say whether that counts as a module outside the role
   reading it. Rule that, and `TB042` follows.
+- [ ] **A serde round-trip test compares bytes, not fields.** Chris, 2026-09-07,
+  from the #172 thread. The proposal: replace the field-by-field assertions in
+  `examples/durable-execution/ordering/application/relays/test_order_orchestrator_runner.py`
+  (`:18`, `:50`) with `serialize(deserialize(serialize(x))) == serialize(x)`.
+  It names no domain type, so `OrderId` and `Quantity` leave
+  `ordering/domain/__init__.py` and the export list becomes exactly what real
+  code reads (`Sku` stays — `order_actions.py:12,30`), which closes the entry
+  above by removing its subject rather than by ruling on it.
+  What it proves, and only in a pair: on its own it is a **fixed point**, not a
+  fidelity claim — it compares the codec against itself with no external
+  reference, and a `serialize` that wrote constants would pass. The goldens
+  already beside it (`:14`, `:43`) supply that reference for the outbound
+  direction and catch a serializer writing the wrong source into a key, which
+  is the bug that breaks injectivity. Once `serialize` is injective, `b2 == b1`
+  implies the rebuilt object carries the same field values, so the byte
+  comparison propagates the golden's guarantee across the inbound direction.
+  Never adopt it as a replacement for a golden; it is the golden's second half.
+  What it catches that field-by-field does not: instability — non-deterministic
+  key order, or a canonical form that is not a function of its value.
+  What it misses, exactly as much as field-by-field does: a field that
+  **neither** side handles. Add a field to the aggregate, omit it from the
+  snapshot, and both forms stay green; what makes that loud today is the
+  required parameter failing to type-check (13 `mypy` errors in #172, before a
+  test ran). The assertion form is not what makes a dropped field loud, which
+  is why the constant-default ban is the ruling that bears on this and this one
+  is not.
+  Two costs. **Diagnostics**: `assert b2 == b1` reports "these two blobs
+  differ" where `assert back.sku == domain.Sku("gadget")` named the field —
+  tolerable at three fields, not at twenty. **A law the docs do not state**:
+  `serialization.md` states `value → canonical → equal value`; this asserts
+  `canonical → value → same canonical`, which is stricter and fails for any
+  leaf accepting two canonical forms for one value (`Quantity("03")` and
+  `Quantity("3")`). It is safe here only because the cycle starts from
+  `serialize`'s own already-normalized output. Write that condition into
+  `serialization.md` if this becomes the norm.
+  The decomposition it buys, each test in the layer that owns its subject:
+  `domain/test_order.py:11` asserts spec → every accessor against `order_spec`;
+  the relay golden asserts object → known bytes; the byte round-trip closes
+  bytes → object → bytes. None names a domain type beyond `Order`/`OrderSpec`.
+  The adapter half of this was separate and is already fixed:
+  `test_restate_order_runtime.py` was re-asserting the relay's claim through
+  the adapter (`testing.md` rule 5), and `restate_order_runtime.py` has no
+  field-specific code — its three behaviors are `None` → `b""`, the empty-body
+  refusal, and delegation, all covered without naming a field.
 
 ## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
 
