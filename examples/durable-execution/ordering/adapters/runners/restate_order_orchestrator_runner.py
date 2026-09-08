@@ -61,7 +61,7 @@ class RestateOrderOrchestratorRunner(ts.Gateway):
         except restate.HttpError as http_error:
             try:
                 outcome = json.loads(http_error.body or "")
-            except ValueError:
+            except (ValueError, RecursionError):
                 outcome = None
             if not (
                 isinstance(outcome, dict)
@@ -73,9 +73,7 @@ class RestateOrderOrchestratorRunner(ts.Gateway):
                 ) from http_error
             match http_error.status_code:
                 case 409:
-                    raise errors.DomainError(
-                        errors.Kind.CONFLICT, "order_already_placed", outcome["message"]
-                    ) from http_error
+                    kind = errors.Kind.CONFLICT
                 case 422:
                     kind = errors.Kind.VALIDATION
                 case 404:
@@ -89,3 +87,7 @@ class RestateOrderOrchestratorRunner(ts.Gateway):
             raise errors.InfraError(
                 f"restate ingress refused the workflow: {transport_error}"
             ) from transport_error
+        except (errors.DomainError, ValueError, RecursionError) as decode_error:
+            raise errors.InfraError(
+                f"restate ingress answered with a body that is not the workflow's result: {decode_error}"
+            ) from decode_error

@@ -281,7 +281,7 @@ class TestRestateOrderOrchestratorRunner:
             listener.close()
 
         assert excinfo.value.kind is errors.Kind.CONFLICT
-        assert excinfo.value.code == "order_already_placed"
+        assert excinfo.value.code == "order_rejected"
         assert excinfo.value.message == "the workflow method was already invoked"
 
     def test_a_workflow_that_ended_terminally_answers_with_the_domains_own_kind(self) -> None:
@@ -392,6 +392,77 @@ class TestRestateOrderOrchestratorRunner:
             listener.close()
 
         assert "not the domain's" in str(excinfo.value)
+
+    def test_a_success_body_that_is_not_the_workflows_result_is_an_infra_error(self) -> None:
+        for answer in (
+            b'{"order_id": "o1"}',
+            b'{"order_id": "o1", "total_cents": -5}',
+            b"<html>gateway</html>",
+            b"",
+        ):
+            listener = socket.socket()
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            port = listener.getsockname()[1]
+
+            def ingress() -> None:  # tesser:debt TB023
+                conn, _ = listener.accept()
+                with conn:
+                    while b"\r\n\r\n" not in conn.recv(4096):
+                        continue
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: "
+                        + str(len(answer)).encode()
+                        + b"\r\n\r\n"
+                        + answer
+                    )
+
+            thread = threading.Thread(target=ingress)
+            thread.start()
+            try:
+                with pytest.raises(errors.InfraError):
+                    asyncio.run(
+                        runners.RestateOrderOrchestratorRunner(
+                            f"http://127.0.0.1:{port}",
+                            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        ).run_order_orchestrator(order_orchestrator_request())
+                    )
+            finally:
+                thread.join(5)
+                listener.close()
+
+    def test_an_error_body_nested_past_the_decoder_is_an_infra_error(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def ingress() -> None:  # tesser:debt TB023
+            conn, _ = listener.accept()
+            with conn:
+                while b"\r\n\r\n" not in conn.recv(4096):
+                    continue
+                answer = b"[" * 10000 + b"]" * 10000
+                conn.sendall(
+                    b"HTTP/1.1 404 Not Found\r\ncontent-type: application/json\r\ncontent-length: "
+                    + str(len(answer)).encode()
+                    + b"\r\n\r\n"
+                    + answer
+                )
+
+        thread = threading.Thread(target=ingress)
+        thread.start()
+        try:
+            with pytest.raises(errors.InfraError):
+                asyncio.run(
+                    runners.RestateOrderOrchestratorRunner(
+                        f"http://127.0.0.1:{port}",
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    ).run_order_orchestrator(order_orchestrator_request())
+                )
+        finally:
+            thread.join(5)
+            listener.close()
 
     def test_a_body_whose_code_disagrees_with_the_status_is_not_the_workflows_own(self) -> None:
         listener = socket.socket()

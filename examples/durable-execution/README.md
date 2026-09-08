@@ -357,8 +357,10 @@ runner maps what each one measured on `restate-server` 1.7.2:
   rather than deduplicates.
 - A repeat `workflow_call` on an existing key is `409` with a body of
   `{"code": 409, "message": "the workflow method was already invoked"}`: the
-  runner raises `DomainError(CONFLICT, "order_already_placed")` and
-  `POST /orders` answers `409`.
+  runner raises `DomainError(CONFLICT, "order_rejected")` carrying that
+  message and `POST /orders` answers `409`. The runner does not claim the
+  order was placed: a workflow's own terminal conflict arrives in the same
+  shape, and only the message tells the two apart.
 - A workflow that ended terminally answers `workflow_call` with the
   `TerminalError`'s own status and a body carrying `code` and `message`, so
   an unknown sku is `404 {"code": 404, "message": "no price for sku 'nope'"}`.
@@ -367,6 +369,12 @@ runner maps what each one measured on `restate-server` 1.7.2:
   maps `422`/`404`/`409` back to the domain's kind, as
   `DomainError(kind, "order_rejected")` with the action's message, and
   `POST /orders` answers with that status.
+- A success body is the response snapshot's to check, the way
+  `OrderSnapshot` checks an order on the way in: `order_id` a string,
+  `total_cents` an `int` that is not a `bool` and not negative, or the
+  snapshot refuses it. The runner turns that refusal, a body that is not
+  JSON, and a body nested past the decoder's depth into an `InfraError`,
+  because none of them is the caller's fault and a `422` would say it was.
 - The run path waits as long as the workflow takes. Its `httpx` client keeps
   the five-second connect, write and pool timeouts and lifts the read
   timeout (`_RUN_TIMEOUT`), because a caller who asked for the total has
