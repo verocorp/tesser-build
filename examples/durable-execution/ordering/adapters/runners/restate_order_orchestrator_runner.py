@@ -1,6 +1,7 @@
 from __future__ import annotations  # tesser:debt TB041
 
 import json
+import typing
 import urllib.parse
 
 import tesser.adapters as ts
@@ -11,6 +12,8 @@ import restate.client
 import ordering.adapters.runtimes as runtimes
 import ordering.application.relays as relays  # tesser:debt TB060
 import tesser.errors as errors
+
+_RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
 
 
 class RestateOrderOrchestratorRunner(ts.Gateway):
@@ -49,7 +52,7 @@ class RestateOrderOrchestratorRunner(ts.Gateway):
     ) -> relays.OrderOrchestratorResponse:
         key = str(order_orchestrator_request.order.identity)
         try:
-            async with httpx.AsyncClient(base_url=self._ingress) as async_client:
+            async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
                 return await restate.client.Client(async_client).workflow_call(
                     self._restate_order_runtime.order_orchestrator_handler,
                     key=urllib.parse.quote(key, safe=""),

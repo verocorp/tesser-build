@@ -365,6 +365,14 @@ runner maps what each one measured on `restate-server` 1.7.2:
   The runner maps `422`/`404`/`409` with a `code` in the body back to the
   domain's kind, as `DomainError(kind, "order_rejected")` with the action's
   message, and `POST /orders` answers with that status.
+- The run path waits as long as the workflow takes. Its `httpx` client keeps
+  the five-second connect, write and pool timeouts and lifts the read
+  timeout (`_RUN_TIMEOUT`), because a caller who asked for the total has
+  asked to wait for it; under the default read timeout a workflow slower
+  than five seconds would answer `503` while it kept running, and the retry
+  would meet the `409` above. How long an order may take to price is a rule
+  this tree does not make; a real one puts the bound in the workflow or at
+  the ingress, where a timed-out caller can still attach to the result.
 - A refusal whose body has no `code` is the ingress's, not the workflow's —
   an unregistered service or handler is `404 {"message": "service ... not
   found"}` — and is an `InfraError`, reported as `503`. So is any status the
