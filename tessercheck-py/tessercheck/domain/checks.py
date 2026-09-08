@@ -927,6 +927,24 @@ class Rename(ts.ValueObject):
         return self._derived
 
 
+UNMARKABLE: typing.Final[tuple[str, ...]] = ("TB043", "TB044", "TB045", "TB090")
+
+QUOTE_OPENS: typing.Final[frozenset[str]] = frozenset(("FSTRING_START", "TSTRING_START"))
+
+QUOTE_CLOSES: typing.Final[frozenset[str]] = frozenset(("FSTRING_END", "TSTRING_END"))
+
+
+class Mark(ts.ValueObject):
+
+    _code: Code
+
+    def __init__(self, value: str) -> None:
+        object.__setattr__(self, "_code", Code(value))
+
+    def code(self) -> Code:
+        return self._code
+
+
 class ViolationSpec(ts.Spec):
 
     def __init__(
@@ -951,6 +969,7 @@ class Violation(ts.ValueObject):
     _code: Code
     _text: Text
     _rename: Rename | None
+    _mark: Mark | None
 
     def __init__(self, spec: ViolationSpec) -> None:
         object.__setattr__(self, "_path", Path(spec.path))
@@ -961,6 +980,9 @@ class Violation(ts.ValueObject):
             self,
             "_rename",
             None if spec.rename is None else Rename(RenameSpec(spec.rename[0], spec.rename[1])),
+        )
+        object.__setattr__(
+            self, "_mark", None if spec.code in UNMARKABLE else Mark(spec.code)
         )
 
     def path(self) -> Path:
@@ -977,6 +999,9 @@ class Violation(ts.ValueObject):
 
     def rename(self) -> Rename | None:
         return self._rename
+
+    def mark(self) -> Mark | None:
+        return self._mark
 
 
 class RewriteSpec(ts.Spec):
@@ -1087,6 +1112,119 @@ class Renaming(ts.ValueObject):
             if str(rewrite) == text:
                 continue
             rewritten.append(RewrittenModule(RewrittenModuleSpec(path, str(rewrite))))
+        object.__setattr__(self, "_rewritten", tuple(rewritten))
+
+    def rewritten(self) -> tuple[RewrittenModule, ...]:
+        return self._rewritten
+
+
+class MarkedSpec(ts.Spec):
+
+    def __init__(
+        self, text: str, marks: tuple[tuple[int, tuple[str, ...]], ...]
+    ) -> None:
+        self.text = text
+        self.marks = marks
+
+
+class Marked(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, spec: MarkedSpec) -> None:
+        try:
+            tokens = list(tokenize.generate_tokens(io.StringIO(spec.text).readline))
+        except Exception:
+            object.__setattr__(self, "_value", spec.text)
+            return None
+        interior: set[int] = set()
+        commented: dict[int, tuple[int, str]] = {}
+        opened: list[int] = []
+        for token in tokens:
+            named = tokenize.tok_name[token.type]
+            if named in QUOTE_OPENS:
+                opened.append(token.start[0])
+            elif named in QUOTE_CLOSES:
+                if opened:
+                    interior.update(range(opened.pop(), token.end[0]))
+            elif token.start[0] != token.end[0]:
+                interior.update(range(token.start[0], token.end[0]))
+            if token.type == tokenize.COMMENT:
+                commented[token.start[0]] = (token.start[1], token.string)
+        lines: list[str] = []
+        reader = io.StringIO(spec.text)
+        while True:
+            row = reader.readline()
+            if not row:
+                break
+            lines.append(row)
+        written: list[tuple[int, str]] = []
+        for line, codes in spec.marks:
+            if not codes or line < 1 or line > len(lines) or line in interior:
+                continue
+            held = lines[line - 1]
+            ending = "\r\n" if held.endswith("\r\n") else ("\n" if held.endswith("\n") else "")
+            row = held[: len(held) - len(ending)]
+            if not row.strip() or row.rstrip().endswith("\\"):
+                continue
+            carried: tuple[str, ...] = ()
+            comment = commented.get(line)
+            if comment is not None:
+                rest = comment[1].lstrip("#").strip()
+                if rest.startswith(DEBT_FILE_MARKER) or not rest.startswith(DEBT_MARKER):
+                    continue
+                tail = rest[len(DEBT_MARKER) :]
+                if tail and tail[0] not in " \t":
+                    continue
+                carried = tuple(tail.replace(",", " ").split())
+                if any(not CODE_SHAPE.match(part) for part in carried):
+                    continue
+                row = lines[line - 1][: comment[0]]
+                if not row.strip():
+                    continue
+                row = row.rstrip()
+            merged = " ".join(sorted(set(carried) | set(codes)))
+            written.append((line, f"{row}  # {DEBT_MARKER} {merged}{ending}"))
+        for line, row in written:
+            lines[line - 1] = row
+        object.__setattr__(self, "_value", "".join(lines))
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class MarkingSpec(ts.Spec):
+
+    def __init__(
+        self,
+        sources: tuple[tuple[str, str], ...],
+        marks: tuple[tuple[str, int, str], ...],
+    ) -> None:
+        self.sources = sources
+        self.marks = marks
+
+
+class Marking(ts.ValueObject):
+
+    _rewritten: tuple[RewrittenModule, ...]
+
+    def __init__(self, spec: MarkingSpec) -> None:
+        held: dict[str, dict[int, set[str]]] = {}
+        for path, line, code in spec.marks:
+            held.setdefault(path, {}).setdefault(line, set()).add(code)
+        texts = dict(spec.sources)
+        rewritten: list[RewrittenModule] = []
+        for path, rows in sorted(held.items()):
+            text = texts.get(path)
+            if text is None:
+                continue
+            marks = tuple(
+                (line, tuple(sorted(codes))) for line, codes in sorted(rows.items())
+            )
+            marked = Marked(MarkedSpec(text=text, marks=marks))
+            if str(marked) == text:
+                continue
+            rewritten.append(RewrittenModule(RewrittenModuleSpec(path, str(marked))))
         object.__setattr__(self, "_rewritten", tuple(rewritten))
 
     def rewritten(self) -> tuple[RewrittenModule, ...]:

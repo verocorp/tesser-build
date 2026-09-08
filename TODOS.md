@@ -96,6 +96,124 @@ worktrees under `.claude/worktrees/`. Pruning any of them destroys the
 three-way comparison this entry rests on; copy the four orchestrators and their
 domain modules out before removing them.
 
+## Left open by the marker writer (2026-09-07, v0.0.104.0)
+
+- [ ] **Nothing removes a stale marker.** `tessercheck-mark` writes markers; it
+  never deletes one. A `TB090` finding (a marker suppressing nothing) is
+  therefore reported as unmarkable and stays reported forever until a person
+  edits the line, which means a tree that has drifted cannot be brought back to
+  green by the tool alone. Removal is as mechanical as writing — a stale code
+  is by definition one no finding on that line names, so dropping it (and the
+  marker with it, when nothing is left) is decidable from the same data. The
+  reason it is not in this change is scope, not doubt: writing and deleting are
+  different risk profiles, and #170 set the precedent of shipping one repair at
+  a time. The measured shape of the gap: stripping all markers from six trees
+  and re-marking returns every one to zero findings, so the write half is
+  complete; it is only an *already-stale* marker that needs the other half.
+- [ ] **File scope is not reconstructible, and that is now load-bearing.**
+  `tesser:debt-file` says "this whole module is excused for this code," which no
+  finding list implies — the same findings are equally consistent with one line
+  marker per site. The tool refuses to touch a line carrying a file marker, so
+  an existing one survives; but a tree whose file markers were stripped comes
+  back line-scoped. Measured on `examples/python-app`: 2 of its 8 markers
+  (`tests/discovery.py`, `tests/support.py`, both `TB041`) are file-scope and
+  are the only sites in six trees where the round trip is not byte-identical.
+  Open question: is file scope worth keeping at all, given that a line marker
+  is strictly more precise and now free to write?
+- [ ] **`mark` costs twice what `check` does, and the cheap fix collides with
+  `TB082`.** Measured by the ship review's performance pass on this repo's own
+  `tessercheck-py` tree (58 files, ~32.8K lines): `check` 8.49s, `mark` 16.79s.
+  The doubling is the second full analysis in `MapToMarkResponse`, not disk I/O
+  (~1.5MB reads in milliseconds). It buys the honesty guarantee — what `mark`
+  reports as remaining is what a `check` would report after it, rather than what
+  the command believes — so it is a deliberate trade, not an oversight, and the
+  guarantee is the more valuable half for a tool that rewrites source. The cheap
+  win is to skip the re-analysis when nothing was written, which is the common
+  case (an already-green tree, and every second run): `if not
+  rewritten_modules` in the service method. **`TB082` forbids exactly that** — a
+  public service method branches only by matching an outcome, so a plain `if`
+  on an empty tuple is a finding. Either the domain answers a `ts.Outcome`
+  ("nothing was written" / "these modules were") that the service matches on, or
+  the trade stands. The rule is doing its job here; the shape it is asking for
+  is a real one. Two measurements ruled out by the same pass, so nobody
+  re-derives them: `interior.update(range(...))` is linear (a synthetic
+  200,000-line triple-quoted string builds the set in 0.005s, and
+  `test_checks.py`'s 699KB produces zero multi-line tokens), and the
+  `splitlines`/`join` pass is O(file size) and not a hotspot.
+- [ ] **The debt-marker grammar has two implementations.** `Module.__init__`
+  parses it (branching on `DEBT_FILE_MARKER` first) and `Marked.__init__` now
+  parses it again to merge into an existing marker. Two copies of one grammar
+  must agree or the writer emits markers the reader rejects. The immediate hole
+  is closed — `Marked` refuses a file-scope marker by name rather than by the
+  accident that `-` is not whitespace, which is what the review found — but the
+  duplication stands. One owner: a value object taking the raw comment string
+  and answering scope, codes, and well-formedness, read by both. Same module, so
+  no `TB060` issue, and it takes one primitive, so `TB080` holds.
+- [ ] **The finding line is formatted in three places.** `MapToCheckResponse`,
+  `MapToMarkResponse` and `MapToRenameResponse` each build
+  `f"{path}:{line}: {code} {text}"`. `docs/faq.md` and the CHANGELOG both claim
+  what `mark` reports is what `check` reports, which is true only while three
+  copies stay byte-identical, and nothing tests that they do. `Violation.__str__`
+  is the sanctioned display exit for a value object, so moving the rendering
+  onto the domain object breaks no rule and makes the claim structural.
+- [ ] **The writer has no conflict detection, no atomic replace, and no
+  containment check.** Surfaced by the v0.0.104.0 ship review (Codex
+  adversarial), all four pre-existing in `FilesystemSourceWriter` since
+  v0.0.103.0 and inherited rather than introduced by `mark` — but `mark` is the
+  first command a conformance wave will run across every tree, so it is the one
+  that makes them matter. (1) `write_text` truncates in place, so a crash or a
+  full disk leaves an empty file, and an empty Python file still parses.
+  (2) The loop commits earlier files before attempting later ones, so a
+  mid-batch failure leaves a partially rewritten tree with no rollback and no
+  record of what got through. (3) The write request carries no expected
+  original bytes, so an editor save between the read and the write is silently
+  discarded — `black`, `ruff --fix` and `gofmt` have the same exposure, which is
+  an argument for the shape being normal, not for it being right. Fix (1) and
+  (2) with stage-then-atomic-replace per file, (3) with a content hash carried
+  into the write request.
+- [ ] **A symlinked source file is still read, and still analyzed, it is just
+  no longer written to.** `TB045` makes a symlinked *directory* a finding; a
+  symlinked *file* is not covered, so the walk reads it and the analyzer judges
+  it as though it belonged to the tree. The write half is closed as of
+  v0.0.104.0 — the ship review demonstrated `mark` appending a marker to a file
+  outside the tree through `mod/__init__.py -> ../../outside/victim.py`, and
+  `FilesystemSourceWriter` now refuses a symlinked path and any path that does
+  not resolve under the tree root, which covers `rename` too. What is left is
+  the *reading* half: whether a symlinked file should be a `TB045` finding
+  (making the escape loud rather than merely blocked) or silently skipped by
+  the walk. That is a rule change and wants a ruling; the containment check in
+  the adapter was not, which is why it shipped without one.
+- [ ] **Marking normalizes bytes it was not asked to touch.** The source reader
+  decodes with `utf-8-sig` and universal newlines, so a BOM is stripped and
+  CRLF becomes LF before the domain ever sees the text; the writer emits UTF-8
+  with `newline=None` and cannot restore either. Marking one line therefore
+  rewrites every line ending in the file and drops the BOM. Demonstrated by the
+  ship review: `b'\xef\xbb\xbfimport mod.domain.tag as tag\r\nX = 1\r\n'` came
+  back as `b'import mod.domain.tag as tag  # tesser:debt TB042 TB060\nX = 1  #
+  tesser:debt TB042\n'`. `Marking`'s `if str(marked) == text: continue` guard
+  cannot catch it, because both sides are already normalized by the time the
+  domain sees them. `Marked` itself now preserves whatever ending each line
+  arrived with, so this is entirely an adapter round-trip gap: read with
+  `newline=""`, record whether a BOM was present, write back the same way.
+  It affects `rename` identically. No tree in this repo has a BOM or CRLF, so
+  nothing is broken today.
+- [ ] **A trailing separator on the tree argument reports `unexpected error`.**
+  `TreeRoot` rejects `path/` deliberately, but the host maps the `ValueError`
+  to the catch-all arm, so `tessercheck-mark path/` — which is exactly what
+  shell tab-completion produces for a directory — prints `unexpected error` and
+  nothing else. Pre-existing and identical on `check` and `rename`;
+  `srv/cli/test_mark.py` now locks the no-internal-leak half of that behavior.
+  The fix is a usage-error arm, not a wider `TreeRoot`.
+- [ ] **A line carrying another directive cannot be marked.** `# type: ignore`,
+  `# noqa` and friends occupy the one comment a line gets, and appending a
+  second `#` yields a marker the parser reads as malformed — so the tool
+  refuses. There are **no such sites in the repo today**, so nothing is blocked;
+  the question is what the answer should be when one appears. Candidates: a
+  marker before the other directive on its own line above (changes line
+  numbers, so every other mark in the module would need re-anchoring), or
+  teaching the debt parser to read a marker anywhere in the comment rather than
+  only at its head.
+
 ## Left open by the relay wave (2026-09-06, v0.0.102.0)
 
 - [ ] **Register the relay shape in the analyzer.** `examples/durable-execution`
@@ -726,6 +844,50 @@ response, its `add` transitions).
   aggregate is exactly the case where a sibling wants the type name, and the
   narrowing does not say whether that counts as a module outside the role
   reading it. Rule that, and `TB042` follows.
+- [ ] **A serde round-trip test compares bytes, not fields.** Chris, 2026-09-07,
+  from the #172 thread. The proposal: replace the field-by-field assertions in
+  `examples/durable-execution/ordering/application/relays/test_order_orchestrator_runner.py`
+  (`:18`, `:50`) with `serialize(deserialize(serialize(x))) == serialize(x)`.
+  It names no domain type, so `OrderId` and `Quantity` leave
+  `ordering/domain/__init__.py` and the export list becomes exactly what real
+  code reads (`Sku` stays — `order_actions.py:12,30`), which closes the entry
+  above by removing its subject rather than by ruling on it.
+  What it proves, and only in a pair: on its own it is a **fixed point**, not a
+  fidelity claim — it compares the codec against itself with no external
+  reference, and a `serialize` that wrote constants would pass. The goldens
+  already beside it (`:14`, `:43`) supply that reference for the outbound
+  direction and catch a serializer writing the wrong source into a key, which
+  is the bug that breaks injectivity. Once `serialize` is injective, `b2 == b1`
+  implies the rebuilt object carries the same field values, so the byte
+  comparison propagates the golden's guarantee across the inbound direction.
+  Never adopt it as a replacement for a golden; it is the golden's second half.
+  What it catches that field-by-field does not: instability — non-deterministic
+  key order, or a canonical form that is not a function of its value.
+  What it misses, exactly as much as field-by-field does: a field that
+  **neither** side handles. Add a field to the aggregate, omit it from the
+  snapshot, and both forms stay green; what makes that loud today is the
+  required parameter failing to type-check (13 `mypy` errors in #172, before a
+  test ran). The assertion form is not what makes a dropped field loud, which
+  is why the constant-default ban is the ruling that bears on this and this one
+  is not.
+  Two costs. **Diagnostics**: `assert b2 == b1` reports "these two blobs
+  differ" where `assert back.sku == domain.Sku("gadget")` named the field —
+  tolerable at three fields, not at twenty. **A law the docs do not state**:
+  `serialization.md` states `value → canonical → equal value`; this asserts
+  `canonical → value → same canonical`, which is stricter and fails for any
+  leaf accepting two canonical forms for one value (`Quantity("03")` and
+  `Quantity("3")`). It is safe here only because the cycle starts from
+  `serialize`'s own already-normalized output. Write that condition into
+  `serialization.md` if this becomes the norm.
+  The decomposition it buys, each test in the layer that owns its subject:
+  `domain/test_order.py:11` asserts spec → every accessor against `order_spec`;
+  the relay golden asserts object → known bytes; the byte round-trip closes
+  bytes → object → bytes. None names a domain type beyond `Order`/`OrderSpec`.
+  The adapter half of this was separate and is already fixed:
+  `test_restate_order_runtime.py` was re-asserting the relay's claim through
+  the adapter (`testing.md` rule 5), and `restate_order_runtime.py` has no
+  field-specific code — its three behaviors are `None` → `b""`, the empty-body
+  refusal, and delegation, all covered without naming a field.
 
 ## Follow-ons from the outcome ruling (2026-08-26, v0.0.84.0)
 

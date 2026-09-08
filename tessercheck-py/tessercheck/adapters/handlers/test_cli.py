@@ -18,6 +18,10 @@ class FakeCheckClient(client.TessercheckClient):
         self.roots.append(check_request.tree)
         return client.CheckResponse(findings=self.findings)
 
+    def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
+        self.roots.append(mark_request.tree)
+        return client.MarkResponse(files=0, remaining=self.findings)
+
     def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
         self.roots.append(rename_request.tree)
         return client.RenameResponse(files=0, remaining=self.findings)
@@ -59,3 +63,37 @@ def test_an_extra_argument_is_a_usage_error() -> None:
     with pytest.raises(protocol.UsageError):
         handlers.Handler(fake_check_client).check(protocol.CliRequest(("tree", "surplus")))
     assert fake_check_client.roots == []
+
+
+def test_the_tree_argument_reaches_the_client_on_a_mark() -> None:
+    fake_check_client = FakeCheckClient()
+    cli_response = handlers.Handler(fake_check_client).mark(protocol.CliRequest(("some/tree",)))
+    assert fake_check_client.roots == ["some/tree"]
+    assert cli_response.exit_code == 0
+    assert cli_response.stdout == "marked 0 file(s)"
+    assert cli_response.stderr == ""
+
+
+def test_no_argument_marks_the_working_directory() -> None:
+    fake_check_client = FakeCheckClient()
+    handlers.Handler(fake_check_client).mark(protocol.CliRequest(()))
+    assert fake_check_client.roots == ["."]
+
+
+def test_what_a_mark_cannot_write_becomes_lines_and_a_failing_exit_code() -> None:
+    fake_check_client = FakeCheckClient("a.py:1: TB044 one", "b.py:2: TB045 two")
+    cli_response = handlers.Handler(fake_check_client).mark(protocol.CliRequest(("tree",)))
+    assert cli_response.exit_code == 1
+    assert cli_response.stdout == (
+        "marked 0 file(s)\n"
+        "2 finding(s) this cannot mark:\n"
+        "a.py:1: TB044 one\n"
+        "b.py:2: TB045 two"
+    )
+    assert cli_response.stderr == ""
+
+
+def test_an_extra_argument_to_mark_is_a_usage_error() -> None:
+    fake_check_client = FakeCheckClient()
+    with pytest.raises(protocol.UsageError):
+        handlers.Handler(fake_check_client).mark(protocol.CliRequest(("tree", "surplus")))

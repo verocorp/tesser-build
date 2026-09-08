@@ -7,6 +7,8 @@ from tessercheck.domain.checks import DECLARED_APP as DECLARED_APP
 from tessercheck.domain.checks import DECLARED_MISSING as DECLARED_MISSING
 from tessercheck.domain.checks import DECLARED_UNREADABLE as DECLARED_UNREADABLE
 from tessercheck.domain.checks import DECLARED_UNRECOGNIZED as DECLARED_UNRECOGNIZED
+from tessercheck.domain.checks import DEBT_FILE_MARKER as DEBT_FILE_MARKER
+from tessercheck.domain.checks import DEBT_MARKER as DEBT_MARKER
 from tessercheck.domain.checks import ImportEdge as ImportEdge
 from tessercheck.domain.checks import ImportEdgeSpec as ImportEdgeSpec
 from tessercheck.domain.checks import KERNEL_PACKAGE as KERNEL_PACKAGE
@@ -14,8 +16,14 @@ from tessercheck.domain.checks import KIND_NAME as KIND_NAME
 from tessercheck.domain.checks import KIND_ROLE as KIND_ROLE
 from tessercheck.domain.checks import KindTable as KindTable
 from tessercheck.domain.checks import KindTableSpec as KindTableSpec
+from tessercheck.domain.checks import Marked as Marked
+from tessercheck.domain.checks import MarkedSpec as MarkedSpec
+from tessercheck.domain.checks import Marking as Marking
+from tessercheck.domain.checks import MarkingSpec as MarkingSpec
 from tessercheck.domain.checks import Names as Names
 from tessercheck.domain.checks import PROTOCOL_TIER as PROTOCOL_TIER
+from tessercheck.domain.checks import QUOTE_CLOSES as QUOTE_CLOSES
+from tessercheck.domain.checks import QUOTE_OPENS as QUOTE_OPENS
 from tessercheck.domain.checks import Placement as Placement
 from tessercheck.domain.checks import PlacementSpec as PlacementSpec
 from tessercheck.domain.checks import ROLES as ROLES
@@ -35,6 +43,7 @@ from tessercheck.domain.checks import SpecShape as SpecShape
 from tessercheck.domain.checks import Symbol as Symbol
 from tessercheck.domain.checks import SymbolSpec as SymbolSpec
 from tessercheck.domain.checks import TESSER as TESSER
+from tessercheck.domain.checks import UNMARKABLE as UNMARKABLE
 from tessercheck.domain.checks import TESSER_BASE_BLOCKS as TESSER_BASE_BLOCKS
 from tessercheck.domain.checks import TESSER_DECORATORS as TESSER_DECORATORS
 from tessercheck.domain.checks import TESSER_NAMESPACES as TESSER_NAMESPACES

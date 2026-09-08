@@ -129,6 +129,49 @@ if ! grep -q 'tag_spec = domain.TagSpec' "$RENAMEABLE/mod/domain/test_tag.py"; t
   exit 1
 fi
 
+# The marker writer must actually write the marker, and the tree it marked has
+# to come back green — a command that starts, or one that writes a marker the
+# analyzer then reports as suppressing nothing, both pass a weaker gate.
+step "tessercheck-mark writes the marker that clears the finding"
+MARKABLE="$VENV/markable"
+mkdir -p "$MARKABLE/mod/domain" || exit 1
+printf 'app\n' > "$MARKABLE/.tesser-root"
+printf 'import mod.domain.tag as tag\n' > "$MARKABLE/mod/__init__.py"
+printf 'from mod.domain.tag import Tag as Tag\n' > "$MARKABLE/mod/domain/__init__.py"
+cat > "$MARKABLE/mod/domain/tag.py" <<'TAG'
+import tesser.domain as ts
+class Tag(ts.ValueObject):
+    def __init__(self, value: str) -> None:
+        object.__setattr__(self, "_value", value)
+TAG
+cat > "$MARKABLE/mod/domain/test_tag.py" <<'TEST'
+import mod.domain as domain
+def test_a_tag_holds_its_value() -> None:
+    assert domain.Tag("a") is not None
+TEST
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-mark" "$MARKABLE" >/dev/null 2>&1)
+if [ $? -ne 0 ]; then
+  echo "tessercheck-mark exited non-zero on a tree it can mark completely" >&2
+  exit 1
+fi
+if ! grep -q '# tesser:debt TB042 TB060' "$MARKABLE/mod/__init__.py"; then
+  echo "tessercheck-mark did not write the marker the findings name" >&2
+  exit 1
+fi
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-check" "$MARKABLE" >/dev/null 2>&1)
+if [ $? -ne 0 ]; then
+  echo "a tree tessercheck-mark marked did not come back green" >&2
+  exit 1
+fi
+# A second run must be a byte-for-byte no-op, or the command is not idempotent
+# and repeated conformance passes would stack markers.
+cp "$MARKABLE/mod/__init__.py" "$VENV/markable-once"
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-mark" "$MARKABLE" >/dev/null 2>&1)
+if ! cmp -s "$VENV/markable-once" "$MARKABLE/mod/__init__.py"; then
+  echo "a second tessercheck-mark run changed a tree it had already marked" >&2
+  exit 1
+fi
+
 step "usage"
 (cd "$VENV" && "$VENV/venv/bin/tessercheck-check" a b >/dev/null 2>&1)
 if [ $? -ne 2 ]; then

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import ast
 import inspect
+import io
 import textwrap
 import pathlib
+import tokenize
 
 import pytest
 import tesser.testing as ts
@@ -16090,6 +16092,309 @@ def test_a_renaming_naming_no_module_it_holds_rewrites_nothing() -> None:
         renames=(("mod/gone.py", 2, "made", "tag_spec"),),
     ))
     assert renaming.rewritten() == ()
+
+
+def test_a_marked_line_carries_the_codes_the_findings_named() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\nx = 1\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050\nx = 1\n"
+
+
+def test_a_marked_line_carries_every_code_reported_on_it_in_one_marker() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\n", marks=((1, ("TB062", "TB050")),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marked_line_merges_into_the_marker_it_already_carries() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marked_line_that_already_names_the_code_is_left_alone() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt TB050\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050\n"
+
+
+def test_a_line_carrying_another_directive_is_refused_rather_than_corrupted() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # type: ignore\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # type: ignore\n"
+
+
+def test_a_line_carrying_a_file_marker_is_refused_rather_than_corrupted() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt-file TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt-file TB050\n"
+
+
+def test_a_line_carrying_a_malformed_marker_is_refused_rather_than_corrupted() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt nonsense\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt nonsense\n"
+
+
+def test_a_comment_of_its_own_never_takes_a_marker_appended_to_it() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="# tesser:debt TB050\nimport os\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "# tesser:debt TB050\nimport os\n"
+
+
+def test_a_line_inside_a_triple_quoted_string_is_refused() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text='text = """\nheld\n"""\n', marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == 'text = """\nheld\n"""\n'
+
+
+def test_the_last_line_of_a_multi_line_string_still_takes_a_marker() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text='text = """\nheld\n"""\n', marks=((3, ("TB050",)),)
+    ))
+    assert str(marked) == 'text = """\nheld\n"""  # tesser:debt TB050\n'
+
+
+def test_a_line_ended_by_a_backslash_continuation_is_refused() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="total = 1 + \\\n    2\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "total = 1 + \\\n    2\n"
+
+
+def test_a_line_inside_brackets_takes_a_marker_because_python_allows_it() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="held = (\n    1,\n)\n", marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == "held = (\n    1,  # tesser:debt TB050\n)\n"
+
+
+def test_a_marker_past_a_multibyte_character_keeps_the_line_intact() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="text = 'xǁy'  # tesser:debt TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "text = 'xǁy'  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marker_counts_columns_the_way_tokenize_does_in_characters() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="text = 'ǁ'# tesser:debt TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == "text = 'ǁ'  # tesser:debt TB050 TB062\n"
+
+
+def test_a_form_feed_does_not_shift_the_line_a_marker_lands_on() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="\f\nvalue = 123456\nimport os\n", marks=((3, ("TB062",)),)
+    ))
+    assert str(marked) == "\f\nvalue = 123456\nimport os  # tesser:debt TB062\n"
+
+
+def test_every_separator_str_splits_on_but_python_does_not_leaves_lines_in_place() -> None:
+    for separator in ("\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", " ", " "):
+        marked = domain.Marked(domain.MarkedSpec(
+            text=f"held = '{separator}'\nvalue = 123456\n", marks=((2, ("TB062",)),)
+        ))
+        assert str(marked) == (
+            f"held = '{separator}'\nvalue = 123456  # tesser:debt TB062\n"
+        ), separator
+
+
+def test_a_line_inside_a_multi_line_f_string_is_refused() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text='result = f"""{1 +\n2=}"""\n', marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == 'result = f"""{1 +\n2=}"""\n'
+
+
+def test_the_last_line_of_a_multi_line_f_string_still_takes_a_marker() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text='result = f"""{1 +\n2=}"""\n', marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == 'result = f"""{1 +\n2=}"""  # tesser:debt TB050\n'
+
+
+def test_every_code_no_marker_can_reach_is_named_unmarkable() -> None:
+    source = pathlib.Path(inspect.getfile(domain.Codebase)).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    declaration_codes: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef) or node.name != "Declaration":
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                if len(inner.value) == 5 and inner.value.startswith("TB"):
+                    declaration_codes.add(inner.value)
+    assert declaration_codes
+    assert declaration_codes <= set(domain.UNMARKABLE), declaration_codes
+    assert "TB090" in domain.UNMARKABLE
+    assert "TB043" in domain.UNMARKABLE
+
+
+def test_a_quoted_interior_is_recognised_by_token_name_so_a_new_kind_is_covered() -> None:
+    assert domain.QUOTE_OPENS == frozenset(("FSTRING_START", "TSTRING_START"))
+    assert domain.QUOTE_CLOSES == frozenset(("FSTRING_END", "TSTRING_END"))
+
+
+def test_a_line_inside_a_multi_line_template_string_is_refused() -> None:
+    text = 'held = t"""{1 +\n2=}"""\n'
+    names = set()
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(text).readline):
+            names.add(tokenize.tok_name[token.type])
+    except Exception:
+        names = set()
+    if "TSTRING_START" not in names:
+        pytest.skip("template strings need an interpreter that tokenizes them")
+    marked = domain.Marked(domain.MarkedSpec(text=text, marks=((1, ("TB050",)),)))
+    assert str(marked) == text
+
+
+def test_a_single_line_f_string_still_takes_a_marker() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text='held = f"{1}"\n', marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == 'held = f"{1}"  # tesser:debt TB050\n'
+
+
+def test_a_carriage_return_line_ending_is_kept_and_the_marker_precedes_it() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="held = 1\r\nvalue = 2\r\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "held = 1  # tesser:debt TB050\r\nvalue = 2\r\n"
+
+
+def test_a_last_line_without_a_newline_keeps_having_none() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="held = 1", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "held = 1  # tesser:debt TB050"
+
+
+def test_a_module_whose_indentation_does_not_close_is_left_exactly_as_it_is() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="if 1:\n    held = 1\n  value = 2\n", marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == "if 1:\n    held = 1\n  value = 2\n"
+
+
+def test_a_file_scope_marker_is_refused_because_it_is_named_not_because_of_its_dash() -> None:
+    assert domain.DEBT_FILE_MARKER.startswith(domain.DEBT_MARKER)
+    marked = domain.Marked(domain.MarkedSpec(
+        text=f"import os  # {domain.DEBT_FILE_MARKER} TB050\n", marks=((1, ("TB062",)),)
+    ))
+    assert str(marked) == f"import os  # {domain.DEBT_FILE_MARKER} TB050\n"
+
+
+def test_a_module_the_tokenizer_refuses_outright_is_left_exactly_as_it_is() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="held = '\ud800'\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "held = '\ud800'\n"
+
+
+def test_a_mark_naming_no_line_the_module_holds_changes_nothing() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\n", marks=((9, ("TB050",)),)
+    ))
+    assert str(marked) == "import os\n"
+
+
+def test_a_module_that_does_not_parse_is_left_exactly_as_it_is() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="def broken(\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "def broken(\n"
+
+
+def test_a_marking_marks_only_the_modules_a_finding_names() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os\n"), ("mod/b.py", "import os\n")),
+        marks=(("mod/a.py", 1, "TB050"),),
+    ))
+    rewritten = marking.rewritten()
+    assert len(rewritten) == 1
+    assert str(rewritten[0].path()) == "mod/a.py"
+    assert str(rewritten[0].text()) == "import os  # tesser:debt TB050\n"
+
+
+def test_a_marking_gathers_every_code_on_one_line_into_one_marker() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os\n"),),
+        marks=(("mod/a.py", 1, "TB062"), ("mod/a.py", 1, "TB050")),
+    ))
+    assert str(marking.rewritten()[0].text()) == "import os  # tesser:debt TB050 TB062\n"
+
+
+def test_a_marking_naming_no_module_it_holds_marks_nothing() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os\n"),),
+        marks=(("mod/gone.py", 1, "TB050"),),
+    ))
+    assert marking.rewritten() == ()
+
+
+def test_a_marking_that_changes_no_text_rewrites_no_module() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/a.py", "import os  # tesser:debt TB050\n"),),
+        marks=(("mod/a.py", 1, "TB050"),),
+    ))
+    assert marking.rewritten() == ()
+
+
+def test_a_mark_naming_no_code_at_all_changes_nothing() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\n", marks=((1, ()),)
+    ))
+    assert str(marked) == "import os\n"
+
+
+def test_a_mark_naming_a_line_number_below_the_first_changes_nothing() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\n", marks=((0, ("TB050",)), (-1, ("TB062",)))
+    ))
+    assert str(marked) == "import os\n"
+
+
+def test_a_blank_line_never_takes_a_marker() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os\n\nheld = 1\n", marks=((2, ("TB050",)),)
+    ))
+    assert str(marked) == "import os\n\nheld = 1\n"
+
+
+def test_a_marker_carrying_no_codes_yet_takes_the_ones_the_findings_named() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt\n", marks=((1, ("TB050",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB050\n"
+
+
+def test_a_marker_written_with_commas_comes_back_one_code_per_space() -> None:
+    marked = domain.Marked(domain.MarkedSpec(
+        text="import os  # tesser:debt TB050,TB062\n", marks=((1, ("TB040",)),)
+    ))
+    assert str(marked) == "import os  # tesser:debt TB040 TB050 TB062\n"
+
+
+def test_a_marking_rewrites_every_module_a_finding_names_in_path_order() -> None:
+    marking = domain.Marking(domain.MarkingSpec(
+        sources=(("mod/b.py", "import os\n"), ("mod/a.py", "import os\n")),
+        marks=(("mod/b.py", 1, "TB050"), ("mod/a.py", 1, "TB062")),
+    ))
+    rewritten = marking.rewritten()
+    assert [str(module.path()) for module in rewritten] == ["mod/a.py", "mod/b.py"]
+    assert str(rewritten[0].text()) == "import os  # tesser:debt TB062\n"
+    assert str(rewritten[1].text()) == "import os  # tesser:debt TB050\n"
 
 
 def test_a_rewritten_module_carries_the_path_and_the_text() -> None:

@@ -63,6 +63,49 @@ class MapToCheckResponse(ts.Mapper, client.CheckResponse):
         )
 
 
+class MapToMarkingSpec(ts.Mapper, domain.MarkingSpec):
+
+    def __init__(
+        self,
+        read_sources_response: ports.ReadSourcesResponse,
+        codebase: domain.Codebase,
+    ) -> None:
+        marks: list[tuple[str, int, str]] = []
+        for violation in codebase.violations():
+            mark = violation.mark()
+            if mark is None:
+                continue
+            marks.append((
+                str(violation.path()),
+                int(violation.line()),
+                str(mark.code()),
+            ))
+        super().__init__(
+            sources=tuple(
+                (source.path, source.text) for source in read_sources_response.sources
+            ),
+            marks=tuple(marks),
+        )
+
+
+class MapToMarkResponse(ts.Mapper, client.MarkResponse):
+
+    def __init__(
+        self,
+        write_sources_response: ports.WriteSourcesResponse,
+        read_sources_response: ports.ReadSourcesResponse,
+    ) -> None:
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+        super().__init__(
+            files=write_sources_response.written,
+            remaining=tuple(
+                f"{violation.path()}:{int(violation.line())}: "
+                f"{violation.code()} {violation.text()}"
+                for violation in codebase.violations()
+            ),
+        )
+
+
 class MapToRenamingSpec(ts.Mapper, domain.RenamingSpec):
 
     def __init__(
@@ -91,12 +134,19 @@ class MapToRenamingSpec(ts.Mapper, domain.RenamingSpec):
 
 class MapToWriteSourcesRequest(ts.Mapper, ports.WriteSourcesRequest):
 
-    def __init__(self, tree_root: domain.TreeRoot, renaming: domain.Renaming) -> None:
+    def __init__(
+        self,
+        tree_root: domain.TreeRoot,
+        rewritten_modules: tuple[domain.RewrittenModule, ...],
+    ) -> None:
         super().__init__(
             tree=str(tree_root),
             sources=tuple(
-                ports.RewrittenSource(path=str(module.path()), text=str(module.text()))
-                for module in renaming.rewritten()
+                ports.RewrittenSource(
+                    path=str(rewritten_module.path()),
+                    text=str(rewritten_module.text()),
+                )
+                for rewritten_module in rewritten_modules
             ),
         )
 
@@ -140,6 +190,19 @@ class TessercheckService(ts.ApplicationService):
         read_sources_response = self._source_reader.sources(ports.ReadSourcesRequest(tree=tree))
         return MapToCheckResponse(read_sources_response)
 
+    def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
+        tree_root = domain.TreeRoot(mark_request.tree)
+        tree = str(tree_root)
+        read_sources_request = ports.ReadSourcesRequest(tree=tree)
+        read_sources_response = self._source_reader.sources(read_sources_request)
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+        marking = domain.Marking(MapToMarkingSpec(read_sources_response, codebase))
+        rewritten_modules = marking.rewritten()
+        write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
+        write_sources_response = self._source_writer.write(write_sources_request)
+        read_sources_response = self._source_reader.sources(read_sources_request)
+        return MapToMarkResponse(write_sources_response, read_sources_response)
+
     def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
         tree_root = domain.TreeRoot(rename_request.tree)
         tree = str(tree_root)
@@ -147,7 +210,8 @@ class TessercheckService(ts.ApplicationService):
         read_sources_response = self._source_reader.sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         renaming = domain.Renaming(MapToRenamingSpec(read_sources_response, codebase))
-        write_sources_request = MapToWriteSourcesRequest(tree_root, renaming)
+        rewritten_modules = renaming.rewritten()
+        write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
         write_sources_response = self._source_writer.write(write_sources_request)
         return MapToRenameResponse(write_sources_response, codebase)
 

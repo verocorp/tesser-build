@@ -13,6 +13,8 @@ _RULES_USAGE: typing.Final[str] = "usage: rules [tree]"
 
 _RENAME_USAGE: typing.Final[str] = "usage: rename [tree]"
 
+_MARK_USAGE: typing.Final[str] = "usage: mark [tree]"
+
 _HERE: typing.Final[str] = "."
 
 
@@ -29,6 +31,20 @@ class Handler(ts.Handler):
             1 if check_response.findings else 0,
             stdout="\n".join(check_response.findings),
             stderr="",
+        )
+
+    def mark(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
+        root = cli_request.arg(0, _HERE)
+        cli_request.no_extra_args(1, _MARK_USAGE)
+        mark_response = self._tessercheck_client.mark(client.MarkRequest(tree=root))
+        told = [f"marked {mark_response.files} file(s)"]
+        if mark_response.remaining:
+            told.append(
+                f"{len(mark_response.remaining)} finding(s) this cannot mark:"
+            )
+            told.extend(mark_response.remaining)
+        return protocol.CliResponse(
+            1 if mark_response.remaining else 0, stdout="\n".join(told), stderr=""
         )
 
     def rename(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
