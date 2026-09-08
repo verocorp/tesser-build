@@ -5,6 +5,48 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.106.0] - 2026-09-08
+
+`examples/durable-execution` places an order and prices it in one call. The
+tree now fills three cells of the calling-mode grid: a workflow started
+(`submit_order`, `POST /submissions`, 202), a workflow run (`place_order`,
+`POST /orders`, 200 with the total), and an action run (`price_product`,
+inside the workflow). The verb on a runner method says how the caller calls;
+either verb goes with either thing.
+
+### Added
+- **`OrderOrchestratorRunner.run_order_orchestrator`**, the second verb on the
+  relay, answering with the `OrderOrchestratorResponse` the workflow ended
+  with. `RestateOrderOrchestratorRunner` implements it over `workflow_call`,
+  keyed and percent-encoded as the send is, with the read timeout lifted:
+  a caller who asked for the total has asked to wait for it.
+- **`OrderService.place_order`**, `OrderingClient.place_order`,
+  `PlaceOrderRequest` / `PlaceOrderResponse{order_id, total_cents}`,
+  `Handler.place_order`, and `POST /orders`. One service, two methods: they
+  share their one dependency. Both use cases run `OrderOrchestrator/run`
+  under the same key, so an order that was submitted cannot then be placed.
+- **An error mapping measured on `restate-server` 1.7.2, not guessed.** A
+  workflow's own terminal error comes back on the call path as its status
+  with a body whose `code` equals that status; the runner takes only that
+  shape as the domain's, mapping `422`/`404`/`409` to the kind as
+  `DomainError(kind, "order_rejected")` with the action's message. A body
+  whose `code` disagrees or is absent is the ingress refusing (an
+  unregistered service, a proxy) and is an `InfraError`; so is any status the
+  domain does not own. A repeat call is `409`; a repeat send is accepted
+  again (`202 PreviouslyAccepted`), which the README now says instead of the
+  409 it claimed.
+- **The workflow's result is checked on the way in.**
+  `OrderOrchestratorResponseSnapshot` refuses a body that is not an
+  `order_id` string and a non-negative `int` total, the way `OrderSnapshot`
+  already refuses an order; a malformed, non-JSON, or over-nested body from
+  the engine is an `InfraError`, never a `422` that would blame the caller.
+
+### Changed
+- The README carries the grid, both routes' run instructions, the measured
+  repeat semantics, and two new production boundaries: the unbounded wait a
+  public `POST /orders` holds, and that a lost response is recoverable only
+  through Restate's own attach, not this API.
+
 ## [0.0.105.0] - 2026-09-08
 
 `examples/durable-execution` speaks ordering's words. Two renames, no behavior

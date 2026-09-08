@@ -23,6 +23,25 @@ case: the order is accepted now and priced later. The verb is the domain's
 word for what the caller gets back, not the engine's word for how it was
 called; that one, `start_`, belongs to the runner.
 
+`POST /orders` is the other use case over the same orchestrator: placing an
+order. `OrderService.place_order` builds the same `Order`, hands it to
+`OrderOrchestratorRunner.run_order_orchestrator`, and waits; the Restate
+runner's `workflow_call` answers with the `OrderOrchestratorResponse` the
+workflow ended with, and the door answers `200 {"order_id", "total_cents"}`.
+"Placed" is the state the caller gets back: priced, now. Both use cases run
+`OrderOrchestrator/run` under the same key, so they are one business act done
+to one order, and an order that was submitted cannot then be placed: the
+engine has already run it.
+
+That is the grid this tree is filling in. The verb on a runner method says
+how the caller calls; the thing it names says what runs; either verb goes
+with either thing.
+
+| | a workflow (`OrderOrchestrator/run`) | an action (`OrderActions/price_product`) |
+|---|---|---|
+| `start_` — the engine accepts, the caller carries on | `start_order_orchestrator`, ingress `workflow_send`, behind `POST /submissions` | not yet |
+| `run_` — the caller waits for the result | `run_order_orchestrator`, ingress `workflow_call`, behind `POST /orders` | `run_price_product`, `ctx.service_call`, inside the workflow |
+
 The application never touches Restate. `OrderOrchestrator` depends on
 `OrderActionsRunner` and nothing else; `OrderActions` (the class of actions)
 depends on the `ProductCatalogRepository` port and nothing else. Both are
@@ -40,7 +59,8 @@ other side through the aggregate's own constructor.
 `application/relays/` holds both protocols, and each declares only what it is
 for. The verb says how the caller calls: `start_` is an asynchronous send that
 answers as soon as the engine accepts; `run_` is a synchronous call that
-answers with the result.
+answers with the result. The orchestrator runner declares both verbs over one
+message, because the two use cases differ only in whether the caller waits.
 
 ```python
 # ordering/application/relays/order_orchestrator_runner.py
@@ -49,6 +69,10 @@ class OrderOrchestratorRunner(ts.Relay, typing.Protocol):
     async def start_order_orchestrator(
         self, order_orchestrator_request: OrderOrchestratorRequest
     ) -> StartOrderOrchestratorResponse: ...
+
+    async def run_order_orchestrator(
+        self, order_orchestrator_request: OrderOrchestratorRequest
+    ) -> OrderOrchestratorResponse: ...
 
 
 # ordering/application/relays/order_actions_runner.py
@@ -89,7 +113,7 @@ whole.
 | class | kind declared | direction | lifetime |
 |---|---|---|---|
 | `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Job` | Restate → us: registers `OrderActions/price_product` and `OrderOrchestrator/run` | process |
-| `RestateOrderOrchestratorRunner` (`adapters/runners/`) | `ts.Gateway` | us → Restate, from outside any invocation (ingress HTTP) | process |
+| `RestateOrderOrchestratorRunner` (`adapters/runners/`) | `ts.Gateway` | us → Restate, from outside any invocation (ingress HTTP: `workflow_send` to start, `workflow_call` to run) | process |
 | `RestateOrderActionsRunner` (`adapters/runners/`) | `ts.JobContext` | us → Restate, from inside an invocation (`service_call`) | one invocation |
 
 The runtime is the inbound side, the same role the HTTP handler plays for
@@ -97,9 +121,10 @@ The runtime is the inbound side, the same role the HTTP handler plays for
 handler, and the handler invokes application code. The two runners are the
 outbound side, the same role an HTTP client gateway plays, except that they
 address the far end by the handler object the runtime registered rather than
-by a URL. That is what the Restate SDK's typed calls take: `service_call` and
-`workflow_send` both read the service name, the handler name, and both serdes
-off the decorated function (`handler_from_callable`), so a rename is a rename
+by a URL. That is what the Restate SDK's typed calls take: `service_call`,
+`workflow_send` and `workflow_call` all read the service name, the handler
+name, and both serdes off the decorated function (`handler_from_callable`),
+so a rename is a rename
 and there is no string to keep in step. `"OrderActions"` and
 `"OrderOrchestrator"` appear exactly once each, in the `restate.Service(...)`
 and `restate.Workflow(...)` constructor calls in `RestateOrderRuntime.__init__`;
@@ -117,9 +142,9 @@ Stronger, and greppable: no field name of any message or domain object appears
 anywhere under `adapters/runtimes/` or `adapters/runners/` — not `sku`, not
 `cents`, not `quantity`, not `order_id`, not `total_cents`. Every encoding is
 a snapshot beside its message in `relays/`, and the one read left is
-`str(order_orchestrator_request.order.identity)` in
-`RestateOrderOrchestratorRunner.start_order_orchestrator`, for the workflow
-key Restate's ingress requires. The SDK splices that key into the request
+`str(order_orchestrator_request.order.identity)` in both methods of
+`RestateOrderOrchestratorRunner`, for the workflow key Restate's ingress
+requires. The SDK splices that key into the request
 path unencoded (`restate/client.py`, `endpoint += f"/{key}"`), and the id
 comes from the public body, so the runner percent-encodes it
 (`urllib.parse.quote(key, safe="")`); an `order_id` of `../admin` reaches the
@@ -136,10 +161,12 @@ that check a list where a `sku` should be builds an `Order` that raises a
 
 This tree is the worked example for `docs/design-app-service-types.md`:
 
-- `OrderService(ts.ApplicationService)` — the public use case, on
-  `client.OrderingClient`, built once by the component. It does the once-only
-  work (validates at the door) and starts the orchestrator through
-  `OrderOrchestratorRunner.start_order_orchestrator`.
+- `OrderService(ts.ApplicationService)` — the public use cases, on
+  `client.OrderingClient`, built once by the component. Both methods do the
+  once-only work (validate at the door, build the `Order`); `submit_order`
+  starts the orchestrator through `OrderOrchestratorRunner.start_order_orchestrator`
+  and `place_order` runs it through `run_order_orchestrator`. One class, two
+  methods, because they share their one dependency.
 - `OrderOrchestrator(ts.Orchestrator)` in `application/orchestrators/` —
   not a service. Built per invocation by the runtime with that invocation's
   `OrderActionsRunner`; stores nothing but it; takes the relay's own
@@ -206,14 +233,17 @@ belongs beside the message it serves, and the messages belong to the relay.
 module, `adapters/runtimes/` and `adapters/runners/` as kind packages, a job
 context protocol outside `adapters/`, and a component publishing something
 besides `client` and `jobs` all draw findings. Every one carries a
-`# tesser:debt TB0xx` marker at its line — 47 of them, plus five `TB023` markers on the nested handler functions the SDK registers, the same debt `main` already carries — and that marker list
+`# tesser:debt TB0xx` marker at its line — 48 of them, plus twelve `TB023`
+markers on nested functions: the two handlers the SDK registers, the two
+route functions `main` declares, and the eight fake-ingress functions the
+orchestrator runner's test binds to a socket — and that marker list
 is the registration this tree asks of the analyzer. Nothing is hidden: the
 tree is at zero findings because every finding is named, not because any is
 absent.
 
 The remaining rule cost of putting an encoding in the application is `json`:
 the application stdlib allowlist is `{__future__, typing}`, and both relays
-modules import it (two of the 47).
+modules import it (two of the 48).
 
 ## Messages are declared once, beside the protocol that speaks them
 
@@ -222,9 +252,9 @@ side of one message are not independent boundaries.
 
 - `order_orchestrator_runner.py` holds `OrderOrchestratorRequest`,
   `StartOrderOrchestratorResponse`, and `OrderOrchestratorResponse` — the
-  orchestrator's input, the start ack, and the orchestrator's result. The
-  result is a relay message even though no method on the runner returns it:
-  the engine stores it and the ingress hands it back.
+  orchestrator's input, the start ack, and the orchestrator's result.
+  `run_order_orchestrator` answers with the result; after a start, the engine
+  stores it and the ingress hands it back on request.
 - `order_actions_runner.py` holds `PriceProductRequest` and
   `PriceProductResponse` — the action's two shapes.
   `application/client/order_actions.py` and `OrderActions` speak the same two.
@@ -316,11 +346,47 @@ status is not the domain's (the SDK's own 500, a cancellation) and is
 re-raised as it is, still terminal. Anything that is not a `TerminalError`
 propagates as-is and Restate retries the invocation.
 
-On the way out, the ingress answering `409` to `workflow_send` means a
-workflow with this key already exists: the orchestrator runner raises
-`DomainError(CONFLICT, "order_already_started")`, which `POST /submissions`
-reports as `409`. Every other ingress refusal and every transport failure is an
-`InfraError`, reported as `503`.
+On the way out, the two calling modes answer a repeat differently, and the
+runner maps what each one measured on `restate-server` 1.7.2:
+
+- A repeat `workflow_send` on an existing key is accepted again — `202` with
+  `"status": "PreviouslyAccepted"` — and deduplicated by the engine. So a
+  second `POST /submissions` for the same order is a `202`, the same as the
+  first. The runner still maps an ingress `409` on the send path to
+  `DomainError(CONFLICT, "order_already_started")`, for a server that refuses
+  rather than deduplicates.
+- A repeat `workflow_call` on an existing key is `409` with a body of
+  `{"code": 409, "message": "the workflow method was already invoked"}`: the
+  runner raises `DomainError(CONFLICT, "order_rejected")` carrying that
+  message and `POST /orders` answers `409`. The runner does not claim the
+  order was placed: a workflow's own terminal conflict arrives in the same
+  shape, and only the message tells the two apart.
+- A workflow that ended terminally answers `workflow_call` with the
+  `TerminalError`'s own status and a body carrying `code` and `message`, so
+  an unknown sku is `404 {"code": 404, "message": "no price for sku 'nope'"}`.
+  The runner takes a body as the workflow's own only when its `code` equals
+  the HTTP status, which is how the server shapes a `TerminalError`; it then
+  maps `422`/`404`/`409` back to the domain's kind, as
+  `DomainError(kind, "order_rejected")` with the action's message, and
+  `POST /orders` answers with that status.
+- A success body is the response snapshot's to check, the way
+  `OrderSnapshot` checks an order on the way in: `order_id` a string,
+  `total_cents` an `int` that is not a `bool` and not negative, or the
+  snapshot refuses it. The runner turns that refusal, a body that is not
+  JSON, and a body nested past the decoder's depth into an `InfraError`,
+  because none of them is the caller's fault and a `422` would say it was.
+- The run path waits as long as the workflow takes. Its `httpx` client keeps
+  the five-second connect, write and pool timeouts and lifts the read
+  timeout (`_RUN_TIMEOUT`), because a caller who asked for the total has
+  asked to wait for it; under the default read timeout a workflow slower
+  than five seconds would answer `503` while it kept running, and the retry
+  would meet the `409` above. How long an order may take to price is a rule
+  this tree does not make; a real one puts the bound in the workflow or at
+  the ingress, where a timed-out caller can still attach to the result.
+- A refusal whose body has no `code` is the ingress's, not the workflow's —
+  an unregistered service or handler is `404 {"message": "service ... not
+  found"}` — and is an `InfraError`, reported as `503`. So is any status the
+  domain does not own (the SDK's own `500`), and every transport failure.
 
 ## Tests, and the one thing they fake
 
@@ -331,7 +397,11 @@ hands its request to the application client; the shims are asserted to write
 what their snapshots write. The orchestrator runner's test builds the real
 SDK client over a real socket listening on `127.0.0.1:0` and checks the
 request line the SDK forms from the registered handler
-(`POST /OrderOrchestrator/o1/run/send`), the route and the key, never a body.
+(`POST /OrderOrchestrator/o1/run/send` to start, `POST /OrderOrchestrator/o1/run`
+to run), the route and the key. On the run path the fake ingress answers the
+response snapshot's bytes, or a refusal shaped as the server shapes it, so the
+test pins the mapping above: `409` with a `code` is a conflict, `404` with a
+`code` is the domain's not-found, `404` without one is infrastructure.
 
 The actions runner's test doubles the one thing the SDK gives no other way to
 reach: a `FakeRestateWorkflowContext` whose `service_call` records the handler
@@ -343,7 +413,7 @@ which the testing norm does not admit; it carries its own debt marker.
 ## Async everywhere the SDK is
 
 The SDK is async on both sides, so the request path is `async`: both runner
-protocols, `OrderService`, `OrderingClient.submit_order`, the HTTP handler,
+protocols, `OrderService`, both `OrderingClient` methods, the HTTP handler,
 `OrderOrchestrator`, and both Restate handlers. The class of actions and its
 repository are sync — plain application code that runs inside the action
 handler. There is no `asyncio.run` on the request path at all: the one loop is
@@ -352,16 +422,17 @@ hypercorn's, opened once by `HttpHost.run`.
 ## One process of ours, two mechanisms in it
 
 `srv/http/main.py` is the whole `srv/` directory. It builds one FastAPI app
-and serves it under one hypercorn: an `APIRouter` carrying `POST /submissions`, the
-API this app offers the world, and the Restate endpoint mounted at `/restate`,
-the one Restate's server calls back into.
+and serves it under one hypercorn: an `APIRouter` carrying `POST /submissions`
+and `POST /orders`, the API this app offers the world, and the Restate
+endpoint mounted at `/restate`, the one Restate's server calls back into.
 
 **Restate's own recommendation is that the ingress IS the API** — you register
 the deployment and clients `POST :8080/OrderOrchestrator/o1/run` directly,
 with no service of yours in front. A front door of our own exists here for
-exactly one reason: to own the public contract. `POST /submissions` is a URL, a
-body shape, and a status code this app is free to keep stable while the
-workflow behind it is renamed, split, or moved off Restate entirely.
+exactly one reason: to own the public contract. `POST /submissions` and
+`POST /orders` are a URL, a body shape, and a status code this app is free to
+keep stable while the workflow behind them is renamed, split, or moved off
+Restate entirely.
 
 **This diverges from `srv.md` rule 6 — one long-running thing per process.**
 The mounted endpoint is not a second delivery mechanism serving someone else's
@@ -384,22 +455,28 @@ curl -X POST localhost:8000/submissions --json '{"order_id":"o1","sku":"gadget",
                                                     # 202 {"order_id": "o1"}
 curl localhost:18080/restate/workflow/OrderOrchestrator/o1/output
                                                     # {"order_id": "o1", "total_cents": 2000}
+curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":3}'
+                                                    # 200 {"order_id": "o2", "total_cents": 3000}
 ```
 
 The failure arms answer at the front door, mapped from the three exception
-kinds the handler and the application can raise:
+kinds the handler and the application can raise, the same on both routes:
 
 ```
-curl -X POST localhost:8000/submissions --json '{"order_id":"o1"}'
+curl -X POST localhost:8000/orders --json '{"order_id":"o3"}'
    # 400 {"detail": "sku must be a string"}
-curl -X POST localhost:8000/submissions --json '{"order_id":"o2","sku":"gadget","quantity":0}'
+curl -X POST localhost:8000/orders --json '{"order_id":"o3","sku":"gadget","quantity":0}'
    # 422 {"detail": "an order is for at least one unit"}          errors.status_for(VALIDATION)
    #     with the ingress down, a well-formed order is 503 {"detail": "unavailable"}
+curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":3}'
+   # 409 {"detail": "the workflow method was already invoked"}    o2 was placed above
 ```
 
-A domain error raised *inside* the workflow ends it terminally instead, and is
-read back off the ingress — an unknown SKU leaves
-`/restate/workflow/OrderOrchestrator/o4/output` answering
+A domain error raised *inside* the workflow ends it terminally. On
+`POST /orders` the caller is waiting, so it comes back through the door with
+the domain's status — an unknown sku is `404 {"detail": "no price for sku
+'nope'"}`. After `POST /submissions` nobody is waiting, so it is read back off
+the ingress: `/restate/workflow/OrderOrchestrator/o4/output` answers
 `404 {"code":404,"message":"no price for sku 'nope'"}`.
 
 **SIGTERM belongs to the SDK.** `restate.app` installs its own `SIGTERM`
@@ -413,8 +490,15 @@ sends SIGINT.
   replica would not share it, which is fine only because the lookup is
   read-only.
 - `start_order_orchestrator` fires and forgets; `POST /submissions` never waits on
-  the workflow. The result is read back through Restate's ingress, so the API
-  has no read route of its own.
+  the workflow. A submitted order's total is read back through Restate's
+  ingress, because the API has no read route of its own; `POST /orders` is the
+  route for a caller who wants the total in the response.
+- `POST /orders` holds the caller's connection for as long as the workflow
+  takes, with no read timeout, no deadline of its own, and no cap on how many
+  may wait at once; a burst of slow or stuck workflows holds that many
+  connections open in this process. The bound belongs at the ingress or in
+  the workflow, where a caller who gave up can still attach to the result;
+  this tree makes neither rule.
 - A handler's registered name is part of the deployment. Renaming one (this
   tree's `prepare_quote` became `price_product`) makes the service a different
   one to Restate: re-register the deployment after upgrading, and an

@@ -79,6 +79,17 @@ class OrderOrchestratorResponseSnapshot(ts.Serde):  # tesser:debt TB052
 
     def deserialize(self, buf: bytes) -> OrderOrchestratorResponse:
         snapshot = json.loads(buf)
+        if not (
+            isinstance(snapshot, dict)
+            and isinstance(snapshot.get("order_id"), str)
+            and isinstance(snapshot.get("total_cents"), int)
+            and not isinstance(snapshot.get("total_cents"), bool)
+            and snapshot["total_cents"] >= 0
+        ):
+            raise errors.invalid(
+                "malformed_order_orchestrator_response_snapshot",
+                "an order orchestrator response is an order_id and a total in cents",
+            )
         return OrderOrchestratorResponse(
             order_id=snapshot["order_id"], total_cents=snapshot["total_cents"]
         )
@@ -89,3 +100,7 @@ class OrderOrchestratorRunner(ts.Relay, typing.Protocol):  # tesser:debt TB052
     async def start_order_orchestrator(
         self, order_orchestrator_request: OrderOrchestratorRequest
     ) -> StartOrderOrchestratorResponse: ...
+
+    async def run_order_orchestrator(
+        self, order_orchestrator_request: OrderOrchestratorRequest
+    ) -> OrderOrchestratorResponse: ...

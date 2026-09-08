@@ -68,6 +68,20 @@ class TestOrderOrchestratorResponseSnapshot:
             order_orchestrator_response
         ) == b'{"order_id": "o1", "total_cents": 500}'
 
+    def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
+        for raw in (
+            b'{"order_id": "o1"}',
+            b'{"order_id": "o1", "total_cents": -1}',
+            b'{"order_id": "o1", "total_cents": true}',
+            b'{"order_id": "o1", "total_cents": NaN}',
+            b'{"order_id": "o1", "total_cents": "500"}',
+            b'{"order_id": {}, "total_cents": 500}',
+            b'["o1", 500]',
+        ):
+            with pytest.raises(errors.DomainError) as excinfo:
+                relays.OrderOrchestratorResponseSnapshot().deserialize(raw)
+            assert excinfo.value.kind is errors.Kind.VALIDATION
+
     def test_a_response_comes_back_equal(self) -> None:
         order_orchestrator_response_snapshot = relays.OrderOrchestratorResponseSnapshot()  # tesser:debt TB085
         order_orchestrator_response = relays.OrderOrchestratorResponse(order_id="o7", total_cents=750)
