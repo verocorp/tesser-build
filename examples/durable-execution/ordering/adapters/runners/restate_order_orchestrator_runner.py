@@ -63,7 +63,11 @@ class RestateOrderOrchestratorRunner(ts.Gateway):
                 outcome = json.loads(http_error.body or "")
             except ValueError:
                 outcome = None
-            if not (isinstance(outcome, dict) and isinstance(outcome.get("message"), str) and "code" in outcome):
+            if not (
+                isinstance(outcome, dict)
+                and isinstance(outcome.get("message"), str)
+                and outcome.get("code") == http_error.status_code
+            ):
                 raise errors.InfraError(
                     f"restate ingress refused the workflow: {http_error}"
                 ) from http_error

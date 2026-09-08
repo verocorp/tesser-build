@@ -362,9 +362,11 @@ runner maps what each one measured on `restate-server` 1.7.2:
 - A workflow that ended terminally answers `workflow_call` with the
   `TerminalError`'s own status and a body carrying `code` and `message`, so
   an unknown sku is `404 {"code": 404, "message": "no price for sku 'nope'"}`.
-  The runner maps `422`/`404`/`409` with a `code` in the body back to the
-  domain's kind, as `DomainError(kind, "order_rejected")` with the action's
-  message, and `POST /orders` answers with that status.
+  The runner takes a body as the workflow's own only when its `code` equals
+  the HTTP status, which is how the server shapes a `TerminalError`; it then
+  maps `422`/`404`/`409` back to the domain's kind, as
+  `DomainError(kind, "order_rejected")` with the action's message, and
+  `POST /orders` answers with that status.
 - The run path waits as long as the workflow takes. Its `httpx` client keeps
   the five-second connect, write and pool timeouts and lifts the read
   timeout (`_RUN_TIMEOUT`), because a caller who asked for the total has
@@ -483,6 +485,12 @@ sends SIGINT.
   the workflow. A submitted order's total is read back through Restate's
   ingress, because the API has no read route of its own; `POST /orders` is the
   route for a caller who wants the total in the response.
+- `POST /orders` holds the caller's connection for as long as the workflow
+  takes, with no read timeout, no deadline of its own, and no cap on how many
+  may wait at once; a burst of slow or stuck workflows holds that many
+  connections open in this process. The bound belongs at the ingress or in
+  the workflow, where a caller who gave up can still attach to the result;
+  this tree makes neither rule.
 - A handler's registered name is part of the deployment. Renaming one (this
   tree's `prepare_quote` became `price_product`) makes the service a different
   one to Restate: re-register the deployment after upgrading, and an

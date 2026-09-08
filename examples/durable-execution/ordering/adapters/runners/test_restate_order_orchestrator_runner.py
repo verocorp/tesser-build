@@ -393,6 +393,39 @@ class TestRestateOrderOrchestratorRunner:
 
         assert "not the domain's" in str(excinfo.value)
 
+    def test_a_body_whose_code_disagrees_with_the_status_is_not_the_workflows_own(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def ingress() -> None:  # tesser:debt TB023
+            conn, _ = listener.accept()
+            with conn:
+                while b"\r\n\r\n" not in conn.recv(4096):
+                    continue
+                answer = b'{"code":404,"message":"something upstream said"}'
+                conn.sendall(
+                    b"HTTP/1.1 422 Unprocessable Entity\r\ncontent-type: application/json\r\ncontent-length: "
+                    + str(len(answer)).encode()
+                    + b"\r\n\r\n"
+                    + answer
+                )
+
+        thread = threading.Thread(target=ingress)
+        thread.start()
+        try:
+            with pytest.raises(errors.InfraError):
+                asyncio.run(
+                    runners.RestateOrderOrchestratorRunner(
+                        f"http://127.0.0.1:{port}",
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    ).run_order_orchestrator(order_orchestrator_request())
+                )
+        finally:
+            thread.join(5)
+            listener.close()
+
     def test_a_refusal_that_is_not_the_workflows_own_is_an_infra_error(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
