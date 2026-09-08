@@ -321,6 +321,78 @@ class TestRestateOrderOrchestratorRunner:
         assert excinfo.value.code == "order_rejected"
         assert excinfo.value.message == "no price for sku 'nope'"
 
+    def test_a_workflow_that_refused_its_input_answers_as_validation(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def ingress() -> None:  # tesser:debt TB023
+            conn, _ = listener.accept()
+            with conn:
+                while b"\r\n\r\n" not in conn.recv(4096):
+                    continue
+                answer = b'{"code":422,"message":"an order is for at least one unit"}'
+                conn.sendall(
+                    b"HTTP/1.1 422 Unprocessable Entity\r\ncontent-type: application/json\r\ncontent-length: "
+                    + str(len(answer)).encode()
+                    + b"\r\n\r\n"
+                    + answer
+                )
+
+        thread = threading.Thread(target=ingress)
+        thread.start()
+        try:
+            with pytest.raises(errors.DomainError) as excinfo:
+                asyncio.run(
+                    runners.RestateOrderOrchestratorRunner(
+                        f"http://127.0.0.1:{port}",
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    ).run_order_orchestrator(order_orchestrator_request())
+                )
+        finally:
+            thread.join(5)
+            listener.close()
+
+        assert excinfo.value.kind is errors.Kind.VALIDATION
+        assert excinfo.value.code == "order_rejected"
+        assert excinfo.value.message == "an order is for at least one unit"
+
+    def test_a_status_the_domain_does_not_own_is_an_infra_error_even_with_a_code(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def ingress() -> None:  # tesser:debt TB023
+            conn, _ = listener.accept()
+            with conn:
+                while b"\r\n\r\n" not in conn.recv(4096):
+                    continue
+                answer = b'{"code":500,"message":"Unable to parse an input argument"}'
+                conn.sendall(
+                    b"HTTP/1.1 500 Internal Server Error\r\ncontent-type: application/json\r\ncontent-length: "
+                    + str(len(answer)).encode()
+                    + b"\r\n\r\n"
+                    + answer
+                )
+
+        thread = threading.Thread(target=ingress)
+        thread.start()
+        try:
+            with pytest.raises(errors.InfraError) as excinfo:
+                asyncio.run(
+                    runners.RestateOrderOrchestratorRunner(
+                        f"http://127.0.0.1:{port}",
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    ).run_order_orchestrator(order_orchestrator_request())
+                )
+        finally:
+            thread.join(5)
+            listener.close()
+
+        assert "not the domain's" in str(excinfo.value)
+
     def test_a_refusal_that_is_not_the_workflows_own_is_an_infra_error(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
