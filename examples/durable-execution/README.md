@@ -4,21 +4,24 @@ The chain, top to bottom, with where each link lives:
 
 | Step | Placement | Code |
 |---|---|---|
-| an HTTP host takes `POST /orders` | `srv/http/main.py` | `HttpHost`'s `APIRouter` → `ordering/adapters/handlers/http.py` `Handler.place_order` |
-| the initial application service | `ordering/application/order_service.py` | `OrderService.place_order` builds the `Order` aggregate |
+| an HTTP host takes `POST /submissions` | `srv/http/main.py` | `HttpHost`'s `APIRouter` → `ordering/adapters/handlers/http.py` `Handler.submit_order` |
+| the initial application service | `ordering/application/order_service.py` | `OrderService.submit_order` builds the `Order` aggregate |
 | it starts the orchestrator through a runner | `ordering/application/relays/order_orchestrator_runner.py` | `OrderOrchestratorRunner.start_order_orchestrator(OrderOrchestratorRequest) -> StartOrderOrchestratorResponse`; the request carries the `Order` aggregate itself |
 | the Restate runner sends the workflow | `ordering/adapters/runners/restate_order_orchestrator_runner.py` | `RestateOrderOrchestratorRunner.start_order_orchestrator` → `workflow_send(runtime.order_orchestrator_handler, key=order_id, arg=request)` |
 | Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_orchestrator_workflow.main()` handler `run`, registered as `OrderOrchestrator/run`, mounted at `/restate` by the host |
 | the orchestrator is built **inside the invocation** | `ordering/adapters/runtimes/restate_order_runtime.py` | `run` builds `RestateOrderActionsRunner(restate_workflow_context, self)` over *this* invocation's context and constructs `OrderOrchestrator` over it |
-| the orchestrator runs the action through its runner | `ordering/application/relays/order_actions_runner.py` | `OrderOrchestrator.run` reads the `Order` off the message, then `OrderActionsRunner.run_prepare_quote(PrepareQuoteRequest) -> PrepareQuoteResponse` |
-| the Restate runner calls the action durably | `ordering/adapters/runners/restate_order_actions_runner.py` | `RestateOrderActionsRunner.run_prepare_quote` → `restate_workflow_context.service_call(runtime.prepare_quote_handler, request)` |
-| Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_actions_service.handler()` handler `prepare_quote`, registered as `OrderActions/prepare_quote`, relaying to the application client |
-| the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.prepare_quote` → `ProductCatalogRepository.get_product_price` → `adapters/repositories/memory_product_catalog_repository.py` |
-| the price comes back up the same chain | | `PrepareQuoteResponse.cents` → `Order.total(PriceSpec)` → `OrderOrchestratorResponse.total_cents` ends the workflow |
+| the orchestrator runs the action through its runner | `ordering/application/relays/order_actions_runner.py` | `OrderOrchestrator.run` reads the `Order` off the message, then `OrderActionsRunner.run_price_product(PriceProductRequest) -> PriceProductResponse` |
+| the Restate runner calls the action durably | `ordering/adapters/runners/restate_order_actions_runner.py` | `RestateOrderActionsRunner.run_price_product` → `restate_workflow_context.service_call(runtime.price_product_handler, request)` |
+| Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_actions_service.handler()` handler `price_product`, registered as `OrderActions/price_product`, relaying to the application client |
+| the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.price_product` → `ProductCatalogRepository.get_product_price` → `adapters/repositories/memory_product_catalog_repository.py` |
+| the price comes back up the same chain | | `PriceProductResponse.cents` → `Order.total(PriceSpec)` → `OrderOrchestratorResponse.total_cents` ends the workflow |
 
-`POST /orders` answers `202` with the order id as soon as the workflow is
+`POST /submissions` answers `202` with the order id as soon as the workflow is
 accepted — `workflow_send` is fire-and-forget, so the total is read back from
-Restate, not from the response.
+Restate, not from the response. Submitting an order is the asynchronous use
+case: the order is accepted now and priced later. The verb is the domain's
+word for what the caller gets back, not the engine's word for how it was
+called; that one, `start_`, belongs to the runner.
 
 The application never touches Restate. `OrderOrchestrator` depends on
 `OrderActionsRunner` and nothing else; `OrderActions` (the class of actions)
@@ -51,9 +54,9 @@ class OrderOrchestratorRunner(ts.Relay, typing.Protocol):
 # ordering/application/relays/order_actions_runner.py
 class OrderActionsRunner(ts.JobContext, typing.Protocol):
 
-    async def run_prepare_quote(
-        self, prepare_quote_request: PrepareQuoteRequest
-    ) -> PrepareQuoteResponse: ...
+    async def run_price_product(
+        self, price_product_request: PriceProductRequest
+    ) -> PriceProductResponse: ...
 ```
 
 `OrderOrchestratorRunner` is held by `OrderService`, lives as long as the
@@ -85,12 +88,12 @@ whole.
 
 | class | kind declared | direction | lifetime |
 |---|---|---|---|
-| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Job` | Restate → us: registers `OrderActions/prepare_quote` and `OrderOrchestrator/run` | process |
+| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Job` | Restate → us: registers `OrderActions/price_product` and `OrderOrchestrator/run` | process |
 | `RestateOrderOrchestratorRunner` (`adapters/runners/`) | `ts.Gateway` | us → Restate, from outside any invocation (ingress HTTP) | process |
 | `RestateOrderActionsRunner` (`adapters/runners/`) | `ts.JobContext` | us → Restate, from inside an invocation (`service_call`) | one invocation |
 
 The runtime is the inbound side, the same role the HTTP handler plays for
-`POST /orders`: the engine's server receives a request, routes it to a
+`POST /submissions`: the engine's server receives a request, routes it to a
 handler, and the handler invokes application code. The two runners are the
 outbound side, the same role an HTTP client gateway plays, except that they
 address the far end by the handler object the runtime registered rather than
@@ -100,7 +103,7 @@ off the decorated function (`handler_from_callable`), so a rename is a rename
 and there is no string to keep in step. `"OrderActions"` and
 `"OrderOrchestrator"` appear exactly once each, in the `restate.Service(...)`
 and `restate.Workflow(...)` constructor calls in `RestateOrderRuntime.__init__`;
-the handler names are the Python function names, `prepare_quote` and `run`.
+the handler names are the Python function names, `price_product` and `run`.
 
 The runners hold the runtime to reach those handlers. The actions runner
 cannot own the handler it invokes: it is built per invocation, and
@@ -222,14 +225,14 @@ side of one message are not independent boundaries.
   orchestrator's input, the start ack, and the orchestrator's result. The
   result is a relay message even though no method on the runner returns it:
   the engine stores it and the ingress hands it back.
-- `order_actions_runner.py` holds `PrepareQuoteRequest` and
-  `PrepareQuoteResponse` — the action's two shapes.
+- `order_actions_runner.py` holds `PriceProductRequest` and
+  `PriceProductResponse` — the action's two shapes.
   `application/client/order_actions.py` and `OrderActions` speak the same two.
 
 **Every wire form is an explicit snapshot beside its message.** Five in all:
 `OrderSnapshot`, `OrderOrchestratorRequestSnapshot` and
 `OrderOrchestratorResponseSnapshot` in `order_orchestrator_runner.py`;
-`PrepareQuoteRequestSnapshot` and `PrepareQuoteResponseSnapshot` in
+`PriceProductRequestSnapshot` and `PriceProductResponseSnapshot` in
 `order_actions_runner.py`. Each is a `ts.Serde` with exactly `serialize` and
 `deserialize`, written out longhand rather than derived:
 
@@ -282,17 +285,17 @@ raised an `AttributeError` there, which is not terminal, and Restate retries a
 non-terminal failure without bound.
 
 ```python
-class RestatePrepareQuoteRequestSerde(ts.Serde, restate.serde.Serde[relays.PrepareQuoteRequest]):
+class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.PriceProductRequest]):
 
-    def serialize(self, prepare_quote_request: relays.PrepareQuoteRequest | None) -> bytes:
-        if prepare_quote_request is None:
+    def serialize(self, price_product_request: relays.PriceProductRequest | None) -> bytes:
+        if price_product_request is None:
             return b""
-        return relays.PrepareQuoteRequestSnapshot().serialize(prepare_quote_request)
+        return relays.PriceProductRequestSnapshot().serialize(price_product_request)
 
-    def deserialize(self, buf: bytes) -> relays.PrepareQuoteRequest | None:
+    def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
         if not buf:
             return None
-        return relays.PrepareQuoteRequestSnapshot().deserialize(buf)
+        return relays.PriceProductRequestSnapshot().deserialize(buf)
 ```
 
 None of them is generic and none of them knows a field. What crosses is decided
@@ -315,7 +318,7 @@ propagates as-is and Restate retries the invocation.
 
 On the way out, the ingress answering `409` to `workflow_send` means a
 workflow with this key already exists: the orchestrator runner raises
-`DomainError(CONFLICT, "order_already_started")`, which `POST /orders`
+`DomainError(CONFLICT, "order_already_started")`, which `POST /submissions`
 reports as `409`. Every other ingress refusal and every transport failure is an
 `InfraError`, reported as `503`.
 
@@ -333,14 +336,14 @@ request line the SDK forms from the registered handler
 The actions runner's test doubles the one thing the SDK gives no other way to
 reach: a `FakeRestateWorkflowContext` whose `service_call` records the handler
 it was handed, so the test asserts the runner journals a call to the runtime's
-own `prepare_quote_handler`, and that a `TerminalError` from the call comes
+own `price_product_handler`, and that a `TerminalError` from the call comes
 back as a `DomainError`. That fake doubles an SDK class rather than a port,
 which the testing norm does not admit; it carries its own debt marker.
 
 ## Async everywhere the SDK is
 
 The SDK is async on both sides, so the request path is `async`: both runner
-protocols, `OrderService`, `OrderingClient.place_order`, the HTTP handler,
+protocols, `OrderService`, `OrderingClient.submit_order`, the HTTP handler,
 `OrderOrchestrator`, and both Restate handlers. The class of actions and its
 repository are sync — plain application code that runs inside the action
 handler. There is no `asyncio.run` on the request path at all: the one loop is
@@ -349,14 +352,14 @@ hypercorn's, opened once by `HttpHost.run`.
 ## One process of ours, two mechanisms in it
 
 `srv/http/main.py` is the whole `srv/` directory. It builds one FastAPI app
-and serves it under one hypercorn: an `APIRouter` carrying `POST /orders`, the
+and serves it under one hypercorn: an `APIRouter` carrying `POST /submissions`, the
 API this app offers the world, and the Restate endpoint mounted at `/restate`,
 the one Restate's server calls back into.
 
 **Restate's own recommendation is that the ingress IS the API** — you register
 the deployment and clients `POST :8080/OrderOrchestrator/o1/run` directly,
 with no service of yours in front. A front door of our own exists here for
-exactly one reason: to own the public contract. `POST /orders` is a URL, a
+exactly one reason: to own the public contract. `POST /submissions` is a URL, a
 body shape, and a status code this app is free to keep stable while the
 workflow behind it is renamed, split, or moved off Restate entirely.
 
@@ -377,7 +380,7 @@ docker run -d --name restate -p 18080:8080 -p 19070:9070 \
 PYTHONPATH=.:../../tesser-py RESTATE_INGRESS=http://localhost:18080 \
   python -m srv.http.main 0.0.0.0:8000 &            # the API and the Restate endpoint
 curl -X POST localhost:19070/deployments --json '{"uri":"http://host.docker.internal:8000/restate"}'
-curl -X POST localhost:8000/orders --json '{"order_id":"o1","sku":"gadget","quantity":2}'
+curl -X POST localhost:8000/submissions --json '{"order_id":"o1","sku":"gadget","quantity":2}'
                                                     # 202 {"order_id": "o1"}
 curl localhost:18080/restate/workflow/OrderOrchestrator/o1/output
                                                     # {"order_id": "o1", "total_cents": 2000}
@@ -387,9 +390,9 @@ The failure arms answer at the front door, mapped from the three exception
 kinds the handler and the application can raise:
 
 ```
-curl -X POST localhost:8000/orders --json '{"order_id":"o1"}'
+curl -X POST localhost:8000/submissions --json '{"order_id":"o1"}'
    # 400 {"detail": "sku must be a string"}
-curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":0}'
+curl -X POST localhost:8000/submissions --json '{"order_id":"o2","sku":"gadget","quantity":0}'
    # 422 {"detail": "an order is for at least one unit"}          errors.status_for(VALIDATION)
    #     with the ingress down, a well-formed order is 503 {"detail": "unavailable"}
 ```
@@ -409,23 +412,30 @@ sends SIGINT.
 - The catalog is an in-memory repository seeded with two SKUs; a second
   replica would not share it, which is fine only because the lookup is
   read-only.
-- `start_order_orchestrator` fires and forgets; `POST /orders` never waits on
+- `start_order_orchestrator` fires and forgets; `POST /submissions` never waits on
   the workflow. The result is read back through Restate's ingress, so the API
-  has no `GET /orders/{id}` of its own.
+  has no read route of its own.
+- A handler's registered name is part of the deployment. Renaming one (this
+  tree's `prepare_quote` became `price_product`) makes the service a different
+  one to Restate: re-register the deployment after upgrading, and an
+  invocation journaled against the old name has no handler to replay against
+  on the new one. This tree has no deployments, so it renames freely; a real
+  one keeps the old handler through a migration window or deploys the new
+  version at its own endpoint and drains the old.
 - The component can wire exactly one engine: the host mounts this runtime's
   two Restate objects by name. A second engine (an in-process one for tests,
   or Temporal) would implement the same two runner protocols over its own
   runtime, and the component would have to publish that too.
 - The deployment endpoint at `/restate` is mounted on the same public bind as
-  `POST /orders`, with no `identity_keys`. Anyone who can reach port 8000 can
-  `POST /restate/invoke/OrderActions/prepare_quote` with a body of their own
+  `POST /submissions`, with no `identity_keys`. Anyone who can reach port 8000 can
+  `POST /restate/invoke/OrderActions/price_product` with a body of their own
   and bypass the service. A deployment passes Restate's request-identity keys
   to `restate.app(...)` or serves the endpoint on a bind only the Restate
   server reaches.
 - An invalid snapshot that reaches the deployment endpoint directly (a
-  `quantity` of `0` posted to the ingress rather than to `POST /orders`) is
+  `quantity` of `0` posted to the ingress rather than to `POST /submissions`) is
   refused inside the SDK's input deserialization, which wraps every exception
   as a `TerminalError` with status 500 (`restate/handler.py`); the same body
-  at `POST /orders` is a 422. Restate does not retry it, but the status is
+  at `POST /submissions` is a 422. Restate does not retry it, but the status is
   the SDK's, not the domain's. Validating inside the handler instead would
   make the wire shape something other than the aggregate.

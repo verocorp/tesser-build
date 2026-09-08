@@ -25,27 +25,27 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:deb
 
 
 @ts.helper
-def place_order_request(
+def submit_order_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 2
-) -> client.PlaceOrderRequest:
-    return client.PlaceOrderRequest(order_id=order_id, sku=sku, quantity=quantity)
+) -> client.SubmitOrderRequest:
+    return client.SubmitOrderRequest(order_id=order_id, sku=sku, quantity=quantity)
 
 
 class TestOrderService:
 
-    def test_placing_answers_the_order_id(self) -> None:
-        place_order_response = asyncio.run(
-            application.OrderService(FakeOrderOrchestratorRunner()).place_order(
-                place_order_request()
+    def test_submitting_answers_the_order_id(self) -> None:
+        submit_order_response = asyncio.run(
+            application.OrderService(FakeOrderOrchestratorRunner()).submit_order(
+                submit_order_request()
             )
         )
-        assert place_order_response.order_id == "o1"
+        assert submit_order_response.order_id == "o1"
 
-    def test_placing_starts_the_orchestrator_for_the_order_it_built(self) -> None:
+    def test_submitting_starts_the_orchestrator_for_the_order_it_built(self) -> None:
         fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
         asyncio.run(
-            application.OrderService(fake_order_orchestrator_runner).place_order(
-                place_order_request(order_id="o2", sku="gadget", quantity=3)
+            application.OrderService(fake_order_orchestrator_runner).submit_order(
+                submit_order_request(order_id="o2", sku="gadget", quantity=3)
             )
         )
         assert [

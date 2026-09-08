@@ -124,7 +124,7 @@ run_minimal() {
 }
 
 # The durable-execution example: one context whose workflow runs on Restate.
-# One FastAPI host serves POST /orders and mounts the Restate endpoint at
+# One FastAPI host serves POST /submissions and mounts the Restate endpoint at
 # /restate; the workflow and the action it calls are both jobs (ts.Job in
 # adapters/jobs/), and the engine never touches the domain.
 run_durable_execution() {

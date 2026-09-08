@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.105.0] - 2026-09-08
+
+`examples/durable-execution` speaks ordering's words. Two renames, no behavior
+change, so the synchronous use case can land next as a clean addition.
+
+`prepare_quote` was carrying two meanings. The action takes a sku and answers
+cents from the product catalog: that is pricing one product, not preparing a
+quote. A quote, in ordering's language, is a priced order offered to a
+customer, which is what the synchronous route will hand back. The action is
+now `price_product`, and the relay messages, snapshots, the runner method
+(`run_price_product`), the runtime's handler and its registered Restate name
+(`OrderActions/price_product`) follow.
+
+The existing route is the asynchronous use case: the order is accepted now and
+priced later. It is now `submit_order` at `POST /submissions`, because
+"submitted" names the state the caller gets back. "Placed" is reserved for the
+synchronous use case that answers with the priced order. Both will run the same
+`OrderOrchestrator` under the same workflow key, so the pair names one business
+act done to one order. The engine's own verbs, `start_` and `run_`, stay on the
+runner and never reach the public contract.
+
+### Changed
+- **`OrderActions.prepare_quote` → `price_product`**, with `PriceProductRequest`
+  / `PriceProductResponse` and their snapshots in `application/relays/`,
+  `OrderActionsRunner.run_price_product`, `RestateOrderActionsRunner`,
+  `RestateOrderRuntime.price_product_handler`, and the registered handler
+  `OrderActions/price_product`. A deployment registered under the old name is
+  a different service to Restate; re-register after upgrading.
+- **`OrderingClient.place_order` → `submit_order`** at `POST /submissions`,
+  with `SubmitOrderRequest` / `SubmitOrderResponse`, `OrderService.submit_order`,
+  and `Handler.submit_order`. Answers `202 {"order_id"}` as before.
+- Test names, fake attributes, the README, `TODOS.md`, `scripts/verify` and the
+  CI workflow comment say the same words. Verified live against
+  `restate-server` 1.7.2: every arm answers as the README states.
+
 ## [0.0.104.0] - 2026-09-07
 
 The analyzer writes the debt markers it can. `tessercheck-mark` (`python -m

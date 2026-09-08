@@ -9,15 +9,15 @@ import ordering.domain as domain
 
 class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
 
-    def __init__(self, place_order_request: client.PlaceOrderRequest) -> None:
+    def __init__(self, submit_order_request: client.SubmitOrderRequest) -> None:
         super().__init__(
-            order_id=place_order_request.order_id,
-            sku=place_order_request.sku,
-            quantity=place_order_request.quantity,
+            order_id=submit_order_request.order_id,
+            sku=submit_order_request.sku,
+            quantity=submit_order_request.quantity,
         )
 
 
-class MapToPlaceOrderResponse(ts.Mapper, client.PlaceOrderResponse):
+class MapToSubmitOrderResponse(ts.Mapper, client.SubmitOrderResponse):
 
     def __init__(
         self, start_order_orchestrator_response: relays.StartOrderOrchestratorResponse
@@ -30,13 +30,13 @@ class OrderService(ts.ApplicationService):
     def __init__(self, order_orchestrator_runner: relays.OrderOrchestratorRunner) -> None:  # tesser:debt TB081
         self._order_orchestrator_runner = order_orchestrator_runner
 
-    async def place_order(
-        self, place_order_request: client.PlaceOrderRequest
-    ) -> client.PlaceOrderResponse:
-        order = domain.Order(MapToOrderSpec(place_order_request))
+    async def submit_order(
+        self, submit_order_request: client.SubmitOrderRequest
+    ) -> client.SubmitOrderResponse:
+        order = domain.Order(MapToOrderSpec(submit_order_request))
         start_order_orchestrator_response = (
             await self._order_orchestrator_runner.start_order_orchestrator(
                 relays.OrderOrchestratorRequest(order=order)
             )
         )
-        return MapToPlaceOrderResponse(start_order_orchestrator_response)
+        return MapToSubmitOrderResponse(start_order_orchestrator_response)

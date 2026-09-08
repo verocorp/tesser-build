@@ -35,30 +35,30 @@ class FakeEmptyProductCatalogRepository(ports.ProductCatalogRepository):
 
 class TestOrderActions:
 
-    def test_preparing_a_quote_answers_the_catalog_price(self) -> None:
-        prepare_quote_response = application.OrderActions(
+    def test_pricing_a_product_answers_the_catalog_price(self) -> None:
+        price_product_response = application.OrderActions(
             FakeProductCatalogRepository()
-        ).prepare_quote(relays.PrepareQuoteRequest(sku="widget"))
-        assert prepare_quote_response.cents == 250
+        ).price_product(relays.PriceProductRequest(sku="widget"))
+        assert price_product_response.cents == 250
 
-    def test_preparing_a_quote_looks_the_sku_up_once(self) -> None:
+    def test_pricing_a_product_looks_the_sku_up_once(self) -> None:
         fake_product_catalog_repository = FakeProductCatalogRepository()
-        application.OrderActions(fake_product_catalog_repository).prepare_quote(
-            relays.PrepareQuoteRequest(sku="gadget")
+        application.OrderActions(fake_product_catalog_repository).price_product(
+            relays.PriceProductRequest(sku="gadget")
         )
         assert fake_product_catalog_repository.priced == ["gadget"]
 
     def test_an_unknown_sku_is_the_catalogs_not_found(self) -> None:
         with pytest.raises(errors.DomainError) as excinfo:
-            application.OrderActions(FakeEmptyProductCatalogRepository()).prepare_quote(
-                relays.PrepareQuoteRequest(sku="nothing")
+            application.OrderActions(FakeEmptyProductCatalogRepository()).price_product(
+                relays.PriceProductRequest(sku="nothing")
             )
         assert excinfo.value.kind is errors.Kind.NOT_FOUND
 
     def test_an_empty_sku_is_refused_before_the_catalog_is_asked(self) -> None:
         fake_product_catalog_repository = FakeProductCatalogRepository()
         with pytest.raises(errors.DomainError):
-            application.OrderActions(fake_product_catalog_repository).prepare_quote(
-                relays.PrepareQuoteRequest(sku="")
+            application.OrderActions(fake_product_catalog_repository).price_product(
+                relays.PriceProductRequest(sku="")
             )
         assert fake_product_catalog_repository.priced == []

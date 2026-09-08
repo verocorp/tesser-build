@@ -11,13 +11,13 @@ import tesser.errors as errors
 
 class TestOrderingContext:
 
-    def test_placing_an_order_with_no_ingress_is_an_infra_error(self) -> None:
+    def test_submitting_an_order_with_no_ingress_is_an_infra_error(self) -> None:
         ordering = component.Ordering(component.Config(component.Spec(ingress="http://127.0.0.1:9")))
         try:
             with pytest.raises(errors.InfraError):
                 asyncio.run(
-                    ordering.client.place_order(
-                        client.PlaceOrderRequest(order_id="o1", sku="widget", quantity=2)
+                    ordering.client.submit_order(
+                        client.SubmitOrderRequest(order_id="o1", sku="widget", quantity=2)
                     )
                 )
         finally:

@@ -251,7 +251,7 @@ domain modules out before removing them.
   `restate`. The alternative is the runtime answering with the mountable ASGI
   app, so the host imports nothing from Restate. Unsettled: with two contexts
   each holding a Restate runtime, one endpoint with merged definitions or two.
-- [ ] **The `202` arm of `POST /orders` has no test.** `srv/http/test_main.py`
+- [ ] **The `202` arm of `POST /submissions` has no test.** `srv/http/test_main.py`
   drives the host as a subprocess and every request lands on a failure arm
   (400/422/503). A reachable fake ingress inside the spawned process would
   cover it.
@@ -931,7 +931,7 @@ where it lands.
   outcome on the response? a single edge-facing rejection?), what the
   handler returns, and what — if anything — the host still maps.
 - [ ] **The wording of a public error belongs to the application, not the
-  handler.** Chris, 2026-09-06, reading #172. `Handler.place_order` in
+  handler.** Chris, 2026-09-06, reading #172. `Handler.submit_order` in
   `examples/durable-execution` reads the body one field at a time
   (`http_request.text("order_id")`, `.integer("quantity")`), and each read is
   what produces the message the API answers with: `400 {"detail": "sku must
@@ -946,7 +946,7 @@ where it lands.
   and what the host may know, this one asks the same of the handler, and a
   service that owns what is surfaced also owns how it reads. Bears on the
   wire-payload helper kind (ruling 4 of the field-cost list): a
-  `PlaceOrderRequestSnapshot` beside the client DTO would move the field
+  `SubmitOrderRequestSnapshot` beside the client DTO would move the field
   list and its messages out of `adapters/`, at the cost of `json` in
   `ordering/client/` — the `TB062` marker
   `relays/order_orchestrator_runner.py` already carries — and a sibling test
@@ -1268,7 +1268,7 @@ measured:
   `abc.Callable`), versus how many are genuinely per-test arrangement with no
   production dependency behind them. Count that before the wave runs.
 - [ ] **An engine's registration callback — `examples/durable-execution`
-  `ordering/adapters/runtimes/restate_order_runtime.py` (`def prepare_quote`,
+  `ordering/adapters/runtimes/restate_order_runtime.py` (`def price_product`,
   `def run` inside `__init__`; `adapters/jobs/restate.py` until v0.0.102.0).** The SDK wants a function registered against a handler name at
   construction time. The closure captures `self`. This is the shape with the
   least obvious relocation, because the engine's API is the constraint, not

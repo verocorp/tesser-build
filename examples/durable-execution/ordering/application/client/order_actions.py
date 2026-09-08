@@ -9,6 +9,6 @@ import ordering.application.relays as relays  # tesser:debt TB067
 
 class OrderingApplicationClient(ts.Client, typing.Protocol):
 
-    def prepare_quote(  # tesser:debt TB081
-        self, prepare_quote_request: relays.PrepareQuoteRequest
-    ) -> relays.PrepareQuoteResponse: ...
+    def price_product(  # tesser:debt TB081
+        self, price_product_request: relays.PriceProductRequest
+    ) -> relays.PriceProductResponse: ...

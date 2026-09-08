@@ -18,7 +18,7 @@ class TestOrdering:
             }
         finally:
             ordering.close()
-        assert declared == {"OrderActions": ["prepare_quote"], "OrderOrchestrator": ["run"]}
+        assert declared == {"OrderActions": ["price_product"], "OrderOrchestrator": ["run"]}
 
 
 class TestConfig:

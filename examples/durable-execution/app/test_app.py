@@ -60,4 +60,4 @@ class TestAppLoader:
             ]
         finally:
             durable_execution_app.close()
-        assert declared == [["prepare_quote"], ["run"]]
+        assert declared == [["price_product"], ["run"]]
