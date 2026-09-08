@@ -414,7 +414,7 @@ sends SIGINT.
   read-only.
 - `start_order_orchestrator` fires and forgets; `POST /submissions` never waits on
   the workflow. The result is read back through Restate's ingress, so the API
-  has no `GET /orders/{id}` of its own.
+  has no read route of its own.
 - The component can wire exactly one engine: the host mounts this runtime's
   two Restate objects by name. A second engine (an in-process one for tests,
   or Temporal) would implement the same two runner protocols over its own
