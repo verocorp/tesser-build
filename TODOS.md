@@ -2,6 +2,100 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Keeping the sequence of port calls out of the domain (2026-09-08, Chris)
+
+**What happened.** Three agents built the same four Restate durable-execution
+scenarios in parallel worktrees. C
+(`.claude/worktrees/restate-scenarios-c`, branch `restate-scenarios-c`) put the
+order of the port calls into the aggregate: `ordering/domain/checkout.py`
+declares `class Step(ts.Outcome)` with seven members — `PRICE_ORDER`,
+`RESERVE_STOCK`, `CHARGE_PAYMENT`, `BOOK_SHIPMENT`, `REFUND_PAYMENT`,
+`RELEASE_STOCK`, `FINISH` — and `Checkout` answers with the next one from seven
+transitions (`begin`, `priced`, `stock_reserved`, `payment_settled`,
+`shipment_booked`, `payment_refunded`, `stock_released`).
+`application/orchestrators/checkout_orchestrator.py:127` is then `while True:`
+around a `match step:` with one port call per arm and a rebind of `step`, and
+the same shape stands in `approval_orchestrator.py:81` and
+`fulfilment_orchestrator.py:78`. A (`restate-next-scenarios`) and B
+(`restate-scenarios-b`) built the same four scenarios with **no** `while` and
+**no** `match` in any orchestrator; B's checkout is a straight-line sequence
+with nested `try`/`except`. Chris reads C's shape as application logic that
+moved into the domain, and wants to know how to keep an agent from writing it.
+
+**The rules as written point at it.** This is not an agent ignoring the skill —
+it is the skill's own idiom applied to a seven-step workflow.
+`skills/tesser-build/application-services.md:45` says no business logic in the
+service and "no conditional `while` (`while True:` ended by a match arm is the
+loop)"; `skills/tesser-build/domain-return.md:74` says "Two members is the loop
+shape (`while True: match outcome:`); a third member is a type error at every
+site, not a redesign"; `skills/tesser-build/python.md:723` shows the loop as
+**the** shape for a multi-step transition and calls each arm "coordination: one
+port call and/or one transition". The 2026-08-29 ruling above (*Decisions go
+through a domain object*) forbids a service from branching on anything but an
+outcome a domain object returned. An agent told all four of those things, and
+handed a workflow with compensation, writes C. Whatever comes out of this entry
+has to say what the fourth thing is that C got wrong, or the guidance keeps
+producing it.
+
+**What the shape buys.** The order is unit-testable with no Restate near it.
+`typing.assert_never` makes the step set total, so a new step is a type error at
+every orchestrator. Compensation is only over what actually ran, because the
+aggregate is what knows — C's compensation is correct on that bar where A's
+first cut refunded a payment it had never taken.
+
+**What it costs.** The happy path is not on the page: `PRICE → RESERVE →
+CHARGE → BOOK` appears in no file, only across seven methods of
+`domain/checkout.py`. The orchestrator stops being a procedure and becomes a
+dispatch table. `while True` is unbounded, so a transition that returns the step
+it was already on is a hang rather than an error, and nothing counts the
+iterations. The vocabulary on the page — `step`, `match`, `while True`,
+`assert_never` — is state-machine language sitting where ordering's own words
+were asked for. And because flow is data, failure has to be a value: C has no
+`try`/`except` in any `run()`, which is why a thrown terminal error from a
+gateway compensates nothing and leaks the stock reservation.
+
+- [ ] **Rule where the line is between a rule and a sequence.** The domain owns
+  what is legal and what a step decided; the open question is whether it may
+  also own *which port is called next*. A first cut of the line: a transition
+  answers a question about the order (paid or declined, refused or booked), and
+  the application decides what that answer means to call next — under which
+  `Step.RESERVE_STOCK` is a finding because it names an operation on a port, and
+  `Settled.DECLINED` is not. C's `Step` members name the collaborator methods
+  (`stock.reserve`, `payments.charge`, `shipping.book`) almost one for one,
+  which is the tell to test the line against.
+- [ ] **Decide whether the loop shape survives at all, and at what size.**
+  Ruled at two members (`domain-return.md` rule 6) as continue-or-stop; C runs
+  it at seven as a workflow driver. Options: keep it with a bound (an outcome
+  used as a loop subject carries at most N members), keep it only where the
+  loop is over *data* rather than steps, or retire the loop shape from the
+  skill and let a multi-step flow be written straight with the domain asked
+  once per step. This collides with the still-open item under **Follow-ons from
+  the outcome ruling** — "A loop-shaped verified impl", which wants exactly a
+  real multi-step transition to land in `examples/python-app` and replace the
+  analyzer fixture. C *is* that impl. Ruling here decides whether that item is
+  satisfied or withdrawn.
+- [ ] **Mechanisms to weigh, cheapest first.** (a) A skill clause plus a worked
+  counter-example — the B-shaped straight-line orchestrator beside the C-shaped
+  one, with the reason on the page; agents follow verified impls more reliably
+  than prose. (b) A check on the member names: an outcome member whose name
+  matches a port protocol's method in the same component (`RESERVE_STOCK` /
+  `stock.reserve`) is mechanically decidable and would fire on C without firing
+  on `Advance.CONTINUE`. (c) A cap on arms or members. (d) A bound on the loop
+  itself, which is worth doing whatever else is ruled — an unbounded `while
+  True` driven by a value the domain returns is a hang, and the existing rules
+  neither forbid nor bound it.
+- [ ] **Say it where an agent reads it.** Whatever is ruled has to land in the
+  `## Application services` and outcomes sections of
+  `skills/tesser-build/python.md`, in `application-services.md` rule 1, and in
+  `domain-return.md` rule 6 — the three places that currently teach the loop —
+  and take a `rationale/coverage.md` row if it becomes a checker.
+
+**The evidence is local-only.** `restate-next-scenarios`,
+`restate-scenarios-b` and `restate-scenarios-c` are unpushed local branches with
+worktrees under `.claude/worktrees/`. Pruning any of them destroys the
+three-way comparison this entry rests on; copy the four orchestrators and their
+domain modules out before removing them.
+
 ## Left open by the relay wave (2026-09-06, v0.0.102.0)
 
 - [ ] **Register the relay shape in the analyzer.** `examples/durable-execution`
