@@ -89,3 +89,7 @@ class OrderOrchestratorRunner(ts.Relay, typing.Protocol):  # tesser:debt TB052
     async def start_order_orchestrator(
         self, order_orchestrator_request: OrderOrchestratorRequest
     ) -> StartOrderOrchestratorResponse: ...
+
+    async def run_order_orchestrator(
+        self, order_orchestrator_request: OrderOrchestratorRequest
+    ) -> OrderOrchestratorResponse: ...
