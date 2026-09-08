@@ -415,6 +415,13 @@ sends SIGINT.
 - `start_order_orchestrator` fires and forgets; `POST /submissions` never waits on
   the workflow. The result is read back through Restate's ingress, so the API
   has no read route of its own.
+- A handler's registered name is part of the deployment. Renaming one (this
+  tree's `prepare_quote` became `price_product`) makes the service a different
+  one to Restate: re-register the deployment after upgrading, and an
+  invocation journaled against the old name has no handler to replay against
+  on the new one. This tree has no deployments, so it renames freely; a real
+  one keeps the old handler through a migration window or deploys the new
+  version at its own endpoint and drains the old.
 - The component can wire exactly one engine: the host mounts this runtime's
   two Restate objects by name. A second engine (an in-process one for tests,
   or Temporal) would implement the same two runner protocols over its own
