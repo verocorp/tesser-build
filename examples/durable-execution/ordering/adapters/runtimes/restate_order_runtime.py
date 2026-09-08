@@ -45,32 +45,32 @@ class RestateOrderOrchestratorResponseSerde(  # tesser:debt TB081
         return relays.OrderOrchestratorResponseSnapshot().deserialize(buf)
 
 
-class RestatePrepareQuoteRequestSerde(ts.Serde, restate.serde.Serde[relays.PrepareQuoteRequest]):  # tesser:debt TB081
+class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.PriceProductRequest]):  # tesser:debt TB081
 
-    def serialize(self, prepare_quote_request: relays.PrepareQuoteRequest | None) -> bytes:
-        if prepare_quote_request is None:
+    def serialize(self, price_product_request: relays.PriceProductRequest | None) -> bytes:
+        if price_product_request is None:
             return b""
-        return relays.PrepareQuoteRequestSnapshot().serialize(prepare_quote_request)
+        return relays.PriceProductRequestSnapshot().serialize(price_product_request)
 
-    def deserialize(self, buf: bytes) -> relays.PrepareQuoteRequest | None:
+    def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
         if not buf:
             raise errors.invalid("empty_message", "a message crosses the engine with a body")
-        return relays.PrepareQuoteRequestSnapshot().deserialize(buf)
+        return relays.PriceProductRequestSnapshot().deserialize(buf)
 
 
-class RestatePrepareQuoteResponseSerde(  # tesser:debt TB081
-    ts.Serde, restate.serde.Serde[relays.PrepareQuoteResponse]
+class RestatePriceProductResponseSerde(  # tesser:debt TB081
+    ts.Serde, restate.serde.Serde[relays.PriceProductResponse]
 ):
 
-    def serialize(self, prepare_quote_response: relays.PrepareQuoteResponse | None) -> bytes:
-        if prepare_quote_response is None:
+    def serialize(self, price_product_response: relays.PriceProductResponse | None) -> bytes:
+        if price_product_response is None:
             return b""
-        return relays.PrepareQuoteResponseSnapshot().serialize(prepare_quote_response)
+        return relays.PriceProductResponseSnapshot().serialize(price_product_response)
 
-    def deserialize(self, buf: bytes) -> relays.PrepareQuoteResponse | None:
+    def deserialize(self, buf: bytes) -> relays.PriceProductResponse | None:
         if not buf:
             raise errors.invalid("empty_message", "a message crosses the engine with a body")
-        return relays.PrepareQuoteResponseSnapshot().deserialize(buf)
+        return relays.PriceProductResponseSnapshot().deserialize(buf)
 
 
 class RestateOrderRuntime(ts.Job):
@@ -80,14 +80,14 @@ class RestateOrderRuntime(ts.Job):
         self.order_orchestrator_workflow = restate.Workflow("OrderOrchestrator")
 
         @self.order_actions_service.handler(
-            input_serde=RestatePrepareQuoteRequestSerde(),
-            output_serde=RestatePrepareQuoteResponseSerde(),
+            input_serde=RestatePriceProductRequestSerde(),
+            output_serde=RestatePriceProductResponseSerde(),
         )
-        async def prepare_quote(  # tesser:debt TB023
-            restate_context: restate.Context, prepare_quote_request: relays.PrepareQuoteRequest
-        ) -> relays.PrepareQuoteResponse:
+        async def price_product(  # tesser:debt TB023
+            restate_context: restate.Context, price_product_request: relays.PriceProductRequest
+        ) -> relays.PriceProductResponse:
             try:
-                return ordering_application_client.prepare_quote(prepare_quote_request)
+                return ordering_application_client.price_product(price_product_request)
             except errors.DomainError as domain_error:
                 raise restate.TerminalError(
                     domain_error.message, status_code=errors.status_for(domain_error.kind)
@@ -110,5 +110,5 @@ class RestateOrderRuntime(ts.Job):
                     domain_error.message, status_code=errors.status_for(domain_error.kind)
                 ) from domain_error
 
-        self.prepare_quote_handler = prepare_quote
+        self.price_product_handler = price_product
         self.order_orchestrator_handler = run

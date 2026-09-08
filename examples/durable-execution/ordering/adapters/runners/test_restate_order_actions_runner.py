@@ -17,10 +17,10 @@ import tesser.errors as errors
 @ts.fake
 class FakeOrderingApplicationClient(client.OrderingApplicationClient):
 
-    def prepare_quote(
-        self, prepare_quote_request: relays.PrepareQuoteRequest
-    ) -> relays.PrepareQuoteResponse:
-        return relays.PrepareQuoteResponse(cents=250)
+    def price_product(
+        self, price_product_request: relays.PriceProductRequest
+    ) -> relays.PriceProductResponse:
+        return relays.PriceProductResponse(cents=250)
 
 
 @ts.fake
@@ -35,24 +35,24 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         self.called.append((tpe, arg))
         if self._refusal:
             raise restate.TerminalError(self._refusal, status_code=self._status_code)
-        return relays.PrepareQuoteResponse(cents=250)
+        return relays.PriceProductResponse(cents=250)
 
 
 class TestRestateOrderActionsRunner:
 
-    def test_running_prepare_quote_journals_a_call_to_the_runtimes_handler(self) -> None:
+    def test_running_price_product_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient())
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        prepare_quote_request = relays.PrepareQuoteRequest(sku="widget")
-        prepare_quote_response = asyncio.run(
+        price_product_request = relays.PriceProductRequest(sku="widget")
+        price_product_response = asyncio.run(
             runners.RestateOrderActionsRunner(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
-            ).run_prepare_quote(prepare_quote_request)
+            ).run_price_product(price_product_request)
         )
-        assert prepare_quote_response.cents == 250
+        assert price_product_response.cents == 250
         assert fake_restate_workflow_context.called == [
-            (restate_order_runtime.prepare_quote_handler, prepare_quote_request)
+            (restate_order_runtime.price_product_handler, price_product_request)
         ]
 
     def test_a_terminal_error_from_the_call_is_a_domain_error(self) -> None:
@@ -64,7 +64,7 @@ class TestRestateOrderActionsRunner:
                         restate.WorkflowContext, FakeRestateWorkflowContext(refusal="no such sku")
                     ),
                     restate_order_runtime,
-                ).run_prepare_quote(relays.PrepareQuoteRequest(sku="nothing"))
+                ).run_price_product(relays.PriceProductRequest(sku="nothing"))
             )
         assert excinfo.value.kind is errors.Kind.NOT_FOUND
         assert excinfo.value.code == "action_rejected"
@@ -81,7 +81,7 @@ class TestRestateOrderActionsRunner:
                             FakeRestateWorkflowContext(refusal="refused", status_code=status_code),
                         ),
                         restate_order_runtime,
-                    ).run_prepare_quote(relays.PrepareQuoteRequest(sku="widget"))
+                    ).run_price_product(relays.PriceProductRequest(sku="widget"))
                 )
             assert excinfo.value.kind is kind
 
@@ -94,6 +94,6 @@ class TestRestateOrderActionsRunner:
                         FakeRestateWorkflowContext(refusal="cancelled", status_code=500),
                     ),
                     runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
-                ).run_prepare_quote(relays.PrepareQuoteRequest(sku="widget"))
+                ).run_price_product(relays.PriceProductRequest(sku="widget"))
             )
         assert excinfo.value.status_code == 500

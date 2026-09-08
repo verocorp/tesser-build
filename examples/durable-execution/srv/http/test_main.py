@@ -58,7 +58,7 @@ class TestHttpHost:
         assert {s["name"] for s in services} == set(declared)
         assert {s["name"]: sorted(h["name"] for h in s["handlers"]) for s in services} == declared
 
-    def test_the_orders_route_answers_by_the_failure_it_meets(self) -> None:
+    def test_the_submissions_route_answers_by_the_failure_it_meets(self) -> None:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
@@ -79,7 +79,7 @@ class TestHttpHost:
                 b'{"order_id": "o1", "sku": "gadget", "quantity": 2}',
             ):
                 order = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/orders",
+                    f"http://127.0.0.1:{port}/submissions",
                     data=body,
                     headers={"Content-Type": "application/json"},
                 )

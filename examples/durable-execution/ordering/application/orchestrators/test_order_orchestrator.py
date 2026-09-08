@@ -15,22 +15,22 @@ import tesser.errors as errors
 class FakeOrderActionsRunner(relays.OrderActionsRunner):
 
     def __init__(self) -> None:
-        self.quoted: list[str] = []
+        self.priced: list[str] = []
 
-    async def run_prepare_quote(
-        self, prepare_quote_request: relays.PrepareQuoteRequest
-    ) -> relays.PrepareQuoteResponse:
-        self.quoted.append(prepare_quote_request.sku)
-        return relays.PrepareQuoteResponse(cents=250)
+    async def run_price_product(
+        self, price_product_request: relays.PriceProductRequest
+    ) -> relays.PriceProductResponse:
+        self.priced.append(price_product_request.sku)
+        return relays.PriceProductResponse(cents=250)
 
 
 @ts.fake
 class FakeRefusingOrderActionsRunner(relays.OrderActionsRunner):
 
-    async def run_prepare_quote(
-        self, prepare_quote_request: relays.PrepareQuoteRequest
-    ) -> relays.PrepareQuoteResponse:
-        raise errors.not_found("unknown_sku", f"no price for sku {prepare_quote_request.sku!r}")
+    async def run_price_product(
+        self, price_product_request: relays.PriceProductRequest
+    ) -> relays.PriceProductResponse:
+        raise errors.not_found("unknown_sku", f"no price for sku {price_product_request.sku!r}")
 
 
 @ts.helper
@@ -44,7 +44,7 @@ def order_orchestrator_request(
 
 class TestOrderOrchestrator:
 
-    def test_running_totals_the_quoted_price_over_the_quantity(self) -> None:
+    def test_running_totals_the_product_price_over_the_quantity(self) -> None:
         order_orchestrator_response = asyncio.run(
             orchestrators.OrderOrchestrator(FakeOrderActionsRunner()).run(
                 order_orchestrator_request()
@@ -53,16 +53,16 @@ class TestOrderOrchestrator:
         assert order_orchestrator_response.order_id == "o1"
         assert order_orchestrator_response.total_cents == 750
 
-    def test_running_prepares_a_quote_for_the_ordered_sku(self) -> None:
+    def test_running_prices_the_ordered_product(self) -> None:
         fake_order_actions_runner = FakeOrderActionsRunner()
         asyncio.run(
             orchestrators.OrderOrchestrator(fake_order_actions_runner).run(
                 order_orchestrator_request(sku="gadget")
             )
         )
-        assert fake_order_actions_runner.quoted == ["gadget"]
+        assert fake_order_actions_runner.priced == ["gadget"]
 
-    def test_a_refused_quote_ends_the_run_with_the_actions_error(self) -> None:
+    def test_a_refused_price_ends_the_run_with_the_actions_error(self) -> None:
         with pytest.raises(errors.DomainError) as excinfo:
             asyncio.run(
                 orchestrators.OrderOrchestrator(FakeRefusingOrderActionsRunner()).run(

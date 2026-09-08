@@ -22,13 +22,13 @@ class TestWiredApp:
             durable_execution_app.close()
         assert declared == ["OrderActions", "OrderOrchestrator"]
 
-    def test_placing_an_order_with_no_ingress_is_an_infra_error(self) -> None:
+    def test_submitting_an_order_with_no_ingress_is_an_infra_error(self) -> None:
         durable_execution_app = app.load()
         try:
             with pytest.raises(errors.InfraError):
                 asyncio.run(
-                    durable_execution_app.ordering.client.place_order(
-                        client.PlaceOrderRequest(order_id="o1", sku="widget", quantity=2)
+                    durable_execution_app.ordering.client.submit_order(
+                        client.SubmitOrderRequest(order_id="o1", sku="widget", quantity=2)
                     )
                 )
         finally:

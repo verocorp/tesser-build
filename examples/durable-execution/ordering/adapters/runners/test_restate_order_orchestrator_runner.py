@@ -18,10 +18,10 @@ import tesser.errors as errors
 @ts.fake
 class FakeOrderingApplicationClient(client.OrderingApplicationClient):
 
-    def prepare_quote(
-        self, prepare_quote_request: relays.PrepareQuoteRequest
-    ) -> relays.PrepareQuoteResponse:
-        return relays.PrepareQuoteResponse(cents=250)
+    def price_product(
+        self, price_product_request: relays.PriceProductRequest
+    ) -> relays.PriceProductResponse:
+        return relays.PriceProductResponse(cents=250)
 
 
 @ts.helper

@@ -149,7 +149,7 @@ jobs:
   durable-execution-example:
     # Gates the durable-execution example at the same bar: tessercheck zero
     # findings + mypy --strict + pytest. One context whose workflow runs on
-    # Restate: one FastAPI host serves POST /orders and mounts the Restate
+    # Restate: one FastAPI host serves POST /submissions and mounts the Restate
     # endpoint, and the srv test boots the real host and reads its /discover
     # manifest. restate_sdk, fastapi, httpx, and hypercorn are installed; no
     # restate-server runs in CI.

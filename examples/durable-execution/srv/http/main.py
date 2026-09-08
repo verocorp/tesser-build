@@ -28,10 +28,10 @@ class HttpHost(ts.Host):
             handler = handlers.Handler(durable_execution_app.ordering.client)
             router = fastapi.APIRouter()
 
-            @router.post("/orders")
-            async def place_order(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
+            @router.post("/submissions")
+            async def submit_order(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
                 try:
-                    http_response = await handler.place_order(
+                    http_response = await handler.submit_order(
                         protocol.HttpRequest(body=await request.body())
                     )
                 except protocol.BadRequest as e:

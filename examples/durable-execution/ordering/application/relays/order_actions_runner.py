@@ -6,38 +6,38 @@ import typing
 import tesser.application as ts
 
 
-class PrepareQuoteRequest(ts.Request):  # tesser:debt TB052
+class PriceProductRequest(ts.Request):  # tesser:debt TB052
 
     def __init__(self, sku: str) -> None:
         self.sku = sku
 
 
-class PrepareQuoteRequestSnapshot(ts.Serde):  # tesser:debt TB052
+class PriceProductRequestSnapshot(ts.Serde):  # tesser:debt TB052
 
-    def serialize(self, prepare_quote_request: PrepareQuoteRequest) -> bytes:
-        return json.dumps({"sku": prepare_quote_request.sku}).encode()
+    def serialize(self, price_product_request: PriceProductRequest) -> bytes:
+        return json.dumps({"sku": price_product_request.sku}).encode()
 
-    def deserialize(self, buf: bytes) -> PrepareQuoteRequest:
-        return PrepareQuoteRequest(sku=json.loads(buf)["sku"])
+    def deserialize(self, buf: bytes) -> PriceProductRequest:
+        return PriceProductRequest(sku=json.loads(buf)["sku"])
 
 
-class PrepareQuoteResponse(ts.Response):  # tesser:debt TB052
+class PriceProductResponse(ts.Response):  # tesser:debt TB052
 
     def __init__(self, cents: int) -> None:
         self.cents = cents
 
 
-class PrepareQuoteResponseSnapshot(ts.Serde):  # tesser:debt TB052
+class PriceProductResponseSnapshot(ts.Serde):  # tesser:debt TB052
 
-    def serialize(self, prepare_quote_response: PrepareQuoteResponse) -> bytes:
-        return json.dumps({"cents": prepare_quote_response.cents}).encode()
+    def serialize(self, price_product_response: PriceProductResponse) -> bytes:
+        return json.dumps({"cents": price_product_response.cents}).encode()
 
-    def deserialize(self, buf: bytes) -> PrepareQuoteResponse:
-        return PrepareQuoteResponse(cents=json.loads(buf)["cents"])
+    def deserialize(self, buf: bytes) -> PriceProductResponse:
+        return PriceProductResponse(cents=json.loads(buf)["cents"])
 
 
 class OrderActionsRunner(ts.JobContext, typing.Protocol):  # tesser:debt TB052
 
-    async def run_prepare_quote(
-        self, prepare_quote_request: PrepareQuoteRequest
-    ) -> PrepareQuoteResponse: ...
+    async def run_price_product(
+        self, price_product_request: PriceProductRequest
+    ) -> PriceProductResponse: ...

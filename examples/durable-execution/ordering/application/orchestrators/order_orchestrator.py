@@ -6,7 +6,7 @@ import ordering.application.relays as relays
 import ordering.domain as domain
 
 
-class MapToPrepareQuoteRequest(ts.Mapper, relays.PrepareQuoteRequest):
+class MapToPriceProductRequest(ts.Mapper, relays.PriceProductRequest):
 
     def __init__(self, order: domain.Order) -> None:
         super().__init__(sku=str(order.sku))
@@ -14,8 +14,8 @@ class MapToPrepareQuoteRequest(ts.Mapper, relays.PrepareQuoteRequest):
 
 class MapToPriceSpec(ts.Mapper, domain.PriceSpec):
 
-    def __init__(self, prepare_quote_response: relays.PrepareQuoteResponse) -> None:
-        super().__init__(cents=prepare_quote_response.cents)
+    def __init__(self, price_product_response: relays.PriceProductResponse) -> None:
+        super().__init__(cents=price_product_response.cents)
 
 
 class MapToOrderOrchestratorResponse(ts.Mapper, relays.OrderOrchestratorResponse):
@@ -33,8 +33,8 @@ class OrderOrchestrator(ts.Orchestrator):
         self, order_orchestrator_request: relays.OrderOrchestratorRequest
     ) -> relays.OrderOrchestratorResponse:
         order = order_orchestrator_request.order  # tesser:debt TB082
-        prepare_quote_response = await self._order_actions_runner.run_prepare_quote(
-            MapToPrepareQuoteRequest(order)
+        price_product_response = await self._order_actions_runner.run_price_product(
+            MapToPriceProductRequest(order)
         )
-        price = order.total(MapToPriceSpec(prepare_quote_response))
+        price = order.total(MapToPriceSpec(price_product_response))
         return MapToOrderOrchestratorResponse(order, price)
