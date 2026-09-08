@@ -1,3 +1,4 @@
+from ordering.domain.order import Note as Note
 from ordering.domain.order import Order as Order
 from ordering.domain.order import OrderId as OrderId
 from ordering.domain.order import OrderSpec as OrderSpec

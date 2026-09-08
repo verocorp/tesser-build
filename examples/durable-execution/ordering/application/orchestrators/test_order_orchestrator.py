@@ -35,10 +35,12 @@ class FakeRefusingOrderActionsRunner(relays.OrderActionsRunner):
 
 @ts.helper
 def order_orchestrator_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 3
+    order_id: str = "o1", sku: str = "widget", quantity: int = 3, note: str = "gift"
 ) -> relays.OrderOrchestratorRequest:
     return relays.OrderOrchestratorRequest(
-        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+        order=domain.Order(
+            domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity, note=note)
+        )
     )
 
 

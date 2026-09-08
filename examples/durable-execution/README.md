@@ -112,7 +112,8 @@ runner reaches its own through the runtime.
 **A runner and the runtime hand a message on whole and read nothing off it.**
 Stronger, and greppable: no field name of any message or domain object appears
 anywhere under `adapters/runtimes/` or `adapters/runners/` — not `sku`, not
-`cents`, not `quantity`, not `order_id`, not `total_cents`. Every encoding is
+`cents`, not `quantity`, not `note`, not `order_id`, not `total_cents`. Every
+encoding is
 a snapshot beside its message in `relays/`, and the one read left is
 `str(order_orchestrator_request.order.identity)` in
 `RestateOrderOrchestratorRunner.start_order_orchestrator`, for the workflow
@@ -123,8 +124,8 @@ comes from the public body, so the runner percent-encodes it
 ingress as `/OrderOrchestrator/..%2Fadmin/run/send`, not as a different route.
 
 An `OrderSnapshot` on the way in checks the shape of what it reads before
-the constructor sees it: `order_id` and `sku` must be strings and `quantity`
-an `int` that is not a `bool`, or the snapshot is refused as a validation
+the constructor sees it: `order_id`, `sku`, and `note` must be strings and
+`quantity` an `int` that is not a `bool`, or the snapshot is refused as a validation
 error. The value objects guard their invariants, not their types, so without
 that check a list where a `sku` should be builds an `Order` that raises a
 `TypeError` later, inside the orchestrator, where Restate would retry it.
@@ -242,6 +243,7 @@ class OrderSnapshot(ts.Serde):
                 "order_id": str(order.identity),
                 "sku": str(order.sku),
                 "quantity": int(order.quantity),
+                "note": str(order.note),
             }
         ).encode()
 
@@ -252,12 +254,13 @@ class OrderSnapshot(ts.Serde):
                 order_id=snapshot["order_id"],
                 sku=snapshot["sku"],
                 quantity=snapshot["quantity"],
+                note=snapshot["note"],
             )
         )
 ```
 
 So the wire carries the aggregate's **public** vocabulary — `order_id`, `sku`,
-`quantity`, each through its canonical exit (`str`/`int`) — and never a private
+`quantity`, `note`, each through its canonical exit (`str`/`int`) — and never a private
 attribute name. Reconstruction goes through `OrderSpec` and the aggregate's own
 constructor, the serialization norm's one inbound path, so every invariant
 re-runs on the way in and a journal holding an order of zero units is refused
@@ -268,7 +271,7 @@ on the wire — the order it carries, and nothing wrapped around it — so the
 body `POST /OrderOrchestrator/o1/run/send` carries is:
 
 ```json
-{"order_id": "o1", "sku": "widget", "quantity": 2}
+{"order_id": "o1", "sku": "widget", "quantity": 2, "note": "gift"}
 ```
 
 The SDK cannot serialize a `ts.Request` on its own — `restate.serde.DefaultSerde`
@@ -377,7 +380,7 @@ docker run -d --name restate -p 18080:8080 -p 19070:9070 \
 PYTHONPATH=.:../../tesser-py RESTATE_INGRESS=http://localhost:18080 \
   python -m srv.http.main 0.0.0.0:8000 &            # the API and the Restate endpoint
 curl -X POST localhost:19070/deployments --json '{"uri":"http://host.docker.internal:8000/restate"}'
-curl -X POST localhost:8000/orders --json '{"order_id":"o1","sku":"gadget","quantity":2}'
+curl -X POST localhost:8000/orders --json '{"order_id":"o1","sku":"gadget","quantity":2,"note":"gift"}'
                                                     # 202 {"order_id": "o1"}
 curl localhost:18080/restate/workflow/OrderOrchestrator/o1/output
                                                     # {"order_id": "o1", "total_cents": 2000}
@@ -389,7 +392,7 @@ kinds the handler and the application can raise:
 ```
 curl -X POST localhost:8000/orders --json '{"order_id":"o1"}'
    # 400 {"detail": "sku must be a string"}
-curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":0}'
+curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":0,"note":"gift"}'
    # 422 {"detail": "an order is for at least one unit"}          errors.status_for(VALIDATION)
    #     with the ingress down, a well-formed order is 503 {"detail": "unavailable"}
 ```

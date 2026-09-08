@@ -14,6 +14,7 @@ class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
             order_id=place_order_request.order_id,
             sku=place_order_request.sku,
             quantity=place_order_request.quantity,
+            note=place_order_request.note,
         )
 
 

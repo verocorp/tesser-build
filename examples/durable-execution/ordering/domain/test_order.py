@@ -9,19 +9,24 @@ import tesser.errors as errors
 class TestOrder:
 
     def test_an_order_constructs_from_its_spec(self) -> None:
-        order_spec = domain.OrderSpec(order_id="o1", sku="widget", quantity=2)
+        order_spec = domain.OrderSpec(order_id="o1", sku="widget", quantity=2, note="gift")
         order = domain.Order(order_spec)
         assert str(order.identity) == order_spec.order_id
         assert str(order.sku) == order_spec.sku
         assert int(order.quantity) == order_spec.quantity
+        assert str(order.note) == order_spec.note
 
     def test_the_total_is_the_unit_price_times_the_quantity(self) -> None:
-        order = domain.Order(domain.OrderSpec(order_id="o1", sku="widget", quantity=3))
+        order = domain.Order(domain.OrderSpec(order_id="o1", sku="widget", quantity=3, note="gift"))
         assert order.total(domain.PriceSpec(cents=250)) == domain.Price(domain.PriceSpec(cents=750))
 
     def test_an_order_is_for_at_least_one_unit(self) -> None:
         with pytest.raises(errors.DomainError):
-            domain.Order(domain.OrderSpec(order_id="o1", sku="widget", quantity=0))
+            domain.Order(domain.OrderSpec(order_id="o1", sku="widget", quantity=0, note="gift"))
+
+    def test_an_order_carries_a_note(self) -> None:
+        with pytest.raises(errors.DomainError):
+            domain.Order(domain.OrderSpec(order_id="o1", sku="widget", quantity=1, note=""))
 
 
 class TestPrice:
