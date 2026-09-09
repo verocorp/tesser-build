@@ -40,6 +40,7 @@ class TestOrderOrchestratorResponseSnapshot:
     def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (
             b'{"order_id": "o1"}',
+            b'{"order_id": "", "total_cents": 500}',
             b'{"order_id": "o1", "total_cents": -1}',
             b'{"order_id": "o1", "total_cents": true}',
             b'{"order_id": "o1", "total_cents": NaN}',

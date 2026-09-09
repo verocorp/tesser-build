@@ -13,10 +13,16 @@ class MapToGetProductPriceRequest(ts.Mapper, ports.GetProductPriceRequest):
         super().__init__(sku=str(sku))
 
 
-class MapToPriceProductResponse(ts.Mapper, relays.PriceProductResponse):
+class MapToPriceSpec(ts.Mapper, domain.PriceSpec):
 
     def __init__(self, get_product_price_response: ports.GetProductPriceResponse) -> None:
         super().__init__(cents=get_product_price_response.cents)
+
+
+class MapToPriceProductResponse(ts.Mapper, relays.PriceProductResponse):
+
+    def __init__(self, price: domain.Price) -> None:
+        super().__init__(cents=int(price))
 
 
 class OrderActions(ts.Actions):
@@ -31,4 +37,5 @@ class OrderActions(ts.Actions):
         get_product_price_response = self._product_catalog_repository.get_product_price(
             MapToGetProductPriceRequest(sku)
         )
-        return MapToPriceProductResponse(get_product_price_response)
+        price = domain.Price(MapToPriceSpec(get_product_price_response))
+        return MapToPriceProductResponse(price)

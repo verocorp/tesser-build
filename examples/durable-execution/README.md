@@ -150,16 +150,23 @@ settles the purchase only if it names this order
 (`payment_mismatch`). The receipt names its order because the processor's
 `ChargeResponse` does, and that id rides the relay as
 `TakePaymentResponse.order_id` into `PaymentSpec`: without it the domain
-could not tell one order's receipt from another's at the same amount.
+could not tell one order's receipt from another's at the same amount. What
+the purchase does not check is the total itself: the parent holds an `Order`
+and no catalog, so the child's total is the child's word, and
+`payment_mismatch` catches a processor that charged something other than
+what it was asked, never a wrong price.
 `PurchaseActions.take_payment` is the class of actions over the
 `PaymentProcessor` port. `adapters/gateways/memory_payment_processor.py` is
 the stand-in, and it is idempotent by order: an identical repeat answers the
 original receipt, and only a repeat for a different amount is
-`CONFLICT payment_already_taken`. That is the one property a processor must
-have behind an action, because an action is the engine's retry unit: if the
-connection drops after the charge but before Restate records the action's
-result, the action runs again, and a processor that refused the repeat would
-turn a paid purchase into a failed one.
+`CONFLICT payment_already_taken`. A processor behind an action has to be
+idempotent on something the request carries, because an action is the
+engine's retry unit: if the connection drops after the charge but before
+Restate records the action's result, the action runs again, and a processor
+that refused the repeat would turn a paid purchase into a failed one. This
+stand-in keys on the order and the amount, which is enough only because the
+shared key namespace already refuses a second purchase of one order; a real
+processor takes an idempotency key on the request.
 
 Two value objects gained bounds in this change, because both were measured
 as holes the purchase widens. `Quantity` is at most 1,000,000 units and
@@ -398,7 +405,7 @@ belongs beside the message it serves, and the messages belong to the relay.
 module, `adapters/runtimes/` and `adapters/runners/` as kind packages, a job
 context protocol outside `adapters/`, and a component publishing something
 besides `client` and `jobs` all draw findings. Every one carries a
-`# tesser:debt TB0xx` marker at its line — 105 of them, plus twenty-six
+`# tesser:debt TB0xx` marker at its line — 104 of them, plus twenty-six
 `TB023` markers on nested functions: the four handlers the SDK registers, the
 three route functions `main` declares, and the nineteen fake-ingress
 functions the two orchestrator runners' tests bind to a socket — and that
@@ -412,7 +419,7 @@ absent.
 
 The remaining rule cost of putting an encoding in the application is `json`:
 the application stdlib allowlist is `{__future__, typing}`, and the four
-relays modules and `snapshots/order_snapshot.py` import it (five of the 105).
+relays modules and `snapshots/order_snapshot.py` import it (five of the 104).
 
 ## Messages are declared once, beside the protocol that speaks them
 
@@ -729,7 +736,10 @@ sends SIGINT.
   tree's `prepare_quote` became `price_product`) makes the service a different
   one to Restate: re-register the deployment after upgrading, and an
   invocation journaled against the old name has no handler to replay against
-  on the new one. This tree has no deployments, so it renames freely; a real
+  on the new one. A snapshot that gains a field is the same boundary: the
+  `order_id` this change added to `TakePaymentResponse` makes a payment
+  result journaled by the previous shape fail its shape check on replay, as a
+  terminal 422 after the money moved. This tree has no deployments, so it renames freely; a real
   one keeps the old handler through a migration window or deploys the new
   version at its own endpoint and drains the old.
 - The component can wire exactly one engine: the host mounts this runtime's

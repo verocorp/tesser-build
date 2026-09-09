@@ -53,6 +53,7 @@ class OrderOrchestratorResponseSnapshot(ts.Serde):  # tesser:debt TB052
         if not (
             isinstance(snapshot, dict)
             and isinstance(snapshot.get("order_id"), str)
+            and snapshot["order_id"]
             and isinstance(snapshot.get("total_cents"), int)
             and not isinstance(snapshot.get("total_cents"), bool)
             and snapshot["total_cents"] >= 0

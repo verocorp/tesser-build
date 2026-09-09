@@ -68,7 +68,7 @@ class Price(ts.ValueObject):
         if spec.cents < 0:
             raise errors.invalid("negative_price", "a price is never negative")
         if spec.cents > _MAX_CENTS:
-            raise errors.invalid("price_above_maximum", f"a price is at most {_MAX_CENTS} cents")
+            raise errors.invalid("price_above_maximum", f"a price, or a total, is at most {_MAX_CENTS} cents")
         object.__setattr__(self, "_cents", spec.cents)
 
     def __int__(self) -> int:

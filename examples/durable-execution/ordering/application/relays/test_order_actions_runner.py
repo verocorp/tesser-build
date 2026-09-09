@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 import ordering.application.relays as relays
+import tesser.errors as errors
 
 
 class TestPriceProductRequestSnapshot:
@@ -29,3 +32,24 @@ class TestPriceProductResponseSnapshot:
         assert price_product_response_snapshot.deserialize(
             price_product_response_snapshot.serialize(price_product_response)
         ) == price_product_response
+
+    def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
+        for raw in (
+            b'{}',
+            b'{"cents": -1}',
+            b'{"cents": true}',
+            b'{"cents": "250"}',
+            b'[250]',
+        ):
+            with pytest.raises(errors.DomainError) as excinfo:
+                relays.PriceProductResponseSnapshot().deserialize(raw)
+            assert excinfo.value.kind is errors.Kind.VALIDATION
+
+
+class TestPriceProductRequestSnapshotShape:
+
+    def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
+        for raw in (b'{}', b'{"sku": 1}', b'{"sku": ""}', b'["widget"]'):
+            with pytest.raises(errors.DomainError) as excinfo:
+                relays.PriceProductRequestSnapshot().deserialize(raw)
+            assert excinfo.value.kind is errors.Kind.VALIDATION
