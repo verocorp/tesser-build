@@ -1,1 +1,2 @@
 from ordering.application.client.order_actions import OrderingApplicationClient as OrderingApplicationClient
+from ordering.application.client.purchase_actions import PurchaseApplicationClient as PurchaseApplicationClient

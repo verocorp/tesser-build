@@ -15,10 +15,21 @@ class TestOrdering:
                 ordering.restate_order_runtime.order_orchestrator_workflow.name: sorted(
                     ordering.restate_order_runtime.order_orchestrator_workflow.handlers
                 ),
+                ordering.restate_order_runtime.purchase_actions_service.name: sorted(
+                    ordering.restate_order_runtime.purchase_actions_service.handlers
+                ),
+                ordering.restate_order_runtime.purchase_orchestrator_workflow.name: sorted(
+                    ordering.restate_order_runtime.purchase_orchestrator_workflow.handlers
+                ),
             }
         finally:
             ordering.close()
-        assert declared == {"OrderActions": ["price_product"], "OrderOrchestrator": ["run"]}
+        assert declared == {
+            "OrderActions": ["price_product"],
+            "OrderOrchestrator": ["run"],
+            "PurchaseActions": ["take_payment"],
+            "PurchaseOrchestrator": ["run"],
+        }
 
 
 class TestConfig:

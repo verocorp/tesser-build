@@ -42,3 +42,22 @@ class Handler(ts.Handler):
                 }
             ).encode(),
         )
+
+    async def purchase(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+        purchase_response = await self._ordering_client.purchase(
+            client.PurchaseRequest(
+                order_id=http_request.text("order_id"),
+                sku=http_request.text("sku"),
+                quantity=http_request.integer("quantity"),
+            )
+        )
+        return protocol.HttpResponse(
+            status_code=200,
+            body=json.dumps(
+                {
+                    "order_id": purchase_response.order_id,
+                    "total_cents": purchase_response.total_cents,
+                    "payment_reference": purchase_response.payment_reference,
+                }
+            ).encode(),
+        )

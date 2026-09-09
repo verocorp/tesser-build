@@ -32,3 +32,47 @@ class TestPrice:
     def test_a_price_is_never_negative(self) -> None:
         with pytest.raises(errors.DomainError):
             domain.Price(domain.PriceSpec(cents=-1))
+
+
+class TestPayment:
+
+    def test_a_payment_constructs_from_its_spec(self) -> None:
+        payment = domain.Payment(domain.PaymentSpec(reference="pay-o1", cents=750))
+        assert str(payment.reference) == "pay-o1"
+        assert payment.amount == domain.Price(domain.PriceSpec(cents=750))
+
+    def test_a_payment_equals_by_value(self) -> None:
+        assert domain.Payment(domain.PaymentSpec(reference="pay-o1", cents=750)) == domain.Payment(
+            domain.PaymentSpec(reference="pay-o1", cents=750)
+        )
+        assert domain.Payment(domain.PaymentSpec(reference="pay-o1", cents=750)) != domain.Payment(
+            domain.PaymentSpec(reference="pay-o2", cents=750)
+        )
+
+    def test_a_payment_reference_is_never_empty(self) -> None:
+        with pytest.raises(errors.DomainError):
+            domain.Payment(domain.PaymentSpec(reference="", cents=750))
+
+
+class TestPurchase:
+
+    def test_a_purchase_constructs_from_its_spec(self) -> None:
+        purchase = domain.Purchase(domain.PurchaseSpec(order_id="o1", total_cents=750))
+        assert purchase.identity == domain.OrderId("o1")
+        assert purchase.total == domain.Price(domain.PriceSpec(cents=750))
+
+    def test_a_payment_of_the_total_settles_the_purchase(self) -> None:
+        purchase = domain.Purchase(domain.PurchaseSpec(order_id="o1", total_cents=750))
+        payment = purchase.paid(domain.PaymentSpec(reference="pay-o1", cents=750))
+        assert payment == domain.Payment(domain.PaymentSpec(reference="pay-o1", cents=750))
+
+    def test_a_payment_of_another_amount_is_a_conflict(self) -> None:
+        purchase = domain.Purchase(domain.PurchaseSpec(order_id="o1", total_cents=750))
+        with pytest.raises(errors.DomainError) as excinfo:
+            purchase.paid(domain.PaymentSpec(reference="pay-o1", cents=700))
+        assert excinfo.value.kind is errors.Kind.CONFLICT
+        assert excinfo.value.code == "payment_mismatch"
+
+    def test_a_purchase_is_never_for_a_negative_total(self) -> None:
+        with pytest.raises(errors.DomainError):
+            domain.Purchase(domain.PurchaseSpec(order_id="o1", total_cents=-1))

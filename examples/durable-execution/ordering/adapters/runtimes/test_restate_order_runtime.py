@@ -24,6 +24,17 @@ class FakeOrderingApplicationClient(client.OrderingApplicationClient):
 
 
 @ts.fake
+class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
+
+    def take_payment(
+        self, take_payment_request: relays.TakePaymentRequest
+    ) -> relays.TakePaymentResponse:
+        return relays.TakePaymentResponse(
+            reference=f"pay-{take_payment_request.order_id}", cents=take_payment_request.cents
+        )
+
+
+@ts.fake
 class FakeRefusingOrderingApplicationClient(client.OrderingApplicationClient):
 
     def price_product(
@@ -33,15 +44,35 @@ class FakeRefusingOrderingApplicationClient(client.OrderingApplicationClient):
 
 
 @ts.fake
+class FakeRefusingPurchaseApplicationClient(client.PurchaseApplicationClient):
+
+    def take_payment(
+        self, take_payment_request: relays.TakePaymentRequest
+    ) -> relays.TakePaymentResponse:
+        raise errors.conflict(
+            "payment_already_taken", f"order {take_payment_request.order_id!r} has already been charged"
+        )
+
+
+@ts.fake
 class FakeRestateWorkflowContext:  # tesser:debt TB072
 
     def __init__(self, refusal: str = "") -> None:
         self._refusal = refusal
+        self.child_keys: list[str] = []
 
     async def service_call(self, tpe: object, arg: object) -> object:
         if self._refusal:
             raise restate.TerminalError(self._refusal, status_code=404)
+        if isinstance(arg, relays.TakePaymentRequest):
+            return relays.TakePaymentResponse(reference=f"pay-{arg.order_id}", cents=arg.cents)
         return relays.PriceProductResponse(cents=250)
+
+    async def workflow_call(self, tpe: object, key: str, arg: object) -> object:
+        self.child_keys.append(key)
+        if self._refusal:
+            raise restate.TerminalError(self._refusal, status_code=404)
+        return relays.OrderOrchestratorResponse(order_id=key, total_cents=500)
 
 
 @ts.helper
@@ -53,10 +84,19 @@ def order_orchestrator_request(
     )
 
 
+@ts.helper
+def purchase_orchestrator_request(
+    order_id: str = "o1", sku: str = "widget", quantity: int = 2
+) -> relays.PurchaseOrchestratorRequest:
+    return relays.PurchaseOrchestratorRequest(
+        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+    )
+
+
 class TestRestateOrderRuntime:
 
-    def test_it_registers_the_actions_service_and_the_orchestrator_workflow(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient())
+    def test_it_registers_two_actions_services_and_two_orchestrator_workflows(self) -> None:
+        restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient())
         assert (
             restate_order_runtime.order_actions_service.name,
             sorted(restate_order_runtime.order_actions_service.handlers),
@@ -65,10 +105,71 @@ class TestRestateOrderRuntime:
             restate_order_runtime.order_orchestrator_workflow.name,
             sorted(restate_order_runtime.order_orchestrator_workflow.handlers),
         ) == ("OrderOrchestrator", ["run"])
+        assert (
+            restate_order_runtime.purchase_actions_service.name,
+            sorted(restate_order_runtime.purchase_actions_service.handlers),
+        ) == ("PurchaseActions", ["take_payment"])
+        assert (
+            restate_order_runtime.purchase_orchestrator_workflow.name,
+            sorted(restate_order_runtime.purchase_orchestrator_workflow.handlers),
+        ) == ("PurchaseOrchestrator", ["run"])
+
+    def test_the_take_payment_handler_hands_the_request_to_the_purchase_client(self) -> None:
+        take_payment_response = asyncio.run(
+            runtimes.RestateOrderRuntime(
+                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+            ).take_payment_handler(
+                typing.cast(restate.Context, None),
+                relays.TakePaymentRequest(order_id="o1", cents=750),
+            )
+        )
+        assert take_payment_response.reference == "pay-o1"
+        assert take_payment_response.cents == 750
+
+    def test_a_domain_error_from_the_purchase_actions_ends_the_invocation_terminally(self) -> None:
+        with pytest.raises(restate.TerminalError) as excinfo:
+            asyncio.run(
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakeRefusingPurchaseApplicationClient()
+                ).take_payment_handler(
+                    typing.cast(restate.Context, None),
+                    relays.TakePaymentRequest(order_id="o1", cents=750),
+                )
+            )
+        assert excinfo.value.status_code == 409
+
+    def test_the_purchase_handler_runs_the_order_as_a_child_over_this_invocation(self) -> None:
+        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
+        purchase_orchestrator_response = asyncio.run(
+            runtimes.RestateOrderRuntime(
+                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+            ).purchase_orchestrator_handler(
+                typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
+                purchase_orchestrator_request(order_id="o9"),
+            )
+        )
+        assert fake_restate_workflow_context.child_keys == ["o9"]
+        assert purchase_orchestrator_response.order_id == "o9"
+        assert purchase_orchestrator_response.total_cents == 500
+        assert purchase_orchestrator_response.payment_reference == "pay-o9"
+
+    def test_a_refused_child_order_ends_the_purchase_terminally_with_its_status(self) -> None:
+        with pytest.raises(restate.TerminalError) as excinfo:
+            asyncio.run(
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ).purchase_orchestrator_handler(
+                    typing.cast(
+                        restate.WorkflowContext, FakeRestateWorkflowContext(refusal="no such sku")
+                    ),
+                    purchase_orchestrator_request(),
+                )
+            )
+        assert excinfo.value.status_code == 404
 
     def test_the_price_product_handler_hands_the_request_to_the_application_client(self) -> None:
         price_product_response = asyncio.run(
-            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()).price_product_handler(
+            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()).price_product_handler(
                 typing.cast(restate.Context, None), relays.PriceProductRequest(sku="gadget")
             )
         )
@@ -78,7 +179,7 @@ class TestRestateOrderRuntime:
         with pytest.raises(restate.TerminalError) as excinfo:
             asyncio.run(
                 runtimes.RestateOrderRuntime(
-                    FakeRefusingOrderingApplicationClient()
+                    FakeRefusingOrderingApplicationClient(), FakePurchaseApplicationClient()
                 ).price_product_handler(
                     typing.cast(restate.Context, None), relays.PriceProductRequest(sku="nothing")
                 )
@@ -87,7 +188,7 @@ class TestRestateOrderRuntime:
 
     def test_the_orchestrator_handler_runs_the_orchestrator_over_this_invocation(self) -> None:
         order_orchestrator_response = asyncio.run(
-            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()).order_orchestrator_handler(
+            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()).order_orchestrator_handler(
                 typing.cast(restate.WorkflowContext, FakeRestateWorkflowContext()),
                 order_orchestrator_request(quantity=3),
             )
@@ -99,7 +200,7 @@ class TestRestateOrderRuntime:
         with pytest.raises(restate.TerminalError) as excinfo:
             asyncio.run(
                 runtimes.RestateOrderRuntime(
-                    FakeOrderingApplicationClient()
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
                 ).order_orchestrator_handler(
                     typing.cast(
                         restate.WorkflowContext, FakeRestateWorkflowContext(refusal="no such sku")
@@ -146,12 +247,48 @@ class TestRestateSerdes:
             restate_order_orchestrator_response_serde.serialize(order_orchestrator_response)
         ) == order_orchestrator_response
 
+    def test_each_purchase_shim_writes_what_its_relay_snapshot_writes_and_reads_it_back(self) -> None:
+        take_payment_request = relays.TakePaymentRequest(order_id="o1", cents=500)
+        take_payment_response = relays.TakePaymentResponse(reference="pay-o1", cents=500)
+        purchase_orchestrator_response = relays.PurchaseOrchestratorResponse(
+            order_id="o1", total_cents=500, payment_reference="pay-o1"
+        )
+        restate_purchase_orchestrator_request_serde = runtimes.RestatePurchaseOrchestratorRequestSerde()
+        restate_purchase_orchestrator_response_serde = runtimes.RestatePurchaseOrchestratorResponseSerde()
+        restate_take_payment_request_serde = runtimes.RestateTakePaymentRequestSerde()
+        restate_take_payment_response_serde = runtimes.RestateTakePaymentResponseSerde()
+        assert restate_purchase_orchestrator_request_serde.serialize(
+            purchase_orchestrator_request()
+        ) == relays.PurchaseOrchestratorRequestSnapshot().serialize(purchase_orchestrator_request())
+        assert restate_purchase_orchestrator_response_serde.serialize(
+            purchase_orchestrator_response
+        ) == relays.PurchaseOrchestratorResponseSnapshot().serialize(purchase_orchestrator_response)
+        assert restate_take_payment_request_serde.serialize(
+            take_payment_request
+        ) == relays.TakePaymentRequestSnapshot().serialize(take_payment_request)
+        assert restate_take_payment_response_serde.serialize(
+            take_payment_response
+        ) == relays.TakePaymentResponseSnapshot().serialize(take_payment_response)
+        assert restate_purchase_orchestrator_response_serde.deserialize(
+            restate_purchase_orchestrator_response_serde.serialize(purchase_orchestrator_response)
+        ) == purchase_orchestrator_response
+        assert restate_take_payment_request_serde.deserialize(
+            restate_take_payment_request_serde.serialize(take_payment_request)
+        ) == take_payment_request
+        assert restate_take_payment_response_serde.deserialize(
+            restate_take_payment_response_serde.serialize(take_payment_response)
+        ) == take_payment_response
+
     def test_no_message_writes_an_empty_body_and_an_empty_body_is_refused_on_every_shim(self) -> None:
         for serde in (
             runtimes.RestateOrderOrchestratorRequestSerde(),
             runtimes.RestateOrderOrchestratorResponseSerde(),
             runtimes.RestatePriceProductRequestSerde(),
             runtimes.RestatePriceProductResponseSerde(),
+            runtimes.RestatePurchaseOrchestratorRequestSerde(),
+            runtimes.RestatePurchaseOrchestratorResponseSerde(),
+            runtimes.RestateTakePaymentRequestSerde(),
+            runtimes.RestateTakePaymentResponseSerde(),
         ):
             assert serde.serialize(None) == b""
             with pytest.raises(errors.DomainError) as excinfo:

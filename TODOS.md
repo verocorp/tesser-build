@@ -251,11 +251,11 @@ domain modules out before removing them.
   `restate`. The alternative is the runtime answering with the mountable ASGI
   app, so the host imports nothing from Restate. Unsettled: with two contexts
   each holding a Restate runtime, one endpoint with merged definitions or two.
-- [ ] **The `202` arm of `POST /submissions` and the `200` arm of `POST /orders`
-  have no test.** `srv/http/test_main.py` drives the host as a subprocess and
-  every request lands on a failure arm (400/422/503). A reachable fake ingress
-  inside the spawned process would cover both; the live smoke covers them
-  today.
+- [ ] **The `202` arm of `POST /submissions` and the `200` arms of `POST /orders`
+  and `POST /purchases` have no test.** `srv/http/test_main.py` drives the
+  host as a subprocess and every request lands on a failure arm
+  (400/422/503). A reachable fake ingress inside the spawned process would
+  cover all three; the live smoke covers them today.
 - [ ] **Left standing from the v0.0.102.0 adversarial pass, all pre-existing.**
   The caller-chosen `order_id` is both the durable key and the unauthenticated
   result address on the ingress; the request body is read with no size cap and

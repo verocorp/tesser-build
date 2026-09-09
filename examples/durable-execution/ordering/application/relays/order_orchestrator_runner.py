@@ -5,38 +5,9 @@ import typing
 
 import tesser.application as ts
 
+import ordering.application.snapshots as snapshots
 import ordering.domain as domain
 import tesser.errors as errors
-
-
-class OrderSnapshot(ts.Serde):  # tesser:debt TB052
-
-    def serialize(self, order: domain.Order) -> bytes:
-        return json.dumps(
-            {
-                "order_id": str(order.identity),
-                "sku": str(order.sku),
-                "quantity": int(order.quantity),
-            }
-        ).encode()
-
-    def deserialize(self, buf: bytes) -> domain.Order:
-        snapshot = json.loads(buf)
-        if not (
-            isinstance(snapshot, dict)
-            and isinstance(snapshot.get("order_id"), str)
-            and isinstance(snapshot.get("sku"), str)
-            and isinstance(snapshot.get("quantity"), int)
-            and not isinstance(snapshot.get("quantity"), bool)
-        ):
-            raise errors.invalid("malformed_order_snapshot", "an order snapshot is order_id, sku, and quantity")
-        return domain.Order(
-            domain.OrderSpec(
-                order_id=snapshot["order_id"],
-                sku=snapshot["sku"],
-                quantity=snapshot["quantity"],
-            )
-        )
 
 
 class OrderOrchestratorRequest(ts.Request):  # tesser:debt TB052
@@ -48,10 +19,10 @@ class OrderOrchestratorRequest(ts.Request):  # tesser:debt TB052
 class OrderOrchestratorRequestSnapshot(ts.Serde):  # tesser:debt TB052
 
     def serialize(self, order_orchestrator_request: OrderOrchestratorRequest) -> bytes:
-        return OrderSnapshot().serialize(order_orchestrator_request.order)
+        return snapshots.OrderSnapshot().serialize(order_orchestrator_request.order)
 
     def deserialize(self, buf: bytes) -> OrderOrchestratorRequest:
-        return OrderOrchestratorRequest(order=OrderSnapshot().deserialize(buf))
+        return OrderOrchestratorRequest(order=snapshots.OrderSnapshot().deserialize(buf))
 
 
 class StartOrderOrchestratorResponse(ts.Response):  # tesser:debt TB052
