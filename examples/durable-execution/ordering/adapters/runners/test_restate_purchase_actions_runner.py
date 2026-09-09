@@ -30,7 +30,9 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         return relays.TakePaymentResponse(
-            reference=f"pay-{take_payment_request.order_id}", cents=take_payment_request.cents
+            order_id=take_payment_request.order_id,
+            reference=f"pay-{take_payment_request.order_id}",
+            cents=take_payment_request.cents,
         )
 
 
@@ -46,7 +48,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         self.called.append((tpe, arg))
         if self._refusal:
             raise restate.TerminalError(self._refusal, status_code=self._status_code)
-        return relays.TakePaymentResponse(reference="pay-o1", cents=750)
+        return relays.TakePaymentResponse(order_id="o1", reference="pay-o1", cents=750)
 
 
 class TestRestatePurchaseActionsRunner:

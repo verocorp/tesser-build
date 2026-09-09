@@ -16,7 +16,11 @@ class MapToChargeRequest(ts.Mapper, ports.ChargeRequest):
 class MapToTakePaymentResponse(ts.Mapper, relays.TakePaymentResponse):
 
     def __init__(self, charge_response: ports.ChargeResponse) -> None:
-        super().__init__(reference=charge_response.reference, cents=charge_response.cents)
+        super().__init__(
+            order_id=charge_response.order_id,
+            reference=charge_response.reference,
+            cents=charge_response.cents,
+        )
 
 
 class PurchaseActions(ts.Actions):

@@ -30,7 +30,9 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         return relays.TakePaymentResponse(
-            reference=f"pay-{take_payment_request.order_id}", cents=take_payment_request.cents
+            order_id=take_payment_request.order_id,
+            reference=f"pay-{take_payment_request.order_id}",
+            cents=take_payment_request.cents,
         )
 
 

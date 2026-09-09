@@ -30,7 +30,9 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         return relays.TakePaymentResponse(
-            reference=f"pay-{take_payment_request.order_id}", cents=take_payment_request.cents
+            order_id=take_payment_request.order_id,
+            reference=f"pay-{take_payment_request.order_id}",
+            cents=take_payment_request.cents,
         )
 
 
@@ -65,7 +67,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         if self._refusal:
             raise restate.TerminalError(self._refusal, status_code=404)
         if isinstance(arg, relays.TakePaymentRequest):
-            return relays.TakePaymentResponse(reference=f"pay-{arg.order_id}", cents=arg.cents)
+            return relays.TakePaymentResponse(order_id=arg.order_id, reference=f"pay-{arg.order_id}", cents=arg.cents)
         return relays.PriceProductResponse(cents=250)
 
     async def workflow_call(self, tpe: object, key: str, arg: object) -> object:
@@ -249,7 +251,7 @@ class TestRestateSerdes:
 
     def test_each_purchase_shim_writes_what_its_relay_snapshot_writes_and_reads_it_back(self) -> None:
         take_payment_request = relays.TakePaymentRequest(order_id="o1", cents=500)
-        take_payment_response = relays.TakePaymentResponse(reference="pay-o1", cents=500)
+        take_payment_response = relays.TakePaymentResponse(order_id="o1", reference="pay-o1", cents=500)
         purchase_orchestrator_response = relays.PurchaseOrchestratorResponse(
             order_id="o1", total_cents=500, payment_reference="pay-o1"
         )
@@ -272,6 +274,15 @@ class TestRestateSerdes:
         assert restate_purchase_orchestrator_response_serde.deserialize(
             restate_purchase_orchestrator_response_serde.serialize(purchase_orchestrator_response)
         ) == purchase_orchestrator_response
+        back = restate_purchase_orchestrator_request_serde.deserialize(
+            restate_purchase_orchestrator_request_serde.serialize(
+                purchase_orchestrator_request(order_id="o7", sku="gadget", quantity=3)
+            )
+        )
+        assert back is not None
+        assert back.order.identity == domain.OrderId("o7")
+        assert back.order.sku == domain.Sku("gadget")
+        assert back.order.quantity == domain.Quantity(3)
         assert restate_take_payment_request_serde.deserialize(
             restate_take_payment_request_serde.serialize(take_payment_request)
         ) == take_payment_request

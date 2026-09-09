@@ -42,6 +42,8 @@ class TestPurchaseOrchestratorResponseSnapshot:
     def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (
             b'{"order_id": "o1", "total_cents": 500}',
+            b'{"order_id": "", "total_cents": 500, "payment_reference": "pay-o1"}',
+            b'{"order_id": "o1", "total_cents": 500, "payment_reference": ""}',
             b'{"order_id": "o1", "total_cents": -1, "payment_reference": "pay-o1"}',
             b'{"order_id": "o1", "total_cents": true, "payment_reference": "pay-o1"}',
             b'{"order_id": "o1", "total_cents": "500", "payment_reference": "pay-o1"}',

@@ -31,7 +31,9 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         return relays.TakePaymentResponse(
-            reference=f"pay-{take_payment_request.order_id}", cents=take_payment_request.cents
+            order_id=take_payment_request.order_id,
+            reference=f"pay-{take_payment_request.order_id}",
+            cents=take_payment_request.cents,
         )
 
 
@@ -253,3 +255,84 @@ class TestRestatePurchaseOrchestratorRunner:
                     ),
                 ).run_purchase_orchestrator(purchase_orchestrator_request())
             )
+
+    def test_the_key_is_encoded_so_an_order_id_cannot_reshape_the_path(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        seen: list[bytes] = []
+
+        def ingress() -> None:  # tesser:debt TB023
+            conn, _ = listener.accept()
+            with conn:
+                raw = b""
+                while b"\r\n\r\n" not in raw:
+                    raw += conn.recv(4096)
+                seen.append(raw.partition(b"\r\n\r\n")[0])
+                answer = relays.PurchaseOrchestratorResponseSnapshot().serialize(
+                    relays.PurchaseOrchestratorResponse(
+                        order_id="../admin?x=1#f", total_cents=500, payment_reference="pay-1"
+                    )
+                )
+                conn.sendall(
+                    b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: "
+                    + str(len(answer)).encode()
+                    + b"\r\n\r\n"
+                    + answer
+                )
+
+        thread = threading.Thread(target=ingress)
+        thread.start()
+        try:
+            purchase_orchestrator_response = asyncio.run(
+                runners.RestatePurchaseOrchestratorRunner(
+                    f"http://127.0.0.1:{port}",
+                    runtimes.RestateOrderRuntime(
+                        FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                    ),
+                ).run_purchase_orchestrator(purchase_orchestrator_request(order_id="../admin?x=1#f"))
+            )
+        finally:
+            thread.join(5)
+            listener.close()
+
+        assert purchase_orchestrator_response.order_id == "../admin?x=1#f"
+        assert seen[0].split(b"\r\n")[0] == (
+            b"POST /PurchaseOrchestrator/..%2Fadmin%3Fx%3D1%23f/run HTTP/1.1"
+        )
+
+    def test_a_success_body_nested_past_the_decoder_is_an_infra_error(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def ingress() -> None:  # tesser:debt TB023
+            conn, _ = listener.accept()
+            with conn:
+                while b"\r\n\r\n" not in conn.recv(4096):
+                    continue
+                answer = b"[" * 10000 + b"]" * 10000
+                conn.sendall(
+                    b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: "
+                    + str(len(answer)).encode()
+                    + b"\r\n\r\n"
+                    + answer
+                )
+
+        thread = threading.Thread(target=ingress)
+        thread.start()
+        try:
+            with pytest.raises(errors.InfraError):
+                asyncio.run(
+                    runners.RestatePurchaseOrchestratorRunner(
+                        f"http://127.0.0.1:{port}",
+                        runtimes.RestateOrderRuntime(
+                            FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                        ),
+                    ).run_purchase_orchestrator(purchase_orchestrator_request())
+                )
+        finally:
+            thread.join(5)
+            listener.close()

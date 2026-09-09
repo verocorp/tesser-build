@@ -18,7 +18,9 @@ class FakePaymentProcessor(ports.PaymentProcessor):
     def charge(self, charge_request: ports.ChargeRequest) -> ports.ChargeResponse:
         self.charged.append((charge_request.order_id, charge_request.cents))
         return ports.ChargeResponse(
-            reference=f"pay-{charge_request.order_id}", cents=charge_request.cents
+            order_id=charge_request.order_id,
+            reference=f"pay-{charge_request.order_id}",
+            cents=charge_request.cents,
         )
 
 
@@ -37,6 +39,7 @@ class TestPurchaseActions:
         take_payment_response = application.PurchaseActions(FakePaymentProcessor()).take_payment(
             relays.TakePaymentRequest(order_id="o1", cents=750)
         )
+        assert take_payment_response.order_id == "o1"
         assert take_payment_response.reference == "pay-o1"
         assert take_payment_response.cents == 750
 

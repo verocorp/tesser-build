@@ -142,12 +142,35 @@ class PurchaseOrchestrator(ts.Orchestrator):
 ```
 
 A `Purchase` is keyed by the order it pays for and holds the total the child
-answered; `paid` is its one rule — the payment settles the purchase only if
-the amount charged equals that total, else `CONFLICT payment_mismatch`.
+answered, and it carries three rules, each a `CONFLICT`: a pricing that names
+another order cannot build the purchase (`priced_another_order`, so a child
+that answered for a different key is refused before any payment); a payment
+settles the purchase only if it names this order
+(`payment_for_another_order`) and only if the amount charged equals the total
+(`payment_mismatch`). The receipt names its order because the processor's
+`ChargeResponse` does, and that id rides the relay as
+`TakePaymentResponse.order_id` into `PaymentSpec`: without it the domain
+could not tell one order's receipt from another's at the same amount.
 `PurchaseActions.take_payment` is the class of actions over the
-`PaymentProcessor` port (`adapters/gateways/memory_payment_processor.py` is
-the stand-in, which charges an order once and refuses a second charge as
-`CONFLICT payment_already_taken`).
+`PaymentProcessor` port. `adapters/gateways/memory_payment_processor.py` is
+the stand-in, and it is idempotent by order: an identical repeat answers the
+original receipt, and only a repeat for a different amount is
+`CONFLICT payment_already_taken`. That is the one property a processor must
+have behind an action, because an action is the engine's retry unit: if the
+connection drops after the charge but before Restate records the action's
+result, the action runs again, and a processor that refused the repeat would
+turn a paid purchase into a failed one.
+
+Two value objects gained bounds in this change, because both were measured
+as holes the purchase widens. `Quantity` is at most 1,000,000 units and
+`Price` at most 10^12 cents, so their product stays far below Python's
+4,300-digit integer-string limit; without the bound a 4 KB body with a
+4,298-digit quantity passed every check until the workflow's output serde
+raised on the way out, which the SDK does not wrap as terminal, so the engine
+retried it forever while the caller's connection stayed open. And `OrderId`
+refuses `.` and `..`: percent-encoding leaves a dot alone and httpx
+normalizes dot segments on the way to the ingress, so an id of `..` would
+have turned `POST /PurchaseOrchestrator/../run` into `POST /run`.
 
 The child is run, not inlined, because it is already a workflow of its own:
 `OrderOrchestrator/<order_id>` is what `POST /orders` runs directly, it has
@@ -375,9 +398,9 @@ belongs beside the message it serves, and the messages belong to the relay.
 module, `adapters/runtimes/` and `adapters/runners/` as kind packages, a job
 context protocol outside `adapters/`, and a component publishing something
 besides `client` and `jobs` all draw findings. Every one carries a
-`# tesser:debt TB0xx` marker at its line — 103 of them, plus twenty-four
+`# tesser:debt TB0xx` marker at its line — 105 of them, plus twenty-six
 `TB023` markers on nested functions: the four handlers the SDK registers, the
-three route functions `main` declares, and the seventeen fake-ingress
+three route functions `main` declares, and the nineteen fake-ingress
 functions the two orchestrator runners' tests bind to a socket — and that
 marker list is the registration this tree asks of the analyzer. The purchase
 roughly doubled it, because a second workflow is a second relay, a second
@@ -389,7 +412,7 @@ absent.
 
 The remaining rule cost of putting an encoding in the application is `json`:
 the application stdlib allowlist is `{__future__, typing}`, and the four
-relays modules and `snapshots/order_snapshot.py` import it (five of the 103).
+relays modules and `snapshots/order_snapshot.py` import it (five of the 105).
 
 ## Messages are declared once, beside the protocol that speaks them
 
@@ -500,9 +523,13 @@ to its kind (`422` → `VALIDATION`, `404` → `NOT_FOUND`, `409` → `CONFLICT`
 raising a `DomainError` with the action's message, so the orchestrator and the
 workflow handler see a domain error, not an SDK one, and the workflow ends
 terminally with the action's status. A `TerminalError` carrying any other
-status is not the domain's (the SDK's own 500, a cancellation) and is
-re-raised as it is, still terminal. Anything that is not a `TerminalError`
-propagates as-is and Restate retries the invocation.
+status is not the domain's (the SDK's own 500) and is re-raised as it is,
+still terminal. One status the domain does own is also the SDK's: a cancelled
+invocation surfaces as `TerminalError("cancelled", 409)`, which lands on the
+conflict arm and reaches the caller as a `409` whose message is `cancelled`;
+telling an operator's cancellation from a business conflict by message is
+not a rule this tree makes (`TODOS.md`). Anything that is not a
+`TerminalError` propagates as-is and Restate retries the invocation.
 
 On the way out, the two calling modes answer a repeat differently, and the
 runner maps what each one measured on `restate-server` 1.7.2:
@@ -659,13 +686,26 @@ sends SIGINT.
 
 - The catalog is an in-memory repository seeded with two SKUs; a second
   replica would not share it, which is fine only because the lookup is
-  read-only. The payment processor is an in-memory gateway that charges each
-  order once; a real one is a vendor behind the same `PaymentProcessor` port.
+  read-only. The payment processor is an in-memory ledger keyed by order,
+  idempotent for an identical repeat; a real one is a vendor behind the same
+  `PaymentProcessor` port, and that port is synchronous like the catalog's.
+  A vendor call inside the action handler would block hypercorn's one event
+  loop, which serves the public API and the `/restate` return leg of every
+  in-flight invocation; a real processor makes the port async, which this
+  tree has not done.
 - A purchase has no compensation. If `take_payment` ended terminally after
   the child order ran, the order would stay placed and unpaid; the purchase
   workflow would end with the payment's status and nothing would undo the
-  child. Compensating only the steps that ran is the checkout scenario, not
-  this one.
+  child. The same holds when the payment *succeeded* and the domain then
+  refused it (`payment_mismatch`, `payment_for_another_order`): the money is
+  taken, the purchase ends `409`, and nothing refunds. Compensating only the
+  steps that ran is the checkout scenario, not this one.
+- The three doors share one key namespace. `POST /orders`,
+  `POST /submissions`, and the purchase's child all run `OrderOrchestrator`
+  under the caller-chosen order id, so an order placed or submitted first can
+  never be purchased, and a purchased order can never be placed again, and
+  any caller can take a key first. That is what "one business act done to one
+  order" costs when ids are chosen by the caller with no authentication.
 - A parent cannot attach to a child that already ran. `ctx.workflow_call` on
   a taken key is a terminal `409`, so a purchase of an order that was placed
   is refused rather than priced from the stored result; a parent that wanted

@@ -12,7 +12,9 @@ class MapToPurchaseSpec(ts.Mapper, domain.PurchaseSpec):
         self, order: domain.Order, order_orchestrator_response: relays.OrderOrchestratorResponse
     ) -> None:
         super().__init__(
-            order_id=str(order.identity), total_cents=order_orchestrator_response.total_cents
+            order_id=str(order.identity),
+            priced_order_id=order_orchestrator_response.order_id,
+            total_cents=order_orchestrator_response.total_cents,
         )
 
 
@@ -25,7 +27,11 @@ class MapToTakePaymentRequest(ts.Mapper, relays.TakePaymentRequest):
 class MapToPaymentSpec(ts.Mapper, domain.PaymentSpec):
 
     def __init__(self, take_payment_response: relays.TakePaymentResponse) -> None:
-        super().__init__(reference=take_payment_response.reference, cents=take_payment_response.cents)
+        super().__init__(
+            order_id=take_payment_response.order_id,
+            reference=take_payment_response.reference,
+            cents=take_payment_response.cents,
+        )
 
 
 class MapToPurchaseOrchestratorResponse(ts.Mapper, relays.PurchaseOrchestratorResponse):

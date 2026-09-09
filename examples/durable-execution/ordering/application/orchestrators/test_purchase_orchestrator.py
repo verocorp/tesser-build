@@ -14,16 +14,19 @@ import tesser.errors as errors
 @ts.fake
 class FakePurchaseActionsRunner(relays.PurchaseActionsRunner):
 
-    def __init__(self, cents_charged: int = 0) -> None:
+    def __init__(self, cents_charged: int = 0, order_charged: str = "") -> None:
         self._cents_charged = cents_charged
+        self._order_charged = order_charged
         self.taken: list[tuple[str, int]] = []
 
     async def run_take_payment(
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         self.taken.append((take_payment_request.order_id, take_payment_request.cents))
+        order_id = self._order_charged or take_payment_request.order_id
         return relays.TakePaymentResponse(
-            reference=f"pay-{take_payment_request.order_id}",
+            order_id=order_id,
+            reference=f"pay-{order_id}",
             cents=self._cents_charged or take_payment_request.cents,
         )
 
@@ -51,6 +54,20 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:deb
             order_id=str(order_orchestrator_request.order.identity),
             total_cents=250 * int(order_orchestrator_request.order.quantity),
         )
+
+
+@ts.fake
+class FakeMisroutedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:debt TB072
+
+    async def start_order_orchestrator(
+        self, order_orchestrator_request: relays.OrderOrchestratorRequest
+    ) -> relays.StartOrderOrchestratorResponse:
+        return relays.StartOrderOrchestratorResponse(order_id="other")
+
+    async def run_order_orchestrator(
+        self, order_orchestrator_request: relays.OrderOrchestratorRequest
+    ) -> relays.OrderOrchestratorResponse:
+        return relays.OrderOrchestratorResponse(order_id="other", total_cents=1)
 
 
 @ts.fake
@@ -120,3 +137,23 @@ class TestPurchaseOrchestrator:
             )
         assert excinfo.value.kind is errors.Kind.NOT_FOUND
         assert fake_purchase_actions_runner.taken == []
+
+    def test_a_child_that_answered_for_another_order_ends_the_run_before_any_payment(self) -> None:
+        fake_purchase_actions_runner = FakePurchaseActionsRunner()
+        with pytest.raises(errors.DomainError) as excinfo:
+            asyncio.run(
+                orchestrators.PurchaseOrchestrator(
+                    fake_purchase_actions_runner, FakeMisroutedOrderOrchestratorRunner()
+                ).run(purchase_orchestrator_request())
+            )
+        assert excinfo.value.code == "priced_another_order"
+        assert fake_purchase_actions_runner.taken == []
+
+    def test_a_receipt_for_another_order_ends_the_run_as_a_conflict(self) -> None:
+        with pytest.raises(errors.DomainError) as excinfo:
+            asyncio.run(
+                orchestrators.PurchaseOrchestrator(
+                    FakePurchaseActionsRunner(order_charged="other"), FakeOrderOrchestratorRunner()
+                ).run(purchase_orchestrator_request())
+            )
+        assert excinfo.value.code == "payment_for_another_order"

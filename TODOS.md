@@ -274,6 +274,18 @@ domain modules out before removing them.
   sentence (promotion makes forwarding redundant); `python.md` says compose
   with "an explicit class that holds the service and delegates". Scope the
   first to Go, and point the second at this class as the verified impl.
+- [ ] **A cancelled invocation reaches the caller as a domain conflict
+  (2026-09-09, from the purchase PR's adversarial pass).** The SDK raises
+  `TerminalError("cancelled", 409)` when an operator cancels an invocation
+  (`restate/server_context.py:686`), and every in-invocation runner maps
+  `409` to `CONFLICT`, so a cancelled child or payment call answers
+  `409 {"detail": "cancelled"}` at the door, indistinguishable from a
+  business rejection. Only the message tells them apart. Belongs to the
+  error-handling wave: whether the status→kind inverse gets a
+  message-shaped carve-out, or cancellation is a kind of its own.
+- [ ] **A zero-cent purchase settles.** `Price` permits `0`, so
+  `Purchase.paid` settles a 0-cent purchase with a 0-cent payment. Unreachable
+  through the seeded catalog; a rule once a free item exists.
 - [ ] **The `202` arm of `POST /submissions` and the `200` arms of `POST /orders`
   and `POST /purchases` have no test.** `srv/http/test_main.py` drives the
   host as a subprocess and every request lands on a failure arm

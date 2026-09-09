@@ -12,14 +12,17 @@ class MemoryPaymentProcessor(ts.Gateway):
         self._charges: dict[str, int] = {}
 
     def charge(self, charge_request: ports.ChargeRequest) -> ports.ChargeResponse:
-        if charge_request.order_id in self._charges:
+        charged = self._charges.get(charge_request.order_id)
+        if charged is not None and charged != charge_request.cents:
             raise errors.conflict(
                 "payment_already_taken",
-                f"order {charge_request.order_id!r} has already been charged",
+                f"order {charge_request.order_id!r} has already been charged {charged} cents",
             )
         self._charges[charge_request.order_id] = charge_request.cents
         return ports.ChargeResponse(
-            reference=f"pay-{charge_request.order_id}", cents=charge_request.cents
+            order_id=charge_request.order_id,
+            reference=f"pay-{charge_request.order_id}",
+            cents=charge_request.cents,
         )
 
     def close(self) -> None:

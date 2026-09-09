@@ -14,7 +14,8 @@ class ChargeRequest(ts.Request):
 
 class ChargeResponse(ts.Response):
 
-    def __init__(self, reference: str, cents: int) -> None:
+    def __init__(self, order_id: str, reference: str, cents: int) -> None:
+        self.order_id = order_id
         self.reference = reference
         self.cents = cents
 
