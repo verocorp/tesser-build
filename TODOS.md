@@ -251,6 +251,29 @@ domain modules out before removing them.
   `restate`. The alternative is the runtime answering with the mountable ASGI
   app, so the host imports nothing from Restate. Unsettled: with two contexts
   each holding a Restate runtime, one endpoint with merged definitions or two.
+- [ ] **What kind is the class that composes two services behind one client?
+  (2026-09-09, Chris)** `examples/durable-execution` is the first tree where a
+  context has two application services (`OrderService`, `PurchaseService`;
+  one runner each — a service holds the methods that share its dependencies)
+  and one `client.OrderingClient` protocol. Python satisfies a protocol
+  structurally and has no embedding, so the composition is a class that holds
+  both services and forwards the three protocol methods:
+  `ordering/component/component.py` `Ordering.Client`, nested in the
+  component, subclassing nothing, named by the module alias the way `Spec`
+  and `Config` are. Rulings made building it: a protocol is never subclassed
+  (so no `client.OrderingClient` base); no Go argument (embedding, the
+  unexported struct) decides a Python shape; the forwarding is the cost of
+  composition and is where reshaping would go. Open: (a) the analyzer reports
+  **nothing** on a class nested inside a component class — no kind, no
+  placement — so this shape passes without a marker; decide whether a nested
+  class is out of the kind rules by design or a hole to close. (b) Whether
+  the composing client wants a tesser kind of its own (a base in
+  `tesser.component` beside `Spec`, `Config`, `Component`) so declare-then-verify
+  covers it, or stays a plain class the component owns. (c) The skill's
+  `public-interface.md` "never add a method that only forwards" is a Go
+  sentence (promotion makes forwarding redundant); `python.md` says compose
+  with "an explicit class that holds the service and delegates". Scope the
+  first to Go, and point the second at this class as the verified impl.
 - [ ] **The `202` arm of `POST /submissions` and the `200` arms of `POST /orders`
   and `POST /purchases` have no test.** `srv/http/test_main.py` drives the
   host as a subprocess and every request lands on a failure arm

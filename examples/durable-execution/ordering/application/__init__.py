@@ -1,3 +1,4 @@
 from ordering.application.order_actions import OrderActions as OrderActions
 from ordering.application.order_service import OrderService as OrderService
 from ordering.application.purchase_actions import PurchaseActions as PurchaseActions
+from ordering.application.purchase_service import PurchaseService as PurchaseService

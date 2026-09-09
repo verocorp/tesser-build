@@ -34,30 +34,6 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:deb
         )
 
 
-@ts.fake
-class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):  # tesser:debt TB072
-
-    def __init__(self) -> None:
-        self.ran: list[relays.PurchaseOrchestratorRequest] = []
-
-    async def run_purchase_orchestrator(
-        self, purchase_orchestrator_request: relays.PurchaseOrchestratorRequest
-    ) -> relays.PurchaseOrchestratorResponse:
-        self.ran.append(purchase_orchestrator_request)
-        return relays.PurchaseOrchestratorResponse(
-            order_id=str(purchase_orchestrator_request.order.identity),
-            total_cents=250 * int(purchase_orchestrator_request.order.quantity),
-            payment_reference=f"pay-{purchase_orchestrator_request.order.identity}",
-        )
-
-
-@ts.helper
-def purchase_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 2
-) -> client.PurchaseRequest:
-    return client.PurchaseRequest(order_id=order_id, sku=sku, quantity=quantity)
-
-
 @ts.helper
 def submit_order_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 2
@@ -76,7 +52,7 @@ class TestOrderService:
 
     def test_submitting_answers_the_order_id(self) -> None:
         submit_order_response = asyncio.run(
-            application.OrderService(FakeOrderOrchestratorRunner(), FakePurchaseOrchestratorRunner()).submit_order(
+            application.OrderService(FakeOrderOrchestratorRunner()).submit_order(
                 submit_order_request()
             )
         )
@@ -85,7 +61,7 @@ class TestOrderService:
     def test_submitting_starts_the_orchestrator_for_the_order_it_built(self) -> None:
         fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
         asyncio.run(
-            application.OrderService(fake_order_orchestrator_runner, FakePurchaseOrchestratorRunner()).submit_order(
+            application.OrderService(fake_order_orchestrator_runner).submit_order(
                 submit_order_request(order_id="o2", sku="gadget", quantity=3)
             )
         )
@@ -96,7 +72,7 @@ class TestOrderService:
 
     def test_placing_answers_the_order_id_and_the_total(self) -> None:
         place_order_response = asyncio.run(
-            application.OrderService(FakeOrderOrchestratorRunner(), FakePurchaseOrchestratorRunner()).place_order(
+            application.OrderService(FakeOrderOrchestratorRunner()).place_order(
                 place_order_request(quantity=3)
             )
         )
@@ -106,7 +82,7 @@ class TestOrderService:
     def test_placing_runs_the_orchestrator_for_the_order_it_built_and_waits(self) -> None:
         fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
         asyncio.run(
-            application.OrderService(fake_order_orchestrator_runner, FakePurchaseOrchestratorRunner()).place_order(
+            application.OrderService(fake_order_orchestrator_runner).place_order(
                 place_order_request(order_id="o2", sku="gadget", quantity=3)
             )
         )
@@ -114,29 +90,4 @@ class TestOrderService:
             (str(r.order.identity), str(r.order.sku), int(r.order.quantity))
             for r in fake_order_orchestrator_runner.ran
         ] == [("o2", "gadget", 3)]
-        assert fake_order_orchestrator_runner.started == []
-
-    def test_purchasing_answers_the_order_id_the_total_and_the_payment_reference(self) -> None:
-        purchase_response = asyncio.run(
-            application.OrderService(
-                FakeOrderOrchestratorRunner(), FakePurchaseOrchestratorRunner()
-            ).purchase(purchase_request(quantity=3))
-        )
-        assert purchase_response.order_id == "o1"
-        assert purchase_response.total_cents == 750
-        assert purchase_response.payment_reference == "pay-o1"
-
-    def test_purchasing_runs_the_purchase_orchestrator_for_the_order_it_built_and_waits(self) -> None:
-        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
-        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()  # tesser:debt TB085
-        asyncio.run(
-            application.OrderService(
-                fake_order_orchestrator_runner, fake_purchase_orchestrator_runner
-            ).purchase(purchase_request(order_id="o2", sku="gadget", quantity=3))
-        )
-        assert [
-            (str(r.order.identity), str(r.order.sku), int(r.order.quantity))
-            for r in fake_purchase_orchestrator_runner.ran
-        ] == [("o2", "gadget", 3)]
-        assert fake_order_orchestrator_runner.ran == []
         assert fake_order_orchestrator_runner.started == []

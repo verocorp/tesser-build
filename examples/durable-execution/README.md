@@ -43,7 +43,7 @@ with either thing.
 | `run_` — the caller waits for the result | `run_order_orchestrator`, ingress `workflow_call`, behind `POST /orders` | `run_price_product`, `ctx.service_call`, inside the workflow |
 
 `POST /purchases` is the third use case and the first scenario on top of the
-grid: a **purchase** is an order paid for. `OrderService.purchase` builds the
+grid: a **purchase** is an order paid for. `PurchaseService.purchase` builds the
 same `Order` and hands it to `PurchaseOrchestratorRunner.run_purchase_orchestrator`;
 the `PurchaseOrchestrator` workflow runs `OrderOrchestrator/run` as a **child
 workflow** under the order's own key, waits for its total, and then runs the
@@ -255,19 +255,17 @@ that check a list where a `sku` should be builds an `Order` that raises a
 
 This tree is the worked example for `docs/design-app-service-types.md`:
 
-- `OrderService(ts.ApplicationService)` — the public use cases, on
-  `client.OrderingClient`, built once by the component. Every method does the
-  once-only work (validate at the door, build the `Order`); `submit_order`
-  starts the order orchestrator through
-  `OrderOrchestratorRunner.start_order_orchestrator`, `place_order` runs it
-  through `run_order_orchestrator`, and `purchase` runs the purchase
-  orchestrator through `PurchaseOrchestratorRunner.run_purchase_orchestrator`.
-  One class, three methods, two runners: the purchase brought a second
-  dependency onto the one service, because the context has one `Client`
-  protocol and Python has no embedding to compose two services behind it
-  without a forwarding class. Whether that is the shape, or the point at which
-  a second service and a composing client appear, is a ruling this tree has
-  not made.
+- `OrderService(ts.ApplicationService)` and `PurchaseService` — the public
+  use cases, built once by the component. Every method does the once-only
+  work (validate at the door, build the `Order`); `submit_order` starts the
+  order orchestrator through `OrderOrchestratorRunner.start_order_orchestrator`,
+  `place_order` runs it through `run_order_orchestrator`, and `purchase` runs
+  the purchase orchestrator through
+  `PurchaseOrchestratorRunner.run_purchase_orchestrator`. Two services because
+  two runners: a service holds the methods that share its dependencies, so the
+  purchase, which holds a different runner, is a second service. What the
+  context offers the world is still one `client.OrderingClient` protocol, and
+  the component composes the two services behind it (below).
 - `OrderOrchestrator(ts.Orchestrator)` and `PurchaseOrchestrator` in
   `application/orchestrators/` — not services. Built per invocation by the
   runtime with that invocation's runners; store nothing but them; take the
@@ -284,18 +282,53 @@ This tree is the worked example for `docs/design-app-service-types.md`:
 
 ## The component publishes the runtime, the host mounts it
 
-The component builds the runtime once and uses it twice — as the thing the
-host mounts, and as what the orchestrator runner sends through:
+The component builds the runtime once and uses it three times — as the
+thing the host mounts, and as what each of the two ingress runners sends
+through — and composes the two services behind the one client protocol:
 
 ```python
-self.restate_order_runtime = runtimes.RestateOrderRuntime(
-    self._order_actions, self._purchase_actions
-)
-self.client: client.OrderingClient = application.OrderService(
-    runners.RestateOrderOrchestratorRunner(config.ingress, self.restate_order_runtime),
-    runners.RestatePurchaseOrchestratorRunner(config.ingress, self.restate_order_runtime),
-)
+class Ordering(ts.Component):
+
+    class Client:
+
+        def __init__(self, order_service: application.OrderService, purchase_service: application.PurchaseService) -> None:
+            self._order_service = order_service
+            self._purchase_service = purchase_service
+
+        async def submit_order(self, submit_order_request):
+            return await self._order_service.submit_order(submit_order_request)
+
+        async def place_order(self, place_order_request):
+            return await self._order_service.place_order(place_order_request)
+
+        async def purchase(self, purchase_request):
+            return await self._purchase_service.purchase(purchase_request)
+
+    def __init__(self, config: Config) -> None:
+        ...
+        self.restate_order_runtime = runtimes.RestateOrderRuntime(
+            self._order_actions, self._purchase_actions
+        )
+        self.client: client.OrderingClient = Ordering.Client(
+            application.OrderService(
+                runners.RestateOrderOrchestratorRunner(config.ingress, self.restate_order_runtime)
+            ),
+            application.PurchaseService(
+                runners.RestatePurchaseOrchestratorRunner(config.ingress, self.restate_order_runtime)
+            ),
+        )
 ```
+
+`Ordering.Client` is the one object that satisfies `client.OrderingClient`;
+the module alias tells the two apart the way `Spec` and `Config` are told
+apart from `ts.Spec` and `ts.Config`. It holds the services and forwards each
+protocol method to the one that owns it, three lines of forwarding, which is
+what composing two services costs in Python; it is where a reshaped contract
+would go if the public surface ever differed from a service's signature. It
+subclasses nothing: a protocol is satisfied structurally, and the annotation
+on `self.client` is where that is checked. The analyzer has no row for a
+class nested in a component and reports nothing on it — whether that is the
+rule or a hole is an open ruling in `TODOS.md`.
 
 `restate.app(services)` is two things glued together: an `Endpoint`, a dict
 of `Service` and `Workflow` objects by name, and an ASGI app that routes
@@ -342,7 +375,7 @@ belongs beside the message it serves, and the messages belong to the relay.
 module, `adapters/runtimes/` and `adapters/runners/` as kind packages, a job
 context protocol outside `adapters/`, and a component publishing something
 besides `client` and `jobs` all draw findings. Every one carries a
-`# tesser:debt TB0xx` marker at its line — 99 of them, plus twenty-four
+`# tesser:debt TB0xx` marker at its line — 103 of them, plus twenty-four
 `TB023` markers on nested functions: the four handlers the SDK registers, the
 three route functions `main` declares, and the seventeen fake-ingress
 functions the two orchestrator runners' tests bind to a socket — and that
@@ -356,7 +389,7 @@ absent.
 
 The remaining rule cost of putting an encoding in the application is `json`:
 the application stdlib allowlist is `{__future__, typing}`, and the four
-relays modules and `snapshots/order_snapshot.py` import it (five of the 99).
+relays modules and `snapshots/order_snapshot.py` import it (five of the 103).
 
 ## Messages are declared once, beside the protocol that speaks them
 
