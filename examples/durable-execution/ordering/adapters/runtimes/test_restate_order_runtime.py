@@ -52,7 +52,7 @@ class FakeRefusingPurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         raise errors.conflict(
-            "payment_already_taken", f"order {take_payment_request.order_id!r} has already been charged"
+            "charge_declined", f"the processor declined the charge for order {take_payment_request.order_id!r}"
         )
 
 
