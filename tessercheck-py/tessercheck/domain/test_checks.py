@@ -166,6 +166,20 @@ def test_placement_is_the_single_routing_decision() -> None:
         ("shop.application.orchestrators.__main__", False, "orchestrators"),
         ("shop.application.orchestrators.test_flow", False, "test"),
         ("shop.application.orchestrators.conftest", False, "conftest"),
+        ("shop.application.relays", True, "relays-init"),
+        ("shop.application.relays", False, "relays-file"),
+        ("shop.application.relays.orders", False, "relays"),
+        ("shop.application.relays.sub.deep", False, "relays"),
+        ("shop.application.relays.__main__", False, "relays"),
+        ("shop.application.relays.test_orders", False, "test"),
+        ("shop.application.relays.conftest", False, "conftest"),
+        ("shop.application.snapshots", True, "snapshots-init"),
+        ("shop.application.snapshots", False, "snapshots-file"),
+        ("shop.application.snapshots.order", False, "snapshots"),
+        ("shop.application.snapshots.sub.deep", False, "snapshots"),
+        ("shop.application.snapshots.__main__", False, "snapshots"),
+        ("shop.application.snapshots.test_order", False, "test"),
+        ("shop.application.snapshots.conftest", False, "conftest"),
         ("shop.adapters.gateways.__main__", False, "role"),
         ("shop.adapters.conftest", False, "conftest"),
         ("shop.adapters.conftest", True, "conftest"),
@@ -796,7 +810,7 @@ def test_a_protocol_init_is_an_export_list() -> None:
 
 
 def test_every_declared_block_has_a_name_and_a_home() -> None:
-    blocks = set(domain.TESSER_BASE_BLOCKS.values())
+    blocks = set(domain.TESSER_BASE_BLOCKS.values()) | set(domain.RELAY_MESSAGE_BLOCKS.values())
     assert set(domain.KIND_NAME) == blocks
     assert set(domain.KIND_ROLE) == blocks - domain.SRV_KINDS - domain.APP_KINDS
     assert not (domain.APP_KINDS & set(domain.KIND_ROLE))
@@ -1593,7 +1607,7 @@ def test_an_orchestrator_reports_its_dependencies_before_its_job_contexts() -> N
     body = [f for f in findings if "Leading.__init__" in f]
     depends = next(
         index for index, f in enumerate(body)
-        if "is not a ts.Port or a ts.Store" in f
+        if "is not a ts.Port, a ts.Relay, or a ts.Store" in f
     )
     contexts = next(index for index, f in enumerate(body) if "job contexts" in f)
     assert depends < contexts, body
@@ -1782,7 +1796,7 @@ def test_service_dependencies_must_be_ports() -> None:
                )
     assert any(
         "NeedyService.__init__" in f
-        and "parameter 'db' is not a ts.Port or a ts.Store; a service depends only on ports and the stores that yield them" in f
+        and "parameter 'db' is not a ts.Port, a ts.Relay, or a ts.Store; a service depends only on ports, relays, and the stores that yield them" in f
         for f in findings
     )
 
@@ -2507,7 +2521,8 @@ def test_only_a_handler_imports_its_own_client() -> None:
         "two.adapters.gateways.sneaky" in f and "imports two.client.client" in f
         and "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a job the application client, the orchestrators, and "
-        "the ports, a gateway or a repository the ports" in f
+        "the ports, a gateway or a repository the ports, a runner its relays, a "
+        "runtime what it registers" in f
         for f in findings
     )
 
@@ -7047,7 +7062,8 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
         "shop.adapters.gateways.memory imports shop.application.service; "
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a job the application client, the orchestrators, and "
-        "the ports, a gateway or a repository the ports" in f
+        "the ports, a gateway or a repository the ports, a runner its relays, a "
+        "runtime what it registers" in f
         for f in findings
     )
     assert not any("imports shop.application.ports.sink;" in f for f in findings)
@@ -12172,19 +12188,19 @@ def test_an_application_client_module_speaks_one_ports_module() -> None:
         ))).violations()
     )
     assert any(
-        "shop.application.client.two_ports imports a second ports package "
+        "shop.application.client.two_ports imports a second message package "
         "shop.application.ports.other; an application client module speaks the "
-        "DTOs of exactly one ports package" in f
+        "DTOs of exactly one ports or relays package" in f
         for f in findings
     )
     assert any(
         "shop.application.client.reaching imports shop.domain.thing; an application "
-        "client module speaks the DTOs of exactly one ports package" in f
+        "client module speaks the DTOs of exactly one ports or relays package" in f
         for f in findings
     )
     assert any(
-        "shop.application.client.reaching imports no ports package; an application "
-        "client module speaks the DTOs of exactly one ports package" in f
+        "shop.application.client.reaching imports no message package; an application "
+        "client module speaks the DTOs of exactly one ports or relays package" in f
         for f in findings
     )
 
@@ -12225,7 +12241,7 @@ def test_an_application_client_module_holds_only_imports_and_one_protocol() -> N
     )
     assert any(
         "shop.application.client.loose imports os; an application client module "
-        "imports only tesser.application, one ports package, and the pure stdlib" in f
+        "imports only tesser.application, one message package, and the pure stdlib" in f
         for f in findings
     )
     assert any(
@@ -12295,9 +12311,9 @@ def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
         for f in findings
     )
     assert any(
-        "shop.application.client.wide.Client.odd names a shape its ports module "
+        "shop.application.client.wide.Client.odd names a shape its message module "
         "does not declare; an application client speaks the requests and "
-        "responses of the ports module it imports" in f
+        "responses of the ports or relays module it imports" in f
         for f in findings
     )
     assert any(
@@ -12375,7 +12391,8 @@ def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
     )
     assert any(
         "shop.adapters.loose is not in an adapter kind package; an adapters "
-        "module lives in handlers, gateways, repositories, or jobs, because "
+        "module lives in handlers, gateways, repositories, jobs, runners, or "
+        "runtimes, because "
         "placement is what carries an adapter's reach" in f
         for f in findings
     )
@@ -12513,8 +12530,8 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
     )
     assert not any("shop.adapters.jobs.wire.RecordSerde" in f for f in findings)
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde declares 0 type parameters" in f
-        and "a serde names one type parameter, the shape it carries in both directions" in f
+        "shop.adapters.jobs.sloppy.LooseSerde declares 0 types" in f
+        and "a serde names one type — a type parameter, or the one shape its base is subscripted with — the shape it carries in both directions" in f
         for f in findings
     )
     assert any(
@@ -12895,12 +12912,12 @@ def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
     )
     assert any(
         "shop.application.orchestrators.bad.Bad.__init__ parameter 'text' is not "
-        "a ts.Port or a ts.Store; an orchestrator depends only on ports and the stores that yield them" in f
+        "a ts.Port, a ts.Relay, or a ts.Store; an orchestrator depends only on ports, relays, and the stores that yield them" in f
         for f in findings
     )
     assert any(
         "shop.application.orchestrators.bad.Bad keeps _state; "
-        "an orchestrator stores only its job context and its action ports" in f
+        "an orchestrator stores only its job context, its action ports, and the relays it runs" in f
         for f in findings
     )
     assert any(
@@ -12997,7 +13014,7 @@ def test_an_orchestrator_takes_and_threads_exactly_one_job_context() -> None:
     )
     assert any(
         "shop.application.orchestrators.twice.Twice keeps _state; an orchestrator "
-        "stores only its job context and its action ports" in f
+        "stores only its job context, its action ports, and the relays it runs" in f
         for f in findings
     )
     assert not any(
@@ -16855,3 +16872,224 @@ def test_a_spec_and_a_dto_take_field_names() -> None:
         ))).violations()
     )
     assert not any("mod.domain" in f and "TB085" in f for f in findings), findings
+def test_a_relay_speaks_messages_that_carry_the_domain_and_snapshots_that_hold_nothing() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/__init__.py",
+                "shop.application.relays",
+                "from shop.application.relays.orders import OrderRelay as OrderRelay\n"
+                "from shop.application.relays.orders import RunRequest as RunRequest\n"
+                "from shop.application.relays.orders import RunRequestSnapshot as RunRequestSnapshot\n"
+                "from shop.application.relays.orders import RunResponse as RunResponse\n",
+                True,
+            ),
+            (
+                "shop/application/relays/orders.py",
+                "shop.application.relays.orders",
+                "import json\n"
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class RunRequest(ts.Request):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        self.name = name\n"
+                "class RunResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class RunRequestSnapshot(ts.Serde):\n"
+                "    def serialize(self, run_request: RunRequest) -> bytes:\n"
+                "        return json.dumps({'name': str(run_request.name)}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> RunRequest:\n"
+                "        return RunRequest(name=thing.Name(json.loads(buf)['name']))\n"
+                "class OrderRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run(self, run_request: RunRequest) -> RunResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/relays/test_orders.py",
+                "shop.application.relays.test_orders",
+                "import shop.application.relays as relays\n"
+                "def test_orders_exists() -> None:\n"
+                "    assert relays.OrderRelay is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("shop.application.relays.orders" in f for f in findings), findings
+
+
+def test_a_relay_dto_field_is_a_primitive_a_relay_dto_or_a_domain_object() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/__init__.py",
+                "shop.application.relays",
+                "from shop.application.relays.bad import BadRequest as BadRequest\n",
+                True,
+            ),
+            (
+                "shop/application/relays/bad.py",
+                "shop.application.relays.bad",
+                "import os\n"
+                "import tesser.application as ts\n"
+                "class BadRequest(ts.Request):\n"
+                "    def __init__(self, flag: bool, table: dict[str, str]) -> None:\n"
+                "        self.flag = flag\n"
+                "        self.table = table\n"
+                "class BadSnapshot(ts.Serde):\n"
+                "    LIMIT = 3\n"
+                "    def __init__(self, held: str) -> None:\n"
+                "        self._held = held\n"
+                "    def serialize(self, bad_request: BadRequest) -> bytes:\n"
+                "        return b''\n",
+                False,
+            ),
+            (
+                "shop/application/relays/test_bad.py",
+                "shop.application.relays.test_bad",
+                "import shop.application.relays as relays\n"
+                "def test_bad_exists() -> None:\n"
+                "    assert relays.BadRequest is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.relays.bad.BadRequest.__init__ field 'flag' is a bool; "
+        "a relay DTO field is never a bare bool — model the outcome as an enum" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.bad.BadRequest.__init__ parameter 'table' is not "
+        "allowed; a relay DTO field is a primitive, another relay DTO, or a domain "
+        "object, because both ends of a relay are this context" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.bad.BadSnapshot declares no deserialize; a snapshot "
+        "declares serialize and deserialize and nothing else, because a snapshot is "
+        "the one place a message becomes bytes" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.bad.BadSnapshot.__init__ is a method; a snapshot "
+        "declares serialize and deserialize and nothing else, because a snapshot is "
+        "the one place a message becomes bytes" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.bad.BadSnapshot carries a class-level statement; a "
+        "snapshot holds nothing, because a relay writes the same bytes on every replay" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.bad.BadSnapshot stores '_held'; a snapshot holds "
+        "nothing, because a relay writes the same bytes on every replay" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.bad imports os; a relays or snapshots module imports "
+        "the application stdlib and json, because a snapshot is where a message "
+        "becomes bytes" in f
+        for f in findings
+    ), findings
+
+
+def test_relays_and_snapshots_are_packages_never_modules() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays.py",
+                "shop.application.relays",
+                "import tesser.application as ts\n"
+                "class RunRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "shop/application/snapshots.py",
+                "shop.application.snapshots",
+                "import tesser.application as ts\n"
+                "class ThingSnapshot(ts.Serde):\n"
+                "    def serialize(self, text: str) -> bytes:\n"
+                "        return b''\n"
+                "    def deserialize(self, buf: bytes) -> str:\n"
+                "        return ''\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.relays is a relays module; relays is a package, never a module" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.snapshots is a snapshots module; snapshots is a package, "
+        "never a module" in f
+        for f in findings
+    ), findings
+
+
+def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/__init__.py",
+                "shop.application.relays",
+                "from shop.application.relays.orders import OrderRelay as OrderRelay\n"
+                "from shop.application.relays.orders import RunRequest as RunRequest\n"
+                "from shop.application.relays.orders import RunResponse as RunResponse\n",
+                True,
+            ),
+            (
+                "shop/application/relays/orders.py",
+                "shop.application.relays.orders",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class RunRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class RunResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class OrderRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run(self, run_request: RunRequest) -> RunResponse: ...\n",
+                False,
+            ),
+            ("shop/adapters/runners/__init__.py", "shop.adapters.runners", "", True),
+            (
+                "shop/adapters/runners/engine.py",
+                "shop.adapters.runners.engine",
+                "import tesser.adapters as ts\n"
+                "import shop.application.relays as relays\n"
+                "import shop.application.service as service\n"
+                "class EngineRunner(ts.Gateway):\n"
+                "    async def run(self, run_request: relays.RunRequest) -> relays.RunResponse:\n"
+                "        return relays.RunResponse(text=run_request.text)\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/test_engine.py",
+                "shop.adapters.runners.test_engine",
+                "import shop.adapters.runners as runners\n"
+                "def test_engine_exists() -> None:\n"
+                "    assert runners.EngineRunner is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.runners.engine imports shop.application.service; "
+        "an adapters kind package reaches only what its kind reaches — a handler "
+        "the context client, a job the application client, the orchestrators, and "
+        "the ports, a gateway or a repository the ports, a runner its relays, a "
+        "runtime what it registers" in f
+        for f in findings
+    ), findings
+    assert not any("imports shop.application.relays;" in f for f in findings), findings

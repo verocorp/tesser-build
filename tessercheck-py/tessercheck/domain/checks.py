@@ -22,6 +22,8 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Orchestrator"): "orchestrator",
     ("tesser.application", "Actions"): "actions",
     ("tesser.application", "JobContext"): "job_context",
+    ("tesser.application", "Relay"): "relay",
+    ("tesser.application", "Serde"): "snapshot",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -37,7 +39,9 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Mapper"): "mapper",
     ("tesser.adapters", "Serde"): "serde",
     ("tesser.adapters", "JobContext"): "job_context",
+    ("tesser.adapters", "Relay"): "relay",
     ("tesser.testing", "JobContext"): "job_context",
+    ("tesser.testing", "Relay"): "relay",
     ("tesser.component", "Component"): "component",
     ("tesser.component", "Config"): "component_config",
     ("tesser.component", "Spec"): "component_spec",
@@ -67,6 +71,8 @@ TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
     "response": "ts.Response",
     "port_request": "ts.Request",
     "port_response": "ts.Response",
+    "relay_request": "ts.Request",
+    "relay_response": "ts.Response",
     "spec": "ts.Spec",
     "app_spec": "ts.Spec",
     "component_spec": "ts.Spec",
@@ -76,7 +82,7 @@ ROLES: typing.Final[tuple[str, ...]] = ("domain", "application", "client", "adap
 
 EXPORT_PACKAGE_PLACES: typing.Final[frozenset[str]] = frozenset({
     "role-init", "ports-init", "app-client-init", "orchestrators-init",
-    "shell-init", "protocol-init",
+    "relays-init", "snapshots-init", "shell-init", "protocol-init",
 })
 
 STORE_METHOD: typing.Final[str] = "transaction"
@@ -105,9 +111,47 @@ ORCHESTRATORS_HOME: typing.Final[str] = "application/orchestrators"
 
 ORCHESTRATORS_IMPORT: typing.Final[str] = "application.orchestrators"
 
+RELAYS_PACKAGE: typing.Final[str] = "relays"
+
+RELAYS_HOME: typing.Final[str] = "application/relays"
+
+RELAYS_IMPORT: typing.Final[str] = "application.relays"
+
+SNAPSHOTS_PACKAGE: typing.Final[str] = "snapshots"
+
+SNAPSHOTS_HOME: typing.Final[str] = "application/snapshots"
+
+SNAPSHOTS_IMPORT: typing.Final[str] = "application.snapshots"
+
+SNAPSHOT_BLOCK: typing.Final[str] = "snapshot"
+
+RELAY_BLOCK: typing.Final[str] = "relay"
+
+RELAY_MESSAGE_BLOCKS: typing.Final[dict[str, str]] = {
+    "port_request": "relay_request",
+    "port_response": "relay_response",
+}
+
+RELAY_DTO_BLOCKS: typing.Final[frozenset[str]] = frozenset(RELAY_MESSAGE_BLOCKS.values())
+
 PACKAGE_HOMES: typing.Final[frozenset[str]] = frozenset(
-    {PORTS_HOME, APPLICATION_CLIENT_HOME, ORCHESTRATORS_HOME}
+    {PORTS_HOME, APPLICATION_CLIENT_HOME, ORCHESTRATORS_HOME, RELAYS_HOME, SNAPSHOTS_HOME}
 )
+
+MESSAGE_PACKAGES: typing.Final[frozenset[str]] = frozenset({PORTS_PACKAGE, RELAYS_PACKAGE})
+
+PLACEMENT_KINDS: typing.Final[dict[str, frozenset[str]]] = {
+    "orchestrators": frozenset({"orchestrator", "port_response"}),
+    "orchestrators-file": frozenset({"orchestrator", "port_response"}),
+    "relays": frozenset(
+        {RELAY_BLOCK, "job_context", SNAPSHOT_BLOCK} | RELAY_DTO_BLOCKS
+    ),
+    "relays-file": frozenset(
+        {RELAY_BLOCK, "job_context", SNAPSHOT_BLOCK} | RELAY_DTO_BLOCKS
+    ),
+    "snapshots": frozenset({SNAPSHOT_BLOCK}),
+    "snapshots-file": frozenset({SNAPSHOT_BLOCK}),
+}
 
 JOB_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (
     APPLICATION_CLIENT_IMPORT,
@@ -118,12 +162,26 @@ ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
     {"handler", "gateway", "repository", "job", "job_context"}
 )
 
+RUNNERS_PACKAGE: typing.Final[str] = "runners"
+
+RUNTIMES_PACKAGE: typing.Final[str] = "runtimes"
+
 ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
     "gateways": frozenset({"gateway"}),
     "repositories": frozenset({"repository"}),
     "jobs": frozenset({"job", "job_context", "serde"}),
+    RUNNERS_PACKAGE: frozenset({"gateway", "job_context"}),
+    RUNTIMES_PACKAGE: frozenset({"job", "serde"}),
 }
+
+JOB_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({"jobs", RUNTIMES_PACKAGE})
+
+JOB_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
+    {"jobs", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
+)
+
+ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, jobs, runners, or runtimes"
 
 SERDE_BLOCK: typing.Final[str] = "serde"
 
@@ -157,6 +215,13 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
     "jobs": (APPLICATION_CLIENT_IMPORT, ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH),
+    RUNNERS_PACKAGE: (RELAYS_IMPORT, f"adapters.{RUNTIMES_PACKAGE}"),
+    RUNTIMES_PACKAGE: (
+        APPLICATION_CLIENT_IMPORT,
+        ORCHESTRATORS_IMPORT,
+        RELAYS_IMPORT,
+        f"adapters.{RUNNERS_PACKAGE}",
+    ),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", "job"})
@@ -178,6 +243,10 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "actions": "application",
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
+    RELAY_BLOCK: RELAYS_HOME,
+    "relay_request": RELAYS_HOME,
+    "relay_response": RELAYS_HOME,
+    SNAPSHOT_BLOCK: SNAPSHOTS_HOME,
     "port": PORTS_HOME,
     "store": PORTS_HOME,
     "port_request": PORTS_HOME,
@@ -216,6 +285,10 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "actions": "a class of actions",
     "orchestrator": "an orchestrator",
     "actions_client": "an application client",
+    RELAY_BLOCK: "a relay",
+    "relay_request": "a relay request",
+    "relay_response": "a relay response",
+    SNAPSHOT_BLOCK: "a snapshot",
     "port": "a port",
     "store": "a store",
     "port_request": "a port request DTO",
@@ -380,6 +453,8 @@ DATA_BLOCKS: typing.Final[frozenset[str]] = frozenset(
         "response",
         "port_request",
         "port_response",
+        "relay_request",
+        "relay_response",
         "protocol_record",
         "protocol_rejection",
         "protocol_request",
@@ -388,7 +463,16 @@ DATA_BLOCKS: typing.Final[frozenset[str]] = frozenset(
 )
 
 PAIRED_PLACES: typing.Final[frozenset[str]] = frozenset(
-    {"role", "kernel", "shell-srv", "shell-app", "protocol", ORCHESTRATORS_PACKAGE}
+    {
+        "role",
+        "kernel",
+        "shell-srv",
+        "shell-app",
+        "protocol",
+        ORCHESTRATORS_PACKAGE,
+        RELAYS_PACKAGE,
+        SNAPSHOTS_PACKAGE,
+    }
 )
 
 NORM_IMPORTS: typing.Final[dict[str, frozenset[str]]] = {
@@ -435,7 +519,11 @@ TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
     "gateways": ("adapters", "gateways"),
     "repositories": ("adapters", "repositories"),
     "jobs": ("adapters", "jobs"),
+    RUNNERS_PACKAGE: ("adapters", RUNNERS_PACKAGE),
+    RUNTIMES_PACKAGE: ("adapters", RUNTIMES_PACKAGE),
     ORCHESTRATORS_PACKAGE: ("application", ORCHESTRATORS_PACKAGE),
+    RELAYS_PACKAGE: ("application", RELAYS_PACKAGE),
+    SNAPSHOTS_PACKAGE: ("application", SNAPSHOTS_PACKAGE),
 }
 
 TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
@@ -447,8 +535,14 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
     "jobs": ADAPTER_KIND_REACH["jobs"],
+    RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE]
+    + (APPLICATION_CLIENT_IMPORT, "domain"),
+    RUNTIMES_PACKAGE: ADAPTER_KIND_REACH[RUNTIMES_PACKAGE] + ("domain",),
     ORCHESTRATORS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
-    + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH),
+    + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, RELAYS_IMPORT),
+    RELAYS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
+    + (RELAYS_IMPORT, SNAPSHOTS_IMPORT),
+    SNAPSHOTS_PACKAGE: SAME_CONTEXT_IMPORTS["application"] + (SNAPSHOTS_IMPORT,),
     TESTS_ROLE: ROLES + (TESTS_ROLE,),
 }
 
@@ -459,7 +553,7 @@ TEST_TIER_FOREIGN: typing.Final[dict[str, tuple[str, ...]]] = {
 }
 
 ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
-    {"handlers", "gateways", "repositories", "jobs"}
+    {"handlers", "gateways", "repositories", "jobs", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
 )
 
 SRV_TIER: typing.Final[str] = "srv"
@@ -490,7 +584,11 @@ TEST_TIER_SHELL: typing.Final[dict[str, frozenset[str]]] = {
     "gateways": frozenset(),
     "repositories": frozenset(),
     "jobs": frozenset(),
+    RUNNERS_PACKAGE: frozenset(),
+    RUNTIMES_PACKAGE: frozenset(),
     ORCHESTRATORS_PACKAGE: frozenset(),
+    RELAYS_PACKAGE: frozenset(),
+    SNAPSHOTS_PACKAGE: frozenset(),
     TESTS_ROLE: frozenset({"protocol"}),
 }
 
@@ -534,6 +632,12 @@ CORE_STDLIB: typing.Final[dict[str, frozenset[str]]] = {
 
 PORTS_STDLIB: typing.Final[frozenset[str]] = frozenset({"__future__", "typing", "enum"})
 
+SNAPSHOT_STDLIB: typing.Final[frozenset[str]] = CORE_STDLIB["application"] | frozenset({"json"})
+
+SNAPSHOT_PLACES: typing.Final[frozenset[str]] = frozenset(
+    {"relays", "relays-file", "snapshots", "snapshots-file"}
+)
+
 DOMAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset({"aggregate", "entity", "valueobject"})
 
 OUTCOME_BLOCK: typing.Final[str] = "outcome"
@@ -563,6 +667,8 @@ FIELD_NAME_BLOCKS: typing.Final[frozenset[str]] = SPEC_BLOCKS | frozenset({
     "response",
     "port_request",
     "port_response",
+    "relay_request",
+    "relay_response",
     "protocol_record",
     "protocol_request",
     "protocol_response",
@@ -2662,6 +2768,7 @@ class SignaturePolicySpec(ts.Spec):
         taking: str,
         leading_context: bool = False,
         constructs: str = "",
+        relayed: bool = False,
     ) -> None:
         self.param_block = param_block
         self.return_block = return_block
@@ -2670,6 +2777,7 @@ class SignaturePolicySpec(ts.Spec):
         self.taking = taking
         self.leading_context = leading_context
         self.constructs = constructs
+        self.relayed = relayed
 
 
 class SignaturePolicy(ts.ValueObject):
@@ -2681,6 +2789,7 @@ class SignaturePolicy(ts.ValueObject):
     _taking: Text
     _leading_context: Names
     _constructs: Text | None
+    _relayed: Names
 
     def __init__(self, spec: SignaturePolicySpec) -> None:
         object.__setattr__(self, "_param_block", Text(spec.param_block))
@@ -2690,6 +2799,7 @@ class SignaturePolicy(ts.ValueObject):
         object.__setattr__(self, "_taking", Text(spec.taking))
         object.__setattr__(self, "_leading_context", Names(("leading",) if spec.leading_context else ()))
         object.__setattr__(self, "_constructs", Text(spec.constructs) if spec.constructs else None)
+        object.__setattr__(self, "_relayed", Names(("relayed",) if spec.relayed else ()))
 
     def violations(self, signature: Signature) -> tuple[Violation, ...]:
         param_block = str(self._param_block)
@@ -2701,6 +2811,21 @@ class SignaturePolicy(ts.ValueObject):
         path = str(signature.path())
         line = int(signature.lineno())
         expected = TS_NAME_BY_BLOCK[param_block]
+        taken = {param_block} | (
+            {RELAY_MESSAGE_BLOCKS[param_block]}
+            if self._relayed and param_block in RELAY_MESSAGE_BLOCKS
+            else set()
+        )
+        answered = (
+            None
+            if return_block is None
+            else {return_block}
+            | (
+                {RELAY_MESSAGE_BLOCKS[return_block]}
+                if self._relayed and return_block in RELAY_MESSAGE_BLOCKS
+                else set()
+            )
+        )
         found: list[Violation] = []
         params = list(signature.params())
         if self._leading_context and params and str(params[0].block()) == JOB_CONTEXT_BLOCK:
@@ -2748,7 +2873,7 @@ class SignaturePolicy(ts.ValueObject):
                 ))
             )
         for slot in params:
-            if str(slot.block()) != param_block:
+            if str(slot.block()) not in taken:
                 arg = str(slot.name())
                 found.append(
                     Violation(ViolationSpec(
@@ -2769,8 +2894,8 @@ class SignaturePolicy(ts.ValueObject):
                         "named spec, because the annotation already says which spec it is",
                     ))
                 )
-        if return_block is not None and (
-            returns is None or str(returns.block()) != return_block
+        if return_block is not None and answered is not None and (
+            returns is None or str(returns.block()) not in answered
         ):
             found.append(
                 Violation(ViolationSpec(
@@ -3108,13 +3233,26 @@ class Body(ts.ValueObject):
             return isinstance(func, ast.Name) and func.id in TRUTH_BUILTINS and func.id not in scope.locals()
 
         positional = list(fn.args.args)
-        request = positional[1].arg if len(positional) >= 2 else None
+        request_arg = positional[1] if len(positional) >= 2 else None
+        request = request_arg.arg if request_arg is not None else None
+        relayed = (
+            request_arg is not None
+            and request_arg.annotation is not None
+            and block_of(request_arg.annotation) in RELAY_DTO_BLOCKS
+        )
         for stmt in fn.body:
             if not isinstance(stmt, ast.Assign):
                 continue
             if not isinstance(stmt.value, (ast.Name, ast.Attribute)):
                 continue
             if any(isinstance(node, ast.Call) for node in ast.walk(stmt.value)):
+                continue
+            if (
+                relayed
+                and isinstance(stmt.value, ast.Attribute)
+                and isinstance(stmt.value.value, ast.Name)
+                and stmt.value.value.id == request
+            ):
                 continue
             facts.append((stmt.lineno, "accessor", None, ()))
         decided: set[int] = set()
@@ -3694,27 +3832,47 @@ class Helper(ts.ValueObject):
 
 class DependencyPolicySpec(ts.Spec):
 
-    def __init__(self, subject: str, context_ok: bool = False) -> None:
+    def __init__(
+        self,
+        subject: str,
+        expected: str,
+        allowed: str,
+        context_ok: bool = False,
+        relay_ok: bool = False,
+    ) -> None:
         self.subject = subject
+        self.expected = expected
+        self.allowed = allowed
         self.context_ok = context_ok
+        self.relay_ok = relay_ok
 
 
 class DependencyPolicy(ts.ValueObject):
 
     _subject: Text
+    _expected: Text
+    _allowed: Text
     _context_ok: Names
+    _relay_ok: Names
 
     def __init__(self, spec: DependencyPolicySpec) -> None:
         object.__setattr__(self, "_subject", Text(spec.subject))
+        object.__setattr__(self, "_expected", Text(spec.expected))
+        object.__setattr__(self, "_allowed", Text(spec.allowed))
         object.__setattr__(self, "_context_ok", Names(("context",) if spec.context_ok else ()))
+        object.__setattr__(self, "_relay_ok", Names(("relay",) if spec.relay_ok else ()))
 
     def violations(self, signature: Signature) -> tuple[Violation, ...]:
         subject = str(self._subject)
+        expected = str(self._expected)
+        allowed = str(self._allowed)
         where = str(signature.where())
         found: list[Violation] = []
         for slot in signature.params():
             block = str(slot.block()) if slot.block() is not None else None
             if self._context_ok and block == JOB_CONTEXT_BLOCK:
+                continue
+            if self._relay_ok and block == RELAY_BLOCK:
                 continue
             if block not in ("port", "store"):
                 arg = str(slot.name())
@@ -3723,8 +3881,8 @@ class DependencyPolicy(ts.ValueObject):
                         str(signature.path()),
                         int(signature.lineno()),
                         "TB081",
-                        f"{where} parameter {arg!r} is not a ts.Port or a ts.Store; "
-                        f"{subject} depends only on ports and the stores that yield them",
+                        f"{where} parameter {arg!r} is not {expected}; "
+                        f"{subject} depends only on {allowed}",
                     ))
                 )
         return tuple(found)
@@ -4379,6 +4537,7 @@ class ClassDecl(ts.Entity):
     _bodies: tuple[Body, ...]
     _held_ports: Names
     _held_contexts: Names
+    _held_relays: Names
     _stores: tuple[Fact, ...]
     _self_annotations: tuple[Field, ...]
     _bases: Names
@@ -4392,6 +4551,7 @@ class ClassDecl(ts.Entity):
     _spec_policy: AnnotationPolicy
     _port_dto_policy: AnnotationPolicy
     _client_dto_policy: AnnotationPolicy
+    _relay_dto_policy: AnnotationPolicy
     _leaf: Text | None
 
     def __init__(self, spec: ClassDeclSpec) -> None:
@@ -4529,8 +4689,10 @@ class ClassDecl(ts.Entity):
 
         held_ports = held("port")
         held_contexts = held(JOB_CONTEXT_BLOCK)
+        held_relays = held(RELAY_BLOCK)
         object.__setattr__(self, "_held_ports", Names(held_ports))
         object.__setattr__(self, "_held_contexts", Names(held_contexts))
+        object.__setattr__(self, "_held_relays", Names(held_relays))
         stores: list[tuple[int, str, str | None, tuple[str, ...]]] = []
         for inner in ast.walk(node):
             if isinstance(inner, ast.AnnAssign):
@@ -4615,8 +4777,13 @@ class ClassDecl(ts.Entity):
         object.__setattr__(self, "_extras", tuple(Fact(FactSpec(*item)) for item in extras))
         object.__setattr__(self, "_block", own_block)
         serde_facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        if own_block is not None and str(own_block) == SERDE_BLOCK:
-            serde_facts.append((node.lineno, "type_params", str(len(node.type_params)), ()))
+        if own_block is not None and str(own_block) in (SERDE_BLOCK, SNAPSHOT_BLOCK):
+            named_types = len(node.type_params)
+            if named_types == 0:
+                subscripted = [base for base in node.bases if isinstance(base, ast.Subscript)]
+                if len(subscripted) == 1 and not isinstance(subscripted[0].slice, ast.Tuple):
+                    named_types = 1
+            serde_facts.append((node.lineno, "type_params", str(named_types), ()))
             serde_methods = [
                 item for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
             ]
@@ -4712,6 +4879,17 @@ class ClassDecl(ts.Entity):
             "_client_dto_policy",
             AnnotationPolicy(AnnotationPolicySpec(
                 ("request", "response"), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry, "none"
+            )),
+        )
+        object.__setattr__(
+            self,
+            "_relay_dto_policy",
+            AnnotationPolicy(AnnotationPolicySpec(
+                tuple(sorted(RELAY_DTO_BLOCKS | DOMAIN_BLOCKS)),
+                tuple(sorted(PORT_DTO_PRIMITIVES)),
+                tuple(self._scope.enums()),
+                spec.scope,
+                spec.registry,
             )),
         )
         bodies: list[Body] = []
@@ -4912,7 +5090,14 @@ class ClassDecl(ts.Entity):
         found: list[Violation] = []
         own = str(self._block) if self._block is not None else None
         port_dto = own in ("port_request", "port_response")
-        policy = self._port_dto_policy if port_dto else self._client_dto_policy
+        relay_dto = own in RELAY_DTO_BLOCKS
+        policy = (
+            self._relay_dto_policy
+            if relay_dto
+            else self._port_dto_policy
+            if port_dto
+            else self._client_dto_policy
+        )
         pending = [
             (
                 int(fact.lineno()),
@@ -4926,7 +5111,7 @@ class ClassDecl(ts.Entity):
                 )),
             )
             for fact in self._statements
-        ] if port_dto else []
+        ] if (port_dto or relay_dto) else []
         index = 0
         for method in self._methods:
             while index < len(pending) and pending[index][0] < int(method.lineno()):
@@ -4953,7 +5138,7 @@ class ClassDecl(ts.Entity):
                     ))
                 )
                 continue
-            if port_dto and not any(str(fact.kind()) == "carrier" for fact in method.facts()):
+            if (port_dto or relay_dto) and not any(str(fact.kind()) == "carrier" for fact in method.facts()):
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -4967,7 +5152,17 @@ class ClassDecl(ts.Entity):
                 arg = str(param.name())
                 annotation = param.annotation()
                 if annotation is not None and "bool" in annotation.form():
-                    if port_dto:
+                    if relay_dto:
+                        found.append(
+                            Violation(ViolationSpec(
+                                str(self._path),
+                                int(method.lineno()),
+                                "TB080",
+                                f"{where} field {arg!r} is a bool; a relay DTO field is "
+                                "never a bare bool — model the outcome as an enum",
+                            ))
+                        )
+                    elif port_dto:
                         found.append(
                             Violation(ViolationSpec(
                                 str(self._path),
@@ -4988,7 +5183,7 @@ class ClassDecl(ts.Entity):
                             ))
                         )
                     continue
-                if port_dto and annotation is not None and "union" in annotation.form():
+                if (port_dto or relay_dto) and annotation is not None and "union" in annotation.form():
                     found.append(
                         Violation(ViolationSpec(
                             str(self._path),
@@ -5000,6 +5195,18 @@ class ClassDecl(ts.Entity):
                     )
                     continue
                 if annotation is None or policy.disallowed(annotation):
+                    if relay_dto:
+                        found.append(
+                            Violation(ViolationSpec(
+                                str(self._path),
+                                int(method.lineno()),
+                                "TB080",
+                                f"{where} parameter {arg!r} is not allowed; a relay DTO "
+                                "field is a primitive, another relay DTO, or a domain "
+                                "object, because both ends of a relay are this context",
+                            ))
+                        )
+                        continue
                     found.append(
                         Violation(ViolationSpec(
                             str(self._path),
@@ -5013,6 +5220,61 @@ class ClassDecl(ts.Entity):
             found.append(violation)
         return tuple(found)
 
+    def snapshot_violations(self) -> tuple[Violation, ...]:
+        where = f"{self._module}.{self._name}"
+        found: list[Violation] = []
+        declared = frozenset(str(method.name()) for method in self._methods)
+        for member in SERDE_METHODS:
+            if member in declared:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(self._lineno),
+                    "TB081",
+                    f"{where} declares no {member}; a snapshot declares serialize and "
+                    "deserialize and nothing else, because a snapshot is the one place a "
+                    "message becomes bytes",
+                ))
+            )
+        for fact in self._statements:
+            if "pass" in fact.traits():
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB081",
+                    f"{where} carries a class-level statement; a snapshot holds nothing, "
+                    "because a relay writes the same bytes on every replay",
+                ))
+            )
+        for method in self._methods:
+            if str(method.name()) in SERDE_METHODS:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(method.lineno()),
+                    "TB081",
+                    f"{where}.{method.name()} is a method; a snapshot declares serialize "
+                    "and deserialize and nothing else, because a snapshot is the one place "
+                    "a message becomes bytes",
+                ))
+            )
+        for fact in self._stores:
+            field = str(fact.detail())
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB081",
+                    f"{where} stores {field!r}; a snapshot holds nothing, because a relay "
+                    "writes the same bytes on every replay",
+                ))
+            )
+        return tuple(found)
+
     def serde_violations(self) -> tuple[Violation, ...]:
         where = f"{self._module}.{self._name}"
         found: list[Violation] = []
@@ -5024,8 +5286,9 @@ class ClassDecl(ts.Entity):
                         str(self._path),
                         int(fact.lineno()),
                         "TB081",
-                        f"{where} declares {type_params} type parameters; a serde names "
-                        "one type parameter, the shape it carries in both directions",
+                        f"{where} declares {type_params} types; a serde names one type — "
+                        "a type parameter, or the one shape its base is subscripted with — "
+                        "the shape it carries in both directions",
                     ))
                 )
         declared = frozenset(str(method.name()) for method in self._methods)
@@ -5487,9 +5750,9 @@ class ClassDecl(ts.Entity):
                         str(self._path),
                         int(method.lineno()),
                         "TB081",
-                        f"{where} names a shape its ports module does not declare; an "
+                        f"{where} names a shape its message module does not declare; an "
                         "application client speaks the requests and responses of the "
-                        "ports module it imports",
+                        "ports or relays module it imports",
                     ))
                 )
         return tuple(found)
@@ -5683,7 +5946,7 @@ class ClassDecl(ts.Entity):
                         "an application client speaks",
                     ))
                 )
-        held = self._held_ports | self._held_contexts
+        held = self._held_ports | self._held_contexts | self._held_relays
         for fact in self._stores:
             published = str(fact.detail())
             if published in held:
@@ -5694,7 +5957,8 @@ class ClassDecl(ts.Entity):
                     int(fact.lineno()),
                     "TB081",
                     f"{self._module}.{self._name} keeps {published}; "
-                    "an orchestrator stores only its job context and its action ports",
+                    "an orchestrator stores only its job context, its action ports, and "
+                    "the relays it runs",
                 ))
             )
         return tuple(found)
@@ -6086,18 +6350,44 @@ SERVICE_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicyS
 ))
 
 ACTIONS_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
-    "port_request", "port_response", "an actions method", "TB081", "an actions method takes exactly one ts.Request"
+    "port_request",
+    "port_response",
+    "an actions method",
+    "TB081",
+    "an actions method takes exactly one ts.Request",
+    relayed=True,
 ))
 
 ORCHESTRATOR_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
-    "port_request", "port_response", "an orchestrator method", "TB081", "an orchestrator method takes exactly one ts.Request"
+    "port_request",
+    "port_response",
+    "an orchestrator method",
+    "TB081",
+    "an orchestrator method takes exactly one ts.Request",
+    relayed=True,
 ))
 
-SERVICE_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec("a service"))
+SERVICE_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec(
+    "a service",
+    "a ts.Port, a ts.Relay, or a ts.Store",
+    "ports, relays, and the stores that yield them",
+    False,
+    True,
+))
 
-ACTIONS_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec("a class of actions"))
+ACTIONS_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec(
+    "a class of actions",
+    "a ts.Port or a ts.Store",
+    "ports and the stores that yield them",
+))
 
-ORCHESTRATOR_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec("an orchestrator", True))
+ORCHESTRATOR_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(DependencyPolicySpec(
+    "an orchestrator",
+    "a ts.Port, a ts.Relay, or a ts.Store",
+    "ports, relays, and the stores that yield them",
+    True,
+    True,
+))
 
 ADAPTER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter", True))
 
@@ -6115,7 +6405,12 @@ PORT_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec
 ))
 
 APP_CLIENT_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
-    "port_request", "port_response", "an application client method", "TB081", "an application client method takes exactly one ts.Request"
+    "port_request",
+    "port_response",
+    "an application client method",
+    "TB081",
+    "an application client method takes exactly one ts.Request",
+    relayed=True,
 ))
 
 
@@ -6479,6 +6774,22 @@ class Placement(ts.ValueObject):
                     if is_package:
                         return "orchestrators-init"
                     return "orchestrators-file" if len(parts) == 3 else "orchestrators"
+                if (
+                    parts[1] == PORTS_PARENT_ROLE
+                    and len(parts) >= 3
+                    and parts[2] == RELAYS_PACKAGE
+                ):
+                    if is_package:
+                        return "relays-init"
+                    return "relays-file" if len(parts) == 3 else "relays"
+                if (
+                    parts[1] == PORTS_PARENT_ROLE
+                    and len(parts) >= 3
+                    and parts[2] == SNAPSHOTS_PACKAGE
+                ):
+                    if is_package:
+                        return "snapshots-init"
+                    return "snapshots-file" if len(parts) == 3 else "snapshots"
                 if is_package:
                     return "role-init"
                 return "role-file" if len(parts) == 2 else "role"
@@ -6673,7 +6984,9 @@ class Module(ts.Entity):
             str(edge._target)
             for edge in self._edges
             if str(edge._target).split(".")[0] in spec.tops
-            and str(edge._target).split(".")[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE]
+            and len(str(edge._target).split(".")) >= 3
+            and str(edge._target).split(".")[1] == PORTS_PARENT_ROLE
+            and str(edge._target).split(".")[2] in MESSAGE_PACKAGES
         ]
         self._spoken: str | None = spoken_modules[0] if len(spoken_modules) == 1 else None
         self._scope = Scope(ScopeSpec(
@@ -6716,9 +7029,9 @@ class Module(ts.Entity):
         elif (
             tier_parts[1] == PORTS_PARENT_ROLE
             and len(tier_parts) >= 4
-            and tier_parts[2] == ORCHESTRATORS_PACKAGE
+            and tier_parts[2] in (ORCHESTRATORS_PACKAGE, RELAYS_PACKAGE, SNAPSHOTS_PACKAGE)
         ):
-            tier = (tier_parts[0], ORCHESTRATORS_PACKAGE)
+            tier = (tier_parts[0], tier_parts[2])
         else:
             tier = (tier_parts[0], tier_parts[1])
         self._tier: tuple[str, str] | None = tier
@@ -7775,6 +8088,26 @@ class Module(ts.Entity):
                     "TB041",
                     f"{module_name} is an orchestrators module; "
                     "orchestrators is a package, never a module",
+                )),
+            )
+        if str(place) == "relays-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is a relays module; "
+                    "relays is a package, never a module",
+                )),
+            )
+        if str(place) == "snapshots-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is a snapshots module; "
+                    "snapshots is a package, never a module",
                 )),
             )
         if str(place) == "role-file":
@@ -8948,7 +9281,7 @@ class Module(ts.Entity):
         kind_table = Registry(registry_spec).kinds()
         parts = module_name.split(".")
         role = parts[1]
-        extra = frozenset({"orchestrator", "port_response"}) if str(self._placement) in ("orchestrators", "orchestrators-file") else frozenset()
+        extra = PLACEMENT_KINDS.get(str(self._placement), frozenset())
         scope = self._scope
         kind_package = parts[2] if len(parts) >= 4 else None
         scope_spec = ScopeSpec(
@@ -8969,8 +9302,8 @@ class Module(ts.Entity):
                     1,
                     "TB041",
                     f"{module_name} is not in an adapter kind package; an adapters "
-                    "module lives in handlers, gateways, repositories, or jobs, because "
-                    "placement is what carries an adapter's reach",
+                    "module lives in handlers, gateways, repositories, jobs, runners, or "
+                    "runtimes, because placement is what carries an adapter's reach",
                 ))
             )
         for stmt in self._body:
@@ -9182,7 +9515,7 @@ class Module(ts.Entity):
                             "__init__",
                         ))
                     )
-                elif pieces[0] == context and job_only and kind_package != "jobs":
+                elif pieces[0] == context and job_only and kind_package not in JOB_KIND_PACKAGES:
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
@@ -9207,7 +9540,8 @@ class Module(ts.Entity):
                                 "package reaches only what its kind reaches — a handler "
                                 "the context client, a job the application client, the "
                                 "orchestrators, and the ports, a gateway or a repository "
-                                "the ports",
+                                "the ports, a runner its relays, a runtime what it "
+                                "registers",
                             ))
                         )
                 elif pieces[0] == context:
@@ -9263,7 +9597,19 @@ class Module(ts.Entity):
                     or pieces[0] in CORE_STDLIB["domain"]
                     or any(target == declared or target.startswith(declared + ".") for declared in pure_stdlib)
                 )
-                if role in CORE_STDLIB and not (
+                if str(self._placement) in SNAPSHOT_PLACES:
+                    if not (target in SNAPSHOT_STDLIB or pieces[0] in SNAPSHOT_STDLIB):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                lineno,
+                                "TB062",
+                                f"{module_name} imports {target}; a relays or snapshots "
+                                "module imports the application stdlib and json, because a "
+                                "snapshot is where a message becomes bytes",
+                            ))
+                        )
+                elif role in CORE_STDLIB and not (
                     pure
                     if role == "domain"
                     else (target in CORE_STDLIB[role] or pieces[0] in CORE_STDLIB[role])
@@ -9351,7 +9697,7 @@ class Module(ts.Entity):
             if pieces[0] == TESSER:
                 continue
             if pieces[0] in tops:
-                if pieces[1:3] == [PORTS_PARENT_ROLE, PORTS_PACKAGE]:
+                if len(pieces) >= 3 and pieces[1] == PORTS_PARENT_ROLE and pieces[2] in MESSAGE_PACKAGES:
                     spoken += 1
                     if spoken > 1:
                         found.append(
@@ -9359,9 +9705,9 @@ class Module(ts.Entity):
                                 self._path,
                                 lineno,
                                 "TB067",
-                                f"{module_name} imports a second ports package {target}; "
+                                f"{module_name} imports a second message package {target}; "
                                 "an application client module speaks the DTOs of exactly "
-                                "one ports package",
+                                "one ports or relays package",
                             ))
                         )
                     else:
@@ -9373,7 +9719,7 @@ class Module(ts.Entity):
                         lineno,
                         "TB067",
                         f"{module_name} imports {target}; an application client module "
-                        "speaks the DTOs of exactly one ports package",
+                        "speaks the DTOs of exactly one ports or relays package",
                     ))
                 )
             elif target not in PORTS_STDLIB and pieces[0] not in PORTS_STDLIB:
@@ -9383,7 +9729,7 @@ class Module(ts.Entity):
                         lineno,
                         "TB067",
                         f"{module_name} imports {target}; an application client module "
-                        "imports only tesser.application, one ports package, and the pure stdlib",
+                        "imports only tesser.application, one message package, and the pure stdlib",
                     ))
                 )
         if spoken == 0 and self._class_defs:
@@ -9392,8 +9738,8 @@ class Module(ts.Entity):
                     self._path,
                     1,
                     "TB067",
-                    f"{module_name} imports no ports package; an application client "
-                    "module speaks the DTOs of exactly one ports package",
+                    f"{module_name} imports no message package; an application client "
+                    "module speaks the DTOs of exactly one ports or relays package",
                 ))
             )
         for stmt in self._body:
@@ -9974,6 +10320,7 @@ class Module(ts.Entity):
                             "client",
                             "actions_client",
                             "job_context",
+                            RELAY_BLOCK,
                             "protocol_port",
                             "config_repository",
                         ):
@@ -9984,8 +10331,8 @@ class Module(ts.Entity):
                                 self._path,
                                 stmt.lineno,
                                 "TB072",
-                                f"{where} implements no application port, store, protocol port, "
-                                "client, or config repository; a fake implements the contract it doubles",
+                                f"{where} implements no application port, store, relay, protocol "
+                                "port, client, or config repository; a fake implements the contract it doubles",
                             ))
                         )
             else:
@@ -10165,7 +10512,7 @@ class Module(ts.Entity):
                     and len(pieces) >= 3
                     and pieces[2] == home[1]
                 )
-                if allowed and tier != "jobs" and not at_home and any(
+                if allowed and tier not in JOB_TEST_TIERS and not at_home and any(
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in JOB_ONLY_IMPORTS
                 ):
@@ -11099,6 +11446,11 @@ class Codebase(ts.AggregateRoot):
         self._used_pure_stdlib = set()
         found = list(self._broken)
         blocks = dict(TESSER_BASE_BLOCKS)
+        relayed = frozenset(
+            module.name()
+            for module in self._modules
+            if str(module.place()) in ("relays", "relays-file")
+        )
         changed = True
         while changed:
             changed = False
@@ -11110,7 +11462,10 @@ class Codebase(ts.AggregateRoot):
                     for base in cls.bases:
                         base_key = module._resolve(base)
                         if base_key is not None and base_key in blocks:
-                            blocks[key] = blocks[base_key]
+                            derived = blocks[base_key]
+                            if module.name() in relayed:
+                                derived = RELAY_MESSAGE_BLOCKS.get(derived, derived)
+                            blocks[key] = derived
                             changed = True
                             break
                 for local, target, original in module.bound_names():
@@ -11488,6 +11843,40 @@ class Codebase(ts.AggregateRoot):
                 found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
                 found.extend(module.import_violations(registry))
                 found.extend(module.orchestrators_violations(registry))
+            elif place == "relays-init":
+                found.extend(module.role_init_violations(registry))
+            elif place == "snapshots-init":
+                found.extend(module.role_init_violations(registry))
+            elif place == "relays-file":
+                found.extend(module.stray_violations())
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
+            elif place == "snapshots-file":
+                found.extend(module.stray_violations())
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
+            elif place == "relays":
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
+            elif place == "snapshots":
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
             elif place == "role-init":
                 found.extend(module.role_init_violations(registry))
             elif place == "role-file":
@@ -11539,7 +11928,14 @@ class Codebase(ts.AggregateRoot):
                     found.extend(decl.outcome_field_violations())
                 elif block == "spec":
                     found.extend(decl.spec_violations())
-                elif block in ("request", "response", "port_request", "port_response"):
+                elif block in (
+                    "request",
+                    "response",
+                    "port_request",
+                    "port_response",
+                    "relay_request",
+                    "relay_response",
+                ):
                     found.extend(decl.dto_violations())
                 elif block == "client":
                     for signature in decl.signatures():
@@ -11578,6 +11974,8 @@ class Codebase(ts.AggregateRoot):
                     found.extend(decl.mapper_violations())
                 elif block == SERDE_BLOCK:
                     found.extend(decl.serde_violations())
+                elif block == SNAPSHOT_BLOCK:
+                    found.extend(decl.snapshot_violations())
                 elif block == "actions":
                     found.extend(decl.actions_violations(ACTIONS_DEPENDENCIES))
                     for body in decl.bodies():
@@ -11611,7 +12009,16 @@ class Codebase(ts.AggregateRoot):
         for module in self._modules:
             place = str(module.place())
             shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
-            if place in ("role", "orchestrators", "orchestrators-file", "kernel") and not shell:
+            if place in (
+                "role",
+                "orchestrators",
+                "orchestrators-file",
+                "relays",
+                "relays-file",
+                "snapshots",
+                "snapshots-file",
+                "kernel",
+            ) and not shell:
                 for name in module.declared_uses(registry):
                     if name in self._imports:
                         self._used_imports.add(name)

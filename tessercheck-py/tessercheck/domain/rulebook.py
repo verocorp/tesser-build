@@ -198,6 +198,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "ClassDecl.component_violations": "component class",
     "ClassDecl.mapper_violations": "mapper class",
     "ClassDecl.serde_violations": "serde class",
+    "ClassDecl.snapshot_violations": "snapshot class",
     "ClassDecl.spec_violations": "spec class",
     "ClassDecl.dto_violations": "request/response DTO",
 }

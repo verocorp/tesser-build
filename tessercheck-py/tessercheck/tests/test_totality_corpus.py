@@ -41,6 +41,12 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
         ("shop/application/orchestrators/flow.py", "import shop.adapters.gateways.thing\n"),
         ("shop/application/orchestrators/__main__.py", "import shop.adapters.gateways.thing\n"),
         ("shop/application/orchestrators.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/relays/orders.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/relays/__main__.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/relays.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/snapshots/order.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/snapshots/__main__.py", "import shop.adapters.gateways.thing\n"),
+        ("shop/application/snapshots.py", "import shop.adapters.gateways.thing\n"),
         ("shop/tests/__main__.py", bait),
         ("app/conftest.py", bait),
         ("shop/adapters/conftest.py", bait),
@@ -99,6 +105,8 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
             "kernel-init",
             "app-client-init",
             "orchestrators-init",
+            "relays-init",
+            "snapshots-init",
         }
     )
     uncovered = returned - package_only - covered
