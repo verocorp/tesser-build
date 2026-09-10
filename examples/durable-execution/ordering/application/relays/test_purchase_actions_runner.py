@@ -15,7 +15,7 @@ class TestTakePaymentRequestSnapshot:
         assert raw == b'{"order_id": "o1", "cents": 750}'
 
     def test_a_request_comes_back_equal(self) -> None:
-        take_payment_request_snapshot = relays.TakePaymentRequestSnapshot()  # tesser:debt TB085
+        take_payment_request_snapshot = relays.TakePaymentRequestSnapshot()
         take_payment_request = relays.TakePaymentRequest(order_id="o1", cents=750)
         assert take_payment_request_snapshot.deserialize(
             take_payment_request_snapshot.serialize(take_payment_request)
@@ -45,7 +45,7 @@ class TestTakePaymentResponseSnapshot:
         assert raw == b'{"order_id": "o1", "reference": "pay-o1", "cents": 750}'
 
     def test_a_response_comes_back_equal(self) -> None:
-        take_payment_response_snapshot = relays.TakePaymentResponseSnapshot()  # tesser:debt TB085
+        take_payment_response_snapshot = relays.TakePaymentResponseSnapshot()
         take_payment_response = relays.TakePaymentResponse(order_id="o1", reference="pay-o1", cents=750)
         assert take_payment_response_snapshot.deserialize(
             take_payment_response_snapshot.serialize(take_payment_response)

@@ -32,7 +32,7 @@ class OrderOrchestrator(ts.Orchestrator):
     async def run(
         self, order_orchestrator_request: relays.OrderOrchestratorRequest
     ) -> relays.OrderOrchestratorResponse:
-        order = order_orchestrator_request.order  # tesser:debt TB082
+        order = order_orchestrator_request.order
         price_product_response = await self._order_actions_runner.run_price_product(
             MapToPriceProductRequest(order)
         )

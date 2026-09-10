@@ -17,16 +17,16 @@ class TestPurchaseOrchestratorRequestSnapshot:
         assert raw == b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
 
     def test_a_request_comes_back_around_its_order(self) -> None:
-        purchase_orchestrator_request_snapshot = relays.PurchaseOrchestratorRequestSnapshot()  # tesser:debt TB085
+        purchase_orchestrator_request_snapshot = relays.PurchaseOrchestratorRequestSnapshot()
         order = domain.Order(domain.OrderSpec(order_id="o7", sku="gadget", quantity=3))
-        back = purchase_orchestrator_request_snapshot.deserialize(
+        purchase_orchestrator_request = purchase_orchestrator_request_snapshot.deserialize(
             purchase_orchestrator_request_snapshot.serialize(
                 relays.PurchaseOrchestratorRequest(order=order)
             )
         )
-        assert back.order.identity == domain.OrderId("o7")
-        assert back.order.sku == domain.Sku("gadget")
-        assert back.order.quantity == domain.Quantity(3)
+        assert purchase_orchestrator_request.order.identity == domain.OrderId("o7")
+        assert purchase_orchestrator_request.order.sku == domain.Sku("gadget")
+        assert purchase_orchestrator_request.order.quantity == domain.Quantity(3)
 
 
 class TestPurchaseOrchestratorResponseSnapshot:
@@ -56,7 +56,7 @@ class TestPurchaseOrchestratorResponseSnapshot:
             assert excinfo.value.kind is errors.Kind.VALIDATION
 
     def test_a_response_comes_back_equal(self) -> None:
-        purchase_orchestrator_response_snapshot = relays.PurchaseOrchestratorResponseSnapshot()  # tesser:debt TB085
+        purchase_orchestrator_response_snapshot = relays.PurchaseOrchestratorResponseSnapshot()
         purchase_orchestrator_response = relays.PurchaseOrchestratorResponse(
             order_id="o7", total_cents=750, payment_reference="pay-o7"
         )

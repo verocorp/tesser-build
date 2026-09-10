@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json  # tesser:debt TB062
+import json
 import typing
 
 import tesser.application as ts
@@ -10,13 +10,13 @@ import ordering.domain as domain
 import tesser.errors as errors
 
 
-class OrderOrchestratorRequest(ts.Request):  # tesser:debt TB052
+class OrderOrchestratorRequest(ts.Request):
 
-    def __init__(self, order: domain.Order) -> None:  # tesser:debt TB080
+    def __init__(self, order: domain.Order) -> None:
         self.order = order
 
 
-class OrderOrchestratorRequestSnapshot(ts.Serde):  # tesser:debt TB052
+class OrderOrchestratorRequestSnapshot(ts.Serde):
 
     def serialize(self, order_orchestrator_request: OrderOrchestratorRequest) -> bytes:
         return snapshots.OrderSnapshot().serialize(order_orchestrator_request.order)
@@ -25,20 +25,20 @@ class OrderOrchestratorRequestSnapshot(ts.Serde):  # tesser:debt TB052
         return OrderOrchestratorRequest(order=snapshots.OrderSnapshot().deserialize(buf))
 
 
-class StartOrderOrchestratorResponse(ts.Response):  # tesser:debt TB052
+class StartOrderOrchestratorResponse(ts.Response):
 
     def __init__(self, order_id: str) -> None:
         self.order_id = order_id
 
 
-class OrderOrchestratorResponse(ts.Response):  # tesser:debt TB052
+class OrderOrchestratorResponse(ts.Response):
 
     def __init__(self, order_id: str, total_cents: int) -> None:
         self.order_id = order_id
         self.total_cents = total_cents
 
 
-class OrderOrchestratorResponseSnapshot(ts.Serde):  # tesser:debt TB052
+class OrderOrchestratorResponseSnapshot(ts.Serde):
 
     def serialize(self, order_orchestrator_response: OrderOrchestratorResponse) -> bytes:
         return json.dumps(
@@ -67,7 +67,7 @@ class OrderOrchestratorResponseSnapshot(ts.Serde):  # tesser:debt TB052
         )
 
 
-class OrderOrchestratorRunner(ts.Relay, typing.Protocol):  # tesser:debt TB052
+class OrderOrchestratorRunner(ts.Relay, typing.Protocol):
 
     async def start_order_orchestrator(
         self, order_orchestrator_request: OrderOrchestratorRequest
