@@ -23,6 +23,15 @@ class FakeProductCatalogRepository(ports.ProductCatalogRepository):
 
 
 @ts.fake
+class FakeAbsurdProductCatalogRepository(ports.ProductCatalogRepository):
+
+    def get_product_price(
+        self, get_product_price_request: ports.GetProductPriceRequest
+    ) -> ports.GetProductPriceResponse:
+        return ports.GetProductPriceResponse(cents=10**13)
+
+
+@ts.fake
 class FakeEmptyProductCatalogRepository(ports.ProductCatalogRepository):
 
     def get_product_price(
@@ -62,3 +71,10 @@ class TestOrderActions:
                 relays.PriceProductRequest(sku="")
             )
         assert fake_product_catalog_repository.priced == []
+
+    def test_a_catalog_price_past_the_bound_is_refused_before_it_crosses_the_engine(self) -> None:
+        with pytest.raises(errors.DomainError) as excinfo:
+            application.OrderActions(FakeAbsurdProductCatalogRepository()).price_product(
+                relays.PriceProductRequest(sku="widget")
+            )
+        assert excinfo.value.code == "price_above_maximum"

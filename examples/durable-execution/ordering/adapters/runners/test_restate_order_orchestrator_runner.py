@@ -24,6 +24,19 @@ class FakeOrderingApplicationClient(client.OrderingApplicationClient):
         return relays.PriceProductResponse(cents=250)
 
 
+@ts.fake
+class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
+
+    def take_payment(
+        self, take_payment_request: relays.TakePaymentRequest
+    ) -> relays.TakePaymentResponse:
+        return relays.TakePaymentResponse(
+            order_id=take_payment_request.order_id,
+            reference=f"pay-{take_payment_request.order_id}",
+            cents=take_payment_request.cents,
+        )
+
+
 @ts.helper
 def order_orchestrator_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 2
@@ -71,7 +84,7 @@ class TestRestateOrderOrchestratorRunner:
             start_order_orchestrator_response = asyncio.run(
                 runners.RestateOrderOrchestratorRunner(
                     f"http://127.0.0.1:{port}",
-                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                 ).start_order_orchestrator(order_orchestrator_request())
             )
         finally:
@@ -112,7 +125,7 @@ class TestRestateOrderOrchestratorRunner:
             start_order_orchestrator_response = asyncio.run(
                 runners.RestateOrderOrchestratorRunner(
                     f"http://127.0.0.1:{port}",
-                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                 ).start_order_orchestrator(order_orchestrator_request(order_id="../admin?x=1#f"))
             )
         finally:
@@ -144,7 +157,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).start_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -174,7 +187,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).start_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -190,7 +203,7 @@ class TestRestateOrderOrchestratorRunner:
             asyncio.run(
                 runners.RestateOrderOrchestratorRunner(
                     f"http://127.0.0.1:{port}",
-                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                 ).start_order_orchestrator(order_orchestrator_request())
             )
 
@@ -232,7 +245,7 @@ class TestRestateOrderOrchestratorRunner:
             order_orchestrator_response = asyncio.run(
                 runners.RestateOrderOrchestratorRunner(
                     f"http://127.0.0.1:{port}",
-                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                 ).run_order_orchestrator(order_orchestrator_request())
             )
         finally:
@@ -273,7 +286,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).run_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -310,7 +323,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).run_order_orchestrator(order_orchestrator_request(sku="nope"))
                 )
         finally:
@@ -347,7 +360,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).run_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -384,7 +397,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).run_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -424,7 +437,7 @@ class TestRestateOrderOrchestratorRunner:
                     asyncio.run(
                         runners.RestateOrderOrchestratorRunner(
                             f"http://127.0.0.1:{port}",
-                            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                         ).run_order_orchestrator(order_orchestrator_request())
                     )
             finally:
@@ -457,7 +470,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).run_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -490,7 +503,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).run_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -523,7 +536,7 @@ class TestRestateOrderOrchestratorRunner:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
-                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                        runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                     ).run_order_orchestrator(order_orchestrator_request())
                 )
         finally:
@@ -539,6 +552,6 @@ class TestRestateOrderOrchestratorRunner:
             asyncio.run(
                 runners.RestateOrderOrchestratorRunner(
                     f"http://127.0.0.1:{port}",
-                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient()),
+                    runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()),
                 ).run_order_orchestrator(order_orchestrator_request())
             )

@@ -1,0 +1,1 @@
+from ordering.application.snapshots.order_snapshot import OrderSnapshot as OrderSnapshot

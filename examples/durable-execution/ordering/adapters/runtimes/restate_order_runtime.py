@@ -73,11 +73,79 @@ class RestatePriceProductResponseSerde(  # tesser:debt TB081
         return relays.PriceProductResponseSnapshot().deserialize(buf)
 
 
+class RestatePurchaseOrchestratorRequestSerde(  # tesser:debt TB081
+    ts.Serde, restate.serde.Serde[relays.PurchaseOrchestratorRequest]
+):
+
+    def serialize(
+        self, purchase_orchestrator_request: relays.PurchaseOrchestratorRequest | None
+    ) -> bytes:
+        if purchase_orchestrator_request is None:
+            return b""
+        return relays.PurchaseOrchestratorRequestSnapshot().serialize(purchase_orchestrator_request)
+
+    def deserialize(self, buf: bytes) -> relays.PurchaseOrchestratorRequest | None:
+        if not buf:
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+        return relays.PurchaseOrchestratorRequestSnapshot().deserialize(buf)
+
+
+class RestatePurchaseOrchestratorResponseSerde(  # tesser:debt TB081
+    ts.Serde, restate.serde.Serde[relays.PurchaseOrchestratorResponse]
+):
+
+    def serialize(
+        self, purchase_orchestrator_response: relays.PurchaseOrchestratorResponse | None
+    ) -> bytes:
+        if purchase_orchestrator_response is None:
+            return b""
+        return relays.PurchaseOrchestratorResponseSnapshot().serialize(
+            purchase_orchestrator_response
+        )
+
+    def deserialize(self, buf: bytes) -> relays.PurchaseOrchestratorResponse | None:
+        if not buf:
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+        return relays.PurchaseOrchestratorResponseSnapshot().deserialize(buf)
+
+
+class RestateTakePaymentRequestSerde(ts.Serde, restate.serde.Serde[relays.TakePaymentRequest]):  # tesser:debt TB081
+
+    def serialize(self, take_payment_request: relays.TakePaymentRequest | None) -> bytes:
+        if take_payment_request is None:
+            return b""
+        return relays.TakePaymentRequestSnapshot().serialize(take_payment_request)
+
+    def deserialize(self, buf: bytes) -> relays.TakePaymentRequest | None:
+        if not buf:
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+        return relays.TakePaymentRequestSnapshot().deserialize(buf)
+
+
+class RestateTakePaymentResponseSerde(ts.Serde, restate.serde.Serde[relays.TakePaymentResponse]):  # tesser:debt TB081
+
+    def serialize(self, take_payment_response: relays.TakePaymentResponse | None) -> bytes:
+        if take_payment_response is None:
+            return b""
+        return relays.TakePaymentResponseSnapshot().serialize(take_payment_response)
+
+    def deserialize(self, buf: bytes) -> relays.TakePaymentResponse | None:
+        if not buf:
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+        return relays.TakePaymentResponseSnapshot().deserialize(buf)
+
+
 class RestateOrderRuntime(ts.Job):
 
-    def __init__(self, ordering_application_client: client.OrderingApplicationClient) -> None:
+    def __init__(
+        self,
+        ordering_application_client: client.OrderingApplicationClient,
+        purchase_application_client: client.PurchaseApplicationClient,
+    ) -> None:
         self.order_actions_service = restate.Service("OrderActions")
         self.order_orchestrator_workflow = restate.Workflow("OrderOrchestrator")
+        self.purchase_actions_service = restate.Service("PurchaseActions")
+        self.purchase_orchestrator_workflow = restate.Workflow("PurchaseOrchestrator")
 
         @self.order_actions_service.handler(
             input_serde=RestatePriceProductRequestSerde(),
@@ -110,5 +178,40 @@ class RestateOrderRuntime(ts.Job):
                     domain_error.message, status_code=errors.status_for(domain_error.kind)
                 ) from domain_error
 
+        @self.purchase_actions_service.handler(
+            input_serde=RestateTakePaymentRequestSerde(),
+            output_serde=RestateTakePaymentResponseSerde(),
+        )
+        async def take_payment(  # tesser:debt TB023
+            restate_context: restate.Context, take_payment_request: relays.TakePaymentRequest
+        ) -> relays.TakePaymentResponse:
+            try:
+                return purchase_application_client.take_payment(take_payment_request)
+            except errors.DomainError as domain_error:
+                raise restate.TerminalError(
+                    domain_error.message, status_code=errors.status_for(domain_error.kind)
+                ) from domain_error
+
+        @self.purchase_orchestrator_workflow.main(
+            name="run",
+            input_serde=RestatePurchaseOrchestratorRequestSerde(),
+            output_serde=RestatePurchaseOrchestratorResponseSerde(),
+        )
+        async def run_purchase(  # tesser:debt TB023
+            restate_workflow_context: restate.WorkflowContext,
+            purchase_orchestrator_request: relays.PurchaseOrchestratorRequest,
+        ) -> relays.PurchaseOrchestratorResponse:
+            try:
+                return await orchestrators.PurchaseOrchestrator(
+                    runners.RestatePurchaseActionsRunner(restate_workflow_context, self),
+                    runners.RestateOrderOrchestratorChildRunner(restate_workflow_context, self),
+                ).run(purchase_orchestrator_request)
+            except errors.DomainError as domain_error:
+                raise restate.TerminalError(
+                    domain_error.message, status_code=errors.status_for(domain_error.kind)
+                ) from domain_error
+
         self.price_product_handler = price_product
         self.order_orchestrator_handler = run
+        self.take_payment_handler = take_payment
+        self.purchase_orchestrator_handler = run_purchase

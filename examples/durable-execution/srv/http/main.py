@@ -64,6 +64,24 @@ class HttpHost(ts.Host):
                     http_response.body, http_response.status_code, media_type=_JSON
                 )
 
+            @router.post("/purchases")
+            async def purchase(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
+                try:
+                    http_response = await handler.purchase(
+                        protocol.HttpRequest(body=await request.body())
+                    )
+                except protocol.BadRequest as e:
+                    http_response = protocol.HttpResponse.problem(400, str(e))
+                except errors.DomainError as e:
+                    http_response = protocol.HttpResponse.problem(
+                        errors.status_for(e.kind), e.message
+                    )
+                except errors.InfraError:
+                    http_response = protocol.HttpResponse.problem(503, "unavailable")
+                return fastapi.Response(
+                    http_response.body, http_response.status_code, media_type=_JSON
+                )
+
             api = fastapi.FastAPI()
             api.include_router(router)
             api.mount(
@@ -72,6 +90,8 @@ class HttpHost(ts.Host):
                     [
                         durable_execution_app.ordering.restate_order_runtime.order_actions_service,
                         durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow,
+                        durable_execution_app.ordering.restate_order_runtime.purchase_actions_service,
+                        durable_execution_app.ordering.restate_order_runtime.purchase_orchestrator_workflow,
                     ]
                 ),
             )

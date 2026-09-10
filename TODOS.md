@@ -251,11 +251,46 @@ domain modules out before removing them.
   `restate`. The alternative is the runtime answering with the mountable ASGI
   app, so the host imports nothing from Restate. Unsettled: with two contexts
   each holding a Restate runtime, one endpoint with merged definitions or two.
-- [ ] **The `202` arm of `POST /submissions` and the `200` arm of `POST /orders`
-  have no test.** `srv/http/test_main.py` drives the host as a subprocess and
-  every request lands on a failure arm (400/422/503). A reachable fake ingress
-  inside the spawned process would cover both; the live smoke covers them
-  today.
+- [ ] **What kind is the class that composes two services behind one client?
+  (2026-09-09, Chris)** `examples/durable-execution` is the first tree where a
+  context has two application services (`OrderService`, `PurchaseService`;
+  one runner each — a service holds the methods that share its dependencies)
+  and one `client.OrderingClient` protocol. Python satisfies a protocol
+  structurally and has no embedding, so the composition is a class that holds
+  both services and forwards the three protocol methods:
+  `ordering/component/component.py` `Ordering.Client`, nested in the
+  component, subclassing nothing, named by the module alias the way `Spec`
+  and `Config` are. Rulings made building it: a protocol is never subclassed
+  (so no `client.OrderingClient` base); no Go argument (embedding, the
+  unexported struct) decides a Python shape; the forwarding is the cost of
+  composition and is where reshaping would go. Open: (a) the analyzer reports
+  **nothing** on a class nested inside a component class — no kind, no
+  placement — so this shape passes without a marker; decide whether a nested
+  class is out of the kind rules by design or a hole to close. (b) Whether
+  the composing client wants a tesser kind of its own (a base in
+  `tesser.component` beside `Spec`, `Config`, `Component`) so declare-then-verify
+  covers it, or stays a plain class the component owns. (c) The skill's
+  `public-interface.md` "never add a method that only forwards" is a Go
+  sentence (promotion makes forwarding redundant); `python.md` says compose
+  with "an explicit class that holds the service and delegates". Scope the
+  first to Go, and point the second at this class as the verified impl.
+- [ ] **A cancelled invocation reaches the caller as a domain conflict
+  (2026-09-09, from the purchase PR's adversarial pass).** The SDK raises
+  `TerminalError("cancelled", 409)` when an operator cancels an invocation
+  (`restate/server_context.py:686`), and every in-invocation runner maps
+  `409` to `CONFLICT`, so a cancelled child or payment call answers
+  `409 {"detail": "cancelled"}` at the door, indistinguishable from a
+  business rejection. Only the message tells them apart. Belongs to the
+  error-handling wave: whether the status→kind inverse gets a
+  message-shaped carve-out, or cancellation is a kind of its own.
+- [ ] **A zero-cent purchase settles.** `Price` permits `0`, so
+  `Purchase.paid` settles a 0-cent purchase with a 0-cent payment. Unreachable
+  through the seeded catalog; a rule once a free item exists.
+- [ ] **The `202` arm of `POST /submissions` and the `200` arms of `POST /orders`
+  and `POST /purchases` have no test.** `srv/http/test_main.py` drives the
+  host as a subprocess and every request lands on a failure arm
+  (400/422/503). A reachable fake ingress inside the spawned process would
+  cover all three; the live smoke covers them today.
 - [ ] **Left standing from the v0.0.102.0 adversarial pass, all pre-existing.**
   The caller-chosen `order_id` is both the durable key and the unauthenticated
   result address on the ingress; the request body is read with no size cap and

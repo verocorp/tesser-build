@@ -50,6 +50,12 @@ class TestHttpHost:
                 durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.name: sorted(
                     durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.handlers
                 ),
+                durable_execution_app.ordering.restate_order_runtime.purchase_actions_service.name: sorted(
+                    durable_execution_app.ordering.restate_order_runtime.purchase_actions_service.handlers
+                ),
+                durable_execution_app.ordering.restate_order_runtime.purchase_orchestrator_workflow.name: sorted(
+                    durable_execution_app.ordering.restate_order_runtime.purchase_orchestrator_workflow.handlers
+                ),
             }
         finally:
             durable_execution_app.close()
@@ -124,6 +130,50 @@ class TestHttpHost:
             ):
                 order = urllib.request.Request(
                     f"http://127.0.0.1:{port}/orders",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                )
+                for _ in range(100):
+                    try:
+                        with urllib.request.urlopen(order, timeout=5) as answer:
+                            answers.append(answer.status)
+                        break
+                    except urllib.error.HTTPError as e:
+                        answers.append(e.code)
+                        break
+                    except OSError:
+                        time.sleep(0.1)
+        finally:
+            host.send_signal(signal.SIGINT)
+            try:
+                host.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                host.kill()
+                host.wait()
+        assert answers == [400, 422, 503]
+
+    def test_the_purchases_route_answers_by_the_failure_it_meets(self) -> None:
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        with socket.socket() as closed:
+            closed.bind(("127.0.0.1", 0))
+            unreachable = closed.getsockname()[1]
+        env = dict(
+            os.environ,
+            RESTATE_INGRESS=f"http://127.0.0.1:{unreachable}",
+            PYTHONPATH=os.pathsep.join(sys.path),
+        )
+        host = subprocess.Popen([sys.executable, "-m", "srv.http.main", f"127.0.0.1:{port}"], env=env)
+        answers: list[int] = []
+        try:
+            for body in (
+                b'{"order_id": "o1"}',
+                b'{"order_id": "o1", "sku": "gadget", "quantity": 0}',
+                b'{"order_id": "o1", "sku": "gadget", "quantity": 2}',
+            ):
+                order = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/purchases",
                     data=body,
                     headers={"Content-Type": "application/json"},
                 )

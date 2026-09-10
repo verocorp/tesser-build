@@ -1,0 +1,1 @@
+from ordering.adapters.gateways.memory_payment_processor import MemoryPaymentProcessor as MemoryPaymentProcessor

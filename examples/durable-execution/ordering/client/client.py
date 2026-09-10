@@ -34,8 +34,26 @@ class PlaceOrderResponse(ts.Response):
         self.total_cents = total_cents
 
 
+class PurchaseRequest(ts.Request):
+
+    def __init__(self, order_id: str, sku: str, quantity: int) -> None:
+        self.order_id = order_id
+        self.sku = sku
+        self.quantity = quantity
+
+
+class PurchaseResponse(ts.Response):
+
+    def __init__(self, order_id: str, total_cents: int, payment_reference: str) -> None:
+        self.order_id = order_id
+        self.total_cents = total_cents
+        self.payment_reference = payment_reference
+
+
 class OrderingClient(ts.Client, typing.Protocol):
 
     async def submit_order(self, submit_order_request: SubmitOrderRequest) -> SubmitOrderResponse: ...
 
     async def place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...
+
+    async def purchase(self, purchase_request: PurchaseRequest) -> PurchaseResponse: ...

@@ -5,6 +5,68 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.107.0] - 2026-09-09
+
+`examples/durable-execution` purchases an order: a parent workflow runs the
+order as a child, waits for its total, and takes payment for it. The first
+scenario on top of the calling-mode grid, and the first place a workflow
+runs another one.
+
+### Added
+- **`POST /purchases`**, answering `200 {order_id, total_cents, payment_reference}`.
+  `PurchaseService.purchase` builds the `Order` and runs the new
+  `PurchaseOrchestrator` workflow through `PurchaseOrchestratorRunner`; the
+  orchestrator runs `OrderOrchestrator/run` as a **child workflow** under the
+  order's own key, then runs the new `PurchaseActions/take_payment` action for
+  the child's total over a `PaymentProcessor` port
+  (`adapters/gateways/memory_payment_processor.py` is the stand-in).
+- **The child is run through the relay the door already uses.**
+  `OrderOrchestratorRunner` gets a second implementation with the second
+  lifetime, `RestateOrderOrchestratorChildRunner(ctx, runtime)`, answering the
+  same protocol with `ctx.workflow_call` and `ctx.workflow_send` instead of
+  the ingress client. One relay, two runners, and neither the service nor the
+  parent orchestrator can tell which it holds.
+- **`Purchase`**, keyed by the order it pays for, with three rules, each a
+  `CONFLICT`: a pricing that names another order cannot build it
+  (`priced_another_order`); a payment settles it only if it names this order
+  (`payment_for_another_order`) and only for the total (`payment_mismatch`).
+  `Payment` and `PaymentReference` beside it; a receipt names its order all
+  the way from `ChargeResponse` through the relay to `PaymentSpec`.
+- **Measured on `restate-server` 1.7.2:** parent and child are journaled under
+  their own keys and the child's result is readable by its key afterwards; a
+  child that ends terminally ends the parent with the same status and no
+  payment is taken; `ctx.workflow_call` on a child whose key already ran does
+  not attach to the stored result but fails terminal `409`, so an order that
+  was placed cannot then be purchased. All in the README, with the
+  no-compensation, no-attach, and shared-key-namespace boundaries named.
+- **Two services, one client.** A service holds the methods that share its
+  dependencies, so the purchase is `PurchaseService` on its own runner and
+  `OrderService` keeps its one. The component composes the two behind the one
+  `client.OrderingClient` protocol with `Ordering.Client`, a class nested in
+  the component that holds both and forwards each protocol method to its
+  owner; a protocol is satisfied structurally, so it subclasses nothing.
+- `application/snapshots/` holds `OrderSnapshot`, because two relay messages
+  now carry an `Order` and a module may not import the module beside it.
+
+### Changed
+- The memory payment processor is **idempotent by order**: an identical
+  repeat answers the original receipt, and only a repeat for a different
+  amount is `payment_already_taken`. An action is the engine's retry unit;
+  a processor that refused the repeat turned a paid purchase into a failed one.
+- `Quantity` is at most 1,000,000 units and `Price` at most 10^12 cents, so a
+  total can never reach Python's 4,300-digit integer limit in the workflow's
+  output serde, where the failure was non-terminal and retried forever.
+  `OrderId` refuses `.` and `..`, the two ids that reshape the ingress path
+  after percent-encoding and httpx's dot-segment normalization.
+- Every snapshot that crosses the engine now checks its shape on the way in,
+  the take-payment and price-product pairs included; empty ids and references
+  are refused. `OrderActions.price_product` builds a `Price` before answering,
+  so a catalog price past the bound is refused inside the handler rather than
+  raising in the output serde.
+- `RestateOrderRuntime` registers four definitions (`OrderActions`,
+  `OrderOrchestrator`, `PurchaseActions`, `PurchaseOrchestrator`) and the
+  host mounts all four.
+
 ## [0.0.106.0] - 2026-09-08
 
 `examples/durable-execution` places an order and prices it in one call. The
