@@ -1223,6 +1223,56 @@ class Ordering(ts.Component):
   `gateways/` and `repositories/` → `application.ports`; a kind imports only
   its own kind. Every adapters module lives in one of the four kind
   packages and holds the kind its package names (TB041/TB052).
+### Relays, snapshots, runners, runtimes
+
+`examples/durable-execution/` names a fifth application kind, and the analyzer
+registers it: **a relay** (`ts.Relay`) is a protocol whose far side is this
+same context's own application code, reached across the engine. It lives in
+`application/relays/` — a package beside `ports/`, one relay per module —
+together with the `ts.Request`/`ts.Response` messages it speaks and a
+**snapshot** for each (`ts.Serde`, from `tesser.application`) that writes the
+message to bytes and reads it back.
+
+- **A relay message may carry a domain object** (TB080). A `ts.Client` faces
+  outsiders and a `ts.Port` faces a foreign system, so both stay
+  primitives-only; a relay has us on both ends, so
+  `OrderOrchestratorRequest(order: domain.Order)` is legal and the order comes
+  back whole. A bare bool and a union are still findings.
+- **A snapshot holds nothing** (TB081): exactly `serialize` and `deserialize`,
+  no `__init__`, no field, no class-level statement — a relay writes the same
+  bytes on every replay. It checks the shape of what it reads before the
+  constructor sees it, so a wrong type is a validation error instead of a
+  `TypeError` raised later, inside the orchestrator, where the engine would
+  retry it. A snapshot several relays share — one over a domain aggregate —
+  lives in `application/snapshots/`.
+- **A relay whose implementation lives exactly as long as one invocation is a
+  `ts.JobContext` instead**, declared in the same package. The two differ in
+  how long the implementation lives, not in what it speaks.
+- **A service or an orchestrator may depend on a relay** (TB081), and an
+  orchestrator may store one. Reading the domain object straight off the
+  relay's own request is how that object arrives, so it is not the straight
+  accessor TB082 flags.
+- **An application client may speak a relay's messages** as well as a ports
+  module's (TB067/TB081) — exactly one message package, `ports` or `relays`.
+- **`json` is legal in `application/relays/` and `application/snapshots/`**
+  and nowhere else in the application role (TB062): a snapshot is the one
+  place a message becomes bytes.
+- **The implementations are two adapter kind packages** (TB041/TB052/TB060).
+  `adapters/runners/` holds the relay implementations — a `ts.Gateway` for the
+  one built once at wiring that enters through the engine's ingress, a
+  `ts.JobContext` for the one built per invocation inside a handler — and
+  reaches `application.relays` and `adapters/runtimes/`. `adapters/runtimes/`
+  holds the `ts.Job` that registers the engine's handlers, plus the
+  `ts.Serde`s over the relay messages those handlers bind, and reaches
+  `application.client`, `application.orchestrators`, `application.relays`, and
+  `adapters/runners/`. A serde names one type — a type parameter, or the one
+  shape its base is subscripted with.
+- **`adapters/jobs/` and the `runners`/`runtimes` split are both registered.**
+  `examples/minimal/` uses the first, `examples/durable-execution/` the
+  second, and `docs/design-app-service-types.md` plus the prose above still
+  describe only the first. Which one the norm keeps is an open ruling —
+  `TODOS.md`. Note the gap; don't invent a third.
+
 - **Not yet ruled:** payload versioning on a durable leg (a field added to a
   port DTO changes the bytes an in-flight journal holds — port DTOs on a
   durable leg are append-only until it is); the Temporal mirror binds its

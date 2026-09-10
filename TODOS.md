@@ -2,6 +2,91 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Rulings the relay registration implemented as the tree does (2026-09-10)
+
+`examples/durable-execution/` carried ~130 `# tesser:debt` markers written when
+PR #171 landed kinds and packages the Python analyzer had never seen. The
+registration wave taught the analyzer those kinds (`tesser.application.Relay`,
+`tesser.application.Serde`, the `application/relays/`, `application/snapshots/`,
+`adapters/runners/`, `adapters/runtimes/` packages) and regenerated the markers
+from a fresh run: 130 → 37. Every rule below was implemented **as the tree
+already writes it**, because the tree is the only worked example. Each needs a
+maintainer ruling before it is a convention rather than a description.
+
+- [ ] **`adapters/jobs/` vs `adapters/runners/` + `adapters/runtimes/`.**
+  `examples/minimal/` still uses `jobs/`; `examples/durable-execution/` moved to
+  the two-package split in #171. All three are now registered adapter kind
+  packages with their own reach rows. Two spellings of one idea is exactly the
+  inconsistency this repo exists to remove. Rule which survives, then delete the
+  other's rows (`ADAPTER_KIND_PACKAGES`, `ADAPTER_KIND_REACH`, `TEST_TIER_*`)
+  and migrate the example.
+- [ ] **A relay's messages may carry a domain object.** `TB080` now admits an
+  aggregate, entity, or value object as a relay DTO field, because both ends of
+  a relay are this same context and the engine pins an invocation to one
+  deployment. A bare bool and a union stay findings. This is a real widening of
+  the no-outward-representation line and should be ruled explicitly, not
+  inherited from the example.
+- [ ] **A relay protocol is `ts.Relay` or `ts.JobContext`, by lifetime.** The
+  tree writes the component-lifetime relay as `ts.Relay` and the
+  invocation-lifetime one as `ts.JobContext`, both in `application/relays/`,
+  both speaking relay messages. The analyzer admits both there. Whether that is
+  one kind with two lifetimes or two kinds is unruled.
+- [ ] **A snapshot (`tesser.application.Serde`) holds nothing.** Implemented as:
+  exactly `serialize`/`deserialize`, no `__init__`, no field, no class-level
+  statement — and, unlike the adapters serde, free to branch, because checking
+  the shape of a payload before the constructor sees it is what a snapshot is
+  for. The adapters serde's "branches on nothing but the empty payload" rule is
+  therefore not applied to a snapshot.
+- [ ] **`json` in `application/relays/` and `application/snapshots/`.** `TB062`
+  now widens the application stdlib allowlist by exactly `json` in those two
+  placements. The alternative — a `.tesser-root` `stdlib json` line — would
+  legalize `json` in the domain too, which is why it was not taken. Whether the
+  allowance should name `json` or a broader "serialization stdlib" is unruled.
+- [ ] **A serde names one type, not one type parameter.** The tree's engine
+  serdes are monomorphic (`class RestateXSerde(ts.Serde,
+  restate.serde.Serde[relays.X])`). `TB081` now accepts either a type parameter
+  or exactly one subscripted base. `docs/design-app-service-types.md` still
+  describes only the generic `RecordSerde[T]`.
+- [ ] **A service and an orchestrator may depend on a relay, and an
+  orchestrator may store one.** `TB081`'s dependency and stores rules widened
+  for both. `PurchaseOrchestrator` holds its job context *and* the order
+  orchestrator's relay, which is what running a child workflow needs.
+- [ ] **Reading a domain object off a relay request is not a straight
+  accessor.** `TB082` no longer flags `order = order_orchestrator_request.order`
+  when the method's request resolves to a relay message. The alternative
+  (inlining the read) trips the other half of TB082, so the rule as written had
+  no legal shape for a relay request.
+- [ ] **A runner or runtime test reaches the application client and the
+  domain.** `TEST_TIER_REACH` for both new tiers is the implementation's reach
+  plus `application.client` (a runner test constructs the runtime it addresses)
+  and `domain` (it builds the objects a relay message carries). That is wider
+  than the implementation's own reach, which no other tier does.
+
+### Left as findings, marked, still needing a fix or a ruling
+
+- [ ] **`FakeRestateWorkflowContext` doubles a foreign SDK class** — 4 `TB072`
+  and 6 `TB085` markers across `adapters/runners/` and `adapters/runtimes/`
+  tests. The fake has no base at all (the SDK's `restate.WorkflowContext` is not
+  a tesser kind) and is `typing.cast` at the call site, so nothing on the page
+  links the double to what it doubles: `TB072` cannot see a contract and
+  `TB085` cannot derive the local's name. There is no shape in the tree to
+  register — a rule here would be invented. Options: admit a `@ts.fake` whose
+  declared base is an external module named in `.tesser-root`; require a
+  tesser-side protocol between the runner and the SDK; or leave it as standing
+  debt.
+- [ ] **The component publishes its runtime under its own name** —
+  `ordering/component/component.py:55`, one `TB081` marker.
+  `docs/design-app-service-types.md` rules that a component publishes exactly
+  `client` and, when it has jobs, `jobs`; the tree publishes
+  `restate_order_runtime` and the host reads
+  `app.ordering.restate_order_runtime.order_actions_service`. Either the example
+  renames the attribute to `jobs` (and the README's several references with it)
+  or the rule widens to "any public attribute whose class is a `ts.Job`", which
+  reopens the porosity codex #11 closed. Not fixed either way.
+- [ ] **26 `TB023` markers** — nested `def`s in the Restate handler
+  registrations and in the FastAPI route registrations. Untouched: the nested-def
+  wave is gated on its own exception list (see the TB022/TB023 entry).
+
 ## Keeping the sequence of port calls out of the domain (2026-09-08, Chris)
 
 **What happened.** Three agents built the same four Restate durable-execution

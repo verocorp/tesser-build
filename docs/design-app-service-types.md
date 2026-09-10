@@ -278,6 +278,37 @@ as the intent; only the scaffold context obeys it.
    These are literal tables in `checks.py`, so nothing follows
    automatically (codex #5).
 
+## Drift, 2026-09-10 (the tree moved, this doc did not)
+
+PR #171 reworked `examples/durable-execution/` and this doc was not walked
+with it. Read the tree as the spec and this section as the diff:
+
+- `adapters/jobs/` became **`adapters/runners/`** (the relay implementations —
+  `ts.Gateway` at the ingress, `ts.JobContext` inside an invocation) and
+  **`adapters/runtimes/`** (the `ts.Job` that registers the engine's handlers,
+  and the serdes those handlers bind). `examples/minimal/` still uses
+  `adapters/jobs/`, so all three packages are registered adapter kinds.
+  Which one the norm keeps is an open ruling (`TODOS.md`).
+- The "Messages — declared once, on the port" section is superseded for the
+  workflow leg: a message whose far side is this same context is declared on a
+  **relay** (`tesser.application.Relay`) in **`application/relays/`**, not on a
+  port, and it may carry a domain object because both ends are us. Each message
+  has a `tesser.application.Serde` snapshot beside it, and a snapshot several
+  relays share lives in **`application/snapshots/`**.
+- The `RecordSerde[T]` shape is one of two: the tree's engine serdes are
+  monomorphic (`class RestateXSerde(ts.Serde, restate.serde.Serde[relays.X])`),
+  so the rule now reads "one type — a type parameter, or the one shape its base
+  is subscripted with".
+- `ts.JobContext` is a bare marker protocol; the generic
+  `call[I, O](step, request)` member it declared is gone. A runner names this
+  context's actions by name on the subclass.
+- The component publishes its runtime under the runtime's own name
+  (`restate_order_runtime`), not `jobs`. That is still a finding
+  (`TB081`) and is carried as a debt marker pending a ruling.
+
+`skills/tesser-build/python.md#orchestrators-actions-jobs` carries the same
+diff as a subsection.
+
 ## Deliberately out of scope for this wave
 
 - Errors: the `DomainError ↔ TerminalError` mapping is duplicated in both
