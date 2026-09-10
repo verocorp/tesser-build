@@ -225,6 +225,20 @@ main{padding:var(--s5) var(--s5) var(--s7);max-width:1000px;margin:0 auto}
 .row.story .snip{font:400 13px/1.5 var(--mono)}
 .row .beneath{font:400 11px/1.6 var(--mono);color:var(--faint);white-space:nowrap}
 .node > .row + .kids{margin-top:var(--s2)}
+/* S1.1 — the given, when and then inputs and a save, shown when add story is clicked */
+.compose{
+  display:grid;grid-template-columns:5.6em 1fr;gap:6px 10px;align-items:center;
+  margin:var(--s2) 0 0 var(--s5);padding:10px 14px;
+  border:1px dashed var(--line-strong);border-radius:3px;background:var(--surface-2);
+}
+.compose label{font:500 10.5px/1.7 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.compose input{
+  font:400 13px/1.5 var(--mono);color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:3px;padding:4px 8px;min-width:0;
+}
+.compose input:focus{outline:none;border-color:var(--accent)}
+.compose .compose-actions{grid-column:2;display:flex;gap:8px;margin-top:2px}
+.compose.failed{border-color:var(--danger, #b3261e)}
 
 /* J1.3a — the chain of identifiers above a card, each a link */
 .crumbs{grid-column:2;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin:0 0 4px;font:500 11px/1.6 var(--mono)}
@@ -506,6 +520,7 @@ function seed(){
 /* ---------------- state ---------------- */
 let model = load();
 const sketchOpen = new Set(["j-svc", "j-buildsvc", "j-jtbdsvc"]);
+const composing = new Map();
 const view = {depth:3, stories:true, focus:null};
 try{ view.focus = localStorage.getItem(STORE_KEY + ":focus") || null; }catch(e){ /* no focus remembered */ }
 /* nodes the user minimized to one line by hand, kept across reloads */
@@ -1158,6 +1173,58 @@ function storyOrRow(st, job, k, path){
   return collapsed.has(st.id) ? compactRow("story", st, path, job.level, "minimized") : storyNode(st, job, k, path);
 }
 
+/* S1.1 / J1.1b–d — the inputs and a save; save POSTs the story to the service and shows what comes back */
+function storyForm(job){
+  const draft = composing.get(job.id);
+  const form = document.createElement("form");
+  form.className = "compose";
+  form.dataset.compose = job.id;
+  STORY_LINES.forEach(spec => {
+    const label = document.createElement("label");
+    label.textContent = spec.pre;
+    label.htmlFor = "compose-" + job.id + "-" + spec.field;
+    form.appendChild(label);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = spec.field;
+    input.id = label.htmlFor;
+    input.placeholder = spec.ph;
+    input.value = draft[spec.field];
+    input.addEventListener("input", () => { draft[spec.field] = input.value; });
+    form.appendChild(input);
+  });
+  const actions = document.createElement("div");
+  actions.className = "compose-actions";
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "btn btn-primary";
+  save.textContent = "Save";
+  actions.appendChild(save);
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn btn-quiet";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", () => { composing.delete(job.id); render(); });
+  actions.appendChild(cancel);
+  form.appendChild(actions);
+  form.addEventListener("submit", ev => {
+    ev.preventDefault();
+    save.disabled = true;
+    fetch("/jtbd/" + encodeURIComponent(job.id) + "/stories", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({given:draft.given, when:draft.when, then:draft.then})
+    }).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(made => {
+      job.stories.push({kind:"story", id:made.story_id, status:"accepted", source:"chris",
+                        given:draft.given, when:draft.when, then:draft.then, children:[]});
+      composing.delete(job.id);
+      render();
+    }).catch(() => { save.disabled = false; form.classList.add("failed"); });
+  });
+  setTimeout(() => { const first = form.querySelector("input"); if(first) first.focus(); }, 0);
+  return form;
+}
+
 function jobNode(job, path, siblings, index){
   const wrap = document.createElement("div");
   wrap.className = "node l" + job.level;
@@ -1196,8 +1263,7 @@ function jobNode(job, path, siblings, index){
     addStory.className = "btn btn-quiet";
     addStory.textContent = "+ story";
     addStory.addEventListener("click", () => {
-      job.stories.push({kind:"story", id:uid("s"), status:"accepted", source:"chris",
-                        given:"", when:"", then:"", children:[]});
+      composing.set(job.id, {given:"", when:"", then:""});
       render();
     });
     act.appendChild(addStory);
@@ -1246,6 +1312,7 @@ function jobNode(job, path, siblings, index){
   if(job.level === 3 && sketchOpen.has(job.id)) card.appendChild(pseudoBlock(job));
 
   wrap.appendChild(card);
+  if(composing.has(job.id)) wrap.appendChild(storyForm(job));
 
   const kids = document.createElement("div");
   kids.className = "kids";

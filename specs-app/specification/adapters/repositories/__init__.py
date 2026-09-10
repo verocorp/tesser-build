@@ -1,0 +1,1 @@
+from specification.adapters.repositories.memory import MemorySpecificationRepository as MemorySpecificationRepository

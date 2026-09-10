@@ -270,6 +270,25 @@ jobs:
         # only building the distribution can catch that omission class.
         run: scripts/verify tesser-py
 
+  specs-app:
+    # Gates the specs app at the same bar: tessercheck zero findings + mypy
+    # --strict + pytest. Its root tests include a Playwright test that drives
+    # the product specification page against the in-process host, so the
+    # job installs Chromium before it runs.
+    name: specs-app (tessercheck + mypy --strict + pytest + playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r specs-app/requirements-dev.txt
+      - name: Install the browser the page test drives
+        run: python -m playwright install --with-deps chromium
+      - name: specs-app — tessercheck + mypy --strict + pytest
+        run: scripts/verify specs-app
+
   roadmap:
     # The roadmap matrix is generated, never hand-maintained (Wave 2 item 10):
     # this job fails when the committed rendering drifts from the derivation,

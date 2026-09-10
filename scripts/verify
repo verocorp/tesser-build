@@ -232,6 +232,21 @@ print(f"wheel ships: {sorted(on_disk)}")
 EOF
 }
 
+# The specs app: the product specification page and the service behind it.
+# One context (specification), one HTTP host that serves the page at / and
+# POST /jtbd/{id}/stories, and a root-tier Playwright test that drives the
+# page against the in-process host — so this tree needs a browser
+# (python -m playwright install chromium) as well as the Python tooling.
+run_specs_app() {
+  cd "$ROOT/specs-app" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../tesser-py mypy --strict protocol specification app srv tests conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
 run_layout() {
   cd "$ROOT/layout" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -270,6 +285,7 @@ run_tree() {
     ports)          run_ports ;;
     errorspy)       run_errorspy ;;
     tesser-py)      run_tesser_py ;;
+    specs-app)      run_specs_app ;;
     layout)         run_layout ;;
     tessercheck-py) run_tessercheck_py ;;
     *) echo "unknown tree: $tree (known: ${TREES[*]})"; return 1 ;;

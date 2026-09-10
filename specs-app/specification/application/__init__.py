@@ -1,0 +1,1 @@
+from specification.application.specification_service import SpecificationService as SpecificationService

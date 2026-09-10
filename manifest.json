@@ -26,7 +26,7 @@
   "roadmap": "ungated",
   "scripts": "ungated",
   "skills": "ungated",
-  "specs": "ungated",
+  "specs-app": "app",
   "tesser-py": "app",
   "tessercheck-cli": "ungated",
   "tessercheck-py": "app"
