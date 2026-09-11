@@ -1,9 +1,23 @@
 from __future__ import annotations
 
 import pytest
+import tesser.testing as ts
 
 import reports.domain as domain
 import tesser.errors as errors
+
+
+@ts.helper
+def _link_verdicts_spec(
+    slug: str = "spring-sale",
+    target_url: str = "https://a.example/s",
+    decision: str = "denied",
+    reason: str = "host blocked",
+) -> domain.LinkVerdictsSpec:
+    return domain.LinkVerdictsSpec(
+        links=(domain.LinkSpec(slug, target_url),),
+        verdicts=(domain.RecordedVerdictSpec(target_url, decision, reason),),
+    )
 
 
 def test_a_link_carries_its_slug_and_target_as_value_objects() -> None:
@@ -156,24 +170,16 @@ def test_a_verdict_the_domain_would_not_accept_fails_the_whole_join() -> None:
 
 
 def test_two_joins_of_the_same_links_and_verdicts_are_equal() -> None:
-    def joined() -> domain.LinkVerdicts:  # tesser:debt TB023
-        return domain.LinkVerdicts(
-            domain.LinkVerdictsSpec(
-                links=(domain.LinkSpec("spring-sale", "https://a.example/s"),),
-                verdicts=(
-                    domain.RecordedVerdictSpec("https://a.example/s", "denied", "host blocked"),
-                ),
-            )
-        )
-
     link_verdicts = domain.LinkVerdicts(
         domain.LinkVerdictsSpec(
             links=(domain.LinkSpec("spring-sale", "https://a.example/s"),), verdicts=()
         )
     )
 
-    assert joined() == joined()
-    assert joined() != link_verdicts
+    assert domain.LinkVerdicts(_link_verdicts_spec()) == domain.LinkVerdicts(
+        _link_verdicts_spec()
+    )
+    assert domain.LinkVerdicts(_link_verdicts_spec()) != link_verdicts
 
 
 def test_a_target_url_accepts_an_http_and_an_https_target() -> None:

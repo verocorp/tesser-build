@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import collections.abc as abc
 import typing
 
 import tesser.adapters as ts
@@ -19,44 +18,52 @@ TOOLS_FOR_STEP: typing.Final[dict[str, tuple[str, ...]]] = {
 }
 
 
+class MapToToolTurn(ts.Mapper, protocol.ToolTurn):
+
+    def __init__(self, booking_state_response: client.BookingStateResponse) -> None:
+        tools: list[protocol.Tool] = []
+        for name in TOOLS_FOR_STEP[booking_state_response.step]:
+            if name == PROVIDE_NAME:
+                description = "Record the caller's full name."
+                parameters: dict[str, object] = {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                    "additionalProperties": False,
+                }
+            elif name == CHOOSE_SLOT:
+                description = "Record the slot the caller chose."
+                parameters = {
+                    "type": "object",
+                    "properties": {
+                        "slot": {
+                            "type": "string",
+                            "enum": list(booking_state_response.offered_slots),
+                        }
+                    },
+                    "required": ["slot"],
+                    "additionalProperties": False,
+                }
+            elif name == CONFIRM_BOOKING:
+                description = "Book the chosen slot after the caller confirms."
+                parameters = {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                }
+            else:
+                raise ValueError(f"unknown tool {name!r}")
+            tools.append(
+                protocol.Tool(name=name, description=description, parameters=parameters)
+            )
+        super().__init__(reply=booking_state_response.reply, tools=tuple(tools))
+
+
 class LlmToolHandler(ts.Handler):
 
     def __init__(self, scheduling_client: client.SchedulingClient, booking_id: str) -> None:
         self._scheduling_client = scheduling_client
         self._booking_id = booking_id
-        self._declarations: dict[
-            str,
-            tuple[str, abc.Callable[[client.BookingStateResponse], dict[str, object]]],  # tesser:debt TB022
-        ] = {
-            PROVIDE_NAME: (
-                "Record the caller's full name.",
-                lambda _state: {  # tesser:debt TB023
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}},
-                    "required": ["name"],
-                    "additionalProperties": False,
-                },
-            ),
-            CHOOSE_SLOT: (
-                "Record the slot the caller chose.",
-                lambda state: {  # tesser:debt TB023
-                    "type": "object",
-                    "properties": {
-                        "slot": {"type": "string", "enum": list(state.offered_slots)}
-                    },
-                    "required": ["slot"],
-                    "additionalProperties": False,
-                },
-            ),
-            CONFIRM_BOOKING: (
-                "Book the chosen slot after the caller confirms.",
-                lambda _state: {  # tesser:debt TB023
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": False,
-                },
-            ),
-        }
 
     def instructions(self) -> str:
         return (
@@ -68,37 +75,13 @@ class LlmToolHandler(ts.Handler):
         booking_state_response = self._scheduling_client.begin(
             client.BeginBookingRequest(booking_id=self._booking_id)
         )
-        tools: list[protocol.Tool] = []
-        for name in TOOLS_FOR_STEP[booking_state_response.step]:
-            if name not in self._declarations:
-                raise ValueError(f"unknown tool {name!r}")
-            description, parameters = self._declarations[name]
-            tools.append(
-                protocol.Tool(
-                    name=name,
-                    description=description,
-                    parameters=parameters(booking_state_response),
-                )
-            )
-        return protocol.ToolTurn(reply=booking_state_response.reply, tools=tuple(tools))
+        return MapToToolTurn(booking_state_response)
 
     def status(self) -> protocol.ToolTurn:
         booking_state_response = self._scheduling_client.status(
             client.StatusRequest(booking_id=self._booking_id)
         )
-        tools: list[protocol.Tool] = []
-        for name in TOOLS_FOR_STEP[booking_state_response.step]:
-            if name not in self._declarations:
-                raise ValueError(f"unknown tool {name!r}")
-            description, parameters = self._declarations[name]
-            tools.append(
-                protocol.Tool(
-                    name=name,
-                    description=description,
-                    parameters=parameters(booking_state_response),
-                )
-            )
-        return protocol.ToolTurn(reply=booking_state_response.reply, tools=tuple(tools))
+        return MapToToolTurn(booking_state_response)
 
     def provide_name(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
         booking_state_response = self._scheduling_client.provide_name(
@@ -106,19 +89,7 @@ class LlmToolHandler(ts.Handler):
                 booking_id=self._booking_id, name=tool_call.text("name")
             )
         )
-        tools: list[protocol.Tool] = []
-        for name in TOOLS_FOR_STEP[booking_state_response.step]:
-            if name not in self._declarations:
-                raise ValueError(f"unknown tool {name!r}")
-            description, parameters = self._declarations[name]
-            tools.append(
-                protocol.Tool(
-                    name=name,
-                    description=description,
-                    parameters=parameters(booking_state_response),
-                )
-            )
-        return protocol.ToolTurn(reply=booking_state_response.reply, tools=tuple(tools))
+        return MapToToolTurn(booking_state_response)
 
     def choose_slot(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
         booking_state_response = self._scheduling_client.choose_slot(
@@ -126,34 +97,10 @@ class LlmToolHandler(ts.Handler):
                 booking_id=self._booking_id, slot=tool_call.text("slot")
             )
         )
-        tools: list[protocol.Tool] = []
-        for name in TOOLS_FOR_STEP[booking_state_response.step]:
-            if name not in self._declarations:
-                raise ValueError(f"unknown tool {name!r}")
-            description, parameters = self._declarations[name]
-            tools.append(
-                protocol.Tool(
-                    name=name,
-                    description=description,
-                    parameters=parameters(booking_state_response),
-                )
-            )
-        return protocol.ToolTurn(reply=booking_state_response.reply, tools=tuple(tools))
+        return MapToToolTurn(booking_state_response)
 
     def confirm(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
         booking_state_response = self._scheduling_client.confirm(
             client.ConfirmBookingRequest(booking_id=self._booking_id)
         )
-        tools: list[protocol.Tool] = []
-        for name in TOOLS_FOR_STEP[booking_state_response.step]:
-            if name not in self._declarations:
-                raise ValueError(f"unknown tool {name!r}")
-            description, parameters = self._declarations[name]
-            tools.append(
-                protocol.Tool(
-                    name=name,
-                    description=description,
-                    parameters=parameters(booking_state_response),
-                )
-            )
-        return protocol.ToolTurn(reply=booking_state_response.reply, tools=tuple(tools))
+        return MapToToolTurn(booking_state_response)

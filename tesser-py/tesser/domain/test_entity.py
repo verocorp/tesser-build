@@ -46,6 +46,16 @@ def test_an_entity_without_identity_says_so() -> None:
 
 
 def test_a_subclass_may_not_override_the_identity_contract() -> None:
-    for name in ("__eq__", "__hash__"):
-        with pytest.raises(TypeError, match=f"must not override {name}"):
-            type("Custom", (entity.Entity,), {name: lambda self, other=None: True})  # tesser:debt TB023
+    with pytest.raises(TypeError, match="must not override __eq__"):
+
+        class CustomEquality(entity.Entity):
+
+            def __eq__(self, other: object) -> bool:
+                return True
+
+    with pytest.raises(TypeError, match="must not override __hash__"):
+
+        class CustomHash(entity.Entity):
+
+            def __hash__(self) -> int:
+                return 0

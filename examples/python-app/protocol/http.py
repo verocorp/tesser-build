@@ -89,7 +89,8 @@ class HttpResponse(ts.Response):
 
     @classmethod
     def problem(cls, status_code: int, code: str, detail: str) -> HttpResponse:
-        return cls.json(status_code, {"type": f"/problems/{code}", "detail": detail})  # tesser:debt TB051
+        payload = json.dumps({"type": f"/problems/{code}", "detail": detail}).encode("utf-8")
+        return cls(status_code, payload, {"Content-Type": "application/json"})
 
     @classmethod
     def redirect(cls, url: str, status_code: int = 302) -> HttpResponse:

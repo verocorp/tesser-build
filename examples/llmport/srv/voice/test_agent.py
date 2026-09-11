@@ -89,83 +89,74 @@ class FakeBrokenEndpoint(protocol.ToolEndpoint):
         raise RuntimeError("the context is unreachable")
 
 
+@ts.fake
+class FakeToolHalt(protocol.ToolHalt):
+
+    def __init__(self) -> None:
+        self.halts: list[str] = []
+
+    async def __call__(self) -> None:
+        self.halts.append("halt")
+
+
 class TestToolAgent:
 
     def test_the_agent_speaks_the_instructions_the_surface_owns(self) -> None:
-        halted: list[str] = []
-
-        async def halt() -> None:  # tesser:debt TB023
-            halted.append("halt")
+        fake_tool_halt = FakeToolHalt()
 
         fake_tool_surface = FakeToolSurface(tool_turn(), tool_turn())
-        tool_agent = voice.ToolAgent(fake_tool_surface, (), halt)
+        tool_agent = voice.ToolAgent(fake_tool_surface, (), fake_tool_halt)
 
         assert tool_agent.instructions == "help the caller book an appointment"
         assert fake_tool_surface.begins == 0
 
     def test_opening_the_session_mounts_the_tools_the_surface_handed_back(self) -> None:
-        halted: list[str] = []
-
-        async def halt() -> None:  # tesser:debt TB023
-            halted.append("halt")
+        fake_tool_halt = FakeToolHalt()
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
-        tool_agent = voice.ToolAgent(fake_tool_surface, (), halt)
+        tool_agent = voice.ToolAgent(fake_tool_surface, (), fake_tool_halt)
 
         asyncio.run(tool_agent.on_enter())
 
         assert [mounted_tool.info.name for mounted_tool in tool_agent.tools] == ["provide_name"]
         assert fake_tool_surface.begins == 1
-        assert halted == []
+        assert fake_tool_halt.halts == []
 
     def test_a_tool_call_reaches_the_route_of_that_name_and_rebinds_to_its_turn(self) -> None:
-        halted: list[str] = []
-
-        async def halt() -> None:  # tesser:debt TB023
-            halted.append("halt")
+        fake_tool_halt = FakeToolHalt()
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
         fake_endpoint = FakeEndpoint(tool_turn(reply="recorded", tool="choose_slot"))
         tool_agent = voice.ToolAgent(
             fake_tool_surface,
             (protocol.Route(name="provide_name", endpoint=fake_endpoint),),
-            halt,
+            fake_tool_halt,
         )
 
-        async def drive() -> str:  # tesser:debt TB023
-            await tool_agent.on_enter()
-            return await tool_agent.tools[0]({"name": "Ada"})
-
-        spoken = asyncio.run(drive())
+        with asyncio.Runner() as runner:
+            runner.run(tool_agent.on_enter())
+            spoken = runner.run(tool_agent.tools[0]({"name": "Ada"}))
 
         assert spoken == "recorded"
         assert fake_endpoint.calls == ["Ada"]
         assert [mounted_tool.info.name for mounted_tool in tool_agent.tools] == ["choose_slot"]
-        assert halted == []
+        assert fake_tool_halt.halts == []
 
     def test_a_tool_the_routes_do_not_name_is_a_tool_error_and_never_halts(self) -> None:
-        halted: list[str] = []
-
-        async def halt() -> None:  # tesser:debt TB023
-            halted.append("halt")
+        fake_tool_halt = FakeToolHalt()
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
-        tool_agent = voice.ToolAgent(fake_tool_surface, (), halt)
+        tool_agent = voice.ToolAgent(fake_tool_surface, (), fake_tool_halt)
 
-        async def drive() -> str:  # tesser:debt TB023
-            await tool_agent.on_enter()
-            return await tool_agent.tools[0]({"name": "Ada"})
+        with asyncio.Runner() as runner:
+            with pytest.raises(agents.ToolError, match="unknown tool 'provide_name'"):
+                runner.run(tool_agent.on_enter())
+                runner.run(tool_agent.tools[0]({"name": "Ada"}))
 
-        with pytest.raises(agents.ToolError, match="unknown tool 'provide_name'"):
-            asyncio.run(drive())
-
-        assert halted == []
+        assert fake_tool_halt.halts == []
 
     def test_a_call_the_model_can_correct_rebinds_from_the_surface_and_never_halts(self) -> None:
-        halted: list[str] = []
-
-        async def halt() -> None:  # tesser:debt TB023
-            halted.append("halt")
+        fake_tool_halt = FakeToolHalt()
 
         fake_tool_surface = FakeToolSurface(
             tool_turn(tool="provide_name"), tool_turn(reply="try again", tool="choose_slot")
@@ -173,53 +164,43 @@ class TestToolAgent:
         tool_agent = voice.ToolAgent(
             fake_tool_surface,
             (protocol.Route(name="provide_name", endpoint=FakeRefusingEndpoint()),),
-            halt,
+            fake_tool_halt,
         )
 
-        async def drive() -> str:  # tesser:debt TB023
-            await tool_agent.on_enter()
-            return await tool_agent.tools[0]({"name": "Ada"})
-
-        with pytest.raises(agents.ToolError, match="name must be a string"):
-            asyncio.run(drive())
+        with asyncio.Runner() as runner:
+            with pytest.raises(agents.ToolError, match="name must be a string"):
+                runner.run(tool_agent.on_enter())
+                runner.run(tool_agent.tools[0]({"name": "Ada"}))
 
         assert fake_tool_surface.statuses == 1
         assert [mounted_tool.info.name for mounted_tool in tool_agent.tools] == ["choose_slot"]
-        assert halted == []
+        assert fake_tool_halt.halts == []
 
     def test_a_failure_the_model_cannot_correct_halts_the_session_and_propagates(self) -> None:
-        halted: list[str] = []
-
-        async def halt() -> None:  # tesser:debt TB023
-            halted.append("halt")
+        fake_tool_halt = FakeToolHalt()
 
         fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
         tool_agent = voice.ToolAgent(
             fake_tool_surface,
             (protocol.Route(name="provide_name", endpoint=FakeBrokenEndpoint()),),
-            halt,
+            fake_tool_halt,
         )
 
-        async def drive() -> str:  # tesser:debt TB023
-            await tool_agent.on_enter()
-            return await tool_agent.tools[0]({"name": "Ada"})
+        with asyncio.Runner() as runner:
+            with pytest.raises(RuntimeError, match="the context is unreachable"):
+                runner.run(tool_agent.on_enter())
+                runner.run(tool_agent.tools[0]({"name": "Ada"}))
 
-        with pytest.raises(RuntimeError, match="the context is unreachable"):
-            asyncio.run(drive())
-
-        assert halted == ["halt"]
+        assert fake_tool_halt.halts == ["halt"]
         assert fake_tool_surface.statuses == 0
 
     def test_a_surface_that_cannot_open_halts_the_session_and_propagates(self) -> None:
-        halted: list[str] = []
+        fake_tool_halt = FakeToolHalt()
 
-        async def halt() -> None:  # tesser:debt TB023
-            halted.append("halt")
-
-        tool_agent = voice.ToolAgent(FakeUnreachableToolSurface(), (), halt)
+        tool_agent = voice.ToolAgent(FakeUnreachableToolSurface(), (), fake_tool_halt)
 
         with pytest.raises(RuntimeError, match="the context is unreachable"):
             asyncio.run(tool_agent.on_enter())
 
-        assert halted == ["halt"]
+        assert fake_tool_halt.halts == ["halt"]
         assert tool_agent.tools == []

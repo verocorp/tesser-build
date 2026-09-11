@@ -52,10 +52,21 @@ def test_the_tool_map_covers_exactly_the_domain_steps() -> None:
 
 
 def test_every_offered_tool_is_declarable_and_routable() -> None:
-    llm_tool_handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
+    steps = tuple(handlers.TOOLS_FOR_STEP)
+    llm_tool_handler = handlers.LlmToolHandler(
+        FakeSchedulingClientScripted(
+            *(
+                client.BookingStateResponse(step=step, offered_slots=(), reply="")
+                for step in steps
+            )
+        ),
+        "b1",
+    )
     offered = {name for names in handlers.TOOLS_FOR_STEP.values() for name in names}
 
-    assert offered == set(llm_tool_handler._declarations)
+    declared = {tool.name for _ in steps for tool in llm_tool_handler.begin().tools}
+
+    assert offered == declared
     routes = (
         protocol.Route(handlers.PROVIDE_NAME, llm_tool_handler.provide_name),
         protocol.Route(handlers.CHOOSE_SLOT, llm_tool_handler.choose_slot),
