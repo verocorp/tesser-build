@@ -1040,6 +1040,38 @@ where it lands.
   a handler with many endpoints (tessercheck's has four identical copies;
   a handler-declared table the host applies generically is the shape that
   removes them, not ruled).
+- [ ] **A port's error set is closed the way a client's is: one `ERRORS`
+  tuple on the port module, caught and matched with `assert_never`.**
+  Chris, 2026-09-11, ruled in direction on #184, deferred to a follow-up
+  wave so the boundary PR ships as it is. The gap: a service catches a
+  port error by class name, so a second error a port declares later
+  escapes the service to the backstop and nothing structural notices —
+  the exact violation of "a service raises only client-defined errors".
+  The rules are what we make them: TB051/TB069 admit one `typing.Final`
+  tuple in a ports module; the service writes `except ports.STORE_ERRORS
+  as store_error:` and matches it, closing on `assert_never`, the same
+  shape the handler has over `client.ERRORS`; the `test_client` totality
+  test ("the tuple names every `Exception` subclass in the module") gets a
+  ports twin; the analyzer checks the arm shape (an except arm's only
+  statement raises a `client.*` error). Why a port can need more than one:
+  unavailable (retry), unreadable (the row is there and the domain rejects
+  it), refused on write (a constraint the schema has that the aggregate
+  does not) are three things an operator does differently, even where two
+  collapse to one status for the caller — the one-error-per-port shape
+  the trees converged on was the migration brief and the tuple ban, not
+  a finding. `ts.Outcome` on the response was weighed and loses on the
+  transaction-open case (`async with store.transaction()` cannot return
+  an outcome when it fails to enter) and on the one-match-per-method
+  rule. Bundle with: `ports/engine.py` holding only errors (TB052 marker),
+  the 27 durable-execution markers (where an engine error lives so a
+  runner reaches it), and the four-error engine port that is this
+  question's first real case. Item 4 of #184 (errorspy's duplicate slug
+  in one create body is 422, in a later add_link 409) is pinned by a
+  transport test so the aggregate step changes it deliberately or not at
+  all; item 5 (asyncpg answers missing/conflict as outcomes) stands — can
+  the caller act on it, then it is a return at the port and a raise at
+  the client; item 6 (tessercheck's four identical `try`/`match` blocks)
+  is a handler-shape question for every multi-endpoint handler, separate.
 - [ ] **The wording of a public error belongs to the application, not the
   handler.** Chris, 2026-09-06, reading #172. `Handler.submit_order` in
   `examples/durable-execution` reads the body one field at a time
