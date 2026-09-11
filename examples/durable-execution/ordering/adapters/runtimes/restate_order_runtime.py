@@ -135,7 +135,7 @@ class RestateTakePaymentResponseSerde(ts.Serde, restate.serde.Serde[relays.TakeP
         return relays.TakePaymentResponseSnapshot().deserialize(buf)
 
 
-class RestateOrderRuntime(ts.Job):
+class RestateOrderRuntime(ts.Runtime):
 
     def __init__(
         self,

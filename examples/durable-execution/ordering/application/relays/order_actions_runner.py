@@ -58,7 +58,7 @@ class PriceProductResponseSnapshot(ts.Serde):
         return PriceProductResponse(cents=snapshot["cents"])
 
 
-class OrderActionsRunner(ts.JobContext, typing.Protocol):
+class OrderActionsRunner(ts.Relay, typing.Protocol):
 
     async def run_price_product(
         self, price_product_request: PriceProductRequest

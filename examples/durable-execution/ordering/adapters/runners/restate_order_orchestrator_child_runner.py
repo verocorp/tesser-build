@@ -8,7 +8,7 @@ import ordering.application.relays as relays
 import tesser.errors as errors
 
 
-class RestateOrderOrchestratorChildRunner(ts.JobContext):
+class RestateOrderOrchestratorChildRunner(ts.Runner):
 
     def __init__(
         self,

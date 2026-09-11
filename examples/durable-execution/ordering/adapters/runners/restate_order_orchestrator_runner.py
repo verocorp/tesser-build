@@ -16,7 +16,7 @@ import tesser.errors as errors
 _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
 
 
-class RestateOrderOrchestratorRunner(ts.Gateway):
+class RestateOrderOrchestratorRunner(ts.Runner):
 
     def __init__(self, ingress: str, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
         self._ingress = ingress

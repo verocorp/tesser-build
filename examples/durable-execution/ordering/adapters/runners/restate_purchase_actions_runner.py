@@ -8,7 +8,7 @@ import ordering.application.relays as relays
 import tesser.errors as errors
 
 
-class RestatePurchaseActionsRunner(ts.JobContext):
+class RestatePurchaseActionsRunner(ts.Runner):
 
     def __init__(
         self,
