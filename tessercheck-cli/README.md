@@ -122,12 +122,16 @@ load, and a skill-doc `Read` do not; the latter two write only to
 `.tesser/sessions/`):
 
 ```
-{actor, session_id, ts, relpath, source: "write", placement: governed|skipped|outside|undeclared,
+{actor, session_id, ts, relpath, source: "write", placement: governed|skipped|outside|undeclared|unknown,
  findings: ["TB0xx:relpath", ...], findings_count, mode, guidance: ["skill:tesser-build", "read:python.md", ...],
  status: ok|timeout|error|disabled, exit_code, duration_ms}
 ```
 
-`guidance` is the list of guidance events recorded so far in the session
+`placement` is `unknown` when the analysis did not run (disabled, timeout, or
+error; `error` then carries the worker's exit and a stderr excerpt). The
+project is the nearest git checkout above `cwd` (else `cwd` itself), so a
+sibling directory of the session's start under the same checkout counts as
+inside. `guidance` is the list of guidance events recorded so far in the session
 (`.tesser/sessions/<session_id>.jsonl`, pruned after seven days), in order;
 `actor` is the machine's global `git config user.email`. Advisory and feedback
 text is capped at 50 findings of 400 characters each with control characters

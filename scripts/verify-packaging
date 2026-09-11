@@ -350,13 +350,13 @@ fi
 # A worker that cannot even start is the shape a half-finished upgrade takes on
 # a consumer's machine. The child runs with -P, so a package in the working
 # directory can no longer shadow the installed one; a sitecustomize on
-# PYTHONPATH still runs at every interpreter start, and this one breaks only
-# the interpreter started in the tree, which is the worker.
+# PYTHONPATH still runs at every interpreter start, and this one exits only
+# the interpreter whose argv is the worker's.
 step "tessercheck-hook fails open when the worker cannot run"
 BROKEN="$VENV/broken"
 mkdir -p "$BROKEN" || exit 1
-printf 'import os\nif os.path.realpath(os.getcwd()) == os.path.realpath(os.environ.get("TESSERCHECK_BREAK_IN", "/")):\n    raise SystemExit("worker cannot start")\n' > "$BROKEN/sitecustomize.py"
-(cd "$VENV" && hook_event s1 Write "$HOOKED/loose.py" "" | PYTHONPATH="$BROKEN" TESSERCHECK_BREAK_IN="$HOOKED" "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+printf 'import sys\nif "--worker" in sys.argv:\n    raise SystemExit("worker cannot start")\n' > "$BROKEN/sitecustomize.py"
+(cd "$VENV" && hook_event s1 Write "$HOOKED/loose.py" "" | PYTHONPATH="$BROKEN" "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
 if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || ! last_log | grep -q '"status": "error"' || ! last_log | grep -q '"error": "worker exit' || ! last_log | grep -q '"placement": "unknown"'; then
   echo "tessercheck-hook did not fail open when the worker could not run" >&2
   cat "$VENV/hook.out" "$VENV/hook.err" >&2; last_log >&2; exit 1
@@ -409,6 +409,15 @@ fi
 
 # State paths that are symlinks are refused: a hostile checkout must not turn
 # the hook into a writer or a pruner of files elsewhere.
+step "tessercheck-hook honors a conf that is a symlink to a per-machine file"
+printf 'enabled=false\n' > "$VENV/machine.conf"
+mkdir -p "$HOOKED/.tesser" && rm -f "$HOOKED/.tesser/hook.conf" && ln -s "$VENV/machine.conf" "$HOOKED/.tesser/hook.conf"
+hook_run s8 Write "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || ! last_log | grep -q '"status": "disabled"'; then
+  echo "tessercheck-hook ignored a symlinked hook.conf" >&2; cat "$VENV/hook.out" >&2; last_log >&2; exit 1
+fi
+rm -f "$HOOKED/.tesser/hook.conf"
+
 step "tessercheck-hook refuses a symlinked state directory"
 SYMLINKED="$VENV/symlinked"
 mkdir -p "$SYMLINKED" "$VENV/elsewhere" || exit 1

@@ -17780,7 +17780,7 @@ def test_a_class_re_exported_through_two_packages_resolves_to_the_module_that_de
     assert not any("shop.domain.kernel.sub.MoneySpec" in f for f in findings), findings
 
 
-def test_a_name_two_modules_export_under_one_package_resolves_through_the_first_row() -> None:
+def test_a_name_two_modules_export_under_one_package_resolves_through_the_first_sorted_row() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_spec(sources=(

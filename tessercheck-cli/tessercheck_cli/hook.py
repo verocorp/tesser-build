@@ -52,11 +52,13 @@ _MAX_FINDING_CHARS: typing.Final[int] = 400
 
 _WRITE_TOOLS: typing.Final[frozenset[str]] = frozenset({"Edit", "Write"})
 
-_SKILL_KEYS: typing.Final[tuple[str, ...]] = ("skill", "name", "skill_name")
+_SKILL_KEYS: typing.Final[tuple[str, ...]] = ("skill", "name", "skill_name", "command")
 
 _SESSION_ID: typing.Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 _CONTROL: typing.Final[re.Pattern[str]] = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+_LINE_BREAKS: typing.Final[re.Pattern[str]] = re.compile(r"[\t\n\r]+")
 
 _PREAMBLE: typing.Final[str] = (
     "tessercheck: findings on the file just written. A sibling file you have not "
@@ -101,7 +103,8 @@ def main() -> int:
 
 def _worker(args: list[str]) -> int:
     if len(args) == 4 and args[2] == _BUDGET_ARG:
-        signal.alarm(int(math.ceil(float(args[3]))) + 2)
+        if hasattr(signal, "alarm"):
+            signal.alarm(int(math.ceil(float(args[3]))) + 2)
         args = args[:2]
     if len(args) != 2:
         print(_USAGE, file=sys.stderr)
@@ -129,9 +132,14 @@ def _session_of(value: object) -> str:
 
 
 def _note_skill(cwd: pathlib.Path, session: str, tool_input: dict[str, object]) -> int:
-    if any(str(tool_input.get(key) or "").strip() == _SKILL_NAME for key in _SKILL_KEYS):
+    if any(_skill_named(str(tool_input.get(key) or "")) for key in _SKILL_KEYS):
         _append_session(cwd, session, "skill", _SKILL_NAME)
     return 0
+
+
+def _skill_named(value: str) -> bool:
+    head = value.strip().split()[0] if value.strip() else ""
+    return head.lstrip("/").rsplit(":", 1)[-1].rsplit("/", 1)[-1] == _SKILL_NAME
 
 
 def _note_read(cwd: pathlib.Path, session: str, file_path: str) -> int:
@@ -202,7 +210,6 @@ def _post_write(cwd: pathlib.Path, session: str, file_path: str) -> int:
                 text=True,
                 timeout=budget,
                 check=False,
-                cwd=str(tree),
                 start_new_session=True,
             )
             if result.returncode != 0:
@@ -283,9 +290,9 @@ def _relative(written: pathlib.Path, base: pathlib.Path) -> str:
         return written.as_posix()
 
 
-def _read_regular(path: pathlib.Path) -> str:
+def _read_regular(path: pathlib.Path, follow: bool = False) -> str:
     try:
-        info = os.lstat(path)
+        info = os.stat(path) if follow else os.lstat(path)
     except OSError:
         return ""
     if not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_STATE_FILE_BYTES:
@@ -297,7 +304,7 @@ def _read_regular(path: pathlib.Path) -> str:
 
 
 def _conf(cwd: pathlib.Path) -> str:
-    return _read_regular(cwd / _STATE_DIR / _CONF_FILE)
+    return _read_regular(cwd / _STATE_DIR / _CONF_FILE, follow=True)
 
 
 def _conf_mode(conf: str) -> str:
@@ -340,7 +347,7 @@ def _actor() -> str:
 
 
 def _clean(text: str) -> str:
-    cleaned = _CONTROL.sub("", text)
+    cleaned = _LINE_BREAKS.sub(" ", _CONTROL.sub("", text))
     return cleaned if len(cleaned) <= _MAX_FINDING_CHARS else cleaned[:_MAX_FINDING_CHARS] + "…"
 
 
@@ -360,12 +367,11 @@ def _advisory(relpath: str, findings: list[str]) -> str:
 
 def _state_dir(cwd: pathlib.Path) -> pathlib.Path | None:
     state = cwd / _STATE_DIR
-    for candidate in (cwd, state):
-        try:
-            if candidate.is_symlink():
-                return None
-        except OSError:
+    try:
+        if state.is_symlink():
             return None
+    except OSError:
+        return None
     return state
 
 
