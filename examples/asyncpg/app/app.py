@@ -5,10 +5,10 @@ import typing
 
 import tesser.app as ts
 
-import alpha.adapters.gateways as gateways
+import alpha.adapters.gateways as alpha_gateways
 import alpha.component as alpha_component
 import beta.component as beta_component
-import pgdatabase.database as pgdatabase
+import pgdatabase.database as pgdatabase_database
 import tesser.errors as errors
 
 
@@ -29,14 +29,14 @@ class AppConfig(ts.Config):
 class AsyncpgApp(ts.App):
 
     def __init__(self, app_config: AppConfig) -> None:
-        self.databases = pgdatabase.Databases(app_config.alpha.database, app_config.beta.database)
+        self.databases = pgdatabase_database.Databases(app_config.alpha.database, app_config.beta.database)
         beta = beta_component.Beta(
             app_config.beta, self.databases.database(app_config.beta.database)
         )
         alpha = alpha_component.Alpha(
             app_config.alpha,
             self.databases.database(app_config.alpha.database),
-            gateways.BetaCheckGateway(beta.client),
+            alpha_gateways.BetaCheckGateway(beta.client),
         )
         self.beta = beta
         self.alpha = alpha

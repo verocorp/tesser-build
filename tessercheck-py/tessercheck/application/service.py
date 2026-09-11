@@ -262,19 +262,16 @@ class MapToRenameResponse(ts.Mapper, client.RenameResponse):
     def __init__(
         self,
         write_sources_response: ports.WriteSourcesResponse,
-        codebase: domain.Codebase,
+        read_sources_response: ports.ReadSourcesResponse,
     ) -> None:
-        remaining: list[str] = []
-        for violation in codebase.violations():
-            rename = violation.rename()
-            if rename is not None:
-                continue
-            remaining.append(
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+        super().__init__(
+            files=write_sources_response.written,
+            remaining=tuple(
                 f"{violation.path()}:{int(violation.line())}: "
                 f"{violation.code()} {violation.text()}"
-            )
-        super().__init__(
-            files=write_sources_response.written, remaining=tuple(sorted(remaining))
+                for violation in codebase.violations()
+            ),
         )
 
 
@@ -333,7 +330,8 @@ class TessercheckService(ts.ApplicationService):
         rewritten_modules = renaming.rewritten()
         write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
         write_sources_response = self._source_writer.write(write_sources_request)
-        return MapToRenameResponse(write_sources_response, codebase)
+        read_sources_response = self._source_reader.sources(read_sources_request)
+        return MapToRenameResponse(write_sources_response, read_sources_response)
 
     def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
         tree_root = domain.TreeRoot(rulebook_request.tree)

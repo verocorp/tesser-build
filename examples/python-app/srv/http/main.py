@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import http.server as server
+import http.server as http_server
 import signal
 import threading
 import types
@@ -32,7 +32,7 @@ class HttpHost(ts.Host):
         )
         router = protocol.Router(routes)
 
-        class _RequestHandler(server.BaseHTTPRequestHandler):
+        class _RequestHandler(http_server.BaseHTTPRequestHandler):
             timeout = 30
 
             def do_GET(self) -> None:
@@ -162,7 +162,7 @@ class HttpHost(ts.Host):
             def log_message(self, format: str, *args: typing.Any) -> None:  # tesser:debt TB022
                 return
 
-        self._server = server.ThreadingHTTPServer(addr, _RequestHandler)
+        self._server = http_server.ThreadingHTTPServer(addr, _RequestHandler)
         self._stop = threading.Event()
 
     def stop(

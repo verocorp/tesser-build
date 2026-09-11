@@ -1,5 +1,5 @@
 import enum
-import collections.abc as abc
+import collections.abc as collections_abc
 import typing
 
 
@@ -87,7 +87,7 @@ def wrap(err: DomainError, message: str, *, field: str | None = None) -> DomainE
     )
 
 
-def collect(**fields: abc.Callable[[], object]) -> None:  # tesser:debt TB022
+def collect(**fields: collections_abc.Callable[[], object]) -> None:  # tesser:debt TB022
     problems: list[NeedsDesignFieldProblem] = []
     for name, thunk in fields.items():
         try:

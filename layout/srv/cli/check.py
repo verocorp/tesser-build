@@ -6,14 +6,14 @@ import tesser.srv as ts
 
 import app
 import protocol
-import repo.adapters.handlers as handlers
+import repo.adapters.handlers as repo_handlers
 
 
 class CheckHost(ts.Host):
 
     def run(self, argv: list[str]) -> int:
         layout_app = app.load()
-        handler = handlers.Handler(layout_app.repo.client)
+        handler = repo_handlers.Handler(layout_app.repo.client)
         try:
             cli_response = handler.check(protocol.CliRequest(args=tuple(argv)))
         except protocol.UsageError as error:

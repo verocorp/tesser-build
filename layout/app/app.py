@@ -4,12 +4,12 @@ import typing
 
 import tesser.app as ts
 
-import repo.component as component
+import repo.component as repo_component
 
 
 class Spec(ts.Spec):
 
-    def __init__(self, repo: component.Config) -> None:
+    def __init__(self, repo: repo_component.Config) -> None:
         self.repo = repo
 
 
@@ -22,7 +22,7 @@ class AppConfig(ts.Config):
 class LayoutApp(ts.App):
 
     def __init__(self, app_config: AppConfig) -> None:
-        self.repo = component.Repo(app_config.repo)
+        self.repo = repo_component.Repo(app_config.repo)
 
     def close(self) -> None:
         self.repo.close()
@@ -36,7 +36,7 @@ class AppConfigRepository(ts.ConfigRepository, typing.Protocol):
 class EnvConfigRepository(AppConfigRepository):
 
     def get(self) -> AppConfig:
-        return AppConfig(Spec(repo=component.Config(component.Spec())))
+        return AppConfig(Spec(repo=repo_component.Config(repo_component.Spec())))
 
 
 class AppLoader(ts.Loader):

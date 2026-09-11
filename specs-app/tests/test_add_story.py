@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import http.client as client
+import http.client as http_client
 import json
 import threading
 
 import tesser.testing as ts
 
 import app as app
-import specification.component as component
-import srv.http as http
+import specification.component as specification_component
+import srv.http as srv_http
 
 
 @ts.helper
 def app_spec(storage: str = "memory") -> app.Spec:
     return app.Spec(
-        specification=component.Config(component.Spec(storage)),
+        specification=specification_component.Config(specification_component.Spec(storage)),
         http=app.HttpConfig(app.HttpSpec(host="127.0.0.1", port=0)),
     )
 
@@ -23,12 +23,12 @@ class TestAddStoryEndToEnd:
 
     def test_a_post_to_a_jtbds_stories_answers_the_storys_id_level_and_position(self) -> None:
         specs_app = app.SpecsApp(app.AppConfig(app_spec()))
-        http_host = http.HttpHost(("127.0.0.1", 0), specs_app)
+        http_host = srv_http.HttpHost(("127.0.0.1", 0), specs_app)
         stop = threading.Event()
         thread = threading.Thread(target=http_host.run, args=(stop,))
         thread.start()
         try:
-            conn = client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
+            conn = http_client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
             conn.request(
                 "POST",
                 "/jtbd/j-root/stories",
@@ -51,17 +51,17 @@ class TestAddStoryEndToEnd:
 
     def test_a_second_post_to_the_same_jtbd_takes_the_next_position(self) -> None:
         specs_app = app.SpecsApp(app.AppConfig(app_spec()))
-        http_host = http.HttpHost(("127.0.0.1", 0), specs_app)
+        http_host = srv_http.HttpHost(("127.0.0.1", 0), specs_app)
         stop = threading.Event()
         thread = threading.Thread(target=http_host.run, args=(stop,))
         thread.start()
         try:
             body = json.dumps({"given": "g", "when": "w", "then": "t"})
-            conn = client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
+            conn = http_client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
             conn.request("POST", "/jtbd/j-root/stories", body=body, headers={"Content-Type": "application/json"})
             conn.getresponse().read()
             conn.close()
-            conn = client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
+            conn = http_client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
             conn.request("POST", "/jtbd/j-root/stories", body=body, headers={"Content-Type": "application/json"})
             resp = conn.getresponse()
             payload = json.loads(resp.read())
@@ -75,12 +75,12 @@ class TestAddStoryEndToEnd:
 
     def test_a_post_missing_a_line_is_a_malformed_request(self) -> None:
         specs_app = app.SpecsApp(app.AppConfig(app_spec()))
-        http_host = http.HttpHost(("127.0.0.1", 0), specs_app)
+        http_host = srv_http.HttpHost(("127.0.0.1", 0), specs_app)
         stop = threading.Event()
         thread = threading.Thread(target=http_host.run, args=(stop,))
         thread.start()
         try:
-            conn = client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
+            conn = http_client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
             conn.request(
                 "POST", "/jtbd/j-root/stories", body=json.dumps({"given": "g"}), headers={"Content-Type": "application/json"}
             )

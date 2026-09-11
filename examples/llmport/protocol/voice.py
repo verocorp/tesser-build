@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-import collections.abc as abc
+import collections.abc as collections_abc
 import typing
 
 import tesser.srv as ts
@@ -13,12 +13,12 @@ class BadToolCall(ts.Rejection):
 
 class Tool(ts.Record):
 
-    def __init__(self, name: str, description: str, parameters: abc.Mapping[str, object]) -> None:
+    def __init__(self, name: str, description: str, parameters: collections_abc.Mapping[str, object]) -> None:
         super().__init__(name=name, description=description, parameters=copy.deepcopy(dict(parameters)))
 
     name: str
     description: str
-    parameters: abc.Mapping[str, object]
+    parameters: collections_abc.Mapping[str, object]
 
     def schema(self) -> dict[str, object]:
         return {
@@ -30,11 +30,11 @@ class Tool(ts.Record):
 
 class ToolCall(ts.Request):
 
-    def __init__(self, name: str, arguments: abc.Mapping[str, object]) -> None:
+    def __init__(self, name: str, arguments: collections_abc.Mapping[str, object]) -> None:
         super().__init__(name=name, arguments=copy.deepcopy(dict(arguments)))
 
     name: str
-    arguments: abc.Mapping[str, object]
+    arguments: collections_abc.Mapping[str, object]
 
     def text(self, key: str) -> str:
         value = self.arguments.get(key)

@@ -4,14 +4,14 @@ import tesser.testing as ts
 
 import alpha.adapters.gateways as gateways
 import alpha.application.ports as ports
-import beta.client as client
+import beta.client as beta_client
 
 
 @ts.fake
-class FakeBetaClient(client.BetaClient):
+class FakeBetaClient(beta_client.BetaClient):
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
-        return client.CheckResponse(held="no")
+    def check(self, check_request: beta_client.CheckRequest) -> beta_client.CheckResponse:
+        return beta_client.CheckResponse(held="no")
 
 
 class TestBetaCheckGateway:

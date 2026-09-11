@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 import app as app
-import campaign.client as client
+import campaign.client as campaign_client
 import tests.support as support
 
 
 def test_graph_built_once_state_persists_across_calls() -> None:
     python_app = app.PythonApp(support.app_config())
     try:
-        campaign_view = python_app.campaign.client.create_campaign(client.CreateCampaignRequest("100.00", "USD"))
+        campaign_view = python_app.campaign.client.create_campaign(campaign_client.CreateCampaignRequest("100.00", "USD"))
         python_app.campaign.client.add_link(
-            client.AddLinkRequest(campaign_view.campaign_id, "a", "https://ok.example/a")
+            campaign_client.AddLinkRequest(campaign_view.campaign_id, "a", "https://ok.example/a")
         )
         python_app.campaign.client.add_link(
-            client.AddLinkRequest(campaign_view.campaign_id, "b", "https://ok.example/b")
+            campaign_client.AddLinkRequest(campaign_view.campaign_id, "b", "https://ok.example/b")
         )
-        listed = python_app.campaign.client.list_links(client.ListLinksRequest()).links
+        listed = python_app.campaign.client.list_links(campaign_client.ListLinksRequest()).links
         assert {v.slug for v in listed} == {"a", "b"}
     finally:
         python_app.close()
@@ -26,7 +26,7 @@ def test_a_component_is_built_once_and_reused_across_calls() -> None:
     try:
         first = python_app.campaign.client
         for _ in range(5):
-            python_app.campaign.client.list_links(client.ListLinksRequest())
+            python_app.campaign.client.list_links(campaign_client.ListLinksRequest())
         assert python_app.campaign.client is first
     finally:
         python_app.close()

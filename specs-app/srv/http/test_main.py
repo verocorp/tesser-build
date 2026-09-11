@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import http.client as client
+import http.client as http_client
 import json
 import os
 import pathlib
@@ -72,7 +72,7 @@ def test_the_server_serves_the_product_specification_page_at_the_root() -> None:
     thread = threading.Thread(target=http_host.run, args=(stop,))
     thread.start()
     try:
-        conn = client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
         conn.request("GET", "/")
         resp = conn.getresponse()
         body = resp.read()
@@ -94,7 +94,7 @@ def test_the_server_answers_a_routed_add_story() -> None:
     thread = threading.Thread(target=http_host.run, args=(stop,))
     thread.start()
     try:
-        conn = client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
         conn.request(
             "POST",
             "/jtbd/j-root/stories",
@@ -120,7 +120,7 @@ def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
     thread = threading.Thread(target=http_host.run, args=(stop,))
     thread.start()
     try:
-        conn = client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", http_host.port, timeout=5)
         conn.request("GET", "/nope")
         resp = conn.getresponse()
         payload = json.loads(resp.read())

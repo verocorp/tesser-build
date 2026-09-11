@@ -5,7 +5,7 @@ import traceback
 
 import tesser.srv as ts
 
-import alpha.adapters.handlers as handlers
+import alpha.adapters.handlers as alpha_handlers
 import app as app
 import protocol as protocol
 
@@ -16,7 +16,7 @@ class CliHost(ts.Host):
         try:
             minimal_app = app.load()
             try:
-                handler = handlers.Handler(minimal_app.alpha.client)
+                handler = alpha_handlers.Handler(minimal_app.alpha.client)
                 try:
                     cli_response = handler.add(protocol.CliRequest(args=tuple(argv)))
                 except protocol.UsageError as e:

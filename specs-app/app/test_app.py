@@ -7,8 +7,8 @@ import pytest
 import tesser.testing as ts
 
 import app as app
-import specification.client as client
-import specification.component as component
+import specification.client as specification_client
+import specification.component as specification_component
 import tesser.errors as errors
 
 
@@ -17,7 +17,7 @@ class FakeConfigRepository(app.AppConfigRepository):
 
     def get(self) -> app.AppConfig:
         spec = app.Spec(
-            specification=component.Config(component.Spec("memory")),
+            specification=specification_component.Config(specification_component.Spec("memory")),
             http=app.HttpConfig(app.HttpSpec(host="127.0.0.1", port=0)),
         )
         return app.AppConfig(spec)
@@ -26,7 +26,7 @@ class FakeConfigRepository(app.AppConfigRepository):
 @ts.helper
 def app_spec(storage: str = "memory", host: str = "127.0.0.1", port: int = 0) -> app.Spec:
     return app.Spec(
-        specification=component.Config(component.Spec(storage)),
+        specification=specification_component.Config(specification_component.Spec(storage)),
         http=app.HttpConfig(app.HttpSpec(host=host, port=port)),
     )
 
@@ -61,7 +61,7 @@ class TestApp:
     def test_the_app_wires_the_specification_context(self) -> None:
         specs_app = app.SpecsApp(app.AppConfig(app_spec()))
         add_story_response = specs_app.specification.client.add_story(
-            client.AddStoryRequest(jtbd_id="j-root", given="g", when="w", then="t")
+            specification_client.AddStoryRequest(jtbd_id="j-root", given="g", when="w", then="t")
         )
         assert add_story_response.story_id == "j-root-s0"
 
@@ -71,6 +71,6 @@ class TestAppLoader:
     def test_the_loader_builds_an_app_from_its_repository(self) -> None:
         specs_app = app.AppLoader(FakeConfigRepository()).load()
         add_story_response = specs_app.specification.client.add_story(
-            client.AddStoryRequest(jtbd_id="j-root", given="g", when="w", then="t")
+            specification_client.AddStoryRequest(jtbd_id="j-root", given="g", when="w", then="t")
         )
         assert add_story_response.story_id == "j-root-s0"

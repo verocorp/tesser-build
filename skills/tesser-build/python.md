@@ -86,16 +86,31 @@ context (`alpha/`), an adapters package (`alpha/adapters/`), a tests package.
 
 The rules that follow from it, each with its code:
 
-- **The alias is the package's last segment** (TB053). `import
-  alpha.application.ports as ports`, not `as p` and not `as alpha_ports`. When
-  two imported packages in one module share a last segment, each takes its
-  context as a prefix — `import alpha.component as alpha_component` beside
-  `import beta.component as beta_component`. A single-segment package is
-  imported bare (`import kernel`), because that already binds the name the rule
-  asks for and the redundant `as kernel` is the alias ruff flags. The alias
-  matters because it is the name every reader resolves a type against, and
-  because the naming rule below derives local names from types — an alias that
-  is not the last segment makes both unpredictable.
+- **The alias says where the package comes from** (TB053). A package under
+  the module's own top is imported under its last segment: from anywhere in
+  `alpha/`, `import alpha.application.ports as ports`, not `as p` and not `as
+  alpha_ports`. A package under any other top — a peer context, a third-party
+  library, a dotted stdlib module — is imported under its first and last
+  segments joined: a gateway in `alpha/` writes `import beta.client as
+  beta_client`, `app/app.py` writes `import alpha.component as
+  alpha_component`, a runner writes `import restate.client as restate_client`,
+  and a domain module writes `import urllib.parse as urllib_parse`. The first
+  segment is the distribution — the context or the library — and the last is
+  the module; the segments between (`cloud` in `google.cloud.storage`, `ext`
+  in `sqlalchemy.ext.asyncio`) name a grouping, not an origin, so
+  `google_storage` and `sqlalchemy_asyncio`. Where two imports in one module
+  would still share a name (`ordering.client` beside
+  `ordering.application.client`), each takes its whole path with underscores.
+  A single-segment package is imported bare (`import kernel`, `import
+  restate`), because that already binds the name the rule asks for and the
+  redundant `as kernel` is the alias ruff flags. The alias matters because it
+  is the name every reader resolves a type against, because the naming rule
+  below derives local names from types, and because a bare `client` in a
+  gateway reads as the gateway's own context when it is the peer's — the
+  origin in the alias is what makes `linkpolicy_client.Unavailable` and
+  `client.Unavailable` visibly two different errors. The prefix does not
+  depend on what else the module imports, so adding a second context to an
+  app renames nothing that was already there.
 
 - **Inside an exporting package a module imports the packages around it, never
   a module beside it** (TB060). A module of `alpha/domain/` cannot import

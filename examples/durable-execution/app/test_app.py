@@ -3,21 +3,21 @@ from __future__ import annotations
 import tesser.testing as ts
 
 import app as app
-import ordering.component as component
+import ordering.component as ordering_component
 
 
 @ts.fake
 class FakeConfigRepository(app.AppConfigRepository):
 
     def get(self) -> app.AppConfig:
-        spec = app.Spec(component.Config(component.Spec("http://localhost:8080")))
+        spec = app.Spec(ordering_component.Config(ordering_component.Spec("http://localhost:8080")))
         return app.AppConfig(spec)
 
 
 class TestAppConfig:
 
     def test_a_config_carries_the_component_config(self) -> None:
-        spec = app.Spec(component.Config(component.Spec("http://localhost:8080")))
+        spec = app.Spec(ordering_component.Config(ordering_component.Spec("http://localhost:8080")))
         app_config = app.AppConfig(spec)
         assert app_config.ordering is spec.ordering
 
@@ -37,7 +37,7 @@ class TestEnvConfigRepository:
 class TestDurableExecutionApp:
 
     def test_the_app_wires_ordering(self) -> None:
-        spec = app.Spec(component.Config(component.Spec("http://localhost:8080")))
+        spec = app.Spec(ordering_component.Config(ordering_component.Spec("http://localhost:8080")))
         durable_execution_app = app.DurableExecutionApp(app.AppConfig(spec))
         try:
             declared = [

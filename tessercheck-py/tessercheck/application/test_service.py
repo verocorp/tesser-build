@@ -185,6 +185,17 @@ def test_a_rename_hands_the_writer_the_module_the_renaming_rewrote() -> None:
     assert "domain.Tag(tag_spec) is not None" in text
 
 
+def test_what_a_rename_reports_as_remaining_is_what_a_check_would_report_after_it() -> None:
+    fake_scripted_reader = FakeScriptedReader(_renameable_tree(), _renameable_tree())
+    tessercheck_service = application.TessercheckService(
+        fake_scripted_reader, FakeSourceWriter(), FakeRulebookSources("")
+    )
+    rename_response = tessercheck_service.rename(client.RenameRequest(tree="."))
+    assert fake_scripted_reader.reads == 2
+    assert rename_response.files == 1
+    assert any("TB085" in line and "names made for a tag_spec" in line for line in rename_response.remaining), rename_response.remaining
+
+
 def test_a_mark_hands_the_writer_the_line_the_finding_names() -> None:
     fake_source_writer = FakeSourceWriter()
     tessercheck_service = application.TessercheckService(

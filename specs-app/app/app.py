@@ -5,7 +5,7 @@ import typing
 
 import tesser.app as ts
 
-import specification.component as component
+import specification.component as specification_component
 import tesser.errors as errors
 
 
@@ -25,7 +25,7 @@ class HttpConfig(ts.Config):
 
 class Spec(ts.Spec):
 
-    def __init__(self, specification: component.Config, http: HttpConfig) -> None:
+    def __init__(self, specification: specification_component.Config, http: HttpConfig) -> None:
         self.specification = specification
         self.http = http
 
@@ -40,7 +40,7 @@ class AppConfig(ts.Config):
 class SpecsApp(ts.App):
 
     def __init__(self, app_config: AppConfig) -> None:
-        self.specification = component.Specification(app_config.specification)
+        self.specification = specification_component.Specification(app_config.specification)
         self.http = app_config.http
 
     def close(self) -> None:
@@ -70,7 +70,7 @@ class EnvConfigRepository(AppConfigRepository):
             raise errors.invalid("bad_http_port", f"HTTP_PORT must be an integer, got {raw_port!r}") from None
         return AppConfig(
             Spec(
-                specification=component.Config(component.Spec(storage=storage)),
+                specification=specification_component.Config(specification_component.Spec(storage=storage)),
                 http=HttpConfig(HttpSpec(host=http_host, port=http_port)),
             )
         )

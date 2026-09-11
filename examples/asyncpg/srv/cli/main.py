@@ -6,7 +6,7 @@ import traceback
 
 import tesser.srv as ts
 
-import alpha.adapters.handlers as handlers
+import alpha.adapters.handlers as alpha_handlers
 import app
 import protocol
 
@@ -18,7 +18,7 @@ class CliHost(ts.Host):
             asyncpg_app = app.load()
             try:
                 await asyncpg_app.open()
-                handler = handlers.Handler(asyncpg_app.alpha.client)
+                handler = alpha_handlers.Handler(asyncpg_app.alpha.client)
                 try:
                     cli_response = await handler.add(protocol.CliRequest(args=tuple(argv)))
                 except protocol.UsageError as e:

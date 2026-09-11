@@ -613,10 +613,10 @@ domain modules out before removing them.
   repo notices. Two of this wave's four Codex findings were exactly that shape,
   which is the argument for building the negatives.
 
-  Same shape, smaller: TB053's third tier (two packages whose last segment *and*
-  context prefix both collide, so the alias becomes the whole dotted path) has
-  neither a positive nor a negative test, and its clause prose says "each takes
-  its context as a prefix", which is not what tier three demands. And
+  Same shape, smaller — now closed: TB053's whole-path tier (two imports that
+  would still share a name after the origin prefix) is pinned by
+  `test_two_imports_that_would_share_a_name_each_take_their_whole_path`, and
+  the clause prose names all three tiers. And
   `DerivedName`, the shared transform behind both TB085 and the own-name rule,
   has no direct test at all — testing it costs an export from the domain
   `__init__`, which is more evidence for the export ruling above.

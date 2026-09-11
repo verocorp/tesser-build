@@ -1209,6 +1209,109 @@ class Rewrite(ts.ValueObject):
                 if holder is None or function.lineno > holder.lineno:
                     holder = function
             if holder is None:
+                importing: ast.alias | None = None
+                for stmt in tree.body:
+                    if isinstance(stmt, ast.Import) and stmt.lineno == line:
+                        for alias in stmt.names:
+                            if (alias.asname or alias.name) == actual:
+                                importing = alias
+                if importing is None:
+                    continue
+                head = actual.split(".")[0]
+                outer: set[str] = set()
+                bound: set[str] = set()
+                aliased: set[str] = set()
+                shadowed = False
+                stack: list[ast.AST] = list(tree.body)
+                while stack:
+                    item = stack.pop()
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                        binds: set[str] = set()
+                        reads_actual = False
+                        if not isinstance(item, ast.Lambda):
+                            outer.add(item.name)
+                            bound.add(item.name)
+                        arguments = item.args
+                        for arg in (
+                            *arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs
+                        ):
+                            binds.add(arg.arg)
+                        for extra in (arguments.vararg, arguments.kwarg):
+                            if extra is not None:
+                                binds.add(extra.arg)
+                        body = [item.body] if isinstance(item, ast.Lambda) else list(item.body)
+                        for inner in body:
+                            for node in ast.walk(inner):
+                                if isinstance(node, ast.Name):
+                                    if node.id == actual:
+                                        reads_actual = True
+                                    if not isinstance(node.ctx, ast.Load):
+                                        binds.add(node.id)
+                                elif isinstance(node, ast.arg):
+                                    binds.add(node.arg)
+                                elif isinstance(
+                                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                                ):
+                                    binds.add(node.name)
+                                elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+                                    binds.add(node.name)
+                                elif isinstance(node, (ast.Global, ast.Nonlocal)):
+                                    binds.update(node.names)
+                        bound.update(binds)
+                        if derived in binds and reads_actual:
+                            shadowed = True
+                        continue
+                    if isinstance(item, ast.ClassDef):
+                        outer.add(item.name)
+                        bound.add(item.name)
+                    elif isinstance(item, ast.Name):
+                        outer.add(item.id)
+                        if not isinstance(item.ctx, ast.Load):
+                            bound.add(item.id)
+                    elif isinstance(item, ast.ExceptHandler) and item.name is not None:
+                        outer.add(item.name)
+                        bound.add(item.name)
+                    elif isinstance(item, ast.alias) and item is not importing:
+                        outer.add((item.asname or item.name).split(".")[0])
+                        aliased.add((item.asname or item.name).split(".")[0])
+                    stack.extend(ast.iter_child_nodes(item))
+                if (
+                    derived in outer
+                    or shadowed
+                    or head in bound
+                    or ("." not in actual and actual in aliased)
+                ):
+                    continue
+                module_sites: list[tuple[int, int, int, str]] = []
+                split = False
+                for node in ast.walk(tree):
+                    if "." not in actual and isinstance(node, ast.Name) and node.id == actual:
+                        module_sites.append(
+                            (node.lineno, node.col_offset, node.end_col_offset or 0, derived)
+                        )
+                    elif "." in actual and isinstance(node, ast.Attribute) and ast.unparse(node) == actual:
+                        if node.end_lineno != node.lineno:
+                            split = True
+                        module_sites.append(
+                            (node.lineno, node.col_offset, node.end_col_offset or 0, derived)
+                        )
+                if split:
+                    continue
+                if importing.asname is None:
+                    module_sites.append((
+                        importing.end_lineno or line,
+                        importing.end_col_offset or 0,
+                        importing.end_col_offset or 0,
+                        f" as {derived}",
+                    ))
+                else:
+                    module_sites.append((
+                        importing.end_lineno or line,
+                        (importing.end_col_offset or 0) - len(importing.asname),
+                        importing.end_col_offset or 0,
+                        derived,
+                    ))
+                edits.extend(module_sites)
                 continue
             taken: set[str] = set()
             bound_elsewhere: set[str] = set()
@@ -8978,33 +9081,31 @@ class Module(ts.Entity):
                 )
         return tuple(found)
 
-    def alias_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+    def alias_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
-        registry = Registry(registry_spec)
-        tops = frozenset(registry.tops())
-        walked = frozenset(registry.module_names())
+        own = module_name.split(".")[0]
         inside: list[tuple[str, str, int]] = []
         for local, package, lineno in self._alias_bindings:
-            head = package.split(".")[0]
-            if head == TESSER or head not in tops or package not in walked:
+            if package.split(".")[0] == TESSER:
                 continue
             inside.append((local, package, lineno))
+        wanted_of: dict[str, str] = {}
         claimed: dict[str, int] = {}
         for _, package, _ in inside:
-            claimed[package.split(".")[-1]] = claimed.get(package.split(".")[-1], 0) + 1
-        prefixed: dict[str, int] = {}
-        for _, package, _ in inside:
             pieces = package.split(".")
-            if claimed[pieces[-1]] > 1:
-                prefixed[f"{pieces[0]}_{pieces[-1]}"] = prefixed.get(f"{pieces[0]}_{pieces[-1]}", 0) + 1
+            if len(pieces) == 1:
+                wanted = pieces[0]
+            elif pieces[0] == own:
+                wanted = pieces[-1]
+            else:
+                wanted = f"{pieces[0]}_{pieces[-1]}"
+            wanted_of[package] = wanted
+            claimed[wanted] = claimed.get(wanted, 0) + 1
         found: list[Violation] = []
         for local, package, lineno in inside:
-            pieces = package.split(".")
-            wanted = pieces[-1]
+            wanted = wanted_of[package]
             if claimed[wanted] > 1:
-                wanted = f"{pieces[0]}_{pieces[-1]}"
-                if prefixed[wanted] > 1:
-                    wanted = "_".join(pieces)
+                wanted = "_".join(package.split("."))
             if local == wanted:
                 continue
             found.append(
@@ -9013,8 +9114,10 @@ class Module(ts.Entity):
                     lineno,
                     "TB053",
                     f"{module_name} imports {package} as {local}, not {wanted}; a package "
-                    "is imported under its last segment, and where two imported packages "
-                    "share that segment each takes its context as a prefix",
+                    "is imported under its last segment from the module's own top, under "
+                    "its first and last segments from any other top, and under its whole "
+                    "path where two imports would share a name",
+                    rename=(local, wanted),
                 ))
             )
         return tuple(found)
@@ -12007,7 +12110,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.dynamic_import_violations())
             found.extend(module.role_package_import_violations(registry))
             found.extend(module.package_read_violations())
-            found.extend(module.alias_violations(registry))
+            found.extend(module.alias_violations())
             found.extend(module.naming_violations(registry))
             place = str(module.place())
             parts = module.name().split(".")

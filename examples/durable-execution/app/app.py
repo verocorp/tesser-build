@@ -5,13 +5,13 @@ import typing
 
 import tesser.app as ts
 
-import ordering.component as component
+import ordering.component as ordering_component
 import tesser.errors as errors
 
 
 class Spec(ts.Spec):
 
-    def __init__(self, ordering: component.Config) -> None:
+    def __init__(self, ordering: ordering_component.Config) -> None:
         self.ordering = ordering
 
 
@@ -24,7 +24,7 @@ class AppConfig(ts.Config):
 class DurableExecutionApp(ts.App):
 
     def __init__(self, app_config: AppConfig) -> None:
-        self.ordering = component.Ordering(app_config.ordering)
+        self.ordering = ordering_component.Ordering(app_config.ordering)
 
     def close(self) -> None:
         self.ordering.close()
@@ -41,7 +41,7 @@ class EnvConfigRepository(AppConfigRepository):
         ingress = os.environ.get("RESTATE_INGRESS")
         if ingress is None:
             raise errors.invalid("missing_env", "RESTATE_INGRESS is required")
-        return AppConfig(Spec(ordering=component.Config(component.Spec(ingress=ingress))))
+        return AppConfig(Spec(ordering=ordering_component.Config(ordering_component.Spec(ingress=ingress))))
 
 
 class AppLoader(ts.Loader):

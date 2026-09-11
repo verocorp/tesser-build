@@ -6,7 +6,7 @@ import typing
 import tesser.srv as ts
 
 import app as app
-import campaign.adapters.handlers as handlers
+import campaign.adapters.handlers as campaign_handlers
 import protocol as protocol
 
 _USAGE: typing.Final[str] = (
@@ -23,7 +23,7 @@ class CliHost(ts.Host):
     def run(self, argv: list[str]) -> int:
         python_app = app.load()
         try:
-            cli_handler = handlers.CliHandler(python_app.campaign.client)
+            cli_handler = campaign_handlers.CliHandler(python_app.campaign.client)
             commands: dict[str, protocol.Command] = {
                 "create-campaign": cli_handler.create_campaign,
                 "add-link": cli_handler.add_link,

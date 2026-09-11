@@ -7,7 +7,7 @@ import pytest
 
 import beta.adapters.repositories as repositories
 import beta.application.ports as ports
-import pgdatabase.database as pgdatabase
+import pgdatabase.database as pgdatabase_database
 
 
 class TestPostgresKeyStore:
@@ -17,7 +17,7 @@ class TestPostgresKeyStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS keys")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_key_store = repositories.PostgresKeyStore(database)
         async with postgres_key_store.transaction() as key_repository:
@@ -35,7 +35,7 @@ class TestPostgresKeyStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS keys")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_key_store = repositories.PostgresKeyStore(database)
         with pytest.raises(RuntimeError):
@@ -52,7 +52,7 @@ class TestPostgresKeyStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS keys")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_key_store = repositories.PostgresKeyStore(database)
         with pytest.raises(RuntimeError):

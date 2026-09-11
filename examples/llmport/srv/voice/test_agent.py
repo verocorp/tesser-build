@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 import tesser.testing as ts
-import livekit.agents as agents
+import livekit.agents as livekit_agents
 
 import protocol
 import srv.voice as voice
@@ -149,7 +149,7 @@ class TestToolAgent:
         tool_agent = voice.ToolAgent(fake_tool_surface, (), fake_tool_halt)
 
         with asyncio.Runner() as runner:
-            with pytest.raises(agents.ToolError, match="unknown tool 'provide_name'"):
+            with pytest.raises(livekit_agents.ToolError, match="unknown tool 'provide_name'"):
                 runner.run(tool_agent.on_enter())
                 runner.run(tool_agent.tools[0]({"name": "Ada"}))
 
@@ -168,7 +168,7 @@ class TestToolAgent:
         )
 
         with asyncio.Runner() as runner:
-            with pytest.raises(agents.ToolError, match="name must be a string"):
+            with pytest.raises(livekit_agents.ToolError, match="name must be a string"):
                 runner.run(tool_agent.on_enter())
                 runner.run(tool_agent.tools[0]({"name": "Ada"}))
 

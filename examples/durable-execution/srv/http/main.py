@@ -7,13 +7,13 @@ import typing
 
 import tesser.srv as ts
 import fastapi
-import hypercorn.asyncio
-import hypercorn.config
-import hypercorn.typing
+import hypercorn.asyncio as hypercorn_asyncio
+import hypercorn.config as hypercorn_config
+import hypercorn.typing as hypercorn_typing
 import restate
 
 import app as app
-import ordering.adapters.handlers as handlers
+import ordering.adapters.handlers as ordering_handlers
 import protocol as protocol
 
 _BIND: typing.Final[str] = "0.0.0.0:8000"
@@ -26,7 +26,7 @@ class HttpHost(ts.Host):
     def run(self, argv: list[str]) -> int:
         durable_execution_app = app.load()
         try:
-            handler = handlers.Handler(durable_execution_app.ordering.client)
+            handler = ordering_handlers.Handler(durable_execution_app.ordering.client)
             router = fastapi.APIRouter()
 
             @router.post("/submissions")
@@ -88,10 +88,10 @@ class HttpHost(ts.Host):
                 ),
             )
 
-            config = hypercorn.config.Config()
+            config = hypercorn_config.Config()
             config.bind = [argv[0] if argv else _BIND]
-            served = typing.cast(hypercorn.typing.ASGIFramework, api)
-            asyncio.run(hypercorn.asyncio.serve(served, config))
+            served = typing.cast(hypercorn_typing.ASGIFramework, api)
+            asyncio.run(hypercorn_asyncio.serve(served, config))
             return 0
         finally:
             durable_execution_app.close()

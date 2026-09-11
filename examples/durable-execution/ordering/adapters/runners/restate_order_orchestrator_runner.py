@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 import typing
-import urllib.parse
+import urllib.parse as urllib_parse
 
 import tesser.adapters as ts
 import httpx
 import restate
-import restate.client
+import restate.client as restate_client
 
 import ordering.adapters.runtimes as runtimes
 import ordering.application.ports as ports  # tesser:debt TB060
@@ -28,9 +28,9 @@ class RestateOrderOrchestratorRunner(ts.Runner):
         key = str(order_orchestrator_request.order.identity)
         try:
             async with httpx.AsyncClient(base_url=self._ingress) as async_client:
-                await restate.client.Client(async_client).workflow_send(
+                await restate_client.Client(async_client).workflow_send(
                     self._restate_order_runtime.order_orchestrator_handler,
-                    key=urllib.parse.quote(key, safe=""),
+                    key=urllib_parse.quote(key, safe=""),
                     arg=order_orchestrator_request,
                 )
         except restate.HttpError as http_error:
@@ -51,9 +51,9 @@ class RestateOrderOrchestratorRunner(ts.Runner):
         key = str(order_orchestrator_request.order.identity)
         try:
             async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
-                return await restate.client.Client(async_client).workflow_call(
+                return await restate_client.Client(async_client).workflow_call(
                     self._restate_order_runtime.order_orchestrator_handler,
-                    key=urllib.parse.quote(key, safe=""),
+                    key=urllib_parse.quote(key, safe=""),
                     arg=order_orchestrator_request,
                 )
         except restate.HttpError as http_error:

@@ -7,7 +7,7 @@ import tesser.srv as ts
 
 import app
 import protocol
-import tessercheck.adapters.handlers as handlers
+import tessercheck.adapters.handlers as tessercheck_handlers
 
 _USAGE: typing.Final[str] = "usage: python -m srv.cli.main [tree]"
 
@@ -17,7 +17,7 @@ class MainHost(ts.Host):
     def run(self, argv: list[str]) -> int:
         tessercheck_app = app.load()
         try:
-            handler = handlers.Handler(tessercheck_app.tessercheck.client)
+            handler = tessercheck_handlers.Handler(tessercheck_app.tessercheck.client)
             try:
                 resp = handler.check(protocol.CliRequest(args=tuple(argv)))
             except protocol.UsageError as e:

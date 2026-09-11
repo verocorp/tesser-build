@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.testing as ts
 
 import app
-import repo.component as component
+import repo.component as repo_component
 
 
 @ts.fake
@@ -14,11 +14,11 @@ class FakeConfigRepository(app.AppConfigRepository):
 
     def get(self) -> app.AppConfig:
         self.reads += 1
-        return app.AppConfig(app.Spec(repo=component.Config(component.Spec())))
+        return app.AppConfig(app.Spec(repo=repo_component.Config(repo_component.Spec())))
 
 
 def test_a_config_carries_the_slice_its_component_reads() -> None:
-    config = component.Config(component.Spec())
+    config = repo_component.Config(repo_component.Spec())
 
     assert app.AppConfig(app.Spec(repo=config)).repo is config
 
@@ -34,13 +34,13 @@ def test_each_read_returns_its_own_config() -> None:
 
 
 def test_an_app_builds_one_component_per_slice() -> None:
-    app_config = app.AppConfig(app.Spec(repo=component.Config(component.Spec())))
+    app_config = app.AppConfig(app.Spec(repo=repo_component.Config(repo_component.Spec())))
 
     assert app.LayoutApp(app_config).repo.client is not None
 
 
 def test_an_app_closes_its_components() -> None:
-    app_config = app.AppConfig(app.Spec(repo=component.Config(component.Spec())))
+    app_config = app.AppConfig(app.Spec(repo=repo_component.Config(repo_component.Spec())))
     layout_app = app.LayoutApp(app_config)
 
     layout_app.close()
