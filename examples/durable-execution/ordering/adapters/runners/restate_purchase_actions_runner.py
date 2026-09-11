@@ -5,7 +5,7 @@ import restate
 
 import ordering.adapters.runtimes as runtimes
 import ordering.application.relays as relays
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 
 class RestatePurchaseActionsRunner(ts.Runner):

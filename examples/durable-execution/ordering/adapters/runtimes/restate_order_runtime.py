@@ -8,7 +8,7 @@ import ordering.adapters.runners as runners
 import ordering.application.client as client
 import ordering.application.orchestrators as orchestrators
 import ordering.application.relays as relays
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 
 class RestateOrderOrchestratorRequestSerde(

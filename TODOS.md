@@ -986,16 +986,40 @@ code, and three places the rulebook is thinner than the code Chris wants were
 found by building it. Each is a ruling, not a bug; each is marked in the tree
 where it lands.
 
-- [ ] **Error handling: the host should not know the error types.** Today
-  `examples/minimal/srv/cli/main.py` (and the verified
-  `examples/python-app/srv/cli/main.py`) catch `UsageError`, `DomainError`,
-  and `InfraError` and map them to exit codes — `handlers.md` rule 7 and
-  the error-norms ruling put the one respond path at the edge. Chris
+- [ ] **Error handling: the host should not know the error types.** Chris
   (2026-08-26): the application should decide what and how application
   errors are surfaced to the user, not the host; the host should be unaware
-  of those types. Needs a design: what crosses the `Client` on failure (an
-  outcome on the response? a single edge-facing rejection?), what the
-  handler returns, and what — if anything — the host still maps.
+  of those types. **Designed and half-landed 2026-09-11 (step 1, the
+  boundary).** Every failure is one of three classes with one owner each:
+  (1) a *host* failure the host can detect knowing nothing of the body — an
+  unmatched route, an oversized body, a missing CLI argument — a `ts.Rejection`
+  the protocol raises and the host renders; (2) a *context* failure — a
+  subclass of `ts.Error` (`tesser.context`, re-exported by
+  `tesser.application` for ports) the context declares beside its DTOs in
+  `client/`, names once in an `ERRORS` tuple, words itself, and raises across
+  the `Client`; the handler catches the tuple and `match`es it to a status,
+  closing on `assert_never`; (3) anything else, which the host's `except
+  Exception` renders as a generic body. `tesser.errors` is no longer granted
+  to `adapters` or `srv` (TB050), so a host or handler naming `DomainError`
+  is a finding rather than a review comment. Inside a context the chain is
+  two translations, not four: the service translates a domain raise into
+  the context's error (`except errors.DomainError` whose only statement
+  raises `client.Rejected` from it — the one legal `try` in a service;
+  transition refusals raise the context's error from their `match` arm), a
+  port failure is declared on the port and passes through the service
+  untouched, and the handler translates the context's error into the
+  transport. Migrated: `examples/minimal` and `tessercheck-py` (its four
+  hosts lost their `DomainError`/`InfraError` arms). Registered as
+  `# tesser:debt TB050` on the `import tesser.errors` line of every adapters
+  and srv module still on the old table: asyncpg 2, durable-execution 8,
+  errorspy 2, python-app 6 — that list is the remaining migration. Still to
+  do in this step: port-declared errors (`class StoreUnavailable(ts.Error)`
+  in the port module, the adapter raising it, the fake total over the same
+  set — the asyncpg finding that no adapter raises `InfraError` is this),
+  the Restate runtime/runner round trip in application types, and the
+  per-endpoint `try`/`match` in a handler with many endpoints (tessercheck's
+  has four identical copies; a handler-declared table the host applies
+  generically is the shape that removes them, not ruled).
 - [ ] **The wording of a public error belongs to the application, not the
   handler.** Chris, 2026-09-06, reading #172. `Handler.submit_order` in
   `examples/durable-execution` reads the body one field at a time
@@ -1017,7 +1041,51 @@ where it lands.
   `ordering/client/` — the `TB062` marker
   `relays/order_orchestrator_runner.py` already carries — and a sibling test
   the package does not have today. Evidence: #172 counts 11 places a
-  required field lands, and this handler is one of them.
+  required field lands, and this handler is one of them. **Ruled in
+  direction 2026-09-11, deferred to the aggregate-construction step:** the
+  host knows nothing of fields or formats (a CLI host has no JSON), so "this
+  body is not the shape I take" is a *context* failure, class 2 above, not
+  a host one — the context owns the decoding of its own request from bytes
+  beside its DTO, the way the relay owns `OrderSnapshot`, and the handler
+  hands the bytes over and names no field. It lands with the aggregate
+  design because a decode failure and a constructor rejection are the same
+  answer to the caller (invalid at this path for this reason, every issue
+  at once) and share the issue/path/problem shape below.
+- [ ] **Aggregate construction reports every issue at once, and the domain
+  names them.** Designed 2026-09-11, not built; the boundary step above
+  went first so this can take its time. The shape converged on: a value
+  object's constructor stays the only validating path and still raises, but
+  it raises one exception, `ts.Invalid`, carrying *issues* — `ts.Issue`
+  subclasses the domain declares beside the object that raises them
+  (`class EmptyNote(ts.Issue)` above `Note`), each located by a `ts.Path` of
+  field names and indices so `links[1].slug` is an address, not a string.
+  A composite attempts every part and collects: parts first, then its own
+  cross-part rules only over a clean set of parts, so a rule about parts
+  that were never valid is never reported. The collector is the author's
+  code, not tesser's: `try: self._sku = Sku(spec.sku) except ts.Invalid as
+  invalid: issues.extend(invalid.under("sku"))` per part, `raise
+  ts.Invalid(tuple(issues))` at the end — four visible lines per part, no
+  context manager, no lambda (the old `errors.collect` cost four debt
+  markers for exactly that). The application never inspects an issue: it
+  holds one template per context, a table from issue kind to wording the
+  analyzer checks is total over the domain's exported issue kinds, folds
+  the `Invalid` into `ts.Problem(path, code, message)` records, and raises
+  its `client.Rejected(problems)`; the handler renders every problem in one
+  body (`invalid-params` for HTTP, a line each for the CLI). Wording is
+  never load-bearing — nothing branches on a message, tests assert code
+  and path. Tesser keeps four data types (`Issue`, `Path`, `Invalid`,
+  `Problem`) and no control flow; the analyzer's two rules are the shape of
+  the domain's `except ts.Invalid` arm (extend only) and the service's
+  (raise the context's error only). Rejected on the way: a `check`
+  classmethod per object (a second construction path), a validating base
+  class (magic), Vernon's `Validator`/`ValidationNotificationHandler` (the
+  client holds the validator), tesser-owned families (`errors.domain.
+  Validation`) matched beside domain leaves (not ubiquitous language, and
+  arm order silently matters). Open inside it: a value object used in two
+  fields of one aggregate cannot be attributed by leaf alone; whether an
+  issue can be a warning that does not block; `Order.FAILURES`-style
+  declared tuples were dropped in favour of one `Invalid` — the dead-arm
+  check they enabled is deferred until a dead arm is seen.
 - [x] **Adapter-side mappers have no home in the rulebook.** Ruled (Chris,
   2026-08-30) and shipped: `tesser.adapters.Mapper` carries the same contract
   as `tesser.application.Mapper` (a mapper is its target), and `KIND_EXTRA_ROLES`

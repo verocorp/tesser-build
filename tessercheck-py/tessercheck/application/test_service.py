@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import tesser.testing as ts
 
 import tessercheck.application.ports as ports
@@ -331,6 +333,16 @@ def test_the_rulebook_answer_carries_the_rendered_rules_and_contracts() -> None:
     rulebook_response = tessercheck_service.rulebook(client.RulebookRequest(tree="."))
     assert "| TB020 | the served tail | every module |" in rulebook_response.rendered
     assert "| pure | domain stays pure |" in rulebook_response.rendered
+
+
+def test_a_rulebook_that_cannot_be_read_is_rejected_in_the_context_s_own_words() -> None:
+    tessercheck_service = application.TessercheckService(
+        FakeSourceReader(ports.RootForm.APP), FakeSourceWriter(), FakeRulebookSources("")
+    )
+    with pytest.raises(client.Rejected) as raised:
+        tessercheck_service.rulebook(client.RulebookRequest(tree="."))
+    assert raised.value.code == "rulebook_unreadable"
+    assert raised.value.message == "TS_NAME_BY_BLOCK not found in checks.py"
 
 
 def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:

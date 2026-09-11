@@ -190,9 +190,19 @@ a `match` on an outcome to close on `assert_never`, and reads the *subject* as
 well as the arms, so a match on a domain call whose arms are strings — or whose
 arms mix a string in beside a member — is a finding rather than a hiding place.
 
-Four decision forms are **named gaps**, not exemptions: `try`/`except` (the
-error norm owns it), dict dispatch (`table[key]`), a dict `.get(key, default)`
-carrying the fallback, and a `sorted(..., key=...)` whose key function ranks.
+Four decision forms are **named gaps**, not exemptions: `try`/`except`, dict
+dispatch (`table[key]`), a dict `.get(key, default)` carrying the fallback,
+and a `sorted(..., key=...)` whose key function ranks. `try`/`except` has
+exactly one legal shape in a service, and it is a translation, not a
+decision: `except errors.DomainError as domain_error:` whose only statement
+raises one of the context's own errors from it — `raise
+client.Rejected(domain_error.code, domain_error.message) from domain_error`.
+That is how a domain rejection becomes the context's error before it crosses
+the `Client` (`handlers.md` rule 7); a transition refusal never needs it,
+because its `match` arm raises the context's error directly. A port's
+failure is not caught at all: the port declares it (`class StoreUnavailable(ts.Error)`
+in the port module), the adapter raises it, and it passes through the
+service untouched, because the service has nothing to decide about it.
 Each puts a rule in the service that a domain object should own; none is
 mechanically distinguishable today from a legitimate lookup, so a reviewer
 reads them rather than a checker. What no check judges is whether the body *coordinates* or *decides*
@@ -211,9 +221,11 @@ discipline a human applies, not a definition.
   asserts the domain object it produced is correct — but the *rules* are tested
   on the domain objects, not here. If you find yourself asserting a domain
   calculation against the service, the calculation is in the wrong place.
-- **Rejection propagates:** an invalid request makes the domain constructor/
-  transition error, and the service returns that error wrapped with context —
-  it does not swallow or re-derive it.
+- **Rejection crosses as the context's own error:** an invalid request makes
+  the domain constructor raise, and the service raises `client.Rejected` from
+  it — the test asserts `pytest.raises(client.Rejected)` with the domain's
+  `code` on it, and that nothing was saved. No tesser type and no domain
+  type crosses the `Client`.
 - **Response is a DTO, not a domain object:** assert the returned type is the
   response DTO; a domain object escaping the service is a failure.
 - **Change use cases load-then-transition:** the modify path loads, calls the

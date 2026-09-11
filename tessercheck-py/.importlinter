@@ -54,6 +54,8 @@ forbidden_modules =
     tesser.domain
     tesser.adapters
     tesser.context
+ignore_imports =
+    tesser.application -> tesser.context.error
 
 [importlinter:contract:adapters-never-import-domain]
 name = an adapter imports its context's application ports and foreign clients, never domain

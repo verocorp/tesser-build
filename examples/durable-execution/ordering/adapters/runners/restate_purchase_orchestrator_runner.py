@@ -11,7 +11,7 @@ import restate.client
 
 import ordering.adapters.runtimes as runtimes
 import ordering.application.relays as relays
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
 

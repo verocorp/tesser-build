@@ -5,7 +5,7 @@ import typing
 import tesser.adapters as ts
 
 import ordering.application.ports as ports
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 _PRICES: typing.Final[dict[str, int]] = {"widget": 250, "gadget": 1000}
 

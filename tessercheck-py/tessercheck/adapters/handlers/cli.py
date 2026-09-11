@@ -26,7 +26,14 @@ class Handler(ts.Handler):
     def check(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
         root = cli_request.arg(0, _HERE)
         cli_request.no_extra_args(1, _CHECK_USAGE)
-        check_response = self._tessercheck_client.check(client.CheckRequest(tree=root))
+        try:
+            check_response = self._tessercheck_client.check(client.CheckRequest(tree=root))
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.CliResponse(2, stdout="", stderr=error.message)
+                case _ as never:
+                    typing.assert_never(never)
         return protocol.CliResponse(
             1 if check_response.findings else 0,
             stdout="\n".join(check_response.findings),
@@ -36,7 +43,14 @@ class Handler(ts.Handler):
     def mark(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
         root = cli_request.arg(0, _HERE)
         cli_request.no_extra_args(1, _MARK_USAGE)
-        mark_response = self._tessercheck_client.mark(client.MarkRequest(tree=root))
+        try:
+            mark_response = self._tessercheck_client.mark(client.MarkRequest(tree=root))
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.CliResponse(2, stdout="", stderr=error.message)
+                case _ as never:
+                    typing.assert_never(never)
         told = [f"marked {mark_response.files} file(s)"]
         if mark_response.remaining:
             told.append(
@@ -50,7 +64,14 @@ class Handler(ts.Handler):
     def rename(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
         root = cli_request.arg(0, _HERE)
         cli_request.no_extra_args(1, _RENAME_USAGE)
-        rename_response = self._tessercheck_client.rename(client.RenameRequest(tree=root))
+        try:
+            rename_response = self._tessercheck_client.rename(client.RenameRequest(tree=root))
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.CliResponse(2, stdout="", stderr=error.message)
+                case _ as never:
+                    typing.assert_never(never)
         told = [f"renamed {rename_response.files} file(s)"]
         if rename_response.remaining:
             told.append(
@@ -64,5 +85,12 @@ class Handler(ts.Handler):
     def rulebook(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
         root = cli_request.arg(0, _HERE)
         cli_request.no_extra_args(1, _RULES_USAGE)
-        rulebook_response = self._tessercheck_client.rulebook(client.RulebookRequest(tree=root))
+        try:
+            rulebook_response = self._tessercheck_client.rulebook(client.RulebookRequest(tree=root))
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.CliResponse(2, stdout="", stderr=error.message)
+                case _ as never:
+                    typing.assert_never(never)
         return protocol.CliResponse(0, stdout=rulebook_response.rendered, stderr="")

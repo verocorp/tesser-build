@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 import campaign.application.ports as ports
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 
 class InMemoryCampaignRepository(ts.Repository):

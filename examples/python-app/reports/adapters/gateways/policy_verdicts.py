@@ -6,7 +6,7 @@ import tesser.adapters as ts
 
 import linkpolicy.client as client
 import reports.application.ports as ports
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 _DECISION_BY_NAME: typing.Final[dict[str, ports.VerdictDecision]] = {
     "allowed": ports.VerdictDecision.ALLOWED,

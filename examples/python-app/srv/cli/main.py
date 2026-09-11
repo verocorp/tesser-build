@@ -8,7 +8,7 @@ import tesser.srv as ts
 import app as app
 import campaign.adapters.handlers as handlers
 import protocol as protocol
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 _USAGE: typing.Final[str] = (
     "usage: python -m srv.cli.main <command> [args]\n"

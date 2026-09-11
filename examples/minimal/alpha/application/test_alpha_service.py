@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import tesser.testing as ts
 
 import alpha.application as application
@@ -77,3 +79,19 @@ class TestAlphaService:
         assert fake_refused_beta_check.checked == ["a"]
         assert add_response.standing == "released"
         assert fake_widget_repository.standing_by_name == {"a": "released"}
+
+    def test_an_empty_name_is_rejected_in_the_context_s_own_words(self) -> None:
+        fake_widget_repository = FakeWidgetRepository()
+        alpha_service = application.AlphaService(fake_widget_repository, FakeOkBetaCheck())
+        with pytest.raises(client.Rejected) as raised:
+            alpha_service.add(add_request(name=""))
+        assert raised.value.code == "empty_name"
+        assert fake_widget_repository.saved == []
+
+    def test_an_empty_part_is_rejected_before_the_widget_is_saved(self) -> None:
+        fake_widget_repository = FakeWidgetRepository()
+        alpha_service = application.AlphaService(fake_widget_repository, FakeOkBetaCheck())
+        with pytest.raises(client.Rejected) as raised:
+            alpha_service.add(add_request(part=""))
+        assert raised.value.code == "empty_identity"
+        assert fake_widget_repository.saved == []

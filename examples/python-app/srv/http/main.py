@@ -12,7 +12,7 @@ import app as app
 import campaign.adapters.handlers as campaign_handlers
 import protocol as protocol
 import reports.adapters.handlers as reports_handlers
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 MAX_BUFFERED_BODY: typing.Final[int] = 1_048_576
 

@@ -8,7 +8,7 @@ import tesser.srv as ts
 import alpha.adapters.handlers as handlers
 import app
 import protocol
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 
 class CliHost(ts.Host):

@@ -23,9 +23,11 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Actions"): "actions",
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
+    ("tesser.application", "Error"): "port_error",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
+    ("tesser.context", "Error"): "error",
     ("tesser.domain", "AggregateRoot"): "aggregate",
     ("tesser.domain", "Entity"): "entity",
     ("tesser.domain", "ValueObject"): "valueobject",
@@ -96,7 +98,9 @@ PORTS_HOME: typing.Final[str] = "application/ports"
 
 PORTS_IMPORT_PATH: typing.Final[str] = "application.ports"
 
-PORTS_KINDS: typing.Final[frozenset[str]] = frozenset({"port", "store", "port_request", "port_response"})
+PORTS_KINDS: typing.Final[frozenset[str]] = frozenset(
+    {"port", "store", "port_request", "port_response", "port_error"}
+)
 
 APPLICATION_CLIENT_PACKAGE: typing.Final[str] = "client"
 
@@ -294,9 +298,11 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "store": PORTS_HOME,
     "port_request": PORTS_HOME,
     "port_response": PORTS_HOME,
+    "port_error": PORTS_HOME,
     "request": "client",
     "response": "client",
     "client": "client",
+    "error": "client",
     "repository": "adapters",
     "gateway": "adapters",
     "handler": "adapters",
@@ -336,9 +342,11 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "store": "a store",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
+    "port_error": "a port error",
     "request": "a request DTO",
     "response": "a response DTO",
     "client": "a client",
+    "error": "a context error",
     "repository": "a repository adapter",
     "gateway": "a gateway adapter",
     "handler": "an inbound handler",
@@ -527,10 +535,10 @@ PAIRED_PLACES: typing.Final[frozenset[str]] = frozenset(
 NORM_IMPORTS: typing.Final[dict[str, frozenset[str]]] = {
     "domain": frozenset({"tesser.errors", "tesser.serialization"}),
     "application": frozenset({"tesser.errors"}),
-    "adapters": frozenset({"tesser.errors"}),
+    "adapters": frozenset(),
     "component": frozenset({"tesser.errors"}),
     "app": frozenset({"tesser.errors"}),
-    "srv": frozenset({"tesser.errors"}),
+    "srv": frozenset(),
     "test": frozenset(
         {"tesser.app", "tesser.errors", "tesser.serialization"}
     ),
@@ -11347,7 +11355,7 @@ APP_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(Tesser
 SRV_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
     "srv",
     "tesser.srv",
-    "a srv module's tesser imports are tesser.srv, and tesser.errors",
+    "a srv module imports only tesser.srv, because the host knows no context's error types",
     "a srv module imports tesser.srv exactly once, as ts",
     "a srv module imports tesser.srv exactly once, as ts",
     tuple(sorted(NORM_IMPORTS["srv"])),
@@ -11407,7 +11415,7 @@ APPLICATION_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolic
 ADAPTERS_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
     "role",
     ROLE_TESSER_PACKAGE["adapters"],
-    "an adapters module's tesser imports are tesser.adapters and tesser.errors",
+    "an adapters module imports only tesser.adapters, because an adapter speaks the errors its context declares",
     "a role module imports its tesser package exactly once, as ts",
     "a role module imports its tesser package exactly once, as ts",
     tuple(sorted(NORM_IMPORTS["adapters"])),

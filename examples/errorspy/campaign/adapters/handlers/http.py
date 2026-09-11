@@ -6,7 +6,7 @@ import tesser.adapters as ts
 
 import campaign.client as client
 import protocol
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 
 class Handler(ts.Handler):

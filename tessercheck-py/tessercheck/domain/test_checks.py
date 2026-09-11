@@ -3075,8 +3075,8 @@ def test_srv_and_app_statement_totality() -> None:
         ))).violations()
                )
     assert any(
-        "srv.box imports tesser.domain; a srv module's tesser imports "
-        "are tesser.srv, and tesser.errors" in f
+        "srv.box imports tesser.domain; a srv module imports only tesser.srv, "
+        "because the host knows no context's error types" in f
         for f in findings
     )
     assert any(
@@ -4269,7 +4269,7 @@ def test_a_norm_module_is_imported_as_a_module_where_its_placement_allows() -> N
     )
 
 
-def test_wiring_bootstrap_and_srv_may_import_tesser_errors_as_a_module() -> None:
+def test_wiring_and_bootstrap_may_import_tesser_errors_and_srv_may_not() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in domain.Codebase(_spec(sources=(
@@ -4355,7 +4355,11 @@ def test_wiring_bootstrap_and_srv_may_import_tesser_errors_as_a_module() -> None
                )
     assert not any("shop.component.component" in f for f in findings)
     assert not any("app.wire" in f and "tesser.errors" in f for f in findings)
-    assert not any("srv.run" in f and "tesser.errors" in f for f in findings)
+    assert any(
+        "srv.run imports tesser.errors; a srv module imports only tesser.srv, "
+        "because the host knows no context's error types" in f
+        for f in findings
+    )
     assert any(
         "member.component.component imports names from tesser.errors; every import is a "
         "module import — import x or import x as name, never from x "
@@ -4370,7 +4374,7 @@ def test_wiring_bootstrap_and_srv_may_import_tesser_errors_as_a_module() -> None
     )
 
 
-def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
+def test_domain_and_application_may_import_tesser_errors_and_adapters_may_not() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in domain.Codebase(_spec(sources=(
@@ -4483,7 +4487,12 @@ def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
                )
     assert not any("shop.domain.money" in f for f in findings)
     assert not any("shop.application.views" in f for f in findings)
-    assert not any("shop.adapters.gateways" in f for f in findings)
+    assert any(
+        "shop.adapters.gateways.memory imports tesser.errors; "
+        "an adapters module imports only tesser.adapters, "
+        "because an adapter speaks the errors its context declares" in f
+        for f in findings
+    )
     assert any(
         "member.domain.money imports names from tesser.errors; every import is a "
         "module import — import x or import x as name, never from x "
@@ -4497,8 +4506,8 @@ def test_any_role_but_client_may_import_tesser_errors_as_a_module() -> None:
     )
     assert any(
         "astray.adapters.gateways imports tesser.serialization; "
-        "an adapters module's tesser imports are "
-        "tesser.adapters and tesser.errors" in f
+        "an adapters module imports only tesser.adapters, "
+        "because an adapter speaks the errors its context declares" in f
         for f in findings
     )
 

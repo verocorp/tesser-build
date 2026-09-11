@@ -13,7 +13,7 @@ import restate
 import app as app
 import ordering.adapters.handlers as handlers
 import protocol as protocol
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 _BIND: typing.Final[str] = "0.0.0.0:8000"
 _RESTATE_DEPLOYMENT_PATH: typing.Final[str] = "/restate"

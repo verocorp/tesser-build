@@ -9,7 +9,7 @@ import tesser.adapters as ts
 
 import alpha.application.ports as ports
 import pgdatabase.database as pgdatabase
-import tesser.errors as errors
+import tesser.errors as errors  # tesser:debt TB050
 
 _SCHEMA: typing.Final[str] = (
     "CREATE TABLE IF NOT EXISTS widgets "

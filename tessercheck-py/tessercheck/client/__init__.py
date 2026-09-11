@@ -1,7 +1,9 @@
+from tessercheck.client.client import ERRORS as ERRORS
 from tessercheck.client.client import CheckRequest as CheckRequest
 from tessercheck.client.client import CheckResponse as CheckResponse
 from tessercheck.client.client import MarkRequest as MarkRequest
 from tessercheck.client.client import MarkResponse as MarkResponse
+from tessercheck.client.client import Rejected as Rejected
 from tessercheck.client.client import RenameRequest as RenameRequest
 from tessercheck.client.client import RenameResponse as RenameResponse
 from tessercheck.client.client import RulebookRequest as RulebookRequest

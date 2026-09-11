@@ -7,6 +7,7 @@ import tesser.application as ts
 import alpha.application.ports as ports
 import alpha.client as client
 import alpha.domain as domain
+import tesser.errors as errors
 
 
 class MapToWidgetSpec(ts.Mapper, domain.WidgetSpec):
@@ -52,8 +53,12 @@ class AlphaService(ts.ApplicationService):
         self._beta_check = beta_check
 
     def add(self, add_request: client.AddRequest) -> client.AddResponse:
-        widget = domain.Widget(MapToWidgetSpec(add_request))
-        match widget.take(MapToPartSpec(add_request)):
+        try:
+            widget = domain.Widget(MapToWidgetSpec(add_request))
+            taken = widget.take(MapToPartSpec(add_request))
+        except errors.DomainError as domain_error:
+            raise client.Rejected(domain_error.code, domain_error.message) from domain_error
+        match taken:
             case domain.Taken.TAKEN:
                 pass
             case domain.Taken.HELD:
