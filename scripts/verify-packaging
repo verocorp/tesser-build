@@ -172,10 +172,307 @@ if ! cmp -s "$VENV/markable-once" "$MARKABLE/mod/__init__.py"; then
   exit 1
 fi
 
+# tessercheck-cli is packaging, not an app, so no verify arm type-checks it;
+# the hook is the one shipped module that runs on developers' machines, so it
+# is held to --strict here, against the same pristine sources the wheels came
+# from. The pin matches tessercheck-py's dev requirements.
+step "mypy --strict over the console entry points"
+"$PY" -m pip install --quiet "mypy>=1.8" >/dev/null 2>&1 || exit 1
+(cd "$VENV/tessercheck-cli" && MYPYPATH="$VENV/tessercheck-py:$VENV/tesser-py" "$PY" -m mypy --strict tessercheck_cli) || exit 1
+
 step "usage"
 (cd "$VENV" && "$VENV/venv/bin/tessercheck-check" a b >/dev/null 2>&1)
 if [ $? -ne 2 ]; then
   echo "tessercheck-check did not reject extra arguments with exit 2" >&2
+  exit 1
+fi
+
+# The post-write hook, driven the way Claude Code drives it: a PostToolUse
+# event on stdin, the answer on stdout (advisory), stderr + exit 2 (feedback),
+# and one JSONL line per analyzed Python write whatever its outcome (a
+# non-Python write and a guidance event log nothing there). Each case is a shape the
+# consumer's machine will produce; a hook that only "starts" passes nothing.
+HOOKED="$VENV/hooked"
+mkdir -p "$HOOKED/legacy" || exit 1
+printf 'app\nskip legacy\n' > "$HOOKED/.tesser-root"
+printf 'x = 1\n' > "$HOOKED/loose.py"
+printf 'x = 1\n' > "$HOOKED/legacy/old.py"
+hook_event() {
+  printf '{"session_id":"%s","cwd":"%s","hook_event_name":"PostToolUse","tool_name":"%s","tool_input":{"file_path":"%s","skill":"%s"},"tool_response":{}}' "$1" "$HOOKED" "$2" "$3" "$4"
+}
+hook_run() {
+  (cd "$VENV" && hook_event "$1" "$2" "$3" "$4" | "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+}
+last_log() { tail -n 1 "$HOOKED/.tesser/changes.jsonl"; }
+
+step "tessercheck-hook advises on a governed file with findings"
+hook_run s1 Write "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || ! grep -q '"additionalContext"' "$VENV/hook.out" || ! grep -q 'loose.py' "$VENV/hook.out"; then
+  echo "tessercheck-hook did not advise on a governed file with findings" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+if ! last_log | grep -q '"placement": "governed"' || ! last_log | grep -q '"status": "ok"' || ! last_log | grep -q '"findings": \["TB0'; then
+  echo "tessercheck-hook did not log the advisory run" >&2; last_log >&2; exit 1
+fi
+
+step "tessercheck-hook feeds back with exit 2 when told to"
+mkdir -p "$HOOKED/.tesser" && printf 'mode=feedback\n' > "$HOOKED/.tesser/hook.conf"
+hook_run s1 Edit "$HOOKED/loose.py" ""
+if [ $? -ne 2 ] || ! grep -q 'TB0' "$VENV/hook.err" || [ -s "$VENV/hook.out" ]; then
+  echo "tessercheck-hook did not feed back with exit 2 in feedback mode" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+if ! last_log | grep -q '"mode": "feedback"' || ! last_log | grep -q '"exit_code": 2'; then
+  echo "tessercheck-hook did not log the feedback run" >&2; last_log >&2; exit 1
+fi
+rm -f "$HOOKED/.tesser/hook.conf"
+
+step "tessercheck-hook is silent on a skipped path and on a non-Python write"
+hook_run s1 Write "$HOOKED/legacy/old.py" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ -s "$VENV/hook.err" ] || ! last_log | grep -q '"placement": "skipped"'; then
+  echo "tessercheck-hook was not silent on a skipped path" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; last_log >&2; exit 1
+fi
+lines_before=$(wc -l < "$HOOKED/.tesser/changes.jsonl")
+hook_run s1 Write "$HOOKED/notes.md" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ "$(wc -l < "$HOOKED/.tesser/changes.jsonl")" -ne "$lines_before" ]; then
+  echo "tessercheck-hook ran or logged on a non-Python write" >&2; exit 1
+fi
+
+step "tessercheck-hook fails open on timeout and logs it"
+(cd "$VENV" && hook_event s1 Write "$HOOKED/loose.py" "" | TESSERCHECK_HOOK_BUDGET=0.001 "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || ! last_log | grep -q '"status": "timeout"'; then
+  echo "tessercheck-hook did not fail open on a timeout" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; last_log >&2; exit 1
+fi
+
+step "tessercheck-hook records the skill load and carries it into the next write's line"
+hook_run s2 Skill "" tesser-build
+if [ $? -ne 0 ] || ! grep -q '"via": "skill"' "$HOOKED/.tesser/sessions/s2.jsonl"; then
+  echo "tessercheck-hook did not record a Skill load" >&2; exit 1
+fi
+hook_run s2 Write "$HOOKED/loose.py" ""
+if ! last_log | grep -q '"guidance": \["skill:tesser-build"\]'; then
+  echo "tessercheck-hook did not carry the guidance list into the log line" >&2; last_log >&2; exit 1
+fi
+
+step "tessercheck-hook advises about an undeclared tree in feedback mode too"
+printf 'library\n' > "$HOOKED/.tesser-root"
+mkdir -p "$HOOKED/.tesser" && printf 'mode=feedback\n' > "$HOOKED/.tesser/hook.conf"
+hook_run s1 Write "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || ! grep -q 'TB044' "$VENV/hook.out" || ! last_log | grep -q '"placement": "undeclared"'; then
+  echo "tessercheck-hook did not name TB044 on an undeclared tree" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+rm -f "$HOOKED/.tesser/hook.conf"
+
+# The hook runs on somebody's machine, unwatched, on every write. Its error
+# paths are the ones nobody sees fail, so each one is driven here: an event it
+# has no business in, a worker that cannot run, a budget that is not a number.
+# The rule throughout is fail open — exit 0, say nothing, log what happened.
+step "tessercheck-hook prints its usage and ignores an event it has no business in"
+printf 'app\nskip legacy\n' > "$HOOKED/.tesser-root"
+(cd "$VENV" && "$VENV/venv/bin/tessercheck-hook" --help >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || ! grep -q 'usage: tessercheck-hook' "$VENV/hook.out"; then
+  echo "tessercheck-hook did not print its usage for --help" >&2; exit 1
+fi
+lines_before=$(wc -l < "$HOOKED/.tesser/changes.jsonl")
+for payload in \
+  'not json at all' \
+  '[]' \
+  '"a bare string"' \
+  '{"cwd":"'"$HOOKED"'","tool_name":"Bash","tool_input":{"command":"ls"}}' \
+  '{"cwd":"'"$HOOKED"'","tool_name":"Write","tool_input":"not a dict"}' \
+  '{"cwd":"'"$HOOKED"'","tool_name":"Write","tool_input":{}}' \
+  '{"cwd":"'"$HOOKED"'","tool_name":"Read","tool_input":{}}'
+do
+  (cd "$VENV" && printf '%s' "$payload" | "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+  if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ -s "$VENV/hook.err" ]; then
+    echo "tessercheck-hook did not stay silent and exit 0 on: $payload" >&2
+    cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+  fi
+done
+if [ "$(wc -l < "$HOOKED/.tesser/changes.jsonl")" -ne "$lines_before" ]; then
+  echo "tessercheck-hook logged a run for an event it should have ignored" >&2; exit 1
+fi
+
+step "tessercheck-hook records a routed skill doc read and ignores a read elsewhere"
+mkdir -p "$HOOKED/.claude/skills/tesser-build" || exit 1
+printf '# value objects\n' > "$HOOKED/.claude/skills/tesser-build/value-objects.md"
+hook_run s3 Read "$HOOKED/.claude/skills/tesser-build/value-objects.md" ""
+if [ $? -ne 0 ] || ! grep -q '"via": "read"' "$HOOKED/.tesser/sessions/s3.jsonl" \
+  || ! grep -q '"path": "value-objects.md"' "$HOOKED/.tesser/sessions/s3.jsonl"; then
+  echo "tessercheck-hook did not record a read of a routed skill doc" >&2; exit 1
+fi
+reads_before=$(wc -l < "$HOOKED/.tesser/sessions/s3.jsonl")
+hook_run s3 Read "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || [ "$(wc -l < "$HOOKED/.tesser/sessions/s3.jsonl")" -ne "$reads_before" ]; then
+  echo "tessercheck-hook recorded a read from outside the skill directory" >&2; exit 1
+fi
+
+step "tessercheck-hook carries one guidance list past a session line it cannot read"
+printf 'not json\n' >> "$HOOKED/.tesser/sessions/s3.jsonl"
+printf '["not","a","dict"]\n' >> "$HOOKED/.tesser/sessions/s3.jsonl"
+hook_run s3 Read "$HOOKED/.claude/skills/tesser-build/value-objects.md" ""
+hook_run s3 Write "$HOOKED/loose.py" ""
+if ! last_log | grep -q '"guidance": \["read:value-objects.md"\]'; then
+  echo "tessercheck-hook did not skip the unreadable session lines and dedupe the rest" >&2
+  last_log >&2; exit 1
+fi
+
+step "tessercheck-hook stands down when the conf disables it"
+mkdir -p "$HOOKED/.tesser" && printf 'enabled=false\n' > "$HOOKED/.tesser/hook.conf"
+hook_run s1 Write "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ -s "$VENV/hook.err" ]; then
+  echo "tessercheck-hook spoke while the conf disabled it" >&2
+  cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+if ! last_log | grep -q '"status": "disabled"' || ! last_log | grep -q '"mode": "disabled"'; then
+  echo "tessercheck-hook did not log a disabled run" >&2; last_log >&2; exit 1
+fi
+rm -f "$HOOKED/.tesser/hook.conf"
+
+step "tessercheck-hook rejects a worker call that names no file"
+(cd "$VENV" && printf '' | "$VENV/venv/bin/tessercheck-hook" --worker "$HOOKED" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 2 ] || ! grep -q 'usage: tessercheck-hook' "$VENV/hook.err"; then
+  echo "tessercheck-hook worker did not reject a wrong argument count with exit 2" >&2
+  cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+
+step "tessercheck-hook logs a write that belongs to no declared tree"
+OUTSIDER="$VENV/outsider"
+mkdir -p "$OUTSIDER" || exit 1
+printf 'x = 1\n' > "$OUTSIDER/stray.py"
+hook_run s1 Write "$OUTSIDER/stray.py" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ -s "$VENV/hook.err" ]; then
+  echo "tessercheck-hook spoke about a file outside every declared tree" >&2
+  cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+if ! last_log | grep -q '"placement": "outside"' || ! last_log | grep -q "\"relpath\": \"$OUTSIDER/stray.py\""; then
+  echo "tessercheck-hook did not log a write outside every declared tree" >&2; last_log >&2; exit 1
+fi
+
+# A worker that cannot even start is the shape a half-finished upgrade takes on
+# a consumer's machine. The child runs with -P, so a package in the working
+# directory can no longer shadow the installed one; a sitecustomize on
+# PYTHONPATH still runs at every interpreter start, and this one exits only
+# the interpreter whose argv is the worker's.
+step "tessercheck-hook fails open when the worker cannot run"
+BROKEN="$VENV/broken"
+mkdir -p "$BROKEN" || exit 1
+printf 'import sys\nif "--worker" in sys.argv:\n    raise SystemExit("worker cannot start")\n' > "$BROKEN/sitecustomize.py"
+(cd "$VENV" && hook_event s1 Write "$HOOKED/loose.py" "" | PYTHONPATH="$BROKEN" "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || ! last_log | grep -q '"status": "error"' || ! last_log | grep -q '"error": "worker exit' || ! last_log | grep -q '"placement": "unknown"'; then
+  echo "tessercheck-hook did not fail open when the worker could not run" >&2
+  cat "$VENV/hook.out" "$VENV/hook.err" >&2; last_log >&2; exit 1
+fi
+rm -rf "$BROKEN"
+
+step "tessercheck-hook prunes a session file a week past its last use"
+printf '{"path": "tesser-build", "ts": "old", "via": "skill"}\n' > "$HOOKED/.tesser/sessions/stale.jsonl"
+printf 'keep me\n' > "$HOOKED/.tesser/sessions/notes.txt"
+touch -t 202001010000 "$HOOKED/.tesser/sessions/stale.jsonl" "$HOOKED/.tesser/sessions/notes.txt"
+hook_run s1 Write "$HOOKED/loose.py" ""
+if [ -e "$HOOKED/.tesser/sessions/stale.jsonl" ]; then
+  echo "tessercheck-hook did not prune a stale session file" >&2; exit 1
+fi
+if [ ! -e "$HOOKED/.tesser/sessions/notes.txt" ] || [ ! -e "$HOOKED/.tesser/sessions/s3.jsonl" ]; then
+  echo "tessercheck-hook pruned something that was not a stale session file" >&2; exit 1
+fi
+
+step "tessercheck-hook falls back to its default budget when the env names no number"
+(cd "$VENV" && hook_event s1 Write "$HOOKED/loose.py" "" | TESSERCHECK_HOOK_BUDGET=soon "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || ! grep -q '"additionalContext"' "$VENV/hook.out" || ! last_log | grep -q '"status": "ok"'; then
+  echo "tessercheck-hook did not fall back to its default budget when the env named no number" >&2
+  cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+
+# A governed write that conforms is the common case on a consumer's machine:
+# the hook must say nothing and still leave its line.
+step "tessercheck-hook is silent on a governed file that conforms, and still logs it"
+mkdir -p "$HOOKED/shop/domain" || exit 1
+printf 'import tesser.domain as ts\nclass ThingSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\nclass Thing(ts.AggregateRoot):\n    def __init__(self, spec: ThingSpec) -> None:\n        self.text = spec.text\n' > "$HOOKED/shop/domain/thing.py"
+printf 'def test_thing_exists() -> None:\n    assert True\n' > "$HOOKED/shop/domain/test_thing.py"
+printf 'app\nskip legacy\n' > "$HOOKED/.tesser-root"
+hook_run s5 Write "$HOOKED/shop/domain/test_thing.py" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ -s "$VENV/hook.err" ]; then
+  echo "tessercheck-hook spoke about a conforming governed write" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+if ! last_log | grep -q '"placement": "governed"' || ! last_log | grep -q '"findings_count": 0' || ! last_log | grep -q '"status": "ok"'; then
+  echo "tessercheck-hook did not log a clean governed run" >&2; last_log >&2; exit 1
+fi
+
+# A session started in a subdirectory still finds the declaration above it:
+# the project boundary is the nearest .git, not the launch directory.
+step "tessercheck-hook finds the tree above a session started in a subdirectory"
+mkdir -p "$HOOKED/.git" "$HOOKED/sub" || exit 1
+printf 'x = 1\n' > "$HOOKED/sub/deep.py"
+(cd "$VENV" && printf '{"session_id":"s6","cwd":"%s","hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"%s"},"tool_response":{}}' "$HOOKED/sub" "$HOOKED/sub/deep.py" | "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || ! grep -q '"additionalContext"' "$VENV/hook.out" || ! tail -n 1 "$HOOKED/sub/.tesser/changes.jsonl" | grep -q '"placement": "governed"'; then
+  echo "tessercheck-hook did not find the declared tree above a subdirectory session" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+
+# The conf is only read, so it may be a symlink to a per-machine file; every
+# path the hook writes or prunes is refused when symlinked (next two cases).
+step "tessercheck-hook honors a conf that is a symlink to a per-machine file"
+printf 'enabled=false\n' > "$VENV/machine.conf"
+mkdir -p "$HOOKED/.tesser" && rm -f "$HOOKED/.tesser/hook.conf" && ln -s "$VENV/machine.conf" "$HOOKED/.tesser/hook.conf"
+hook_run s8 Write "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || ! last_log | grep -q '"status": "disabled"'; then
+  echo "tessercheck-hook ignored a symlinked hook.conf" >&2; cat "$VENV/hook.out" >&2; last_log >&2; exit 1
+fi
+rm -f "$HOOKED/.tesser/hook.conf"
+
+# State paths that are symlinks are refused: a hostile checkout must not turn
+# the hook into a writer or a pruner of files elsewhere. A symlinked cwd is
+# not a state path: Claude Code supplies it, and the write must still land.
+step "tessercheck-hook still logs when the session's cwd is itself a symlink"
+REAL="$VENV/real-project"
+mkdir -p "$REAL" || exit 1
+printf 'app\n' > "$REAL/.tesser-root"
+printf 'x = 1\n' > "$REAL/loose.py"
+ln -s "$REAL" "$VENV/linked-project"
+(cd "$VENV" && printf '{"session_id":"s9","cwd":"%s","hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"%s"},"tool_response":{}}' "$VENV/linked-project" "$VENV/linked-project/loose.py" | "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || ! grep -q '"additionalContext"' "$VENV/hook.out" || ! tail -n 1 "$REAL/.tesser/changes.jsonl" | grep -q '"placement": "governed"'; then
+  echo "tessercheck-hook dropped the log for a session whose cwd is a symlink" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+
+step "tessercheck-hook refuses a symlinked state directory"
+SYMLINKED="$VENV/symlinked"
+mkdir -p "$SYMLINKED" "$VENV/elsewhere" || exit 1
+printf 'app\n' > "$SYMLINKED/.tesser-root"
+printf 'x = 1\n' > "$SYMLINKED/loose.py"
+ln -s "$VENV/elsewhere" "$SYMLINKED/.tesser"
+(cd "$VENV" && printf '{"session_id":"s7","cwd":"%s","hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"%s"},"tool_response":{}}' "$SYMLINKED" "$SYMLINKED/loose.py" | "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || [ -e "$VENV/elsewhere/changes.jsonl" ] || [ -n "$(ls -A "$VENV/elsewhere")" ]; then
+  echo "tessercheck-hook wrote through a symlinked .tesser directory" >&2; ls -la "$VENV/elsewhere" >&2; exit 1
+fi
+
+# A session id is a path segment; anything that is not a plain token is
+# recorded as unknown rather than used as a path.
+step "tessercheck-hook does not use a hostile session id as a path"
+(cd "$VENV" && printf '{"session_id":"../../escaped","cwd":"%s","hook_event_name":"PostToolUse","tool_name":"Skill","tool_input":{"skill":"tesser-build"},"tool_response":{}}' "$HOOKED" | "$VENV/venv/bin/tessercheck-hook" >/dev/null 2>&1)
+if [ -e "$VENV/escaped.jsonl" ] || [ -e "$HOOKED/escaped.jsonl" ] || ! grep -q '"via": "skill"' "$HOOKED/.tesser/sessions/unknown.jsonl"; then
+  echo "tessercheck-hook let a session id escape the sessions directory" >&2; exit 1
+fi
+
+# The three distributions pin each other exactly, so a CLI installed alone
+# against a stale analyzer is refused at pip, before any hook can fail on a
+# machine nobody is watching. The wheel is built first, with an index, because
+# --no-index would also refuse the build backend and make the refusal below
+# hold by accident; the positive control proves the same wheel installs when
+# the analyzer matches.
+step "a stale analyzer is refused at install"
+"$PY" -m pip wheel --quiet --no-deps -w "$VENV/wheels" "$VENV/tessercheck-cli" >/dev/null 2>&1 || exit 1
+CLI_WHL=$(echo "$VENV"/wheels/tessercheck_cli-*.whl)
+"$PY" -m pip uninstall --quiet -y tessercheck-cli >/dev/null 2>&1 || exit 1
+if ! "$PY" -m pip install --quiet --no-index "$CLI_WHL" >/dev/null 2>&1; then
+  echo "the control install of the tessercheck-cli wheel failed; the refusal below would prove nothing" >&2
+  exit 1
+fi
+STALE="$VENV/stale-tessercheck-py"
+mkdir -p "$STALE/tessercheck" || exit 1
+printf '[build-system]\nrequires = ["setuptools>=61"]\nbuild-backend = "setuptools.build_meta"\n[project]\nname = "tessercheck-py"\nversion = "0.0.1"\n[tool.setuptools]\npackages = ["tessercheck"]\n' > "$STALE/pyproject.toml"
+: > "$STALE/tessercheck/__init__.py"
+"$PY" -m pip install --quiet --no-deps "$STALE" >/dev/null 2>&1 || exit 1
+"$PY" -m pip uninstall --quiet -y tessercheck-cli >/dev/null 2>&1 || exit 1
+if "$PY" -m pip install --quiet --no-index "$CLI_WHL" >/dev/null 2>&1; then
+  echo "pip installed tessercheck-cli against a stale tessercheck-py; the pin is not exact" >&2
   exit 1
 fi
 

@@ -28,6 +28,7 @@ class FakeSourceReader(ports.SourceReader):
             imports=(),
             stdlib=(),
             pure_stdlib=(),
+            pruned=(),
         )
 
 
@@ -104,6 +105,7 @@ def _tree_of(text: str = "import os\n") -> ports.ReadSourcesResponse:
         imports=(),
         stdlib=("os",),
         pure_stdlib=(),
+        pruned=(),
     )
 
 
@@ -163,6 +165,7 @@ def _renameable_tree() -> ports.ReadSourcesResponse:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
 
 
@@ -206,6 +209,7 @@ def test_what_a_mark_reports_as_remaining_is_what_a_check_would_report_after_it(
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     fake_scripted_reader = FakeScriptedReader(
         _tree_of("import os\n"), read_sources_response
@@ -242,6 +246,7 @@ def test_a_symlinked_directory_is_reported_rather_than_marked() -> None:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     tessercheck_service = application.TessercheckService(
         FakePreparedReader(read_sources_response),
@@ -378,6 +383,7 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     assert application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings == ()
 
@@ -400,6 +406,7 @@ def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
         imports=(),
         stdlib=("os",),
         pure_stdlib=(),
+        pruned=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings
     assert len(found) == 1
@@ -421,6 +428,7 @@ def test_every_root_form_other_than_app_is_reported() -> None:
             imports=(),
             stdlib=(),
             pure_stdlib=(),
+            pruned=(),
         )
         found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings
         assert len(found) == 1
@@ -437,6 +445,7 @@ def test_a_symlinked_directory_from_the_read_is_reported() -> None:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings
     assert any("TB045" in finding and "app/vendored" in finding for finding in found)
@@ -452,6 +461,7 @@ def test_a_nested_declaration_from_the_read_is_reported() -> None:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings
     assert any("app/.tesser-root" in finding for finding in found)
@@ -475,6 +485,7 @@ def test_a_finding_reads_path_line_code_then_message() -> None:
         imports=(),
         stdlib=("os",),
         pure_stdlib=(),
+        pruned=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings
     assert found != ()
@@ -501,6 +512,7 @@ def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings
     assert any("shop/domain/thing.py" in finding for finding in found)
@@ -524,6 +536,7 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     as_module = ports.ReadSourcesResponse(
         root=ports.RootForm.APP,
@@ -542,7 +555,111 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         imports=(),
         stdlib=(),
         pure_stdlib=(),
+        pruned=(),
     )
     assert application.TessercheckService(FakePreparedReader(as_package), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings == ()
     assert application.TessercheckService(FakePreparedReader(as_module), FakeSourceWriter(), FakeRulebookSources('')).check(client.CheckRequest(tree='.')).findings != ()
 
+
+
+@ts.helper
+def _loose_tree(root: str = "app") -> ports.ReadSourcesResponse:
+    return ports.ReadSourcesResponse(
+        root=ports.RootForm(root),
+        nested=(),
+        symlinked=(),
+        sources=(
+            ports.SourceFile(
+                path="loose_a.py",
+                name="loose_a",
+                text="x = 1\n",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+            ports.SourceFile(
+                path="loose_b.py",
+                name="loose_b",
+                text="y = 2\n",
+                state=ports.SourceState.READ,
+                form=ports.ModuleForm.MODULE,
+            ),
+        ),
+        exports=(),
+        imports=(),
+        stdlib=("os",),
+        pure_stdlib=(),
+        pruned=("legacy",),
+    )
+
+
+def test_check_file_reports_the_findings_of_one_governed_file() -> None:
+    check_file_response = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).check_file(
+        client.CheckFileRequest(tree="some/tree", path="loose_a.py")
+    )
+
+    assert check_file_response.governance == "governed"
+    assert check_file_response.findings
+    assert all(finding.startswith("loose_a.py:") for finding in check_file_response.findings)
+    assert len(check_file_response.codes) == len(check_file_response.findings)
+    assert all(code.startswith("TB") for code in check_file_response.codes)
+
+
+def test_check_file_is_silent_about_a_skipped_or_outside_path() -> None:
+    skipped = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).check_file(
+        client.CheckFileRequest(tree="some/tree", path="legacy/old.py")
+    )
+    outside = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).check_file(
+        client.CheckFileRequest(tree="some/tree", path="elsewhere/new.py")
+    )
+
+    assert (skipped.governance, skipped.findings) == ("skipped", ())
+    assert (outside.governance, outside.findings) == ("outside", ())
+
+
+def test_check_file_names_an_undeclared_tree_whatever_the_path() -> None:
+    check_file_response = application.TessercheckService(FakePreparedReader(_loose_tree("missing")), FakeSourceWriter(), FakeRulebookSources("")).check_file(
+        client.CheckFileRequest(tree="some/tree", path="loose_a.py")
+    )
+
+    assert check_file_response.governance == "undeclared"
+    assert check_file_response.codes == ("TB044",)
+
+
+def test_hook_advises_by_default_and_feeds_back_when_told_to() -> None:
+    advised = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).hook(
+        client.HookRequest(tree="some/tree", path="loose_a.py", conf="")
+    )
+    fed_back = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).hook(
+        client.HookRequest(tree="some/tree", path="loose_a.py", conf="mode=feedback\n")
+    )
+
+    assert (advised.mode, advised.action, advised.governance) == ("advisory", "advise", "governed")
+    assert (fed_back.mode, fed_back.action) == ("feedback", "feedback")
+    assert advised.findings == fed_back.findings
+    assert advised.codes == fed_back.codes
+
+
+def test_hook_is_silent_off_the_governed_tree_and_disabled_when_told_to() -> None:
+    skipped = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).hook(
+        client.HookRequest(tree="some/tree", path="legacy/old.py", conf="mode=feedback\n")
+    )
+    disabled = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).hook(
+        client.HookRequest(tree="some/tree", path="loose_a.py", conf="enabled=false\n")
+    )
+
+    outside = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).hook(
+        client.HookRequest(tree="some/tree", path="elsewhere/new.py", conf="mode=feedback\n")
+    )
+
+    assert (skipped.governance, skipped.action, skipped.findings) == ("skipped", "silent", ())
+    assert (outside.governance, outside.action, outside.findings) == ("outside", "silent", ())
+    assert (disabled.mode, disabled.action) == ("disabled", "disabled")
+
+
+def test_hook_advises_about_an_undeclared_tree_in_every_mode() -> None:
+    hook_response = application.TessercheckService(FakePreparedReader(_loose_tree("missing")), FakeSourceWriter(), FakeRulebookSources("")).hook(
+        client.HookRequest(tree="some/tree", path="loose_a.py", conf="mode=feedback\n")
+    )
+
+    assert (hook_response.governance, hook_response.action) == ("undeclared", "advise")
+    assert hook_response.codes == ("TB044",)

@@ -216,3 +216,27 @@ def test_a_symlinked_directory_is_reported_and_never_walked(tmp_path: pathlib.Pa
     )
     assert read_sources_response.symlinked == ("vendored",)
     assert read_sources_response.sources == ()
+
+
+def test_the_directories_the_walk_did_not_enter_are_reported(tmp_path: pathlib.Path) -> None:
+    (tmp_path / ".tesser-root").write_text("app\nskip legacy\n", encoding="utf-8")
+    (tmp_path / "legacy").mkdir()
+    (tmp_path / "legacy" / "old.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "alpha" / "legacy").mkdir(parents=True)
+    (tmp_path / "alpha" / "legacy" / "old.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "alpha" / ".venv").mkdir()
+    (tmp_path / "alpha" / "new.py").write_text("x = 1\n", encoding="utf-8")
+    read_sources_response = repositories.FilesystemSourceReader().sources(
+        ports.ReadSourcesRequest(tree=str(tmp_path))
+    )
+    assert read_sources_response.pruned == ("alpha/.venv", "alpha/legacy", "legacy")
+    assert [source.path for source in read_sources_response.sources] == ["alpha/new.py"]
+
+
+def test_an_undeclared_tree_still_reports_what_it_did_not_enter(tmp_path: pathlib.Path) -> None:
+    (tmp_path / ".venv").mkdir()
+    read_sources_response = repositories.FilesystemSourceReader().sources(
+        ports.ReadSourcesRequest(tree=str(tmp_path))
+    )
+    assert read_sources_response.root is ports.RootForm.MISSING
+    assert read_sources_response.pruned == (".venv",)

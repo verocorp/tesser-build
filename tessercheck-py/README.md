@@ -91,13 +91,20 @@ tessercheck-check /path/to/tree
 Same exit codes, same one-finding-per-line output. `tessercheck-check` is a
 distinct command from the pre-graduation `python -m tessercheck --app-root .`,
 so a repo migrating off the old analyzer can install both without either
-shadowing the other. Installation, and why all three distributions are named
+shadowing the other. That distribution also carries the two repairs
+(`tessercheck-rename`, `tessercheck-mark`) and `tessercheck-hook`, a Claude
+Code `PostToolUse` hook that runs after every Python write and reports the
+findings on the written file — the whole tree is parsed, so cross-module rules
+see the whole universe, but the rule pass runs for that module alone.
+Installation, and why all three distributions are named
 in one `pip install`, are in that directory's README.
 
 `scripts/verify-packaging` is the gate on all of this: it builds the three
 distributions from a pristine copy, installs them into a clean virtualenv with
 no source tree on the path, imports every shipped module, and runs
-`tessercheck-check` for real. The checkout gates cannot see packaging defects —
+`tessercheck-check` for real, drives the installed hook through every case it
+has to survive on a developer's machine, and refuses a CLI installed against a
+stale analyzer. The checkout gates cannot see packaging defects —
 they run with `PYTHONPATH` pointed at the source, where a module missing from
 a wheel's package list imports perfectly well.
 

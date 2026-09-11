@@ -123,6 +123,7 @@ mechanics and a worked example land when the shape is built.
 | A domain module declares at most one aggregate root, because a second root in one module is two consistency boundaries sharing a file (`TB052`, maintainer ruling 2026-09-11) | `aggregates.md#rules` | — (no Go mirror — `TODOS.md`) | `python.md#aggregates` | — | "a second aggregate root appearing in a context" |
 | Defensive copies on collection accessors | `aggregates.md#rules` | `go.md#aggregates` | `python.md#aggregates` | — | "adding a collection field" |
 | Aggregates are never value-compared (non-comparability) | `aggregates.md#rules` | `go.md#aggregates` | `python.md#aggregates` | — | — |
+| Exemplar precedence: a neighbor carrying a `tesser:debt` marker or living in a skipped directory is registered non-conformance, not the convention to imitate (skill-version 75, from the pilot eng review 2026-09-11) | — (a routing rule, stated in `SKILL.md` Mode 1 step 2) | — | — | — | "survey the codebase for which pieces already exist" |
 | Spec leaves are primitives; constructor is the boundary | `value-objects.md#decisions-you-must-make` | `go.md#the-spec-pattern` | `python.md#the-spec-pattern` | #6 | "writing or changing a constructor" |
 | Spec nesting mirrors composition (composition-frequency coupling) | — (mechanics-owned) | `go.md#the-spec-pattern` | `python.md#the-spec-pattern` | #7 | "writing or changing a constructor" |
 | Validation belongs to the value, not parents | `value-objects.md#rules` | `go.md#entities` (wrap, don't re-check) | `python.md#entities` | #5 | — |

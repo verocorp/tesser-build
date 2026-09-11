@@ -10,7 +10,11 @@ import tessercheck.domain as domain
 
 class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
 
-    def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
+    def __init__(
+        self,
+        read_sources_response: ports.ReadSourcesResponse,
+        path: domain.Path | None = None,
+    ) -> None:
         rows: list[tuple[str, str, str | None, bool]] = []
         for source in read_sources_response.sources:
             match source.state:
@@ -48,6 +52,8 @@ class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
             imports=read_sources_response.imports,
             stdlib=read_sources_response.stdlib,
             pure_stdlib=read_sources_response.pure_stdlib,
+            pruned=read_sources_response.pruned,
+            scoped=() if path is None else (str(path),),
         )
 
 
@@ -61,6 +67,74 @@ class MapToCheckResponse(ts.Mapper, client.CheckResponse):
                 f"{violation.code()} {violation.text()}"
                 for violation in codebase.violations()
             )
+        )
+
+
+class MapToCheckFileResponse(ts.Mapper, client.CheckFileResponse):
+
+    def __init__(self, codebase: domain.Codebase, path: domain.Path) -> None:
+        match codebase.governance(path):
+            case domain.Governance.GOVERNED:
+                governance = domain.GOVERNANCE_GOVERNED
+            case domain.Governance.SKIPPED:
+                governance = domain.GOVERNANCE_SKIPPED
+            case domain.Governance.OUTSIDE:
+                governance = domain.GOVERNANCE_OUTSIDE
+            case domain.Governance.UNDECLARED:
+                governance = domain.GOVERNANCE_UNDECLARED
+            case _ as never:
+                typing.assert_never(never)
+        violations = codebase.violations()
+        super().__init__(
+            governance=governance,
+            findings=tuple(
+                f"{violation.path()}:{int(violation.line())}: "
+                f"{violation.code()} {violation.text()}"
+                for violation in violations
+            ),
+            codes=tuple(str(violation.code()) for violation in violations),
+        )
+
+
+class MapToHookResponse(ts.Mapper, client.HookResponse):
+
+    def __init__(self, codebase: domain.Codebase, hook_request: client.HookRequest) -> None:
+        match codebase.governance(domain.Path(hook_request.path)):
+            case domain.Governance.GOVERNED:
+                governance = domain.GOVERNANCE_GOVERNED
+            case domain.Governance.SKIPPED:
+                governance = domain.GOVERNANCE_SKIPPED
+            case domain.Governance.OUTSIDE:
+                governance = domain.GOVERNANCE_OUTSIDE
+            case domain.Governance.UNDECLARED:
+                governance = domain.GOVERNANCE_UNDECLARED
+            case _ as never:
+                typing.assert_never(never)
+        violations = codebase.violations()
+        hook_run = domain.HookRun(domain.HookRunSpec(
+            conf=hook_request.conf, governance=governance, findings=len(violations)
+        ))
+        match hook_run.action():
+            case domain.HookAction.DISABLED:
+                action = "disabled"
+            case domain.HookAction.SILENT:
+                action = "silent"
+            case domain.HookAction.ADVISE:
+                action = "advise"
+            case domain.HookAction.FEEDBACK:
+                action = "feedback"
+            case _ as never_action:
+                typing.assert_never(never_action)
+        super().__init__(
+            governance=governance,
+            mode=str(hook_run.conf()),
+            action=action,
+            findings=tuple(
+                f"{violation.path()}:{int(violation.line())}: "
+                f"{violation.code()} {violation.text()}"
+                for violation in violations
+            ),
+            codes=tuple(str(violation.code()) for violation in violations),
         )
 
 
@@ -221,6 +295,22 @@ class TessercheckService(ts.ApplicationService):
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.sources(read_sources_request)
         return MapToCheckResponse(read_sources_response)
+
+    def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
+        tree_root = domain.TreeRoot(check_file_request.tree)
+        read_sources_request = MapToReadSourcesRequest(tree_root)
+        read_sources_response = self._source_reader.sources(read_sources_request)
+        path = domain.Path(check_file_request.path)
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
+        return MapToCheckFileResponse(codebase, path)
+
+    def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
+        tree_root = domain.TreeRoot(hook_request.tree)
+        read_sources_request = MapToReadSourcesRequest(tree_root)
+        read_sources_response = self._source_reader.sources(read_sources_request)
+        path = domain.Path(hook_request.path)
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
+        return MapToHookResponse(codebase, hook_request)
 
     def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
         tree_root = domain.TreeRoot(mark_request.tree)

@@ -1,11 +1,13 @@
 import ast
 import inspect
+import json
 import textwrap
 import collections.abc as abc
 import pathlib
 
 import tessercheck.adapters.repositories as repositories
 import tessercheck.application as application
+import tessercheck.application.ports as ports
 import tessercheck.client as client
 
 
@@ -87,3 +89,67 @@ def returned_tokens(func: ast.FunctionDef) -> frozenset[str]:
         for value in ast.walk(node.value)
         if isinstance(value, ast.Constant) and isinstance(value.value, str)
     )
+
+
+def check_file_raw(root: pathlib.Path, path: str) -> client.CheckFileResponse:
+    tessercheck_service = application.TessercheckService(repositories.FilesystemSourceReader(), repositories.FilesystemSourceWriter(), repositories.FilesystemRulebookSources())
+    return tessercheck_service.check_file(client.CheckFileRequest(tree=str(root), path=path))
+
+
+def governed_paths(root: pathlib.Path) -> tuple[str, ...]:
+    read_sources_response = repositories.FilesystemSourceReader().sources(
+        ports.ReadSourcesRequest(tree=str(root))
+    )
+    return tuple(source.path for source in read_sources_response.sources)
+
+
+def repo_root() -> pathlib.Path:
+    return pathlib.Path(__file__).resolve().parents[3]
+
+
+def example_trees() -> tuple[str, ...]:
+    manifest = json.loads((repo_root() / "manifest.json").read_text(encoding="utf-8"))
+    return tuple(
+        sorted(tree for tree, kind in manifest.items() if kind == "app" and tree.startswith("examples/"))
+    )
+
+
+def fixture_trees() -> tuple[str, ...]:
+    return (
+        "tessercheck-py/testdata/tb031/good_tree",
+        "tessercheck-py/testdata/tb031/bad_tree",
+    )
+
+
+def bounded_rebuilds(paths: tuple[str, ...], must: tuple[str, ...] = (), most: int = 16) -> tuple[str, ...]:
+    stride = max(1, len(paths) // most)
+    chosen = dict.fromkeys(must)
+    for path in paths[::stride]:
+        chosen[path] = None
+    return tuple(chosen)
+
+
+def findings_on(findings: tuple[str, ...], path: str) -> tuple[str, ...]:
+    return tuple(finding for finding in findings if finding.startswith(path + ":"))
+
+
+def inject_findings(root: pathlib.Path) -> tuple[str, ...]:
+    paths = governed_paths(root)
+    module = next(
+        path for path in paths
+        if not path.endswith("__init__.py")
+        and not path.rsplit("/", 1)[-1].startswith("test_")
+        and not path.endswith("conftest.py")
+    )
+    target = root / module
+    target.write_text(target.read_text(encoding="utf-8") + "\n# a comment\nf = lambda x: x\n", encoding="utf-8")
+    sibling = target.parent / ("test_" + target.name)
+    if sibling.exists():
+        sibling.unlink()
+    test_module = next((path for path in paths if path.rsplit("/", 1)[-1].startswith("test_") and path != str(sibling.relative_to(root))), None)
+    touched = [module]
+    if test_module is not None:
+        stray = root / test_module
+        stray.write_text("import os\n" + stray.read_text(encoding="utf-8"), encoding="utf-8")
+        touched.append(test_module)
+    return tuple(touched)

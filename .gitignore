@@ -20,3 +20,8 @@ build/
 # the tesser-py matrix runs three interpreters, so verifying it locally means
 # three environments side by side.
 .venv*/
+
+# Per-machine state the post-write hook writes (tessercheck-cli/README.md):
+# the mode/kill-switch conf, the change log, and per-session guidance records.
+# Never committed: the log carries an actor email and machine-local paths.
+.tesser/

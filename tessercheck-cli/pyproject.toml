@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tessercheck-cli"
-version = "0.1.0"
-description = "Console entry point for the tessercheck analyzer: composes the tessercheck component and runs a check over a tree"
+version = "0.2.0"
+description = "Console entry points for the tessercheck analyzer: a check over a tree, the repairs it carries, and the Claude Code post-write hook"
 requires-python = ">=3.12"
-dependencies = ["tessercheck-py"]
+dependencies = ["tessercheck-py==0.4.0"]
 
 [project.scripts]
 tessercheck-check = "tessercheck_cli.main:main"
 tessercheck-mark = "tessercheck_cli.mark:main"
 tessercheck-rename = "tessercheck_cli.rename:main"
+tessercheck-hook = "tessercheck_cli.hook:main"
 
 [tool.setuptools]
 packages = ["tessercheck_cli"]

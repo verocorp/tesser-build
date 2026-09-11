@@ -6,9 +6,10 @@ the build-side member of the tesser family): the `go/analysis` analyzers in
 `cmd/tessercheck` (composed from `internal/analyzers.All`), a golangci-lint module
 plugin (`gclplugin/`), the Python analyzer (`tessercheck-py/` — the `TB0*`
 checks) and its packaged console entry points (`tessercheck-cli/` — the
-`tessercheck-check`, `tessercheck-rename` and `tessercheck-mark` commands, so a
-consumer repo can run the analyzer, and the repairs it carries, from an
-install instead of a checkout), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
+`tessercheck-check`, `tessercheck-rename`, `tessercheck-mark` and
+`tessercheck-hook` commands, so a consumer repo can run the analyzer, the
+repairs it carries, and the post-write hook that puts it in an agent's loop,
+from an install instead of a checkout), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
 the repo's first shipped runtime dependency rather than a build-time checker;
 candidate mutation-testable VO base — the mutmut-visibility claim is asserted
 by the ecosystem test in `tesser-py/tests/ecosystem/mutmut/`), an executable

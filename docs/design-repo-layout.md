@@ -91,7 +91,8 @@ when someone has a real performance problem):
 `tessercheck-cli` is the one `ungated` row that holds production Python, and
 it is worth saying why rather than leaving it to look like an oversight. It is
 the console entry point for the analyzer — the `tessercheck-check`,
-`tessercheck-rename` and `tessercheck-mark` commands a consumer repo installs.
+`tessercheck-rename`, `tessercheck-mark` and `tessercheck-hook` commands a
+consumer repo installs.
 It cannot be part of `tessercheck-py`, because the
 analyzer's own host is `srv/cli/main.py` and it imports `app.loader` and
 `protocol.cli`: TB040 mandates those names, every tesser app has its own set,
@@ -114,7 +115,15 @@ and `tessercheck-rename` against a tree holding a repairable local — checking
 the file came back rewritten, not merely that the command started. It runs
 `tessercheck-mark` the same way, against a tree holding a markable finding,
 and then re-runs `tessercheck-check` on what it marked: a marker that
-suppressed nothing would satisfy the first assertion and fail the second.
+suppressed nothing would satisfy the first assertion and fail the second. It
+drives the installed `tessercheck-hook` the way Claude Code drives it — a
+`PostToolUse` event on stdin, through advisory and feedback modes, a disabled
+conf, a skipped and an undeclared tree, a non-Python write, a timeout and a
+broken worker, the guidance events it records, and the session files it prunes
+— and type-checks the shipped entry points under `mypy --strict`, because the
+hook is the one shipped module that runs on a developer's machine. It also
+installs the CLI wheel alone against a stale analyzer, which the distributions'
+exact pins must refuse.
 
 Earlier drafts had eleven kinds; nine were labels that nothing read, so they
 could rot without anything noticing. And a word in a file can be typo'd, so

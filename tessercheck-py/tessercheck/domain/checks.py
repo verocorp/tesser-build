@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import bisect
 import builtins
+import enum
 import io
 import re
 import tokenize
@@ -2103,33 +2104,30 @@ class Alias(ts.ValueObject):
         return self._package
 
 
-class ReexportSpec(ts.Spec):
+class ReexportTableSpec(ts.Spec):
 
-    def __init__(self, package: str, exported: str, defining: str, original: str) -> None:
-        self.package = package
-        self.exported = exported
-        self.defining = defining
-        self.original = original
+    def __init__(self, reexports: tuple[tuple[str, str, str, str], ...]) -> None:
+        self.reexports = reexports
 
 
-class Reexport(ts.ValueObject):
+class ReexportTable(ts.ValueObject):
 
-    _package: Text
-    _exported: Text
-    _defining: Text
-    _original: Text
+    _rows: tuple[tuple[tuple[str, str], int, tuple[str, str]], ...]
 
-    def __init__(self, spec: ReexportSpec) -> None:
-        object.__setattr__(self, "_package", Text(spec.package))
-        object.__setattr__(self, "_exported", Text(spec.exported))
-        object.__setattr__(self, "_defining", Text(spec.defining))
-        object.__setattr__(self, "_original", Text(spec.original))
+    def __init__(self, spec: ReexportTableSpec) -> None:
+        object.__setattr__(self, "_rows", tuple(sorted(
+            ((package, exported), position, (defining, original))
+            for position, (package, exported, defining, original) in enumerate(spec.reexports)
+        )))
 
-    def exports(self) -> Symbol:
-        return Symbol(SymbolSpec(str(self._package), str(self._exported)))
-
-    def defines(self) -> Symbol:
-        return Symbol(SymbolSpec(str(self._defining), str(self._original)))
+    def canonical(self, symbol: Symbol) -> Symbol:
+        key = (str(symbol.module()), str(symbol.name()))
+        for _ in self._rows:
+            at = bisect.bisect_left(self._rows, (key,))
+            if at == len(self._rows) or self._rows[at][0] != key:
+                break
+            key = self._rows[at][2]
+        return Symbol(SymbolSpec(key[0], key[1]))
 
 
 class ScopeSpec(ts.Spec):
@@ -2164,7 +2162,7 @@ class Scope(ts.ValueObject):
     _functions: Names
     _spoken: Text | None
     _enums: Names
-    _reexports: tuple[Reexport, ...]
+    _table: ReexportTable
 
     def __init__(self, spec: ScopeSpec) -> None:
         object.__setattr__(self, "_module", Text(spec.module))
@@ -2174,10 +2172,7 @@ class Scope(ts.ValueObject):
         object.__setattr__(self, "_functions", Names(spec.functions))
         object.__setattr__(self, "_spoken", Text(spec.spoken) if spec.spoken else None)
         object.__setattr__(self, "_enums", Names(spec.enums))
-        object.__setattr__(self, "_reexports", tuple(
-            Reexport(ReexportSpec(package, exported, defining, original))
-            for package, exported, defining, original in spec.reexports
-        ))
+        object.__setattr__(self, "_table", ReexportTable(ReexportTableSpec(spec.reexports)))
 
     def enums(self) -> Names:
         return self._enums
@@ -2224,17 +2219,7 @@ class Scope(ts.ValueObject):
                 found = (str(self._module), wanted)
         if found is None:
             return None
-        symbol = Symbol(SymbolSpec(found[0], found[1]))
-        for _ in self._reexports:
-            hop: Symbol | None = None
-            for reexport in self._reexports:
-                if reexport.exports() == symbol:
-                    hop = reexport.defines()
-                    break
-            if hop is None:
-                break
-            symbol = hop
-        return symbol
+        return self._table.canonical(Symbol(SymbolSpec(found[0], found[1])))
 
     def symbols(self, annotation: Annotation) -> Symbols:
         found: list[tuple[str, str]] = []
@@ -2250,21 +2235,12 @@ class Scope(ts.ValueObject):
                     found.append((str(binding.target()), str(binding.original())))
             if ref in self._classes:
                 found.append((str(self._module), ref))
-        canonical: list[Symbol] = []
-        for module_name, name in found:
-            symbol = Symbol(SymbolSpec(module_name, name))
-            for _ in self._reexports:
-                hop: Symbol | None = None
-                for reexport in self._reexports:
-                    if reexport.exports() == symbol:
-                        hop = reexport.defines()
-                        break
-                if hop is None:
-                    break
-                symbol = hop
-            canonical.append(symbol)
         return Symbols(SymbolsSpec(tuple(
-            SymbolSpec(str(item.module()), str(item.name())) for item in canonical
+            SymbolSpec(str(item.module()), str(item.name()))
+            for item in (
+                self._table.canonical(Symbol(SymbolSpec(module_name, name)))
+                for module_name, name in found
+            )
         )))
 
 
@@ -11492,6 +11468,8 @@ class CodebaseSpec(ts.Spec):
         imports: tuple[str, ...] = (),
         stdlib: tuple[str, ...] = (),
         pure_stdlib: tuple[str, ...] = (),
+        pruned: tuple[str, ...] = (),
+        scoped: tuple[str, ...] = (),
     ) -> None:
         self.sources = sources
         self.declared = declared
@@ -11501,16 +11479,129 @@ class CodebaseSpec(ts.Spec):
         self.imports = imports
         self.stdlib = stdlib
         self.pure_stdlib = pure_stdlib
+        self.pruned = pruned
+        self.scoped = scoped
+
+
+class Governance(ts.Outcome):
+    GOVERNED = enum.auto()
+    SKIPPED = enum.auto()
+    OUTSIDE = enum.auto()
+    UNDECLARED = enum.auto()
+
+
+GOVERNANCE_GOVERNED: typing.Final[str] = "governed"
+
+GOVERNANCE_SKIPPED: typing.Final[str] = "skipped"
+
+GOVERNANCE_OUTSIDE: typing.Final[str] = "outside"
+
+GOVERNANCE_UNDECLARED: typing.Final[str] = "undeclared"
+
+
+class Count(ts.ValueObject):
+
+    _value: int
+
+    def __init__(self, value: int) -> None:
+        if value < 0:
+            raise ValueError("count must not be negative")
+        object.__setattr__(self, "_value", value)
+
+    def __int__(self) -> int:
+        return serialization.canonical_int(self._value)
+
+
+HOOK_ADVISORY: typing.Final[str] = "advisory"
+
+HOOK_FEEDBACK: typing.Final[str] = "feedback"
+
+HOOK_DISABLED: typing.Final[str] = "disabled"
+
+
+class HookConf(ts.ValueObject):
+
+    _mode: str
+
+    def __init__(self, text: str) -> None:
+        mode = HOOK_ADVISORY
+        enabled = True
+        for line in text.splitlines():
+            key, _, value = line.strip().partition("=")
+            key = key.strip()
+            value = value.strip()
+            if key == "mode" and value in (HOOK_ADVISORY, HOOK_FEEDBACK):
+                mode = value
+            elif key == "enabled" and value in ("true", "false"):
+                enabled = value == "true"
+        object.__setattr__(self, "_mode", mode if enabled else HOOK_DISABLED)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._mode)
+
+
+class HookAction(ts.Outcome):
+    DISABLED = enum.auto()
+    SILENT = enum.auto()
+    ADVISE = enum.auto()
+    FEEDBACK = enum.auto()
+
+
+class HookRunSpec(ts.Spec):
+
+    def __init__(self, conf: str, governance: str, findings: int) -> None:
+        self.conf = conf
+        self.governance = governance
+        self.findings = findings
+
+
+class HookRun(ts.ValueObject):
+
+    _conf: HookConf
+    _governance: Text
+    _findings: Count
+
+    def __init__(self, spec: HookRunSpec) -> None:
+        if spec.governance not in (
+            GOVERNANCE_GOVERNED,
+            GOVERNANCE_SKIPPED,
+            GOVERNANCE_OUTSIDE,
+            GOVERNANCE_UNDECLARED,
+        ):
+            raise ValueError(f"unknown governance {spec.governance!r}")
+        object.__setattr__(self, "_conf", HookConf(spec.conf))
+        object.__setattr__(self, "_governance", Text(spec.governance))
+        object.__setattr__(self, "_findings", Count(spec.findings))
+
+    def conf(self) -> HookConf:
+        return self._conf
+
+    def action(self) -> HookAction:
+        if str(self._conf) == HOOK_DISABLED:
+            return HookAction.DISABLED
+        if str(self._governance) == GOVERNANCE_UNDECLARED:
+            return HookAction.ADVISE
+        if str(self._governance) != GOVERNANCE_GOVERNED:
+            return HookAction.SILENT
+        if int(self._findings) == 0:
+            return HookAction.SILENT
+        if str(self._conf) == HOOK_FEEDBACK:
+            return HookAction.FEEDBACK
+        return HookAction.ADVISE
 
 
 class Codebase(ts.AggregateRoot):
 
     def __init__(self, spec: CodebaseSpec) -> None:
+        self._pruned = spec.pruned
+        self._scoped = spec.scoped
+        self._source_paths = frozenset(path for path, _, _, _ in spec.sources)
         broken: list[Violation] = []
         paths_by_name: dict[str, list[str]] = {}
         for path, name, _, _ in spec.sources:
             paths_by_name.setdefault(name, []).append(path)
         parsed: list[tuple[str, str, str, bool]] = []
+        parsed_trees: dict[str, ast.Module] = {}
         for path, name, source, is_package in spec.sources:
             if path.endswith(STUB_SUFFIX):
                 broken.append(
@@ -11546,7 +11637,7 @@ class Codebase(ts.AggregateRoot):
                 )
                 continue
             try:
-                ast.parse(source)
+                parsed_trees[path] = ast.parse(source)
             except SyntaxError as error:
                 broken.append(
                     Violation(ViolationSpec(
@@ -11576,7 +11667,7 @@ class Codebase(ts.AggregateRoot):
             if export == TESSER and name.split(".")[0] == TESSER:
                 continue
             context_kernel = place == "context-kernel-init"
-            for stmt in ast.parse(source).body:
+            for stmt in parsed_trees[path].body:
                 if not isinstance(stmt, ast.ImportFrom) or stmt.level or stmt.module is None:
                     continue
                 from_root_kernel = context_kernel and stmt.module.split(".")[0] in kernel_tops
@@ -11619,13 +11710,32 @@ class Codebase(ts.AggregateRoot):
         self._mapper_target: dict[tuple[str, str], tuple[str, str]] = {}
         self._outcome_methods: frozenset[tuple[str, str, str]] = frozenset()
 
+    def governance(self, path: Path) -> Governance:
+        if self._tree.violations():
+            return Governance.UNDECLARED
+        wanted = str(path)
+        if wanted in self._source_paths:
+            return Governance.GOVERNED
+        for pruned in self._pruned:
+            if wanted == pruned or wanted.startswith(pruned + "/"):
+                return Governance.SKIPPED
+        return Governance.OUTSIDE
+
     def violations(self) -> tuple[Violation, ...]:
         declaration = self._tree.violations()
         if declaration:
             return declaration
         self._used_imports = set()
         self._used_pure_stdlib = set()
-        found = list(self._broken)
+        whole = not self._scoped
+        scoped = tuple(
+            module for module in self._modules if whole or module.path() in self._scoped
+        )
+        found = [
+            violation
+            for violation in self._broken
+            if whole or str(violation.path()) in self._scoped
+        ]
         blocks = dict(TESSER_BASE_BLOCKS)
         relayed = frozenset(
             module.name()
@@ -11885,7 +11995,7 @@ class Codebase(ts.AggregateRoot):
                 for shared_module, shared_class, line, shared_spec, shared_owner in self._spec_shared
             ),
         )
-        for module in self._modules:
+        for module in scoped:
             found.extend(module.annotation_violations())
             found.extend(module.type_name_violations())
             found.extend(module.function_placement_violations())
@@ -12201,28 +12311,29 @@ class Codebase(ts.AggregateRoot):
                         if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
                             continue
                         found.extend(APP_CLIENT_METHOD.violations(signature))
-        for module in self._modules:
+        for module in scoped:
             found.extend(module.pairing_violations(registry))
-        for module in self._modules:
-            place = str(module.place())
-            shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
-            if place in (
-                "role",
-                "orchestrators",
-                "orchestrators-file",
-                "relays",
-                "relays-file",
-                "snapshots",
-                "snapshots-file",
-                "kernel",
-                "context-kernel",
-            ) and not shell:
-                for name in module.declared_uses(registry):
-                    if name in self._imports:
-                        self._used_imports.add(name)
-                    else:
-                        self._used_pure_stdlib.add(name)
-        found.extend(self._tree.unused_violations(Names(tuple(self._used_imports | self._used_pure_stdlib))))
+        if whole:
+            for module in self._modules:
+                place = str(module.place())
+                shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
+                if place in (
+                    "role",
+                    "orchestrators",
+                    "orchestrators-file",
+                    "relays",
+                    "relays-file",
+                    "snapshots",
+                    "snapshots-file",
+                    "kernel",
+                    "context-kernel",
+                ) and not shell:
+                    for name in module.declared_uses(registry):
+                        if name in self._imports:
+                            self._used_imports.add(name)
+                        else:
+                            self._used_pure_stdlib.add(name)
+            found.extend(self._tree.unused_violations(Names(tuple(self._used_imports | self._used_pure_stdlib))))
         kept: list[Violation] = []
         used: set[tuple[str, Line]] = set()
         by_path = {module.path(): module for module in self._modules}
@@ -12245,7 +12356,7 @@ class Codebase(ts.AggregateRoot):
                     continue
             kept.append(violation)
         kept = list(dict.fromkeys(kept))
-        for module in self._modules:
+        for module in scoped:
             for debt in module.debts():
                 if (module.path(), debt._line) not in used:
                     kept.append(

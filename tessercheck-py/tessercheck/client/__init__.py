@@ -1,6 +1,10 @@
 from tessercheck.client.client import ERRORS as ERRORS
+from tessercheck.client.client import CheckFileRequest as CheckFileRequest
+from tessercheck.client.client import CheckFileResponse as CheckFileResponse
 from tessercheck.client.client import CheckRequest as CheckRequest
 from tessercheck.client.client import CheckResponse as CheckResponse
+from tessercheck.client.client import HookRequest as HookRequest
+from tessercheck.client.client import HookResponse as HookResponse
 from tessercheck.client.client import MarkRequest as MarkRequest
 from tessercheck.client.client import MarkResponse as MarkResponse
 from tessercheck.client.client import Rejected as Rejected
