@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
 import ordering.adapters.gateways as gateways
 import ordering.application.ports as ports
-import tesser.errors as errors
 
 
 class TestMemoryPaymentProcessor:
@@ -23,13 +20,12 @@ class TestMemoryPaymentProcessor:
         again = memory_payment_processor.charge(ports.ChargeRequest(order_id="o1", cents=750))
         assert again == first
 
-    def test_a_repeat_for_another_amount_is_a_conflict(self) -> None:
+    def test_a_repeat_for_another_amount_answers_the_original_receipt_unchanged(self) -> None:
         memory_payment_processor = gateways.MemoryPaymentProcessor()
-        memory_payment_processor.charge(ports.ChargeRequest(order_id="o1", cents=750))
-        with pytest.raises(errors.DomainError) as excinfo:
-            memory_payment_processor.charge(ports.ChargeRequest(order_id="o1", cents=700))
-        assert excinfo.value.kind is errors.Kind.CONFLICT
-        assert excinfo.value.code == "payment_already_taken"
+        first = memory_payment_processor.charge(ports.ChargeRequest(order_id="o1", cents=750))
+        again = memory_payment_processor.charge(ports.ChargeRequest(order_id="o1", cents=700))
+        assert again == first
+        assert again.cents == 750
 
     def test_a_closed_processor_forgets_what_it_charged(self) -> None:
         memory_payment_processor = gateways.MemoryPaymentProcessor()
