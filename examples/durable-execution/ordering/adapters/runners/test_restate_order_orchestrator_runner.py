@@ -10,7 +10,7 @@ import pytest
 import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
-import ordering.application.ports as ports
+import ordering.application.ports as ports  # tesser:debt TB070
 import ordering.application.relays as relays
 import ordering.domain as domain
 

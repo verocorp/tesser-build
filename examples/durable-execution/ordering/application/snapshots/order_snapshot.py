@@ -20,7 +20,7 @@ class OrderSnapshot(ts.Serde):
             }
         ).encode()
 
-    def deserialize(self, buf: bytes) -> domain.Order:
+    def deserialize(self, buf: bytes) -> domain.Order:  # tesser:debt TB081
         snapshot = json.loads(buf)
         if not (
             isinstance(snapshot, dict)
@@ -29,8 +29,8 @@ class OrderSnapshot(ts.Serde):
             and isinstance(snapshot.get("quantity"), int)
             and not isinstance(snapshot.get("quantity"), bool)
         ):
-            raise ports.EngineRejected("an order snapshot is order_id, sku, and quantity")
-        try:
+            raise ports.EngineRejected("an order snapshot is order_id, sku, and quantity")  # tesser:debt TB082
+        try:  # tesser:debt TB082
             return domain.Order(
                 domain.OrderSpec(
                     order_id=snapshot["order_id"],
@@ -39,4 +39,4 @@ class OrderSnapshot(ts.Serde):
                 )
             )
         except errors.DomainError as domain_error:
-            raise ports.EngineRejected(domain_error.message) from domain_error
+            raise ports.EngineRejected(domain_error.message) from domain_error  # tesser:debt TB082

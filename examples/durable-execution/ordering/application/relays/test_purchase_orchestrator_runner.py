@@ -4,7 +4,7 @@ import pytest
 
 import ordering.application.relays as relays
 import ordering.domain as domain
-import ordering.application.ports as ports
+import ordering.application.ports as ports  # tesser:debt TB070
 
 
 class TestPurchaseOrchestratorRequestSnapshot:

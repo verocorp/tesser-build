@@ -56,7 +56,7 @@ class PurchaseOrchestratorResponseSnapshot(ts.Serde):
             and isinstance(snapshot.get("payment_reference"), str)
             and snapshot["payment_reference"]
         ):
-            raise ports.EngineRejected(
+            raise ports.EngineRejected(  # tesser:debt TB082
                 "a purchase orchestrator response is an order_id, a total in cents, "
                 "and a payment reference"
             )

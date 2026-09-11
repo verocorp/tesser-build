@@ -26,7 +26,7 @@ class PriceProductRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("sku"), str)
             and snapshot["sku"]
         ):
-            raise ports.EngineRejected("a price product request is a sku")
+            raise ports.EngineRejected("a price product request is a sku")  # tesser:debt TB082
         return PriceProductRequest(sku=snapshot["sku"])
 
 
@@ -49,7 +49,7 @@ class PriceProductResponseSnapshot(ts.Serde):
             and not isinstance(snapshot.get("cents"), bool)
             and snapshot["cents"] >= 0
         ):
-            raise ports.EngineRejected("a price product response is a price in cents")
+            raise ports.EngineRejected("a price product response is a price in cents")  # tesser:debt TB082
         return PriceProductResponse(cents=snapshot["cents"])
 
 

@@ -10,7 +10,7 @@ import restate
 import restate.client
 
 import ordering.adapters.runtimes as runtimes
-import ordering.application.ports as ports
+import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
 
 _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)

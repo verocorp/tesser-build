@@ -4,7 +4,7 @@ import tesser.adapters as ts
 import restate
 
 import ordering.adapters.runtimes as runtimes
-import ordering.application.ports as ports
+import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
 
 

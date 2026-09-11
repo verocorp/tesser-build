@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import ordering.application.relays as relays
-import ordering.application.ports as ports
+import ordering.application.ports as ports  # tesser:debt TB070
 
 
 class TestTakePaymentRequestSnapshot:

@@ -11,7 +11,7 @@ import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
-import ordering.application.ports as ports
+import ordering.application.ports as ports  # tesser:debt TB070
 
 
 @ts.fake

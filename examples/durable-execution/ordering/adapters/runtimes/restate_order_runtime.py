@@ -7,7 +7,7 @@ import restate.serde
 import ordering.adapters.runners as runners
 import ordering.application.client as client
 import ordering.application.orchestrators as orchestrators
-import ordering.application.ports as ports
+import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
 
 

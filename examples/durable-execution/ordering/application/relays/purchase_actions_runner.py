@@ -32,7 +32,7 @@ class TakePaymentRequestSnapshot(ts.Serde):
             and not isinstance(snapshot.get("cents"), bool)
             and snapshot["cents"] >= 0
         ):
-            raise ports.EngineRejected(
+            raise ports.EngineRejected(  # tesser:debt TB082
                 "a take payment request is an order_id and an amount in cents"
             )
         return TakePaymentRequest(order_id=snapshot["order_id"], cents=snapshot["cents"])
@@ -69,7 +69,7 @@ class TakePaymentResponseSnapshot(ts.Serde):
             and not isinstance(snapshot.get("cents"), bool)
             and snapshot["cents"] >= 0
         ):
-            raise ports.EngineRejected(
+            raise ports.EngineRejected(  # tesser:debt TB082
                 "a take payment response is the order_id, a reference, "
                 "and the amount charged in cents"
             )

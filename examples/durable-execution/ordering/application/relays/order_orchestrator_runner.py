@@ -58,7 +58,7 @@ class OrderOrchestratorResponseSnapshot(ts.Serde):
             and not isinstance(snapshot.get("total_cents"), bool)
             and snapshot["total_cents"] >= 0
         ):
-            raise ports.EngineRejected(
+            raise ports.EngineRejected(  # tesser:debt TB082
                 "an order orchestrator response is an order_id and a total in cents"
             )
         return OrderOrchestratorResponse(
