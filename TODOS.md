@@ -1005,21 +1005,30 @@ where it lands.
   two translations, not four: the service translates a domain raise into
   the context's error (`except errors.DomainError` whose only statement
   raises `client.Rejected` from it — the one legal `try` in a service;
-  transition refusals raise the context's error from their `match` arm), a
-  port failure is declared on the port and passes through the service
-  untouched, and the handler translates the context's error into the
-  transport. Migrated: `examples/minimal` and `tessercheck-py` (its four
-  hosts lost their `DomainError`/`InfraError` arms). Registered as
-  `# tesser:debt TB050` on the `import tesser.errors` line of every adapters
-  and srv module still on the old table: asyncpg 2, durable-execution 8,
-  errorspy 2, python-app 6 — that list is the remaining migration. Still to
-  do in this step: port-declared errors (`class StoreUnavailable(ts.Error)`
-  in the port module, the adapter raising it, the fake total over the same
-  set — the asyncpg finding that no adapter raises `InfraError` is this),
-  the Restate runtime/runner round trip in application types, and the
-  per-endpoint `try`/`match` in a handler with many endpoints (tessercheck's
-  has four identical copies; a handler-declared table the host applies
-  generically is the shape that removes them, not ruled).
+  transition refusals raise the context's error from their `match` arm),
+  and the handler translates the context's error into the transport. A
+  port error is declared on the port (`class StoreUnavailable(ts.Error)`
+  in the port module), the adapter raises it, fake and real alike, and
+  the service translates it by the same one-arm rule (`except
+  ports.StoreUnavailable` whose only statement raises
+  `client.Unavailable` from it). **Chris, 2026-09-11: an application
+  service only ever raises client-defined errors; it never passes a port
+  error through.** Across contexts the chain stays total: a gateway
+  translates a peer's `client.Unavailable` into the port error its own
+  context declares, and a peer's `Rejected` is the caller's bug, left for
+  the backstop. Migrated: every gated tree — `examples/minimal`,
+  `tessercheck-py`, errorspy, python-app, asyncpg, durable-execution — and
+  no adapters or srv module imports `tesser.errors` anywhere. Still open
+  from this step: a ports module may hold only imports and classes
+  (TB051/TB069), so port errors are caught by class name with no `ERRORS`
+  tuple to register against; `durable-execution/ordering/application/ports/engine.py`
+  holds only errors and carries a file-scope `# tesser:debt TB052`; an
+  *action* lets the payment port's `ChargeDeclined` reach the runtime
+  untranslated (a port-to-port hop inside the engine, not a service
+  crossing a `Client` — not ruled); and the per-endpoint `try`/`match` in
+  a handler with many endpoints (tessercheck's has four identical copies;
+  a handler-declared table the host applies generically is the shape that
+  removes them, not ruled).
 - [ ] **The wording of a public error belongs to the application, not the
   handler.** Chris, 2026-09-06, reading #172. `Handler.submit_order` in
   `examples/durable-execution` reads the body one field at a time

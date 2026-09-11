@@ -200,9 +200,15 @@ client.Rejected(domain_error.code, domain_error.message) from domain_error`.
 That is how a domain rejection becomes the context's error before it crosses
 the `Client` (`handlers.md` rule 7); a transition refusal never needs it,
 because its `match` arm raises the context's error directly. A port's
-failure is not caught at all: the port declares it (`class StoreUnavailable(ts.Error)`
-in the port module), the adapter raises it, and it passes through the
-service untouched, because the service has nothing to decide about it.
+error takes the same shape: the port declares it (`class StoreUnavailable(ts.Error)`
+in the port module), the adapter raises it, and the service catches it
+around the port call — `except ports.StoreUnavailable as store_error:`
+whose only statement raises `client.Unavailable(...)` from it. A service
+only ever raises errors its own `client/` declares; nothing declared in
+`ports/` leaves the service, and nothing from a peer context does either
+(a gateway translates a peer's `client.Unavailable` into the port error
+its own context declares, and a peer's `Rejected` is the caller's bug,
+left for the host's backstop).
 Each puts a rule in the service that a domain object should own; none is
 mechanically distinguishable today from a legitimate lookup, so a reviewer
 reads them rather than a checker. What no check judges is whether the body *coordinates* or *decides*
