@@ -6,8 +6,8 @@ import typing
 import tesser.application as ts
 
 import ordering.application.snapshots as snapshots
+import ordering.application.ports as ports
 import ordering.domain as domain
-import tesser.errors as errors
 
 
 class PurchaseOrchestratorRequest(ts.Request):
@@ -56,9 +56,9 @@ class PurchaseOrchestratorResponseSnapshot(ts.Serde):
             and isinstance(snapshot.get("payment_reference"), str)
             and snapshot["payment_reference"]
         ):
-            raise errors.invalid(
-                "malformed_purchase_orchestrator_response_snapshot",
-                "a purchase orchestrator response is an order_id, a total in cents, and a payment reference",
+            raise ports.EngineRejected(
+                "a purchase orchestrator response is an order_id, a total in cents, "
+                "and a payment reference"
             )
         return PurchaseOrchestratorResponse(
             order_id=snapshot["order_id"],

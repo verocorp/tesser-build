@@ -5,7 +5,7 @@ import typing
 
 import tesser.application as ts
 
-import tesser.errors as errors
+import ordering.application.ports as ports
 
 
 class PriceProductRequest(ts.Request):
@@ -26,9 +26,7 @@ class PriceProductRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("sku"), str)
             and snapshot["sku"]
         ):
-            raise errors.invalid(
-                "malformed_price_product_request_snapshot", "a price product request is a sku"
-            )
+            raise ports.EngineRejected("a price product request is a sku")
         return PriceProductRequest(sku=snapshot["sku"])
 
 
@@ -51,10 +49,7 @@ class PriceProductResponseSnapshot(ts.Serde):
             and not isinstance(snapshot.get("cents"), bool)
             and snapshot["cents"] >= 0
         ):
-            raise errors.invalid(
-                "malformed_price_product_response_snapshot",
-                "a price product response is a price in cents",
-            )
+            raise ports.EngineRejected("a price product response is a price in cents")
         return PriceProductResponse(cents=snapshot["cents"])
 
 

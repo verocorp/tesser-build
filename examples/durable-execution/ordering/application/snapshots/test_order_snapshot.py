@@ -4,7 +4,7 @@ import pytest
 
 import ordering.application.snapshots as snapshots
 import ordering.domain as domain
-import tesser.errors as errors
+import ordering.application.ports as ports
 
 
 class TestOrderSnapshot:
@@ -22,7 +22,7 @@ class TestOrderSnapshot:
         assert back.quantity == domain.Quantity(3)
 
     def test_a_snapshot_that_breaks_an_invariant_is_refused_on_the_way_in(self) -> None:
-        with pytest.raises(errors.DomainError):
+        with pytest.raises(ports.EngineRejected):
             snapshots.OrderSnapshot().deserialize(b'{"order_id": "o1", "sku": "widget", "quantity": 0}')
 
     def test_a_snapshot_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
@@ -33,6 +33,5 @@ class TestOrderSnapshot:
             b'{"order_id": "o1", "sku": "widget"}',
             b'["o1", "widget", 2]',
         ):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected):
                 snapshots.OrderSnapshot().deserialize(raw)
-            assert excinfo.value.kind is errors.Kind.VALIDATION

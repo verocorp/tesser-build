@@ -3,7 +3,9 @@ from __future__ import annotations
 import tesser.application as ts
 
 import ordering.application.relays as relays
+import ordering.application.ports as ports
 import ordering.domain as domain
+import tesser.errors as errors
 
 
 class MapToPriceProductRequest(ts.Mapper, relays.PriceProductRequest):
@@ -36,5 +38,8 @@ class OrderOrchestrator(ts.Orchestrator):
         price_product_response = await self._order_actions_runner.run_price_product(
             MapToPriceProductRequest(order)
         )
-        price = order.total(MapToPriceSpec(price_product_response))
+        try:
+            price = order.total(MapToPriceSpec(price_product_response))
+        except errors.DomainError as domain_error:
+            raise ports.EngineRejected(domain_error.message) from domain_error
         return MapToOrderOrchestratorResponse(order, price)

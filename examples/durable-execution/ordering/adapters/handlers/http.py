@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import typing
 
 import tesser.adapters as ts
 
@@ -14,25 +15,51 @@ class Handler(ts.Handler):
         self._ordering_client = ordering_client
 
     async def submit_order(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
-        submit_order_response = await self._ordering_client.submit_order(
-            client.SubmitOrderRequest(
-                order_id=http_request.text("order_id"),
-                sku=http_request.text("sku"),
-                quantity=http_request.integer("quantity"),
+        try:
+            submit_order_response = await self._ordering_client.submit_order(
+                client.SubmitOrderRequest(
+                    order_id=http_request.text("order_id"),
+                    sku=http_request.text("sku"),
+                    quantity=http_request.integer("quantity"),
+                )
             )
-        )
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.Missing():
+                    return protocol.HttpResponse.problem(404, error.message)
+                case client.Conflict():
+                    return protocol.HttpResponse.problem(409, error.message)
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable")
+                case _ as never:
+                    typing.assert_never(never)
         return protocol.HttpResponse(
             status_code=202, body=json.dumps({"order_id": submit_order_response.order_id}).encode()
         )
 
     async def place_order(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
-        place_order_response = await self._ordering_client.place_order(
-            client.PlaceOrderRequest(
-                order_id=http_request.text("order_id"),
-                sku=http_request.text("sku"),
-                quantity=http_request.integer("quantity"),
+        try:
+            place_order_response = await self._ordering_client.place_order(
+                client.PlaceOrderRequest(
+                    order_id=http_request.text("order_id"),
+                    sku=http_request.text("sku"),
+                    quantity=http_request.integer("quantity"),
+                )
             )
-        )
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.Missing():
+                    return protocol.HttpResponse.problem(404, error.message)
+                case client.Conflict():
+                    return protocol.HttpResponse.problem(409, error.message)
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable")
+                case _ as never:
+                    typing.assert_never(never)
         return protocol.HttpResponse(
             status_code=200,
             body=json.dumps(
@@ -44,13 +71,26 @@ class Handler(ts.Handler):
         )
 
     async def purchase(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
-        purchase_response = await self._ordering_client.purchase(
-            client.PurchaseRequest(
-                order_id=http_request.text("order_id"),
-                sku=http_request.text("sku"),
-                quantity=http_request.integer("quantity"),
+        try:
+            purchase_response = await self._ordering_client.purchase(
+                client.PurchaseRequest(
+                    order_id=http_request.text("order_id"),
+                    sku=http_request.text("sku"),
+                    quantity=http_request.integer("quantity"),
+                )
             )
-        )
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.Missing():
+                    return protocol.HttpResponse.problem(404, error.message)
+                case client.Conflict():
+                    return protocol.HttpResponse.problem(409, error.message)
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable")
+                case _ as never:
+                    typing.assert_never(never)
         return protocol.HttpResponse(
             status_code=200,
             body=json.dumps(

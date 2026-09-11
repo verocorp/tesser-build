@@ -10,9 +10,9 @@ import pytest
 import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
+import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -105,22 +105,22 @@ class TestRestatePurchaseOrchestratorRunner:
             purchase_orchestrator_request()
         )
 
-    def test_a_workflow_that_ended_terminally_answers_with_the_domains_own_kind(self) -> None:
-        for status_line, answer, kind in (
+    def test_a_workflow_that_ended_terminally_answers_with_the_engines_own_error(self) -> None:
+        for status_line, answer, engine_error in (
             (
                 b"HTTP/1.1 409 Conflict",
                 b'{"code":409,"message":"the workflow method was already invoked"}',
-                errors.Kind.CONFLICT,
+                ports.EngineConflict,
             ),
             (
                 b"HTTP/1.1 404 Not Found",
                 b'{"code":404,"message":"no price for sku \'nope\'"}',
-                errors.Kind.NOT_FOUND,
+                ports.EngineMissing,
             ),
             (
                 b"HTTP/1.1 422 Unprocessable Entity",
                 b'{"code":422,"message":"an order is for at least one unit"}',
-                errors.Kind.VALIDATION,
+                ports.EngineRejected,
             ),
         ):
             listener = socket.socket()
@@ -144,7 +144,7 @@ class TestRestatePurchaseOrchestratorRunner:
             thread = threading.Thread(target=ingress)
             thread.start()
             try:
-                with pytest.raises(errors.DomainError) as excinfo:
+                with pytest.raises(engine_error) as excinfo:
                     asyncio.run(
                         runners.RestatePurchaseOrchestratorRunner(
                             f"http://127.0.0.1:{port}",
@@ -157,9 +157,7 @@ class TestRestatePurchaseOrchestratorRunner:
                 thread.join(5)
                 listener.close()
 
-            assert excinfo.value.kind is kind
-            assert excinfo.value.code == "purchase_rejected"
-            assert excinfo.value.message.encode() in answer
+            assert str(excinfo.value).encode() in answer
 
     def test_a_refusal_that_is_not_the_workflows_is_an_infra_error(self) -> None:
         for status_line, answer in (
@@ -188,7 +186,7 @@ class TestRestatePurchaseOrchestratorRunner:
             thread = threading.Thread(target=ingress)
             thread.start()
             try:
-                with pytest.raises(errors.InfraError):
+                with pytest.raises(ports.EngineUnavailable):
                     asyncio.run(
                         runners.RestatePurchaseOrchestratorRunner(
                             f"http://127.0.0.1:{port}",
@@ -228,7 +226,7 @@ class TestRestatePurchaseOrchestratorRunner:
             thread = threading.Thread(target=ingress)
             thread.start()
             try:
-                with pytest.raises(errors.InfraError):
+                with pytest.raises(ports.EngineUnavailable):
                     asyncio.run(
                         runners.RestatePurchaseOrchestratorRunner(
                             f"http://127.0.0.1:{port}",
@@ -246,7 +244,7 @@ class TestRestatePurchaseOrchestratorRunner:
             closed.bind(("127.0.0.1", 0))
             port = closed.getsockname()[1]
 
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.EngineUnavailable):
             asyncio.run(
                 runners.RestatePurchaseOrchestratorRunner(
                     f"http://127.0.0.1:{port}",
@@ -324,7 +322,7 @@ class TestRestatePurchaseOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.InfraError):
+            with pytest.raises(ports.EngineUnavailable):
                 asyncio.run(
                     runners.RestatePurchaseOrchestratorRunner(
                         f"http://127.0.0.1:{port}",

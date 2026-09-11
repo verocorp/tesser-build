@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import ordering.application.relays as relays
-import tesser.errors as errors
+import ordering.application.ports as ports
 
 
 class TestTakePaymentRequestSnapshot:
@@ -31,9 +31,8 @@ class TestTakePaymentRequestSnapshot:
             b'{"order_id": "", "cents": 750}',
             b'["o1", 750]',
         ):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected):
                 relays.TakePaymentRequestSnapshot().deserialize(raw)
-            assert excinfo.value.kind is errors.Kind.VALIDATION
 
 
 class TestTakePaymentResponseSnapshot:
@@ -64,6 +63,5 @@ class TestTakePaymentResponseSnapshot:
             b'{"order_id": "o1", "reference": "", "cents": 750}',
             b'["o1", "pay-o1", 750]',
         ):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected):
                 relays.TakePaymentResponseSnapshot().deserialize(raw)
-            assert excinfo.value.kind is errors.Kind.VALIDATION

@@ -5,7 +5,7 @@ import typing
 
 import tesser.application as ts
 
-import tesser.errors as errors
+import ordering.application.ports as ports
 
 
 class TakePaymentRequest(ts.Request):
@@ -32,9 +32,8 @@ class TakePaymentRequestSnapshot(ts.Serde):
             and not isinstance(snapshot.get("cents"), bool)
             and snapshot["cents"] >= 0
         ):
-            raise errors.invalid(
-                "malformed_take_payment_request_snapshot",
-                "a take payment request is an order_id and an amount in cents",
+            raise ports.EngineRejected(
+                "a take payment request is an order_id and an amount in cents"
             )
         return TakePaymentRequest(order_id=snapshot["order_id"], cents=snapshot["cents"])
 
@@ -70,9 +69,9 @@ class TakePaymentResponseSnapshot(ts.Serde):
             and not isinstance(snapshot.get("cents"), bool)
             and snapshot["cents"] >= 0
         ):
-            raise errors.invalid(
-                "malformed_take_payment_response_snapshot",
-                "a take payment response is the order_id, a reference, and the amount charged in cents",
+            raise ports.EngineRejected(
+                "a take payment response is the order_id, a reference, "
+                "and the amount charged in cents"
             )
         return TakePaymentResponse(
             order_id=snapshot["order_id"], reference=snapshot["reference"], cents=snapshot["cents"]

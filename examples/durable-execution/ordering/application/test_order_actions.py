@@ -6,7 +6,6 @@ import pytest
 import ordering.application as application
 import ordering.application.ports as ports
 import ordering.application.relays as relays
-import tesser.errors as errors
 
 
 @ts.fake
@@ -19,7 +18,9 @@ class FakeProductCatalogRepository(ports.ProductCatalogRepository):
         self, get_product_price_request: ports.GetProductPriceRequest
     ) -> ports.GetProductPriceResponse:
         self.priced.append(get_product_price_request.sku)
-        return ports.GetProductPriceResponse(cents=250)
+        return ports.GetProductPriceResponse(
+            outcome=ports.Priced.FOUND, prices=(ports.PriceRecord(cents=250),)
+        )
 
 
 @ts.fake
@@ -28,7 +29,9 @@ class FakeAbsurdProductCatalogRepository(ports.ProductCatalogRepository):
     def get_product_price(
         self, get_product_price_request: ports.GetProductPriceRequest
     ) -> ports.GetProductPriceResponse:
-        return ports.GetProductPriceResponse(cents=10**13)
+        return ports.GetProductPriceResponse(
+            outcome=ports.Priced.FOUND, prices=(ports.PriceRecord(cents=10**13),)
+        )
 
 
 @ts.fake
@@ -37,9 +40,7 @@ class FakeEmptyProductCatalogRepository(ports.ProductCatalogRepository):
     def get_product_price(
         self, get_product_price_request: ports.GetProductPriceRequest
     ) -> ports.GetProductPriceResponse:
-        raise errors.not_found(
-            "unknown_sku", f"no price for sku {get_product_price_request.sku!r}"
-        )
+        return ports.GetProductPriceResponse(outcome=ports.Priced.MISSING, prices=())
 
 
 class TestOrderActions:
@@ -57,24 +58,24 @@ class TestOrderActions:
         )
         assert fake_product_catalog_repository.priced == ["gadget"]
 
-    def test_an_unknown_sku_is_the_catalogs_not_found(self) -> None:
-        with pytest.raises(errors.DomainError) as excinfo:
+    def test_an_unknown_sku_is_the_engines_missing(self) -> None:
+        with pytest.raises(ports.EngineMissing) as excinfo:
             application.OrderActions(FakeEmptyProductCatalogRepository()).price_product(
                 relays.PriceProductRequest(sku="nothing")
             )
-        assert excinfo.value.kind is errors.Kind.NOT_FOUND
+        assert excinfo.value.message == "no price for sku 'nothing'"
 
     def test_an_empty_sku_is_refused_before_the_catalog_is_asked(self) -> None:
         fake_product_catalog_repository = FakeProductCatalogRepository()
-        with pytest.raises(errors.DomainError):
+        with pytest.raises(ports.EngineRejected):
             application.OrderActions(fake_product_catalog_repository).price_product(
                 relays.PriceProductRequest(sku="")
             )
         assert fake_product_catalog_repository.priced == []
 
     def test_a_catalog_price_past_the_bound_is_refused_before_it_crosses_the_engine(self) -> None:
-        with pytest.raises(errors.DomainError) as excinfo:
+        with pytest.raises(ports.EngineRejected) as excinfo:
             application.OrderActions(FakeAbsurdProductCatalogRepository()).price_product(
                 relays.PriceProductRequest(sku="widget")
             )
-        assert excinfo.value.code == "price_above_maximum"
+        assert "at most" in excinfo.value.message

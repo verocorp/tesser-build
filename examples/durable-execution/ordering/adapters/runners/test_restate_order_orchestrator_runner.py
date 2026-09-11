@@ -10,9 +10,9 @@ import pytest
 import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
+import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -137,7 +137,7 @@ class TestRestateOrderOrchestratorRunner:
             b"POST /OrderOrchestrator/..%2Fadmin%3Fx%3D1%23f/run/send HTTP/1.1"
         )
 
-    def test_an_order_already_started_is_a_conflict(self) -> None:
+    def test_an_order_already_started_is_the_engines_conflict(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
@@ -153,7 +153,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineConflict) as excinfo:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -164,8 +164,7 @@ class TestRestateOrderOrchestratorRunner:
             thread.join(5)
             listener.close()
 
-        assert excinfo.value.kind is errors.Kind.CONFLICT
-        assert excinfo.value.code == "order_already_started"
+        assert excinfo.value.message == "Conflict"
 
     def test_a_refused_send_is_an_infra_error(self) -> None:
         listener = socket.socket()
@@ -183,7 +182,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.InfraError):
+            with pytest.raises(ports.EngineUnavailable):
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -199,7 +198,7 @@ class TestRestateOrderOrchestratorRunner:
             closed.bind(("127.0.0.1", 0))
             port = closed.getsockname()[1]
 
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.EngineUnavailable):
             asyncio.run(
                 runners.RestateOrderOrchestratorRunner(
                     f"http://127.0.0.1:{port}",
@@ -260,7 +259,7 @@ class TestRestateOrderOrchestratorRunner:
             order_orchestrator_request()
         )
 
-    def test_an_order_already_placed_is_a_conflict(self) -> None:
+    def test_an_order_already_placed_is_the_engines_conflict(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
@@ -282,7 +281,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineConflict) as excinfo:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -293,11 +292,9 @@ class TestRestateOrderOrchestratorRunner:
             thread.join(5)
             listener.close()
 
-        assert excinfo.value.kind is errors.Kind.CONFLICT
-        assert excinfo.value.code == "order_rejected"
         assert excinfo.value.message == "the workflow method was already invoked"
 
-    def test_a_workflow_that_ended_terminally_answers_with_the_domains_own_kind(self) -> None:
+    def test_a_workflow_that_ended_terminally_answers_with_the_engines_missing(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
@@ -319,7 +316,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineMissing) as excinfo:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -330,11 +327,9 @@ class TestRestateOrderOrchestratorRunner:
             thread.join(5)
             listener.close()
 
-        assert excinfo.value.kind is errors.Kind.NOT_FOUND
-        assert excinfo.value.code == "order_rejected"
         assert excinfo.value.message == "no price for sku 'nope'"
 
-    def test_a_workflow_that_refused_its_input_answers_as_validation(self) -> None:
+    def test_a_workflow_that_refused_its_input_answers_as_the_engines_rejection(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
@@ -356,7 +351,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected) as excinfo:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -367,8 +362,6 @@ class TestRestateOrderOrchestratorRunner:
             thread.join(5)
             listener.close()
 
-        assert excinfo.value.kind is errors.Kind.VALIDATION
-        assert excinfo.value.code == "order_rejected"
         assert excinfo.value.message == "an order is for at least one unit"
 
     def test_a_status_the_domain_does_not_own_is_an_infra_error_even_with_a_code(self) -> None:
@@ -393,7 +386,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.InfraError) as excinfo:
+            with pytest.raises(ports.EngineUnavailable) as excinfo:
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -433,7 +426,7 @@ class TestRestateOrderOrchestratorRunner:
             thread = threading.Thread(target=ingress)
             thread.start()
             try:
-                with pytest.raises(errors.InfraError):
+                with pytest.raises(ports.EngineUnavailable):
                     asyncio.run(
                         runners.RestateOrderOrchestratorRunner(
                             f"http://127.0.0.1:{port}",
@@ -466,7 +459,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.InfraError):
+            with pytest.raises(ports.EngineUnavailable):
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -499,7 +492,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.InfraError):
+            with pytest.raises(ports.EngineUnavailable):
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -532,7 +525,7 @@ class TestRestateOrderOrchestratorRunner:
         thread = threading.Thread(target=ingress)
         thread.start()
         try:
-            with pytest.raises(errors.InfraError):
+            with pytest.raises(ports.EngineUnavailable):
                 asyncio.run(
                     runners.RestateOrderOrchestratorRunner(
                         f"http://127.0.0.1:{port}",
@@ -548,7 +541,7 @@ class TestRestateOrderOrchestratorRunner:
             closed.bind(("127.0.0.1", 0))
             port = closed.getsockname()[1]
 
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.EngineUnavailable):
             asyncio.run(
                 runners.RestateOrderOrchestratorRunner(
                     f"http://127.0.0.1:{port}",

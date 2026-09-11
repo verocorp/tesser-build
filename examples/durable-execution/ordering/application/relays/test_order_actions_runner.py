@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import ordering.application.relays as relays
-import tesser.errors as errors
+import ordering.application.ports as ports
 
 
 class TestPriceProductRequestSnapshot:
@@ -41,15 +41,13 @@ class TestPriceProductResponseSnapshot:
             b'{"cents": "250"}',
             b'[250]',
         ):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected):
                 relays.PriceProductResponseSnapshot().deserialize(raw)
-            assert excinfo.value.kind is errors.Kind.VALIDATION
 
 
 class TestPriceProductRequestSnapshotShape:
 
     def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (b'{}', b'{"sku": 1}', b'{"sku": ""}', b'["widget"]'):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected):
                 relays.PriceProductRequestSnapshot().deserialize(raw)
-            assert excinfo.value.kind is errors.Kind.VALIDATION

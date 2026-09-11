@@ -7,8 +7,8 @@ import restate.serde
 import ordering.adapters.runners as runners
 import ordering.application.client as client
 import ordering.application.orchestrators as orchestrators
+import ordering.application.ports as ports
 import ordering.application.relays as relays
-import tesser.errors as errors  # tesser:debt TB050
 
 
 class RestateOrderOrchestratorRequestSerde(
@@ -24,7 +24,7 @@ class RestateOrderOrchestratorRequestSerde(
 
     def deserialize(self, buf: bytes) -> relays.OrderOrchestratorRequest | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.OrderOrchestratorRequestSnapshot().deserialize(buf)
 
 
@@ -41,7 +41,7 @@ class RestateOrderOrchestratorResponseSerde(
 
     def deserialize(self, buf: bytes) -> relays.OrderOrchestratorResponse | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.OrderOrchestratorResponseSnapshot().deserialize(buf)
 
 
@@ -54,7 +54,7 @@ class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.Price
 
     def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.PriceProductRequestSnapshot().deserialize(buf)
 
 
@@ -69,7 +69,7 @@ class RestatePriceProductResponseSerde(
 
     def deserialize(self, buf: bytes) -> relays.PriceProductResponse | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.PriceProductResponseSnapshot().deserialize(buf)
 
 
@@ -86,7 +86,7 @@ class RestatePurchaseOrchestratorRequestSerde(
 
     def deserialize(self, buf: bytes) -> relays.PurchaseOrchestratorRequest | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.PurchaseOrchestratorRequestSnapshot().deserialize(buf)
 
 
@@ -105,7 +105,7 @@ class RestatePurchaseOrchestratorResponseSerde(
 
     def deserialize(self, buf: bytes) -> relays.PurchaseOrchestratorResponse | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.PurchaseOrchestratorResponseSnapshot().deserialize(buf)
 
 
@@ -118,7 +118,7 @@ class RestateTakePaymentRequestSerde(ts.Serde, restate.serde.Serde[relays.TakePa
 
     def deserialize(self, buf: bytes) -> relays.TakePaymentRequest | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.TakePaymentRequestSnapshot().deserialize(buf)
 
 
@@ -131,7 +131,7 @@ class RestateTakePaymentResponseSerde(ts.Serde, restate.serde.Serde[relays.TakeP
 
     def deserialize(self, buf: bytes) -> relays.TakePaymentResponse | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise ports.EngineRejected("a message crosses the engine with a body")
         return relays.TakePaymentResponseSnapshot().deserialize(buf)
 
 
@@ -156,10 +156,18 @@ class RestateOrderRuntime(ts.Runtime):
         ) -> relays.PriceProductResponse:
             try:
                 return ordering_application_client.price_product(price_product_request)
-            except errors.DomainError as domain_error:
+            except ports.EngineRejected as engine_error:
                 raise restate.TerminalError(
-                    domain_error.message, status_code=errors.status_for(domain_error.kind)
-                ) from domain_error
+                    str(engine_error), status_code=422
+                ) from engine_error
+            except ports.EngineMissing as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=404
+                ) from engine_error
+            except ports.EngineConflict as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=409
+                ) from engine_error
 
         @self.order_orchestrator_workflow.main(
             input_serde=RestateOrderOrchestratorRequestSerde(),
@@ -173,10 +181,18 @@ class RestateOrderRuntime(ts.Runtime):
                 return await orchestrators.OrderOrchestrator(
                     runners.RestateOrderActionsRunner(restate_workflow_context, self)
                 ).run(order_orchestrator_request)
-            except errors.DomainError as domain_error:
+            except ports.EngineRejected as engine_error:
                 raise restate.TerminalError(
-                    domain_error.message, status_code=errors.status_for(domain_error.kind)
-                ) from domain_error
+                    str(engine_error), status_code=422
+                ) from engine_error
+            except ports.EngineMissing as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=404
+                ) from engine_error
+            except ports.EngineConflict as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=409
+                ) from engine_error
 
         @self.purchase_actions_service.handler(
             input_serde=RestateTakePaymentRequestSerde(),
@@ -187,10 +203,22 @@ class RestateOrderRuntime(ts.Runtime):
         ) -> relays.TakePaymentResponse:
             try:
                 return purchase_application_client.take_payment(take_payment_request)
-            except errors.DomainError as domain_error:
+            except ports.ChargeDeclined as declined:
                 raise restate.TerminalError(
-                    domain_error.message, status_code=errors.status_for(domain_error.kind)
-                ) from domain_error
+                    declined.message, status_code=409
+                ) from declined
+            except ports.EngineRejected as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=422
+                ) from engine_error
+            except ports.EngineMissing as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=404
+                ) from engine_error
+            except ports.EngineConflict as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=409
+                ) from engine_error
 
         @self.purchase_orchestrator_workflow.main(
             name="run",
@@ -206,10 +234,18 @@ class RestateOrderRuntime(ts.Runtime):
                     runners.RestatePurchaseActionsRunner(restate_workflow_context, self),
                     runners.RestateOrderOrchestratorChildRunner(restate_workflow_context, self),
                 ).run(purchase_orchestrator_request)
-            except errors.DomainError as domain_error:
+            except ports.EngineRejected as engine_error:
                 raise restate.TerminalError(
-                    domain_error.message, status_code=errors.status_for(domain_error.kind)
-                ) from domain_error
+                    str(engine_error), status_code=422
+                ) from engine_error
+            except ports.EngineMissing as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=404
+                ) from engine_error
+            except ports.EngineConflict as engine_error:
+                raise restate.TerminalError(
+                    str(engine_error), status_code=409
+                ) from engine_error
 
         self.price_product_handler = price_product
         self.order_orchestrator_handler = run

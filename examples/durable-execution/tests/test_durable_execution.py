@@ -6,7 +6,6 @@ import pytest
 
 import app as app
 import ordering.client as client
-import tesser.errors as errors
 
 
 class TestWiredApp:
@@ -22,10 +21,10 @@ class TestWiredApp:
             durable_execution_app.close()
         assert declared == ["OrderActions", "OrderOrchestrator"]
 
-    def test_submitting_an_order_with_no_ingress_is_an_infra_error(self) -> None:
+    def test_submitting_an_order_with_no_ingress_is_unavailable(self) -> None:
         durable_execution_app = app.load()
         try:
-            with pytest.raises(errors.InfraError):
+            with pytest.raises(client.Unavailable):
                 asyncio.run(
                     durable_execution_app.ordering.client.submit_order(
                         client.SubmitOrderRequest(order_id="o1", sku="widget", quantity=2)

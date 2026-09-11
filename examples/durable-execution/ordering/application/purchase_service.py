@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import tesser.application as ts
 
+import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.client as client
 import ordering.domain as domain
+import tesser.errors as errors
 
 
 class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
@@ -37,10 +39,32 @@ class PurchaseService(ts.ApplicationService):
         self._purchase_orchestrator_runner = purchase_orchestrator_runner
 
     async def purchase(self, purchase_request: client.PurchaseRequest) -> client.PurchaseResponse:
-        order = domain.Order(MapToOrderSpec(purchase_request))
-        purchase_orchestrator_response = (
-            await self._purchase_orchestrator_runner.run_purchase_orchestrator(
-                relays.PurchaseOrchestratorRequest(order=order)
+        try:
+            order = domain.Order(MapToOrderSpec(purchase_request))
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
+        try:
+            purchase_orchestrator_response = (
+                await self._purchase_orchestrator_runner.run_purchase_orchestrator(
+                    relays.PurchaseOrchestratorRequest(order=order)
+                )
             )
-        )
+        except ports.EngineRejected as engine_error:
+            raise client.Rejected(
+                code="purchase_rejected", message=engine_error.message
+            ) from engine_error
+        except ports.EngineMissing as engine_error:
+            raise client.Missing(
+                code="purchase_rejected", message=engine_error.message
+            ) from engine_error
+        except ports.EngineConflict as engine_error:
+            raise client.Conflict(
+                code="purchase_rejected", message=engine_error.message
+            ) from engine_error
+        except ports.EngineUnavailable as engine_error:
+            raise client.Unavailable(
+                message="the ordering engine is unavailable"
+            ) from engine_error
         return MapToPurchaseResponse(purchase_orchestrator_response)

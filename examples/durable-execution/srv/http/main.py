@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import sys
+import traceback
 import typing
 
 import tesser.srv as ts
@@ -13,7 +15,6 @@ import restate
 import app as app
 import ordering.adapters.handlers as handlers
 import protocol as protocol
-import tesser.errors as errors  # tesser:debt TB050
 
 _BIND: typing.Final[str] = "0.0.0.0:8000"
 _RESTATE_DEPLOYMENT_PATH: typing.Final[str] = "/restate"
@@ -36,12 +37,9 @@ class HttpHost(ts.Host):
                     )
                 except protocol.BadRequest as e:
                     http_response = protocol.HttpResponse.problem(400, str(e))
-                except errors.DomainError as e:
-                    http_response = protocol.HttpResponse.problem(
-                        errors.status_for(e.kind), e.message
-                    )
-                except errors.InfraError:
-                    http_response = protocol.HttpResponse.problem(503, "unavailable")
+                except Exception:
+                    traceback.print_exc(file=sys.stderr)
+                    http_response = protocol.HttpResponse.problem(500, "unexpected error")
                 return fastapi.Response(
                     http_response.body, http_response.status_code, media_type=_JSON
                 )
@@ -54,12 +52,9 @@ class HttpHost(ts.Host):
                     )
                 except protocol.BadRequest as e:
                     http_response = protocol.HttpResponse.problem(400, str(e))
-                except errors.DomainError as e:
-                    http_response = protocol.HttpResponse.problem(
-                        errors.status_for(e.kind), e.message
-                    )
-                except errors.InfraError:
-                    http_response = protocol.HttpResponse.problem(503, "unavailable")
+                except Exception:
+                    traceback.print_exc(file=sys.stderr)
+                    http_response = protocol.HttpResponse.problem(500, "unexpected error")
                 return fastapi.Response(
                     http_response.body, http_response.status_code, media_type=_JSON
                 )
@@ -72,12 +67,9 @@ class HttpHost(ts.Host):
                     )
                 except protocol.BadRequest as e:
                     http_response = protocol.HttpResponse.problem(400, str(e))
-                except errors.DomainError as e:
-                    http_response = protocol.HttpResponse.problem(
-                        errors.status_for(e.kind), e.message
-                    )
-                except errors.InfraError:
-                    http_response = protocol.HttpResponse.problem(503, "unavailable")
+                except Exception:
+                    traceback.print_exc(file=sys.stderr)
+                    http_response = protocol.HttpResponse.problem(500, "unexpected error")
                 return fastapi.Response(
                     http_response.body, http_response.status_code, media_type=_JSON
                 )
