@@ -91,15 +91,15 @@ class FilesystemSourceReader(ts.Repository):
             for name in list(dirnames):
                 if name in SKIP_DIRS or name in skips:
                     dirnames.remove(name)
-                    pruned.append(str((here / name).relative_to(base)))
+                    pruned.append((here / name).relative_to(base).as_posix())
                 elif (here / name).is_symlink():
                     dirnames.remove(name)
-                    symlinked.append(str((here / name).relative_to(base)))
+                    symlinked.append((here / name).relative_to(base).as_posix())
             for name in sorted(filenames):
                 path = here / name
                 relative = path.relative_to(base)
                 if name == DECLARATION and here != base:
-                    nested.append(str(relative))
+                    nested.append(relative.as_posix())
                 if name.endswith(".py") or name.endswith(".pyi"):
                     parts = list(relative.with_suffix("").parts)
                     is_package = bool(parts) and parts[-1] == "__init__"
@@ -120,7 +120,7 @@ class FilesystemSourceReader(ts.Repository):
                     if module:
                         found.append(
                             ports.SourceFile(
-                                path=str(relative),
+                                path=relative.as_posix(),
                                 name=module,
                                 text=text,
                                 state=state,

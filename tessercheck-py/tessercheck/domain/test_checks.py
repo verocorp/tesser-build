@@ -17715,3 +17715,140 @@ def test_hook_runs_are_equal_by_value() -> None:
     assert domain.HookRun(_run_spec("mode=feedback\n")) == domain.HookRun(_run_spec("mode = feedback\n"))
     assert domain.HookRun(_run_spec("")) != domain.HookRun(_run_spec("mode=feedback\n"))
     assert domain.HookRun(_run_spec("", findings=1)) != domain.HookRun(_run_spec("", findings=2))
+
+
+def test_a_class_re_exported_through_two_packages_resolves_to_the_module_that_defines_it() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/domain/kernel/__init__.py",
+                "shop.domain.kernel",
+                "from shop.domain.kernel.sub import Money as Money\n"
+                "from shop.domain.kernel.sub import MoneySpec as MoneySpec\n",
+                True,
+            ),
+            (
+                "shop/domain/kernel/sub/__init__.py",
+                "shop.domain.kernel.sub",
+                "from shop.domain.kernel.sub.money import Money as Money\n"
+                "from shop.domain.kernel.sub.money import MoneySpec as MoneySpec\n",
+                True,
+            ),
+            (
+                "shop/domain/kernel/sub/money.py",
+                "shop.domain.kernel.sub.money",
+                "import tesser.domain as ts\n"
+                "class MoneySpec(ts.Spec):\n"
+                "    def __init__(self, amount: int) -> None:\n"
+                "        self.amount = amount\n"
+                "class Money(ts.ValueObject):\n"
+                "    def __init__(self, spec: MoneySpec) -> None:\n"
+                "        object.__setattr__(self, '_amount', spec.amount)\n",
+                False,
+            ),
+            (
+                "shop/domain/kernel/sub/test_money.py",
+                "shop.domain.kernel.sub.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/domain/price.py",
+                "shop.domain.price",
+                "import shop.domain.kernel as kernel\n"
+                "import tesser.domain as ts\n"
+                "class Price(ts.ValueObject):\n"
+                "    def __init__(self, spec: kernel.MoneySpec) -> None:\n"
+                "        object.__setattr__(self, '_amount', spec.amount)\n",
+                False,
+            ),
+            (
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "TB083" in f and "shop.domain.kernel.sub.money.MoneySpec" in f for f in findings
+    ), findings
+    assert not any("shop.domain.kernel.MoneySpec" in f for f in findings), findings
+    assert not any("shop.domain.kernel.sub.MoneySpec" in f for f in findings), findings
+
+
+def test_a_name_two_modules_export_under_one_package_resolves_through_the_first_row() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/domain/kernel/__init__.py",
+                "shop.domain.kernel",
+                "from shop.domain.kernel.zulu import MoneySpec as MoneySpec\n"
+                "from shop.domain.kernel.alpha import MoneySpec as MoneySpec\n",
+                True,
+            ),
+            (
+                "shop/domain/kernel/alpha.py",
+                "shop.domain.kernel.alpha",
+                "import tesser.domain as ts\n"
+                "class MoneySpec(ts.Spec):\n"
+                "    def __init__(self, amount: int) -> None:\n"
+                "        self.amount = amount\n"
+                "class Money(ts.ValueObject):\n"
+                "    def __init__(self, spec: MoneySpec) -> None:\n"
+                "        object.__setattr__(self, '_amount', spec.amount)\n",
+                False,
+            ),
+            (
+                "shop/domain/kernel/test_alpha.py",
+                "shop.domain.kernel.test_alpha",
+                "def test_alpha_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/domain/kernel/zulu.py",
+                "shop.domain.kernel.zulu",
+                "import tesser.domain as ts\n"
+                "class MoneySpec(ts.Spec):\n"
+                "    def __init__(self, amount: int) -> None:\n"
+                "        self.amount = amount\n"
+                "class Money(ts.ValueObject):\n"
+                "    def __init__(self, spec: MoneySpec) -> None:\n"
+                "        object.__setattr__(self, '_amount', spec.amount)\n",
+                False,
+            ),
+            (
+                "shop/domain/kernel/test_zulu.py",
+                "shop.domain.kernel.test_zulu",
+                "def test_zulu_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/domain/price.py",
+                "shop.domain.price",
+                "import shop.domain.kernel as kernel\n"
+                "import tesser.domain as ts\n"
+                "class Price(ts.ValueObject):\n"
+                "    def __init__(self, spec: kernel.MoneySpec) -> None:\n"
+                "        object.__setattr__(self, '_amount', spec.amount)\n",
+                False,
+            ),
+            (
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "TB083" in f and "shop.domain.kernel.alpha.MoneySpec" in f for f in findings
+    ), findings
+    assert not any("shop.domain.kernel.zulu.MoneySpec" in f for f in findings), findings

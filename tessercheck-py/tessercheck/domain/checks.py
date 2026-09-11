@@ -2104,35 +2104,6 @@ class Alias(ts.ValueObject):
         return self._package
 
 
-class ReexportSpec(ts.Spec):
-
-    def __init__(self, package: str, exported: str, defining: str, original: str) -> None:
-        self.package = package
-        self.exported = exported
-        self.defining = defining
-        self.original = original
-
-
-class Reexport(ts.ValueObject):
-
-    _package: Text
-    _exported: Text
-    _defining: Text
-    _original: Text
-
-    def __init__(self, spec: ReexportSpec) -> None:
-        object.__setattr__(self, "_package", Text(spec.package))
-        object.__setattr__(self, "_exported", Text(spec.exported))
-        object.__setattr__(self, "_defining", Text(spec.defining))
-        object.__setattr__(self, "_original", Text(spec.original))
-
-    def exports(self) -> Symbol:
-        return Symbol(SymbolSpec(str(self._package), str(self._exported)))
-
-    def defines(self) -> Symbol:
-        return Symbol(SymbolSpec(str(self._defining), str(self._original)))
-
-
 class ReexportTableSpec(ts.Spec):
 
     def __init__(self, reexports: tuple[tuple[str, str, str, str], ...]) -> None:
@@ -2141,11 +2112,11 @@ class ReexportTableSpec(ts.Spec):
 
 class ReexportTable(ts.ValueObject):
 
-    _rows: tuple[tuple[tuple[str, str], tuple[str, str], int], ...]
+    _rows: tuple[tuple[tuple[str, str], int, tuple[str, str]], ...]
 
     def __init__(self, spec: ReexportTableSpec) -> None:
         object.__setattr__(self, "_rows", tuple(sorted(
-            ((package, exported), (defining, original), position)
+            ((package, exported), position, (defining, original))
             for position, (package, exported, defining, original) in enumerate(spec.reexports)
         )))
 
@@ -2155,7 +2126,7 @@ class ReexportTable(ts.ValueObject):
             at = bisect.bisect_left(self._rows, (key,))
             if at == len(self._rows) or self._rows[at][0] != key:
                 break
-            key = self._rows[at][1]
+            key = self._rows[at][2]
         return Symbol(SymbolSpec(key[0], key[1]))
 
 
@@ -2191,7 +2162,6 @@ class Scope(ts.ValueObject):
     _functions: Names
     _spoken: Text | None
     _enums: Names
-    _reexports: tuple[Reexport, ...]
     _table: ReexportTable
 
     def __init__(self, spec: ScopeSpec) -> None:
@@ -2202,10 +2172,6 @@ class Scope(ts.ValueObject):
         object.__setattr__(self, "_functions", Names(spec.functions))
         object.__setattr__(self, "_spoken", Text(spec.spoken) if spec.spoken else None)
         object.__setattr__(self, "_enums", Names(spec.enums))
-        object.__setattr__(self, "_reexports", tuple(
-            Reexport(ReexportSpec(package, exported, defining, original))
-            for package, exported, defining, original in spec.reexports
-        ))
         object.__setattr__(self, "_table", ReexportTable(ReexportTableSpec(spec.reexports)))
 
     def enums(self) -> Names:
@@ -11629,11 +11595,13 @@ class Codebase(ts.AggregateRoot):
     def __init__(self, spec: CodebaseSpec) -> None:
         self._pruned = spec.pruned
         self._scoped = spec.scoped
+        self._source_paths = frozenset(path for path, _, _, _ in spec.sources)
         broken: list[Violation] = []
         paths_by_name: dict[str, list[str]] = {}
         for path, name, _, _ in spec.sources:
             paths_by_name.setdefault(name, []).append(path)
         parsed: list[tuple[str, str, str, bool]] = []
+        parsed_trees: dict[str, ast.Module] = {}
         for path, name, source, is_package in spec.sources:
             if path.endswith(STUB_SUFFIX):
                 broken.append(
@@ -11669,7 +11637,7 @@ class Codebase(ts.AggregateRoot):
                 )
                 continue
             try:
-                ast.parse(source)
+                parsed_trees[path] = ast.parse(source)
             except SyntaxError as error:
                 broken.append(
                     Violation(ViolationSpec(
@@ -11699,7 +11667,7 @@ class Codebase(ts.AggregateRoot):
             if export == TESSER and name.split(".")[0] == TESSER:
                 continue
             context_kernel = place == "context-kernel-init"
-            for stmt in ast.parse(source).body:
+            for stmt in parsed_trees[path].body:
                 if not isinstance(stmt, ast.ImportFrom) or stmt.level or stmt.module is None:
                     continue
                 from_root_kernel = context_kernel and stmt.module.split(".")[0] in kernel_tops
@@ -11746,9 +11714,8 @@ class Codebase(ts.AggregateRoot):
         if self._tree.violations():
             return Governance.UNDECLARED
         wanted = str(path)
-        for module in self._modules:
-            if module.path() == wanted:
-                return Governance.GOVERNED
+        if wanted in self._source_paths:
+            return Governance.GOVERNED
         for pruned in self._pruned:
             if wanted == pruned or wanted.startswith(pruned + "/"):
                 return Governance.SKIPPED
@@ -12346,26 +12313,26 @@ class Codebase(ts.AggregateRoot):
                         found.extend(APP_CLIENT_METHOD.violations(signature))
         for module in scoped:
             found.extend(module.pairing_violations(registry))
-        for module in self._modules if whole else ():
-            place = str(module.place())
-            shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
-            if place in (
-                "role",
-                "orchestrators",
-                "orchestrators-file",
-                "relays",
-                "relays-file",
-                "snapshots",
-                "snapshots-file",
-                "kernel",
-                "context-kernel",
-            ) and not shell:
-                for name in module.declared_uses(registry):
-                    if name in self._imports:
-                        self._used_imports.add(name)
-                    else:
-                        self._used_pure_stdlib.add(name)
         if whole:
+            for module in self._modules:
+                place = str(module.place())
+                shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
+                if place in (
+                    "role",
+                    "orchestrators",
+                    "orchestrators-file",
+                    "relays",
+                    "relays-file",
+                    "snapshots",
+                    "snapshots-file",
+                    "kernel",
+                    "context-kernel",
+                ) and not shell:
+                    for name in module.declared_uses(registry):
+                        if name in self._imports:
+                            self._used_imports.add(name)
+                        else:
+                            self._used_pure_stdlib.add(name)
             found.extend(self._tree.unused_violations(Names(tuple(self._used_imports | self._used_pure_stdlib))))
         kept: list[Violation] = []
         used: set[tuple[str, Line]] = set()

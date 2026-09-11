@@ -647,7 +647,12 @@ def test_hook_is_silent_off_the_governed_tree_and_disabled_when_told_to() -> Non
         client.HookRequest(tree="some/tree", path="loose_a.py", conf="enabled=false\n")
     )
 
+    outside = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).hook(
+        client.HookRequest(tree="some/tree", path="elsewhere/new.py", conf="mode=feedback\n")
+    )
+
     assert (skipped.governance, skipped.action, skipped.findings) == ("skipped", "silent", ())
+    assert (outside.governance, outside.action, outside.findings) == ("outside", "silent", ())
     assert (disabled.mode, disabled.action) == ("disabled", "disabled")
 
 

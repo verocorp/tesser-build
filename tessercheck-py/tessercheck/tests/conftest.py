@@ -1,5 +1,6 @@
 import ast
 import inspect
+import json
 import textwrap
 import collections.abc as abc
 import pathlib
@@ -107,15 +108,9 @@ def repo_root() -> pathlib.Path:
 
 
 def example_trees() -> tuple[str, ...]:
-    return (
-        "examples/minimal",
-        "examples/ports",
-        "examples/errorspy",
-        "examples/llmport",
-        "examples/serdepy",
-        "examples/asyncpg",
-        "examples/durable-execution",
-        "examples/python-app",
+    manifest = json.loads((repo_root() / "manifest.json").read_text(encoding="utf-8"))
+    return tuple(
+        sorted(tree for tree, kind in manifest.items() if kind == "app" and tree.startswith("examples/"))
     )
 
 
@@ -126,10 +121,35 @@ def fixture_trees() -> tuple[str, ...]:
     )
 
 
-def sampled(paths: tuple[str, ...], most: int = 24) -> tuple[str, ...]:
+def bounded_rebuilds(paths: tuple[str, ...], must: tuple[str, ...] = (), most: int = 16) -> tuple[str, ...]:
     stride = max(1, len(paths) // most)
-    return paths[::stride]
+    chosen = dict.fromkeys(must)
+    for path in paths[::stride]:
+        chosen[path] = None
+    return tuple(chosen)
 
 
 def findings_on(findings: tuple[str, ...], path: str) -> tuple[str, ...]:
     return tuple(finding for finding in findings if finding.startswith(path + ":"))
+
+
+def inject_findings(root: pathlib.Path) -> tuple[str, ...]:
+    paths = governed_paths(root)
+    module = next(
+        path for path in paths
+        if not path.endswith("__init__.py")
+        and not path.rsplit("/", 1)[-1].startswith("test_")
+        and not path.endswith("conftest.py")
+    )
+    target = root / module
+    target.write_text(target.read_text(encoding="utf-8") + "\n# a comment\nf = lambda x: x\n", encoding="utf-8")
+    sibling = target.parent / ("test_" + target.name)
+    if sibling.exists():
+        sibling.unlink()
+    test_module = next((path for path in paths if path.rsplit("/", 1)[-1].startswith("test_") and path != str(sibling.relative_to(root))), None)
+    touched = [module]
+    if test_module is not None:
+        stray = root / test_module
+        stray.write_text("import os\n" + stray.read_text(encoding="utf-8"), encoding="utf-8")
+        touched.append(test_module)
+    return tuple(touched)
