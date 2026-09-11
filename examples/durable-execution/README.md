@@ -168,6 +168,18 @@ stand-in keys on the order and the amount, which is enough only because the
 shared key namespace already refuses a second purchase of one order; a real
 processor takes an idempotency key on the request.
 
+`Order` and `Purchase` are two aggregate roots, and they live in two domain
+modules — `domain/order.py` and `domain/purchase.py` — because a domain module
+declares at most one root, and a second root in one module is two consistency
+boundaries sharing a file. Neither module imports the other: a purchase names
+its order by `OrderId`. What both roots need lives in `domain/kernel/`, the
+context kernel — `OrderId` in `order_id.py`, and `Quantity`, `PriceSpec` and
+`Price` in `price.py`. A context kernel is an exporting package, so its
+modules do not import each other either, which is why `Quantity` sits beside
+`Price` rather than in a module of its own: `Price.times` takes a `Quantity`.
+Both roots write `import ordering.domain.kernel as kernel` and name
+`kernel.OrderId`.
+
 Two value objects gained bounds in this change, because both were measured
 as holes the purchase widens. `Quantity` is at most 1,000,000 units and
 `Price` at most 10^12 cents, so their product stays far below Python's

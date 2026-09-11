@@ -69,14 +69,17 @@ the object that owns it — `Clearance` through `Widget.clear()`.
 
 An **exporting package** is every role package (`domain`, `application`,
 `application/ports`, `application/client`, `application/orchestrators`,
-`client`, `adapters/<kind>`, `component`) **and** the app shell: `app/`,
-`srv/`, `srv/<host>/`, and `protocol/`. They all carry an export list and are
-all imported whole. The two packages that are **not** import units are a
-kernel (`kernel/`, an exported kernel, and a context's `domain/kernel/`
-re-export aside — a kernel module imports its sibling by design, which is what
-"a kernel imports only its kernel" has always meant) and the bare container
-packages whose `__init__` must stay empty: a context (`alpha/`), an adapters
-package (`alpha/adapters/`), a tests package.
+`client`, `adapters/<kind>`, `component`), a context's own
+`<context>/domain/kernel/`, **and** the app shell: `app/`, `srv/`,
+`srv/<host>/`, and `protocol/`. They all carry an export list and are all
+imported whole. The one package that is **not** an import unit is a **root**
+kernel — `kernel/` and a tree's one exported kernel — whose modules import
+each other as modules, which is what "a kernel imports only its kernel" has
+always meant. That exemption is the root kernel's alone: a context kernel is
+an exporting package like any other, so its modules do not import each other
+either (`TB060`), and two shared concepts that need each other are one module.
+The rest are the bare container packages whose `__init__` must stay empty: a
+context (`alpha/`), an adapters package (`alpha/adapters/`), a tests package.
 
 The rules that follow from it, each with its code:
 
@@ -149,6 +152,28 @@ so the reach is drawn where domain is:
   modules share. A domain module then writes `import alpha.domain.kernel as
   kernel` and names `kernel.Identity` — exactly one `kernel` in scope, and the
   module never has to know which kernel a type came from.
+- **A context kernel also declares** (maintainer ruling 2026-09-11). When two
+  aggregate roots in one context share a value object, that value object moves
+  into `<context>/domain/kernel/` as a module of its own, and neither root's
+  module imports the other. It is a place the analyzer names, not a role
+  package that happens to be called `kernel`: `kernel` is a package, never a
+  `domain/kernel.py` module (TB041); its modules declare only the value
+  objects, specs, and enums two aggregates can share, so an entity or an
+  aggregate root there is a finding (TB052) — a root is owned by one module and
+  named elsewhere by its id (TB012); its `__init__` re-exports its own modules'
+  classes and, where a root kernel exists, what the context takes from it, and
+  nothing else (TB042); and each module carries its sibling test (TB074). Its
+  modules import `tesser.domain` as `ts`, the domain's norm imports and pure
+  stdlib, and a root kernel — never their own context, and never a module
+  beside them, because a context kernel is an exporting package and the root
+  kernel's sibling-import exemption does not reach it (TB060, TB062). One
+  module per shared concept where you can; where two shared concepts need each
+  other, they are one module — `Quantity` lives beside `Price` in
+  `examples/durable-execution/ordering/domain/kernel/price.py` for exactly that
+  reason.
+- **A domain module declares at most one aggregate root** (TB052, same
+  ruling). A second root in one module is two consistency boundaries sharing a
+  file; split it, and what the two roots shared goes to the context kernel.
 - Nothing else imports a kernel: not `application`, not `client`, not
   `adapters`, not `component`, not `app`, not `srv`, not `protocol`, not a
   `conftest`. An application that needs a kernel type names it through the
