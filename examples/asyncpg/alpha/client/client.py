@@ -47,6 +47,37 @@ class FindResponse(ts.Response):
         self.found = found
 
 
+class Rejected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Missing(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Conflict(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[Rejected], type[Missing], type[Conflict]]] = (
+    Rejected,
+    Missing,
+    Conflict,
+)
+
+
 class AlphaClient(ts.Client, typing.Protocol):
 
     async def add(self, add_request: AddRequest) -> AddResponse: ...

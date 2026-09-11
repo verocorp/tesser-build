@@ -11,6 +11,20 @@ class Found(enum.Enum):
     NO = "no"
 
 
+class Added(enum.Enum):
+    ADDED = "added"
+    EXISTS = "exists"
+
+
+class Loaded(enum.Enum):
+    FOUND = "found"
+    MISSING = "missing"
+
+
+class StoreUnavailable(ts.Error):
+    pass
+
+
 class AddWidgetRequest(ts.Request):
 
     def __init__(self, name: str, part: str, standing: str) -> None:
@@ -21,7 +35,8 @@ class AddWidgetRequest(ts.Request):
 
 class AddWidgetResponse(ts.Response):
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, outcome: Added, name: str) -> None:
+        self.outcome = outcome
         self.name = name
 
 
@@ -45,12 +60,19 @@ class LoadWidgetRequest(ts.Request):
         self.name = name
 
 
-class LoadWidgetResponse(ts.Response):
+class WidgetRecord(ts.Response):
 
     def __init__(self, name: str, part: str, standing: str) -> None:
         self.name = name
         self.part = part
         self.standing = standing
+
+
+class LoadWidgetResponse(ts.Response):
+
+    def __init__(self, outcome: Loaded, widgets: tuple[WidgetRecord, ...]) -> None:
+        self.outcome = outcome
+        self.widgets = widgets
 
 
 class FindWidgetRequest(ts.Request):

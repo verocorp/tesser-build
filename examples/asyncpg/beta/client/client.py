@@ -29,6 +29,17 @@ class HoldResponse(ts.Response):
         self.key = key
 
 
+class Rejected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
+
+
 class BetaClient(ts.Client, typing.Protocol):
 
     async def check(self, check_request: CheckRequest) -> CheckResponse: ...

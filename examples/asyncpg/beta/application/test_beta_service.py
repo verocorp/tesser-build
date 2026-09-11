@@ -11,7 +11,6 @@ import beta.application as application
 import beta.application.ports as ports
 import beta.client as client
 import beta.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -47,7 +46,7 @@ class FakeUnavailableKeyStore(ports.KeyStore):
 
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[ports.KeyRepository]:
-        raise errors.InfraError("key store unavailable")
+        raise ports.StoreUnavailable("key store unavailable")
         yield FakeKeyRepository(set())
 
 
@@ -74,12 +73,12 @@ class TestBetaServiceOverAFailedTransaction:
 
     async def test_check_surfaces_the_failure(self) -> None:
         beta_service = application.BetaService(FakeUnavailableKeyStore())
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.StoreUnavailable):
             await beta_service.check(client.CheckRequest(key="k"))
 
     async def test_hold_surfaces_the_failure(self) -> None:
         beta_service = application.BetaService(FakeUnavailableKeyStore())
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.StoreUnavailable):
             await beta_service.hold(client.HoldRequest(key="k"))
 
 

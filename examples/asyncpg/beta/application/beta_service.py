@@ -5,6 +5,7 @@ import tesser.application as ts
 import beta.application.ports as ports
 import beta.client as client
 import beta.domain as domain
+import tesser.errors as errors
 
 
 class MapToHasKeyRequest(ts.Mapper, ports.HasKeyRequest):
@@ -25,13 +26,23 @@ class BetaService(ts.ApplicationService):
         self._key_store = key_store
 
     async def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
-        key = domain.Key(check_request.key)
+        try:
+            key = domain.Key(check_request.key)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         async with self._key_store.transaction() as key_repository:
             has_key_response = await key_repository.has_key(MapToHasKeyRequest(key))
         return client.CheckResponse(held=has_key_response.held.value)
 
     async def hold(self, hold_request: client.HoldRequest) -> client.HoldResponse:
-        key = domain.Key(hold_request.key)
+        try:
+            key = domain.Key(hold_request.key)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         async with self._key_store.transaction() as key_repository:
             put_key_response = await key_repository.put_key(MapToPutKeyRequest(key))
         return client.HoldResponse(key=put_key_response.key)

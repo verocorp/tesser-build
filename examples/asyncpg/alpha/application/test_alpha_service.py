@@ -11,7 +11,6 @@ import alpha.application as application
 import alpha.application.ports as ports
 import alpha.client as client
 import alpha.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -26,13 +25,15 @@ class FakeWidgetRepository(ports.WidgetRepository):
 
     async def add_widget(self, add_widget_request: ports.AddWidgetRequest) -> ports.AddWidgetResponse:
         if add_widget_request.name in self._part_by_name:
-            raise errors.conflict(
-                "widget_exists", f"widget {add_widget_request.name!r} is already stored"
+            return ports.AddWidgetResponse(
+                outcome=ports.Added.EXISTS, name=add_widget_request.name
             )
         self._saved.append(add_widget_request.name)
         self._part_by_name[add_widget_request.name] = add_widget_request.part
         self._standing_by_name[add_widget_request.name] = add_widget_request.standing
-        return ports.AddWidgetResponse(name=add_widget_request.name)
+        return ports.AddWidgetResponse(
+            outcome=ports.Added.ADDED, name=add_widget_request.name
+        )
 
     async def save_widget(self, save_widget_request: ports.SaveWidgetRequest) -> ports.SaveWidgetResponse:
         self._saved.append(save_widget_request.name)
@@ -42,11 +43,16 @@ class FakeWidgetRepository(ports.WidgetRepository):
 
     async def load_widget(self, load_widget_request: ports.LoadWidgetRequest) -> ports.LoadWidgetResponse:
         if load_widget_request.name not in self._part_by_name:
-            raise errors.not_found("unknown_widget", f"no widget {load_widget_request.name!r}")
+            return ports.LoadWidgetResponse(outcome=ports.Loaded.MISSING, widgets=())
         return ports.LoadWidgetResponse(
-            name=load_widget_request.name,
-            part=self._part_by_name[load_widget_request.name],
-            standing=self._standing_by_name[load_widget_request.name],
+            outcome=ports.Loaded.FOUND,
+            widgets=(
+                ports.WidgetRecord(
+                    name=load_widget_request.name,
+                    part=self._part_by_name[load_widget_request.name],
+                    standing=self._standing_by_name[load_widget_request.name],
+                ),
+            ),
         )
 
     async def find_widget(self, find_widget_request: ports.FindWidgetRequest) -> ports.FindWidgetResponse:
@@ -74,7 +80,7 @@ class FakeUnavailableWidgetStore(ports.WidgetStore):
 
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[ports.WidgetRepository]:
-        raise errors.InfraError("widget store unavailable")
+        raise ports.StoreUnavailable("widget store unavailable")
         yield FakeWidgetRepository({}, {}, [])
 
 
@@ -156,20 +162,20 @@ class TestAlphaServiceOverACommittedTransaction:
         assert fake_committed_widget_store.part_by_name == {"a": "p"}
         assert fake_committed_widget_store.saved == ["a"]
 
-    async def test_take_of_an_unknown_widget_is_not_found(self) -> None:
+    async def test_take_of_an_unknown_widget_crosses_as_the_contexts_missing(self) -> None:
         alpha_service = application.AlphaService(FakeCommittedWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(errors.DomainError) as caught:
+        with pytest.raises(client.Missing) as caught:
             await alpha_service.take(client.TakeRequest(name="x", part="q"))
-        assert caught.value.kind is errors.Kind.NOT_FOUND
+        assert caught.value.code == "unknown_widget"
 
-    async def test_adding_a_stored_name_conflicts_and_leaves_the_stored_widget_alone(self) -> None:
+    async def test_adding_a_stored_name_is_a_conflict_and_leaves_the_stored_widget_alone(self) -> None:
         fake_committed_widget_store = FakeCommittedWidgetStore()
         alpha_service = application.AlphaService(fake_committed_widget_store, FakeRefusedBetaCheck())
         add_response = await alpha_service.add(client.AddRequest(name="a", part="a"))
-        with pytest.raises(errors.DomainError) as caught:
+        with pytest.raises(client.Conflict) as caught:
             await alpha_service.add(client.AddRequest(name="a", part="q"))
         assert add_response.standing == "released"
-        assert caught.value.kind is errors.Kind.CONFLICT
+        assert caught.value.code == "widget_exists"
         assert fake_committed_widget_store.part_by_name == {"a": "a"}
         assert fake_committed_widget_store.standing_by_name == {"a": "released"}
 
@@ -186,23 +192,23 @@ class TestAlphaServiceOverAFailedTransaction:
 
     async def test_add_surfaces_the_failure(self) -> None:
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.StoreUnavailable):
             await alpha_service.add(client.AddRequest(name="a", part="p"))
 
     async def test_take_surfaces_the_failure(self) -> None:
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.StoreUnavailable):
             await alpha_service.take(client.TakeRequest(name="a", part="q"))
 
     async def test_find_surfaces_the_failure(self) -> None:
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.StoreUnavailable):
             await alpha_service.find(client.FindRequest(name="a"))
 
     async def test_a_held_part_reaches_beta_and_then_surfaces_the_failure_of_the_save(self) -> None:
         fake_refused_beta_check = FakeRefusedBetaCheck()
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), fake_refused_beta_check)
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(ports.StoreUnavailable):
             await alpha_service.add(client.AddRequest(name="a", part="a"))
         assert fake_refused_beta_check.checked == ["a"]
 
@@ -223,11 +229,24 @@ class TestAlphaServiceMappers:
 
     def test_a_loaded_widget_maps_to_a_spec_carrying_its_stored_part(self) -> None:
         widget_spec = application.MapToLoadedWidgetSpec(
-            ports.LoadWidgetResponse(name="a", part="p", standing="released")
+            ports.LoadWidgetRequest(name="a"),
+            ports.LoadWidgetResponse(
+                outcome=ports.Loaded.FOUND,
+                widgets=(ports.WidgetRecord(name="a", part="p", standing="released"),),
+            ),
         )
         assert widget_spec.name == "a"
         assert widget_spec.part.id == "p"
         assert widget_spec.standing == "released"
+
+    def test_a_missing_lookup_is_the_contexts_missing_naming_the_widget(self) -> None:
+        with pytest.raises(client.Missing) as caught:
+            application.MapToLoadedWidgetSpec(
+                ports.LoadWidgetRequest(name="x"),
+                ports.LoadWidgetResponse(outcome=ports.Loaded.MISSING, widgets=()),
+            )
+        assert caught.value.code == "unknown_widget"
+        assert caught.value.message == "no widget 'x'"
 
     def test_a_widget_maps_to_a_save_request_carrying_its_name_and_part(self) -> None:
         widget = domain.Widget(application.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
@@ -250,11 +269,20 @@ class TestAlphaServiceMappers:
         check_response = ports.CheckResponse(verdict=ports.Verdict.REFUSED)
         assert application.MapToClearanceSpec(check_response).verdict == "refused"
 
-    def test_a_widget_maps_to_an_add_response(self) -> None:
+    def test_a_stored_widget_maps_to_an_add_response(self) -> None:
         widget = domain.Widget(application.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
-        assert application.MapToAddResponse(widget).name == "a"
-        assert application.MapToAddResponse(widget).part == "a"
-        assert application.MapToAddResponse(widget).standing == "kept"
+        add_widget_response = ports.AddWidgetResponse(outcome=ports.Added.ADDED, name="a")
+        assert application.MapToAddResponse(add_widget_response, widget).name == "a"
+        assert application.MapToAddResponse(add_widget_response, widget).part == "a"
+        assert application.MapToAddResponse(add_widget_response, widget).standing == "kept"
+
+    def test_a_name_the_store_already_holds_is_the_contexts_conflict(self) -> None:
+        widget = domain.Widget(application.MapToWidgetSpec(client.AddRequest(name="a", part="p")))
+        add_widget_response = ports.AddWidgetResponse(outcome=ports.Added.EXISTS, name="a")
+        with pytest.raises(client.Conflict) as caught:
+            application.MapToAddResponse(add_widget_response, widget)
+        assert caught.value.code == "widget_exists"
+        assert caught.value.message == "widget 'a' is already stored"
 
     def test_a_widget_maps_to_an_add_widget_request(self) -> None:
         widget = domain.Widget(application.MapToWidgetSpec(client.AddRequest(name="a", part="p")))

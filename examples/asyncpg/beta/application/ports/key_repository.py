@@ -11,6 +11,10 @@ class Held(enum.Enum):
     NO = "no"
 
 
+class StoreUnavailable(ts.Error):
+    pass
+
+
 class HasKeyRequest(ts.Request):
 
     def __init__(self, key: str) -> None:

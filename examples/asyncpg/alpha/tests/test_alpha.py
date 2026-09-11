@@ -12,7 +12,6 @@ import alpha.client as client
 import alpha.component as component
 import pgdatabase.database as pgdatabase
 import protocol
-import tesser.errors as errors
 
 
 @ts.fake
@@ -74,7 +73,7 @@ class TestAlphaContext:
         add_response = await alpha.client.add(
             client.AddRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
         )
-        with pytest.raises(errors.DomainError) as caught:
+        with pytest.raises(client.Conflict) as caught:
             await alpha.client.add(client.AddRequest(name="ctx-alpha-twice", part="q"))
         take_response = await alpha.client.take(
             client.TakeRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
@@ -82,5 +81,5 @@ class TestAlphaContext:
         await alpha.close()
         await database.close()
         assert add_response.standing == "released"
-        assert caught.value.kind is errors.Kind.CONFLICT
+        assert caught.value.code == "widget_exists"
         assert take_response.standing == "released"
