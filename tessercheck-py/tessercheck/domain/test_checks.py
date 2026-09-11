@@ -137,6 +137,14 @@ def test_placement_is_the_single_routing_decision() -> None:
         ("shop.domain.thing", False, "role"),
         ("shop.domain.__main__", False, "role"),
         ("shop.domain.sub.deep", False, "role"),
+        ("shop.domain.kernel", True, "context-kernel-init"),
+        ("shop.domain.kernel", False, "context-kernel-file"),
+        ("shop.domain.kernel.price", False, "context-kernel"),
+        ("shop.domain.kernel.sub", True, "context-kernel-init"),
+        ("shop.domain.kernel.sub.deep", False, "context-kernel"),
+        ("shop.domain.kernel.__main__", False, "context-kernel"),
+        ("shop.domain.kernel.test_price", False, "test"),
+        ("shop.domain.kernel.conftest", False, "conftest"),
         ("shop.domain.test_thing", False, "test"),
         ("shop.domain.eval_bad", False, "eval"),
         ("shop.domain.eval_pkg", True, "eval"),
@@ -8685,6 +8693,282 @@ def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
         "import name" in f
         for f in member
     ), member
+
+
+@ts.helper
+def _context_kernel_spec(
+    extra: tuple[tuple[str, str, str | None, bool], ...] = (),
+    money: str = "import tesser.domain as ts\n"
+    "class Money(ts.ValueObject):\n"
+    "    _amount: int\n"
+    "    def __init__(self, amount: int) -> None:\n"
+    '        object.__setattr__(self, "_amount", amount)\n',
+    init: str = "from shop.domain.kernel.money import Money as Money\n",
+) -> domain.CodebaseSpec:
+    return _spec(
+        sources=(
+            ("shop/domain/kernel/__init__.py", "shop.domain.kernel", init, True),
+            ("shop/domain/kernel/money.py", "shop.domain.kernel.money", money, False),
+            (
+                "shop/domain/kernel/test_money.py",
+                "shop.domain.kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/domain/price.py",
+                "shop.domain.price",
+                "import tesser.domain as ts\n"
+                "import shop.domain.kernel as kernel\n"
+                "class Price(ts.ValueObject):\n"
+                "    _money: kernel.Money\n"
+                "    def __init__(self, amount: int) -> None:\n"
+                '        object.__setattr__(self, "_money", kernel.Money(amount))\n',
+                False,
+            ),
+            (
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        )
+        + extra,
+    )
+
+
+def test_a_conforming_context_kernel_is_silent() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_context_kernel_spec()).violations()
+    )
+    assert findings == (), findings
+
+
+def test_a_context_kernel_is_a_package_never_a_module() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/domain/kernel.py",
+                "shop.domain.kernel",
+                "import tesser.domain as ts\n"
+                "class Money(ts.ValueObject):\n"
+                "    _amount: int\n"
+                "    def __init__(self, amount: int) -> None:\n"
+                '        object.__setattr__(self, "_amount", amount)\n',
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop/domain/kernel.py:1: TB041 shop.domain.kernel is a context's domain "
+        "kernel as a module; a context kernel is a package, never a module" in f
+        for f in findings
+    ), findings
+
+
+def test_a_context_kernel_holds_only_the_kinds_two_aggregates_share() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_context_kernel_spec(extra=(
+            (
+                "shop/domain/kernel/basket.py",
+                "shop.domain.kernel.basket",
+                "import tesser.domain as ts\n"
+                "class BasketSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Basket(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: BasketSpec) -> None:\n"
+                "        self.text = spec.text\n",
+                False,
+            ),
+            (
+                "shop/domain/kernel/test_basket.py",
+                "shop.domain.kernel.test_basket",
+                "def test_basket_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.domain.kernel.basket.Basket is an aggregate; a context kernel declares "
+        "the value objects, specs, and enums two aggregates share, because a root is "
+        "owned by one module and named elsewhere by its id" in f
+        for f in findings
+    ), findings
+    assert not any("BasketSpec is a spec" in f for f in findings), findings
+    enums = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_context_kernel_spec(
+            money="import enum\n"
+            "import tesser.domain as ts\n"
+            "class Grade(enum.Enum):\n"
+            "    HIGH = 1\n"
+            "class Money(ts.ValueObject):\n"
+            "    _amount: int\n"
+            "    def __init__(self, amount: int) -> None:\n"
+            '        object.__setattr__(self, "_amount", amount)\n',
+        )).violations()
+    )
+    assert not any("shop/domain/kernel/money.py" in f for f in enums), enums
+
+
+def test_a_domain_module_declares_at_most_one_aggregate_root() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/domain/two.py",
+                "shop.domain.two",
+                "import tesser.domain as ts\n"
+                "class OneSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class One(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: OneSpec) -> None:\n"
+                "        self.text = spec.text\n"
+                "class TwoSpec(ts.Spec):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Two(ts.AggregateRoot):\n"
+                "    def __init__(self, spec: TwoSpec) -> None:\n"
+                "        self.text = spec.text\n",
+                False,
+            ),
+            (
+                "shop/domain/test_two.py",
+                "shop.domain.test_two",
+                "def test_two_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop/domain/two.py:11: TB052 shop.domain.two declares 2 aggregate roots; a "
+        "domain module declares at most one aggregate root, because a second root in "
+        "one module is two consistency boundaries sharing a file" in f
+        for f in findings
+    ), findings
+
+
+def test_a_context_kernel_init_re_exports_its_own_modules_and_a_root_kernel() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_context_kernel_spec(
+            init="from shop.domain.kernel.money import Money as Money\n"
+            "from shop.domain.price import Price as Price\n",
+        )).violations()
+    )
+    assert any(
+        "shop.domain.kernel imports shop.domain.price; a role __init__ only re-exports "
+        "a module of its own role, and a context kernel __init__ also re-exports from "
+        "a root kernel" in f
+        for f in findings
+    ), findings
+    rooted = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "kernel/__init__.py",
+                "kernel",
+                "from kernel.identity import Identity as Identity\n",
+                True,
+            ),
+            (
+                "kernel/identity.py",
+                "kernel.identity",
+                "import tesser.domain as ts\n"
+                "class Identity(ts.ValueObject):\n"
+                "    _value: str\n"
+                "    def __init__(self, value: str) -> None:\n"
+                '        object.__setattr__(self, "_value", value)\n',
+                False,
+            ),
+            (
+                "kernel/test_identity.py",
+                "kernel.test_identity",
+                "def test_identity_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/domain/kernel/__init__.py",
+                "shop.domain.kernel",
+                "from kernel import Identity as Identity\n"
+                "from shop.domain.kernel.money import Money as Money\n",
+                True,
+            ),
+            (
+                "shop/domain/kernel/money.py",
+                "shop.domain.kernel.money",
+                "import tesser.domain as ts\n"
+                "import kernel\n"
+                "class Money(ts.ValueObject):\n"
+                "    _identity: kernel.Identity\n"
+                "    def __init__(self, value: str) -> None:\n"
+                '        object.__setattr__(self, "_identity", kernel.Identity(value))\n',
+                False,
+            ),
+            (
+                "shop/domain/kernel/test_money.py",
+                "shop.domain.kernel.test_money",
+                "def test_money_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/domain/price.py",
+                "shop.domain.price",
+                "import tesser.domain as ts\n"
+                "import shop.domain.kernel as kernel\n"
+                "class Price(ts.ValueObject):\n"
+                "    _money: kernel.Money\n"
+                "    _identity: kernel.Identity\n"
+                "    def __init__(self, value: str) -> None:\n"
+                '        object.__setattr__(self, "_money", kernel.Money(value))\n'
+                '        object.__setattr__(self, "_identity", kernel.Identity(value))\n',
+                False,
+            ),
+            (
+                "shop/domain/test_price.py",
+                "shop.domain.test_price",
+                "def test_price_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert rooted == (), rooted
+
+
+def test_a_context_kernel_module_never_reaches_its_own_context() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_context_kernel_spec(
+            money="import tesser.domain as ts\n"
+            "import shop.domain.kernel.other as other\n"
+            "import shop.application.service as service\n"
+            "class Money(ts.ValueObject):\n"
+            "    _amount: int\n"
+            "    def __init__(self, amount: int) -> None:\n"
+            '        object.__setattr__(self, "_amount", amount)\n',
+        )).violations()
+    )
+    assert any(
+        "shop.domain.kernel.money imports shop.domain.kernel.other, a module beside it" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.domain.kernel.money imports shop.application.service; the same-context "
+        "matrix is" in f
+        for f in findings
+    ), findings
 
 
 def test_an_undeclared_package_in_a_pure_role_is_still_a_finding() -> None:
