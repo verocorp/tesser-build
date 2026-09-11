@@ -53,6 +53,22 @@ class MapToAddItemResponse(ts.Mapper, client.AddItemResponse):
         super().__init__(items=items, reason=check_name_response.reason)
 
 
+class MapToFindItemRequest(ts.Mapper, ports.FindItemRequest):
+
+    def __init__(self, item_id: domain.ItemID) -> None:
+        super().__init__(id=str(item_id))
+
+
+class MapToListItemsResponse(ts.Mapper, client.ListItemsResponse):
+
+    def __init__(self, list_items_response: ports.ListItemsResponse) -> None:
+        super().__init__(
+            items=tuple(
+                MapToItemView(item_view=item_view) for item_view in list_items_response.items
+            )
+        )
+
+
 class CatalogService(ts.ApplicationService):
 
     def __init__(
@@ -73,14 +89,10 @@ class CatalogService(ts.ApplicationService):
 
     def get(self, get_item_request: client.GetItemRequest) -> client.GetItemResponse:
         item_id = domain.ItemID(get_item_request.id)
-        item_id_text = str(item_id)
-        find_item_response = self._item_repository.find(ports.FindItemRequest(id=item_id_text))
+        find_item_request = MapToFindItemRequest(item_id=item_id)
+        find_item_response = self._item_repository.find(find_item_request)
         return MapToGetItemResponse(find_item_response=find_item_response)
 
     def list(self, list_items_request: client.ListItemsRequest) -> client.ListItemsResponse:
         list_items_response = self._item_repository.all(ports.ListItemsRequest())
-        item_views = tuple(
-            client.ItemView(id=item_view.id, name=item_view.name)
-            for item_view in list_items_response.items
-        )
-        return client.ListItemsResponse(items=item_views)
+        return MapToListItemsResponse(list_items_response=list_items_response)

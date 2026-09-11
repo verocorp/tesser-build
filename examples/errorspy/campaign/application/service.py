@@ -40,6 +40,65 @@ class MapToCampaignSpec(ts.Mapper, domain.CampaignSpec):
         )
 
 
+class MapToShortLinkSpecFromLinkBody(ts.Mapper, domain.ShortLinkSpec):
+
+    def __init__(self, link_body: client.LinkBody) -> None:
+        super().__init__(slug=link_body.slug, target_url=link_body.target_url)
+
+
+class MapToCampaignSpecFromCreateRequest(ts.Mapper, domain.CampaignSpec):
+
+    def __init__(self, create_campaign_request: client.CreateCampaignRequest) -> None:
+        super().__init__(
+            id=create_campaign_request.campaign_id,
+            window=domain.DateWindowSpec(
+                start=create_campaign_request.window_start,
+                end=create_campaign_request.window_end,
+            ),
+            links=tuple(
+                MapToShortLinkSpecFromLinkBody(link_body)
+                for link_body in create_campaign_request.links
+            ),
+        )
+
+
+class MapToFindCampaignRequest(ts.Mapper, ports.FindCampaignRequest):
+
+    def __init__(self, campaign_id: domain.CampaignID) -> None:
+        super().__init__(campaign_id=str(campaign_id))
+
+
+class MapToWindowRecord(ts.Mapper, ports.WindowRecord):
+
+    def __init__(self, campaign: domain.Campaign) -> None:
+        super().__init__(start=str(campaign.window.start), end=str(campaign.window.end))
+
+
+class MapToLinkRecord(ts.Mapper, ports.LinkRecord):
+
+    def __init__(self, short_link: domain.ShortLink) -> None:
+        super().__init__(slug=str(short_link.slug), target_url=str(short_link.target))
+
+
+class MapToSaveCampaignRequest(ts.Mapper, ports.SaveCampaignRequest):
+
+    def __init__(self, campaign: domain.Campaign) -> None:
+        super().__init__(
+            id=campaign.id,
+            window=MapToWindowRecord(campaign),
+            links=tuple(MapToLinkRecord(link) for link in campaign.links),
+        )
+
+
+class MapToCampaignView(ts.Mapper, client.CampaignView):
+
+    def __init__(self, campaign: domain.Campaign) -> None:
+        super().__init__(
+            campaign_id=campaign.id,
+            links=tuple(str(link.slug) for link in campaign.links),
+        )
+
+
 class CampaignService(ts.ApplicationService):
 
     def __init__(self, campaign_repository: ports.CampaignRepository) -> None:
@@ -48,41 +107,16 @@ class CampaignService(ts.ApplicationService):
     def create_campaign(
         self, create_campaign_request: client.CreateCampaignRequest
     ) -> client.CampaignView:
-        date_window_spec = domain.DateWindowSpec(
-            start=create_campaign_request.window_start,
-            end=create_campaign_request.window_end,
-        )
-        link_specs = tuple(
-            domain.ShortLinkSpec(slug=link.slug, target_url=link.target_url)
-            for link in create_campaign_request.links
-        )
-        campaign_spec = domain.CampaignSpec(
-            id=create_campaign_request.campaign_id, window=date_window_spec, links=link_specs
-        )
+        campaign_spec = MapToCampaignSpecFromCreateRequest(create_campaign_request)
         campaign = domain.Campaign(campaign_spec)
-        window_start = str(campaign.window.start)
-        window_end = str(campaign.window.end)
-        window_record = ports.WindowRecord(start=window_start, end=window_end)
-        link_records: list[ports.LinkRecord] = []
-        for link in campaign.links:
-            link_slug = str(link.slug)
-            link_target = str(link.target)
-            link_record = ports.LinkRecord(slug=link_slug, target_url=link_target)
-            link_records.append(link_record)
-        saved_links = tuple(link_records)
-        save_campaign_request = ports.SaveCampaignRequest(
-            id=campaign.id, window=window_record, links=saved_links
-        )
-        self._campaign_repository.save(save_campaign_request)
-        view_links = tuple(str(link.slug) for link in campaign.links)
-        return client.CampaignView(campaign_id=campaign.id, links=view_links)
+        self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
+        return MapToCampaignView(campaign)
 
     def get_campaign(
         self, get_campaign_request: client.GetCampaignRequest
     ) -> client.CampaignView:
         campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
-        campaign_id_text = str(campaign_id)
-        find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
+        find_campaign_request = MapToFindCampaignRequest(campaign_id)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
@@ -92,10 +126,9 @@ class CampaignService(ts.ApplicationService):
             campaign = domain.Campaign(campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
-                f"corrupted campaign record {campaign_id_text!r}: {e}"
+                f"corrupted campaign record {find_campaign_request.campaign_id!r}: {e}"
             ) from e
-        view_links = tuple(str(link.slug) for link in campaign.links)
-        return client.CampaignView(campaign_id=campaign.id, links=view_links)
+        return MapToCampaignView(campaign)
 
     def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
         errors.collect(
@@ -104,8 +137,7 @@ class CampaignService(ts.ApplicationService):
             target_url=lambda: domain.TargetURL(add_link_request.target_url),  # tesser:debt TB023
         )
         campaign_id = domain.CampaignID(add_link_request.campaign_id)
-        campaign_id_text = str(campaign_id)
-        find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
+        find_campaign_request = MapToFindCampaignRequest(campaign_id)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
@@ -115,36 +147,21 @@ class CampaignService(ts.ApplicationService):
             campaign = domain.Campaign(campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
-                f"corrupted campaign record {campaign_id_text!r}: {e}"
+                f"corrupted campaign record {find_campaign_request.campaign_id!r}: {e}"
             ) from e
         campaign.add_link(
             domain.ShortLinkSpec(
                 slug=add_link_request.slug, target_url=add_link_request.target_url
             )
         )
-        window_start = str(campaign.window.start)
-        window_end = str(campaign.window.end)
-        window_record = ports.WindowRecord(start=window_start, end=window_end)
-        link_records: list[ports.LinkRecord] = []
-        for link in campaign.links:
-            link_slug = str(link.slug)
-            link_target = str(link.target)
-            link_record = ports.LinkRecord(slug=link_slug, target_url=link_target)
-            link_records.append(link_record)
-        saved_links = tuple(link_records)
-        save_campaign_request = ports.SaveCampaignRequest(
-            id=campaign.id, window=window_record, links=saved_links
-        )
-        self._campaign_repository.save(save_campaign_request)
-        view_links = tuple(str(link.slug) for link in campaign.links)
-        return client.CampaignView(campaign_id=campaign.id, links=view_links)
+        self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
+        return MapToCampaignView(campaign)
 
     def deactivate_link(
         self, deactivate_link_request: client.DeactivateLinkRequest
     ) -> client.CampaignView:
         campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
-        campaign_id_text = str(campaign_id)
-        find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
+        find_campaign_request = MapToFindCampaignRequest(campaign_id)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
@@ -154,22 +171,8 @@ class CampaignService(ts.ApplicationService):
             campaign = domain.Campaign(campaign_spec)
         except errors.DomainError as e:
             raise errors.InfraError(
-                f"corrupted campaign record {campaign_id_text!r}: {e}"
+                f"corrupted campaign record {find_campaign_request.campaign_id!r}: {e}"
             ) from e
         campaign.deactivate_link(domain.Slug(deactivate_link_request.slug))
-        window_start = str(campaign.window.start)
-        window_end = str(campaign.window.end)
-        window_record = ports.WindowRecord(start=window_start, end=window_end)
-        link_records: list[ports.LinkRecord] = []
-        for link in campaign.links:
-            link_slug = str(link.slug)
-            link_target = str(link.target)
-            link_record = ports.LinkRecord(slug=link_slug, target_url=link_target)
-            link_records.append(link_record)
-        saved_links = tuple(link_records)
-        save_campaign_request = ports.SaveCampaignRequest(
-            id=campaign.id, window=window_record, links=saved_links
-        )
-        self._campaign_repository.save(save_campaign_request)
-        view_links = tuple(str(link.slug) for link in campaign.links)
-        return client.CampaignView(campaign_id=campaign.id, links=view_links)
+        self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
+        return MapToCampaignView(campaign)

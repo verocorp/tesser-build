@@ -132,6 +132,37 @@ class MapToRenamingSpec(ts.Mapper, domain.RenamingSpec):
         )
 
 
+class MapToReadSourcesRequest(ts.Mapper, ports.ReadSourcesRequest):
+
+    def __init__(self, tree_root: domain.TreeRoot) -> None:
+        super().__init__(tree=str(tree_root))
+
+
+class MapToReadRulebookRequest(ts.Mapper, ports.ReadRulebookRequest):
+
+    def __init__(self, tree_root: domain.TreeRoot) -> None:
+        super().__init__(tree=str(tree_root))
+
+
+class MapToRulebookSpec(ts.Mapper, domain.RulebookSpec):
+
+    def __init__(self, read_rulebook_response: ports.ReadRulebookResponse) -> None:
+        super().__init__(
+            checks_text=read_rulebook_response.checks_text,
+            test_modules=tuple(
+                (module.name, module.text)
+                for module in read_rulebook_response.test_modules
+            ),
+            contracts_text=read_rulebook_response.contracts_text,
+        )
+
+
+class MapToRulebookResponse(ts.Mapper, client.RulebookResponse):
+
+    def __init__(self, rulebook: domain.Rulebook) -> None:
+        super().__init__(rendered=str(rulebook))
+
+
 class MapToWriteSourcesRequest(ts.Mapper, ports.WriteSourcesRequest):
 
     def __init__(
@@ -186,14 +217,13 @@ class TessercheckService(ts.ApplicationService):
 
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         tree_root = domain.TreeRoot(check_request.tree)
-        tree = str(tree_root)
-        read_sources_response = self._source_reader.sources(ports.ReadSourcesRequest(tree=tree))
+        read_sources_request = MapToReadSourcesRequest(tree_root)
+        read_sources_response = self._source_reader.sources(read_sources_request)
         return MapToCheckResponse(read_sources_response)
 
     def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
         tree_root = domain.TreeRoot(mark_request.tree)
-        tree = str(tree_root)
-        read_sources_request = ports.ReadSourcesRequest(tree=tree)
+        read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         marking = domain.Marking(MapToMarkingSpec(read_sources_response, codebase))
@@ -205,8 +235,7 @@ class TessercheckService(ts.ApplicationService):
 
     def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
         tree_root = domain.TreeRoot(rename_request.tree)
-        tree = str(tree_root)
-        read_sources_request = ports.ReadSourcesRequest(tree=tree)
+        read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         renaming = domain.Renaming(MapToRenamingSpec(read_sources_response, codebase))
@@ -217,15 +246,7 @@ class TessercheckService(ts.ApplicationService):
 
     def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
         tree_root = domain.TreeRoot(rulebook_request.tree)
-        tree = str(tree_root)
-        read_rulebook_response = self._rulebook_sources.read(ports.ReadRulebookRequest(tree=tree))
-        modules = tuple((module.name, module.text) for module in read_rulebook_response.test_modules)
-        rulebook = domain.Rulebook(
-            domain.RulebookSpec(
-                checks_text=read_rulebook_response.checks_text,
-                test_modules=modules,
-                contracts_text=read_rulebook_response.contracts_text,
-            )
-        )
-        rendered = str(rulebook)
-        return client.RulebookResponse(rendered=rendered)
+        read_rulebook_request = MapToReadRulebookRequest(tree_root)
+        read_rulebook_response = self._rulebook_sources.read(read_rulebook_request)
+        rulebook = domain.Rulebook(MapToRulebookSpec(read_rulebook_response))
+        return MapToRulebookResponse(rulebook)

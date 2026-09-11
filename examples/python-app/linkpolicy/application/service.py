@@ -31,6 +31,16 @@ class MapToVerdictView(ts.Mapper, client.VerdictView):
         )
 
 
+class MapToListVerdictsResponse(ts.Mapper, client.ListVerdictsResponse):
+
+    def __init__(self, list_verdicts_response: ports.ListVerdictsResponse) -> None:
+        super().__init__(
+            verdicts=tuple(
+                MapToVerdictView(record) for record in list_verdicts_response.verdicts
+            )
+        )
+
+
 class LinkPolicyService(ts.ApplicationService):
 
     def __init__(self, verdict_repository: ports.VerdictRepository) -> None:
@@ -39,8 +49,7 @@ class LinkPolicyService(ts.ApplicationService):
 
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         target_url = domain.TargetURL(check_request.target_url)
-        target_url_text = str(target_url)
-        verdict = self._policy.evaluate(target_url_text)
+        verdict = self._policy.evaluate(target_url)
         self._verdict_repository.record(MapToRecordVerdictRequest(verdict))
         return MapToCheckResponse(verdict)
 
@@ -48,8 +57,4 @@ class LinkPolicyService(ts.ApplicationService):
         self, list_verdicts_request: client.ListVerdictsRequest
     ) -> client.ListVerdictsResponse:
         list_verdicts_response = self._verdict_repository.all(ports.ListVerdictsRequest())
-        views: list[client.VerdictView] = []
-        for record in list_verdicts_response.verdicts:
-            views.append(MapToVerdictView(record))
-        listed_views = tuple(views)
-        return client.ListVerdictsResponse(verdicts=listed_views)
+        return MapToListVerdictsResponse(list_verdicts_response=list_verdicts_response)

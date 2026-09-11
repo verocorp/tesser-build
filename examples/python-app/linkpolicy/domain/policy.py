@@ -138,18 +138,19 @@ class Policy(ts.ValueObject):
     def blocked_hosts(self) -> tuple[Host, ...]:
         return self._blocked_hosts
 
-    def evaluate(self, target_url: str) -> Verdict:
-        parsed = urllib.parse.urlparse(target_url)
+    def evaluate(self, target_url: TargetURL) -> Verdict:
+        target_url_text = str(target_url)
+        parsed = urllib.parse.urlparse(target_url_text)
         if parsed.scheme not in {str(s) for s in self._allowed_schemes}:
             return Verdict(
                 VerdictSpec(
-                    target_url, False, f"scheme {parsed.scheme or '(none)'!r} not allowed"
+                    target_url_text, False, f"scheme {parsed.scheme or '(none)'!r} not allowed"
                 )
             )
         host = parsed.hostname or ""
         if host in {str(h) for h in self._blocked_hosts}:
-            return Verdict(VerdictSpec(target_url, False, f"host {host!r} is blocked"))
-        return Verdict(VerdictSpec(target_url, True, "ok"))
+            return Verdict(VerdictSpec(target_url_text, False, f"host {host!r} is blocked"))
+        return Verdict(VerdictSpec(target_url_text, True, "ok"))
 
     _allowed_schemes: tuple[Scheme, ...]
     _blocked_hosts: tuple[Host, ...]

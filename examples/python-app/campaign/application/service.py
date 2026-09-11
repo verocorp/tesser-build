@@ -210,6 +210,50 @@ class MapToCampaignSpecFromRecord(ts.Mapper, domain.CampaignSpec):
         )
 
 
+class MapToFindCampaignRequest(ts.Mapper, ports.FindCampaignRequest):
+
+    def __init__(self, campaign_id: domain.CampaignID) -> None:
+        super().__init__(campaign_id=str(campaign_id))
+
+
+class MapToFindCampaignViewRequest(ts.Mapper, ports.FindCampaignViewRequest):
+
+    def __init__(self, campaign_id: domain.CampaignID) -> None:
+        super().__init__(campaign_id=str(campaign_id))
+
+
+class MapToFindCampaignBySlugRequest(ts.Mapper, ports.FindCampaignBySlugRequest):
+
+    def __init__(self, slug: domain.Slug) -> None:
+        super().__init__(slug=str(slug))
+
+
+class MapToResolveResponse(ts.Mapper, client.ResolveResponse):
+
+    def __init__(self, target_url: domain.TargetURL) -> None:
+        super().__init__(target_url=str(target_url))
+
+
+class MapToLinkViewFromRecord(ts.Mapper, client.LinkView):
+
+    def __init__(self, link_record: ports.LinkRecord) -> None:
+        super().__init__(
+            slug=link_record.slug, target_url=link_record.target_url, status=link_record.status
+        )
+
+
+class MapToListLinksResponse(ts.Mapper, client.ListLinksResponse):
+
+    def __init__(self, list_campaigns_response: ports.ListCampaignsResponse) -> None:
+        super().__init__(
+            links=tuple(
+                MapToLinkViewFromRecord(link_record=link_record)
+                for campaign_record in list_campaigns_response.campaigns
+                for link_record in campaign_record.links
+            )
+        )
+
+
 class CampaignService(ts.ApplicationService):
 
     def __init__(
@@ -252,7 +296,6 @@ class CampaignService(ts.ApplicationService):
         slug = domain.Slug(add_link_request.slug)
         target_url = domain.TargetURL(add_link_request.target_url)
         campaign_id = domain.CampaignID(add_link_request.campaign_id)
-        campaign_id_text = str(campaign_id)
         check_target_response = self._target_policy.check(
             MapToCheckTargetRequest(target_url=target_url)
         )
@@ -264,7 +307,7 @@ class CampaignService(ts.ApplicationService):
             check_target_response=check_target_response,
             slug_taken_response=slug_taken_response,
         )
-        find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
+        find_campaign_request = MapToFindCampaignRequest(campaign_id=campaign_id)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
         campaign = domain.Campaign(MapToCampaignSpecFromRecord(
             find_campaign_request=find_campaign_request,
@@ -272,9 +315,7 @@ class CampaignService(ts.ApplicationService):
         ))
         campaign.add_short_link(short_link_spec)
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign=campaign))
-        find_campaign_view_request = ports.FindCampaignViewRequest(
-            campaign_id=campaign_id_text,
-        )
+        find_campaign_view_request = MapToFindCampaignViewRequest(campaign_id=campaign_id)
         find_campaign_view_response = self._campaign_queries.find_view(
             find_campaign_view_request
         )
@@ -287,8 +328,7 @@ class CampaignService(ts.ApplicationService):
         self, deactivate_link_request: client.DeactivateLinkRequest
     ) -> client.CampaignView:
         campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
-        campaign_id_text = str(campaign_id)
-        find_campaign_request = ports.FindCampaignRequest(campaign_id=campaign_id_text)
+        find_campaign_request = MapToFindCampaignRequest(campaign_id=campaign_id)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
         campaign = domain.Campaign(MapToCampaignSpecFromRecord(
             find_campaign_request=find_campaign_request,
@@ -297,9 +337,7 @@ class CampaignService(ts.ApplicationService):
         slug = domain.Slug(deactivate_link_request.slug)
         campaign.deactivate_short_link(slug)
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign=campaign))
-        find_campaign_view_request = ports.FindCampaignViewRequest(
-            campaign_id=campaign_id_text,
-        )
+        find_campaign_view_request = MapToFindCampaignViewRequest(campaign_id=campaign_id)
         find_campaign_view_response = self._campaign_queries.find_view(
             find_campaign_view_request
         )
@@ -312,10 +350,7 @@ class CampaignService(ts.ApplicationService):
         self, get_campaign_request: client.GetCampaignRequest
     ) -> client.CampaignView:
         campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
-        campaign_id_text = str(campaign_id)
-        find_campaign_view_request = ports.FindCampaignViewRequest(
-            campaign_id=campaign_id_text,
-        )
+        find_campaign_view_request = MapToFindCampaignViewRequest(campaign_id=campaign_id)
         find_campaign_view_response = self._campaign_queries.find_view(
             find_campaign_view_request
         )
@@ -326,8 +361,7 @@ class CampaignService(ts.ApplicationService):
 
     def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
         slug = domain.Slug(resolve_request.slug)
-        slug_text = str(slug)
-        find_campaign_by_slug_request = ports.FindCampaignBySlugRequest(slug=slug_text)
+        find_campaign_by_slug_request = MapToFindCampaignBySlugRequest(slug=slug)
         find_campaign_response = self._campaign_repository.find_by_slug(
             find_campaign_by_slug_request
         )
@@ -336,8 +370,7 @@ class CampaignService(ts.ApplicationService):
             find_campaign_response=find_campaign_response,
         ))
         target_url = campaign.active_target(slug)
-        target_url_text = str(target_url)
-        return client.ResolveResponse(target_url=target_url_text)
+        return MapToResolveResponse(target_url=target_url)
 
     def list_links(
         self, list_links_request: client.ListLinksRequest
@@ -345,12 +378,4 @@ class CampaignService(ts.ApplicationService):
         list_campaigns_response = self._campaign_repository.all(
             ports.ListCampaignsRequest()
         )
-        views: list[client.LinkView] = []
-        for listed_campaign in list_campaigns_response.campaigns:
-            for link in listed_campaign.links:
-                link_view = client.LinkView(
-                    slug=link.slug, target_url=link.target_url, status=link.status
-                )
-                views.append(link_view)
-        listed_views = tuple(views)
-        return client.ListLinksResponse(links=listed_views)
+        return MapToListLinksResponse(list_campaigns_response=list_campaigns_response)
