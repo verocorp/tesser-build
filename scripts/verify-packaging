@@ -179,5 +179,92 @@ if [ $? -ne 2 ]; then
   exit 1
 fi
 
+# The post-write hook, driven the way Claude Code drives it: a PostToolUse
+# event on stdin, the answer on stdout (advisory), stderr + exit 2 (feedback),
+# and one JSONL line per run whatever happened. Each case is a shape the
+# consumer's machine will produce; a hook that only "starts" passes nothing.
+HOOKED="$VENV/hooked"
+mkdir -p "$HOOKED/legacy" || exit 1
+printf 'app\nskip legacy\n' > "$HOOKED/.tesser-root"
+printf 'x = 1\n' > "$HOOKED/loose.py"
+printf 'x = 1\n' > "$HOOKED/legacy/old.py"
+hook_event() {
+  printf '{"session_id":"%s","cwd":"%s","hook_event_name":"PostToolUse","tool_name":"%s","tool_input":{"file_path":"%s","skill":"%s"},"tool_response":{}}' "$1" "$HOOKED" "$2" "$3" "$4"
+}
+hook_run() {
+  (cd "$VENV" && hook_event "$1" "$2" "$3" "$4" | "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+}
+last_log() { tail -n 1 "$HOOKED/.tesser/changes.jsonl"; }
+
+step "tessercheck-hook advises on a governed file with findings"
+hook_run s1 Write "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || ! grep -q '"additionalContext"' "$VENV/hook.out" || ! grep -q 'loose.py' "$VENV/hook.out"; then
+  echo "tessercheck-hook did not advise on a governed file with findings" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+if ! last_log | grep -q '"placement": "governed"' || ! last_log | grep -q '"status": "ok"' || ! last_log | grep -q '"findings": \["TB0'; then
+  echo "tessercheck-hook did not log the advisory run" >&2; last_log >&2; exit 1
+fi
+
+step "tessercheck-hook feeds back with exit 2 when told to"
+mkdir -p "$HOOKED/.tesser" && printf 'mode=feedback\n' > "$HOOKED/.tesser/hook.conf"
+hook_run s1 Edit "$HOOKED/loose.py" ""
+if [ $? -ne 2 ] || ! grep -q 'TB0' "$VENV/hook.err" || [ -s "$VENV/hook.out" ]; then
+  echo "tessercheck-hook did not feed back with exit 2 in feedback mode" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+if ! last_log | grep -q '"mode": "feedback"' || ! last_log | grep -q '"exit_code": 2'; then
+  echo "tessercheck-hook did not log the feedback run" >&2; last_log >&2; exit 1
+fi
+rm -f "$HOOKED/.tesser/hook.conf"
+
+step "tessercheck-hook is silent on a skipped path and on a non-Python write"
+hook_run s1 Write "$HOOKED/legacy/old.py" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ -s "$VENV/hook.err" ] || ! last_log | grep -q '"placement": "skipped"'; then
+  echo "tessercheck-hook was not silent on a skipped path" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; last_log >&2; exit 1
+fi
+lines_before=$(wc -l < "$HOOKED/.tesser/changes.jsonl")
+hook_run s1 Write "$HOOKED/notes.md" ""
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || [ "$(wc -l < "$HOOKED/.tesser/changes.jsonl")" -ne "$lines_before" ]; then
+  echo "tessercheck-hook ran or logged on a non-Python write" >&2; exit 1
+fi
+
+step "tessercheck-hook fails open on timeout and logs it"
+(cd "$VENV" && hook_event s1 Write "$HOOKED/loose.py" "" | TESSERCHECK_HOOK_BUDGET=0.001 "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || ! last_log | grep -q '"status": "timeout"'; then
+  echo "tessercheck-hook did not fail open on a timeout" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; last_log >&2; exit 1
+fi
+
+step "tessercheck-hook records the skill load and carries it into the next write's line"
+hook_run s2 Skill "" tesser-build
+if [ $? -ne 0 ] || ! grep -q '"via": "skill"' "$HOOKED/.tesser/sessions/s2.jsonl"; then
+  echo "tessercheck-hook did not record a Skill load" >&2; exit 1
+fi
+hook_run s2 Write "$HOOKED/loose.py" ""
+if ! last_log | grep -q '"guidance": \["skill:tesser-build"\]'; then
+  echo "tessercheck-hook did not carry the guidance list into the log line" >&2; last_log >&2; exit 1
+fi
+
+step "tessercheck-hook advises about an undeclared tree in feedback mode too"
+printf 'library\n' > "$HOOKED/.tesser-root"
+mkdir -p "$HOOKED/.tesser" && printf 'mode=feedback\n' > "$HOOKED/.tesser/hook.conf"
+hook_run s1 Write "$HOOKED/loose.py" ""
+if [ $? -ne 0 ] || ! grep -q 'TB044' "$VENV/hook.out" || ! last_log | grep -q '"placement": "undeclared"'; then
+  echo "tessercheck-hook did not name TB044 on an undeclared tree" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
+rm -f "$HOOKED/.tesser/hook.conf"
+
+# The three distributions pin each other exactly, so a CLI installed alone
+# against a stale analyzer is refused at pip, before any hook can fail on a
+# machine nobody is watching.
+step "a stale analyzer is refused at install"
+STALE="$VENV/stale-tessercheck-py"
+mkdir -p "$STALE/tessercheck" || exit 1
+printf '[build-system]\nrequires = ["setuptools>=61"]\nbuild-backend = "setuptools.build_meta"\n[project]\nname = "tessercheck-py"\nversion = "0.0.1"\n[tool.setuptools]\npackages = ["tessercheck"]\n' > "$STALE/pyproject.toml"
+: > "$STALE/tessercheck/__init__.py"
+"$PY" -m pip install --quiet --no-deps "$STALE" >/dev/null 2>&1 || exit 1
+if "$PY" -m pip install --quiet --no-index "$VENV/tessercheck-cli" >/dev/null 2>&1; then
+  echo "pip installed tessercheck-cli against a stale tessercheck-py; the pin is not exact" >&2
+  exit 1
+fi
+
 echo
 echo "packaging green"

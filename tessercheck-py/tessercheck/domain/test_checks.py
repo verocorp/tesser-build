@@ -17600,3 +17600,118 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
         for f in findings
     ), findings
     assert not any("imports shop.application.relays;" in f for f in findings), findings
+
+
+@ts.helper
+def _two_loose_spec(
+    scoped: tuple[str, ...] = (),
+    declared: str = "app",
+    imports: tuple[str, ...] = (),
+    pruned: tuple[str, ...] = (),
+) -> domain.CodebaseSpec:
+    return domain.CodebaseSpec(
+        sources=(
+            ("loose_a.py", "loose_a", "x = 1  # tesser:debt TB099\n", False),
+            ("loose_b.py", "loose_b", "y = 2  # tesser:debt TB099\n", False),
+        ),
+        declared=declared,
+        nested=(),
+        symlinked=(),
+        imports=imports,
+        stdlib=("os",),
+        pruned=pruned,
+        scoped=scoped,
+    )
+
+
+def test_a_scoped_codebase_reports_only_the_scoped_module() -> None:
+    whole = domain.Codebase(_two_loose_spec()).violations()
+    scoped = domain.Codebase(_two_loose_spec(scoped=("loose_a.py",))).violations()
+
+    assert {str(v.path()) for v in whole} == {"loose_a.py", "loose_b.py"}
+    assert scoped == tuple(v for v in whole if str(v.path()) == "loose_a.py")
+    assert scoped
+    assert any(str(v.code()) == "TB090" for v in scoped)
+
+
+def test_a_scoped_codebase_still_reports_a_broken_declaration() -> None:
+    whole = domain.Codebase(_two_loose_spec(declared=domain.DECLARED_MISSING)).violations()
+    scoped = domain.Codebase(_two_loose_spec(
+        declared=domain.DECLARED_MISSING, scoped=("loose_a.py",)
+    )).violations()
+
+    assert scoped == whole
+    assert all(str(v.code()) == "TB044" for v in scoped)
+
+
+def test_a_scoped_codebase_does_not_judge_the_tree_declaration_from_one_module() -> None:
+    whole = domain.Codebase(_two_loose_spec(imports=("other.client.client",))).violations()
+    scoped = domain.Codebase(_two_loose_spec(
+        imports=("other.client.client",), scoped=("loose_a.py",)
+    )).violations()
+
+    assert any(str(v.path()) == ".tesser-root" for v in whole)
+    assert not any(str(v.path()) == ".tesser-root" for v in scoped)
+
+
+def test_a_scope_naming_no_module_reports_nothing() -> None:
+    assert domain.Codebase(_two_loose_spec(scoped=("elsewhere.py",))).violations() == ()
+
+
+def test_governance_names_where_a_path_stands_in_the_walk() -> None:
+    codebase = domain.Codebase(_two_loose_spec(pruned=("legacy", "alpha/legacy")))
+
+    assert codebase.governance(domain.Path("loose_a.py")) is domain.Governance.GOVERNED
+    assert codebase.governance(domain.Path("legacy/old.py")) is domain.Governance.SKIPPED
+    assert codebase.governance(domain.Path("alpha/legacy/old.py")) is domain.Governance.SKIPPED
+    assert codebase.governance(domain.Path("legacy_bis/old.py")) is domain.Governance.OUTSIDE
+    assert codebase.governance(domain.Path("alpha/new.py")) is domain.Governance.OUTSIDE
+
+
+def test_governance_is_undeclared_when_the_tree_is() -> None:
+    codebase = domain.Codebase(_two_loose_spec(declared=domain.DECLARED_UNRECOGNIZED))
+
+    assert codebase.governance(domain.Path("loose_a.py")) is domain.Governance.UNDECLARED
+
+
+def test_a_hook_run_reads_its_conf_with_advisory_and_enabled_as_the_defaults() -> None:
+    assert str(domain.HookRun(_run_spec("")).conf()) == "advisory"
+    assert str(domain.HookRun(_run_spec("mode=feedback\n")).conf()) == "feedback"
+    assert str(domain.HookRun(_run_spec("mode = feedback \nenabled = true\n")).conf()) == "feedback"
+    assert str(domain.HookRun(_run_spec("mode=banana\n")).conf()) == "advisory"
+    assert str(domain.HookRun(_run_spec("enabled=false\n")).conf()) == "disabled"
+    assert str(domain.HookRun(_run_spec("mode=feedback\nenabled=false\n")).conf()) == "disabled"
+    assert str(domain.HookRun(_run_spec("enabled=maybe\n# a comment\n")).conf()) == "advisory"
+
+
+@ts.helper
+def _run_spec(conf: str = "", governance: str = "governed", findings: int = 1) -> domain.HookRunSpec:
+    return domain.HookRunSpec(conf=conf, governance=governance, findings=findings)
+
+
+def test_a_hook_run_decides_its_action_from_conf_governance_and_findings() -> None:
+    assert domain.HookRun(_run_spec("enabled=false\n")).action() is domain.HookAction.DISABLED
+    assert domain.HookRun(_run_spec("enabled=false\n", governance="undeclared")).action() is domain.HookAction.DISABLED
+    assert domain.HookRun(_run_spec("", governance="undeclared", findings=0)).action() is domain.HookAction.ADVISE
+    assert domain.HookRun(_run_spec("mode=feedback\n", governance="undeclared")).action() is domain.HookAction.ADVISE
+    assert domain.HookRun(_run_spec("mode=feedback\n", governance="skipped")).action() is domain.HookAction.SILENT
+    assert domain.HookRun(_run_spec("mode=feedback\n", governance="outside")).action() is domain.HookAction.SILENT
+    assert domain.HookRun(_run_spec("mode=feedback\n", findings=0)).action() is domain.HookAction.SILENT
+    assert domain.HookRun(_run_spec("", findings=3)).action() is domain.HookAction.ADVISE
+    assert domain.HookRun(_run_spec("mode=feedback\n", findings=3)).action() is domain.HookAction.FEEDBACK
+
+
+def test_a_hook_run_rejects_a_governance_it_does_not_know() -> None:
+    with pytest.raises(ValueError, match="unknown governance"):
+        domain.HookRun(_run_spec("", governance="somewhere"))
+
+
+def test_a_hook_run_rejects_a_negative_finding_count() -> None:
+    with pytest.raises(ValueError, match="count must not be negative"):
+        domain.HookRun(_run_spec("", findings=-1))
+
+
+def test_hook_runs_are_equal_by_value() -> None:
+    assert domain.HookRun(_run_spec("mode=feedback\n")) == domain.HookRun(_run_spec("mode = feedback\n"))
+    assert domain.HookRun(_run_spec("")) != domain.HookRun(_run_spec("mode=feedback\n"))
+    assert domain.HookRun(_run_spec("", findings=1)) != domain.HookRun(_run_spec("", findings=2))

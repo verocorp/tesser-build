@@ -53,6 +53,7 @@ class ReadSourcesResponse(ts.Response):
         imports: tuple[str, ...],
         stdlib: tuple[str, ...],
         pure_stdlib: tuple[str, ...],
+        pruned: tuple[str, ...],
     ) -> None:
         self.root = root
         self.nested = nested
@@ -62,6 +63,7 @@ class ReadSourcesResponse(ts.Response):
         self.imports = imports
         self.stdlib = stdlib
         self.pure_stdlib = pure_stdlib
+        self.pruned = pruned
 
 
 class SourceReader(ts.Port, typing.Protocol):

@@ -6,6 +6,7 @@ import pathlib
 
 import tessercheck.adapters.repositories as repositories
 import tessercheck.application as application
+import tessercheck.application.ports as ports
 import tessercheck.client as client
 
 
@@ -87,3 +88,48 @@ def returned_tokens(func: ast.FunctionDef) -> frozenset[str]:
         for value in ast.walk(node.value)
         if isinstance(value, ast.Constant) and isinstance(value.value, str)
     )
+
+
+def check_file_raw(root: pathlib.Path, path: str) -> client.CheckFileResponse:
+    tessercheck_service = application.TessercheckService(repositories.FilesystemSourceReader(), repositories.FilesystemSourceWriter(), repositories.FilesystemRulebookSources())
+    return tessercheck_service.check_file(client.CheckFileRequest(tree=str(root), path=path))
+
+
+def governed_paths(root: pathlib.Path) -> tuple[str, ...]:
+    read_sources_response = repositories.FilesystemSourceReader().sources(
+        ports.ReadSourcesRequest(tree=str(root))
+    )
+    return tuple(source.path for source in read_sources_response.sources)
+
+
+def repo_root() -> pathlib.Path:
+    return pathlib.Path(__file__).resolve().parents[3]
+
+
+def example_trees() -> tuple[str, ...]:
+    return (
+        "examples/minimal",
+        "examples/ports",
+        "examples/errorspy",
+        "examples/llmport",
+        "examples/serdepy",
+        "examples/asyncpg",
+        "examples/durable-execution",
+        "examples/python-app",
+    )
+
+
+def fixture_trees() -> tuple[str, ...]:
+    return (
+        "tessercheck-py/testdata/tb031/good_tree",
+        "tessercheck-py/testdata/tb031/bad_tree",
+    )
+
+
+def sampled(paths: tuple[str, ...], most: int = 24) -> tuple[str, ...]:
+    stride = max(1, len(paths) // most)
+    return paths[::stride]
+
+
+def findings_on(findings: tuple[str, ...], path: str) -> tuple[str, ...]:
+    return tuple(finding for finding in findings if finding.startswith(path + ":"))

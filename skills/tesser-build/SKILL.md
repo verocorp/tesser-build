@@ -1,7 +1,7 @@
 ---
 name: tesser-build
 description: Application-construction entry point (DDD). Load whenever creating or modifying domain types OR the code around them — adding a field to a struct/class, creating a new type, modeling a new concept, writing a constructor, adding validation, comparing domain objects in tests, deciding between a value object/entity/aggregate, AND whenever writing a handler/endpoint, a use-case or application/domain service, or persistence/repository code (where to put business logic, how to load or save an aggregate, keeping domain math out of controllers), AND whenever component an application together — writing an entry point / `main` / composition root / host, exposing a component behind a public interface (a `Client` + DTOs), connecting two bounded contexts (a cross-context call or read), or placing a web UI / frontend / SPA (where presentation code lives), AND whenever reasoning about strategic design — subdomains, bounded contexts, or ubiquitous language. Routes the task through the decomposition procedure to the right component doc.
-skill-version: 77
+skill-version: 78
 source: https://github.com/verocorp/tesser-build (skills/tesser-build/)
 ---
 
@@ -68,7 +68,12 @@ anatomy it walks are in `map.md`; the three steps:
      (`handlers.md`) behind the context's **`Client`** (`public-interface.md`).
 2. **Survey the codebase for which pieces already exist.** Find the context by
    its `Client`; check each named piece against what is there. What exists is
-   the convention to follow — imitate before inventing.
+   the convention to follow — imitate before inventing — **unless it carries a
+   `tesser:debt` marker or lives in a directory the tree's `.tesser-root`
+   skips.** That code is registered non-conformance, not a convention; the
+   verified exemplar (`examples/minimal/`, named by each component doc's
+   status note) outranks it, and a neighbor that agrees with the exemplar is
+   the one to imitate.
 3. **Build only the gap**, each piece per its component doc (Mode 2).
 
 **Behavior placement — "where does this line go?"** Most agent spaghetti is a

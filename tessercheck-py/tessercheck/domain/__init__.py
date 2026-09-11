@@ -9,6 +9,14 @@ from tessercheck.domain.checks import DECLARED_UNREADABLE as DECLARED_UNREADABLE
 from tessercheck.domain.checks import DECLARED_UNRECOGNIZED as DECLARED_UNRECOGNIZED
 from tessercheck.domain.checks import DEBT_FILE_MARKER as DEBT_FILE_MARKER
 from tessercheck.domain.checks import DEBT_MARKER as DEBT_MARKER
+from tessercheck.domain.checks import GOVERNANCE_GOVERNED as GOVERNANCE_GOVERNED
+from tessercheck.domain.checks import GOVERNANCE_OUTSIDE as GOVERNANCE_OUTSIDE
+from tessercheck.domain.checks import GOVERNANCE_SKIPPED as GOVERNANCE_SKIPPED
+from tessercheck.domain.checks import GOVERNANCE_UNDECLARED as GOVERNANCE_UNDECLARED
+from tessercheck.domain.checks import Governance as Governance
+from tessercheck.domain.checks import HookAction as HookAction
+from tessercheck.domain.checks import HookRun as HookRun
+from tessercheck.domain.checks import HookRunSpec as HookRunSpec
 from tessercheck.domain.checks import ImportEdge as ImportEdge
 from tessercheck.domain.checks import ImportEdgeSpec as ImportEdgeSpec
 from tessercheck.domain.checks import KERNEL_PACKAGE as KERNEL_PACKAGE
@@ -24,6 +32,7 @@ from tessercheck.domain.checks import Names as Names
 from tessercheck.domain.checks import PROTOCOL_TIER as PROTOCOL_TIER
 from tessercheck.domain.checks import QUOTE_CLOSES as QUOTE_CLOSES
 from tessercheck.domain.checks import QUOTE_OPENS as QUOTE_OPENS
+from tessercheck.domain.checks import Path as Path
 from tessercheck.domain.checks import Placement as Placement
 from tessercheck.domain.checks import PlacementSpec as PlacementSpec
 from tessercheck.domain.checks import ROLES as ROLES

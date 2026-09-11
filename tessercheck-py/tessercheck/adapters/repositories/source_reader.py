@@ -84,12 +84,14 @@ class FilesystemSourceReader(ts.Repository):
         found: list[ports.SourceFile] = []
         nested: list[str] = []
         symlinked: list[str] = []
+        pruned: list[str] = []
         for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
             here = pathlib.Path(dirpath)
             dirnames.sort()
             for name in list(dirnames):
                 if name in SKIP_DIRS or name in skips:
                     dirnames.remove(name)
+                    pruned.append(str((here / name).relative_to(base)))
                 elif (here / name).is_symlink():
                     dirnames.remove(name)
                     symlinked.append(str((here / name).relative_to(base)))
@@ -134,4 +136,5 @@ class FilesystemSourceReader(ts.Repository):
             imports=tuple(imports),
             stdlib=tuple(sorted(sys.stdlib_module_names)),
             pure_stdlib=tuple(pure_stdlib),
+            pruned=tuple(sorted(pruned)),
         )

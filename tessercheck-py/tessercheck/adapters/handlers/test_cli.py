@@ -18,6 +18,16 @@ class FakeCheckClient(client.TessercheckClient):
         self.roots.append(check_request.tree)
         return client.CheckResponse(findings=self.findings)
 
+    def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
+        self.roots.append(check_file_request.tree)
+        return client.CheckFileResponse(governance="governed", findings=self.findings, codes=())
+
+    def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
+        self.roots.append(hook_request.tree)
+        return client.HookResponse(
+            governance="governed", mode="advisory", action="advise", findings=self.findings, codes=()
+        )
+
     def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
         self.roots.append(mark_request.tree)
         return client.MarkResponse(files=0, remaining=self.findings)
