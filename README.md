@@ -119,6 +119,17 @@ carry a `.tesser-root` file declaring `app` at its root, or the run reports
 output; suppress a single finding with a trailing
 `# tesser:debt TB0xx`.
 
+From an install rather than a checkout, the console entry points ship in
+[`tessercheck-cli`](tessercheck-cli/): `tessercheck-check <tree>`, the two
+repairs the analyzer carries (`tessercheck-rename`, `tessercheck-mark`), and
+`tessercheck-hook` — a Claude Code `PostToolUse` hook that runs the analyzer
+after every Python write and answers with the findings on the written file,
+advisory context by default or a self-correcting exit 2 when the machine's
+`.tesser/hook.conf` says so. It never blocks the write and never shows a
+traceback. The install command, the wrapper script, and the `settings.json`
+entries a consumer copies in are in
+[`tessercheck-cli/README.md`](tessercheck-cli/README.md).
+
 ### `tesser-py`: the Python runtime library
 
 The repo's runtime artifact ([`tesser-py/`](tesser-py/)):
