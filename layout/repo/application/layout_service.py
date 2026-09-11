@@ -103,6 +103,33 @@ class MapToRepoSpec(ts.Mapper, domain.RepoSpec):
         )
 
 
+class MapToReadRepoRequest(ts.Mapper, ports.ReadRepoRequest):
+
+    def __init__(self, repo_root: domain.RepoRoot) -> None:
+        super().__init__(repo_root=str(repo_root))
+
+
+class MapToCheckResponseWhenClean(ts.Mapper, client.CheckResponse):
+
+    def __init__(self, repo: domain.Repo) -> None:
+        super().__init__(problems=(), counts=tuple(str(count) for count in repo.counts()))
+
+
+class MapToCheckResponseWithProblems(ts.Mapper, client.CheckResponse):
+
+    def __init__(self, repo: domain.Repo) -> None:
+        super().__init__(
+            problems=tuple(str(problem.text()) for problem in repo.problems()),
+            counts=tuple(str(count) for count in repo.counts()),
+        )
+
+
+class MapToTreesResponse(ts.Mapper, client.TreesResponse):
+
+    def __init__(self, repo: domain.Repo) -> None:
+        super().__init__(trees=tuple(str(tree) for tree in repo.trees()))
+
+
 class LayoutService(ts.ApplicationService):
 
     def __init__(self, repo_reader: ports.RepoReader) -> None:
@@ -110,36 +137,18 @@ class LayoutService(ts.ApplicationService):
 
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         repo_root = domain.RepoRoot(check_request.repo_root)
-        root = str(repo_root)
-        read_repo_response = self._repo_reader.read(ports.ReadRepoRequest(repo_root=root))
+        read_repo_response = self._repo_reader.read(MapToReadRepoRequest(repo_root))
         repo = domain.Repo(MapToRepoSpec(read_repo_response))
-        counts: list[str] = []
-        for count in repo.counts():
-            counted = str(count)
-            counts.append(counted)
-        rendered_counts = tuple(counts)
         match repo.health():
             case domain.Health.CLEAN:
-                return client.CheckResponse(problems=(), counts=rendered_counts)
+                return MapToCheckResponseWhenClean(repo)
             case domain.Health.PROBLEMS:
-                problems: list[str] = []
-                for problem in repo.problems():
-                    text = problem.text()
-                    rendered = str(text)
-                    problems.append(rendered)
-                rendered_problems = tuple(problems)
-                return client.CheckResponse(problems=rendered_problems, counts=rendered_counts)
+                return MapToCheckResponseWithProblems(repo)
             case _ as unreachable:
                 typing.assert_never(unreachable)
 
     def trees(self, trees_request: client.TreesRequest) -> client.TreesResponse:
         repo_root = domain.RepoRoot(trees_request.repo_root)
-        root = str(repo_root)
-        read_repo_response = self._repo_reader.read(ports.ReadRepoRequest(repo_root=root))
+        read_repo_response = self._repo_reader.read(MapToReadRepoRequest(repo_root))
         repo = domain.Repo(MapToRepoSpec(read_repo_response))
-        listed: list[str] = []
-        for tree in repo.trees():
-            named = str(tree)
-            listed.append(named)
-        rendered_trees = tuple(listed)
-        return client.TreesResponse(trees=rendered_trees)
+        return MapToTreesResponse(repo)

@@ -788,7 +788,13 @@ not itself a decision: it may drive a `-> None` transition that records the
 answer as state, and the method then persists unconditionally. Every
 translation the method needs is a **mapper** — a class that *is* the spec or
 DTO it maps to (`MapTo…`, **Application ports** below) — so the service names
-the use case and never spells a field out.
+the use case and never spells a field out. TB082 checks it (maintainer
+ruling 2026-09-11): a builtin call (`str`, `tuple`, `len`, …), an arithmetic
+operator, or a collection mutation (`.append`, …) in a service, actions, or
+orchestrator method is a finding — a value that took an operation to make
+crosses through a `MapTo` class and never through the method's own hands.
+Constructing a domain object from a request field (`domain.Identity(request.id)`)
+is an accessor read, not an operation, and stays in the method.
 
 ```python
 # campaign/application/service.py (verified impl: examples/python-app/)

@@ -1332,6 +1332,75 @@ def test_computing_in_an_argument_is_flagged() -> None:
         for f in findings
     )
 
+def test_a_service_that_operates_on_a_value_itself_is_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/client/client.py",
+                "shop.client.client",
+                "import tesser.context as ts\n"
+                "class AskRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AskResponse(ts.Response):\n"
+                "    def __init__(self, text: str, tag: str) -> None:\n"
+                "        self.text = text\n"
+                "        self.tag = tag\n",
+                False,
+            ),
+            (
+                "shop/domain/widget.py",
+                "shop.domain.widget",
+                "import tesser.domain as ts\n"
+                "class Widget(ts.ValueObject):\n"
+                "    _value: str\n"
+                "    def __init__(self, value: str) -> None:\n"
+                "        object.__setattr__(self, '_value', value)\n"
+                "    def __str__(self) -> str:\n"
+                "        return self._value\n",
+                False,
+            ),
+            (
+                "shop/application/service.py",
+                "shop.application.service",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "from shop.domain.widget import Widget\n"
+                "class MapToAskResponse(ts.Mapper, client.AskResponse):\n"
+                "    def __init__(self, widget: Widget) -> None:\n"
+                "        super().__init__(text=str(widget), tag='t')\n"
+                "class OperatingService(ts.ApplicationService):\n"
+                "    def converts(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        widget = Widget(request.text)\n"
+                "        text = str(widget)\n"
+                "        return client.AskResponse(text=text, tag='t')\n"
+                "    def adds(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        text = request.text + 't'\n"
+                "        return client.AskResponse(text=text, tag='t')\n"
+                "    def collects(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        tags: list[str] = []\n"
+                "        tags.append(request.text)\n"
+                "        return client.AskResponse(text=request.text, tag='t')\n"
+                "    def maps(self, request: client.AskRequest) -> client.AskResponse:\n"
+                "        widget = Widget(request.text)\n"
+                "        return MapToAskResponse(widget)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "OperatingService.converts applies str itself" in f
+        and "a translation is a mapper, because a value that took an operation to make crosses "
+        "through a MapTo class and never through a service method's own hands" in f
+        for f in findings
+    )
+    assert any("OperatingService.adds applies + itself" in f for f in findings)
+    assert any("OperatingService.collects applies .append itself" in f for f in findings)
+    assert not any("OperatingService.maps applies" in f for f in findings)
+    assert not any("MapToAskResponse" in f and "applies" in f for f in findings)
+
+
 def test_a_mapper_is_read_as_the_spec_it_constructs() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -14290,7 +14359,7 @@ def test_a_service_decision_is_read_through_the_binding_forms_that_hide_its_subj
         "BindingService.predeclared",
         "BindingService.comprehended",
     ):
-        assert not any(bound in f for f in findings), (bound, findings)
+        assert not any(bound in f and "match subject" in f for f in findings), (bound, findings)
 
 
 def test_a_public_call_is_a_public_method_on_a_domain_object() -> None:
@@ -14690,7 +14759,7 @@ def test_one_decision_in_a_branch_test_is_one_finding() -> None:
     branched = tuple(f for f in findings if "DedupedService.branched" in f)
     assert len(branched) == 1, branched
     assert "branches with if" in branched[0], branched
-    filtered = tuple(f for f in findings if "DedupedService.filtered" in f)
+    filtered = tuple(f for f in findings if "DedupedService.filtered" in f and "applies" not in f)
     assert len(filtered) == 1, filtered
     assert "filters a comprehension" in filtered[0], filtered
 

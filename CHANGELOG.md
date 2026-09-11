@@ -5,6 +5,54 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.0.108.0] - 2026-09-11
+
+A translation is a mapper. A public service, actions, or orchestrator method
+reads an accessor and calls a port, a domain method, or a `MapTo` class; it
+applies no operation of its own. `str(identity)`, `a + b`, `tuple(...)` and
+`.append(...)` written inside one are `TB082` findings, because a value that
+took an operation to make crosses through a mapper class and never through
+the method's own hands (maintainer ruling 2026-09-11, made while reviewing a
+service that wrote `str(identity)` on the way to a port request). The checker
+and the migration ship together: the 80 sites in seven service modules that
+carried one now go through a mapper, and every tree is at zero findings with
+no debt marker drawn.
+
+### Added
+- **`TB082` — ⟨where⟩ applies ⟨operation⟩ itself.** `Body` records an
+  `operation` fact for a call to a builtin (`BUILTIN_NAMES` minus the
+  truth-valued `TRUTH_BUILTINS`, and never a name the module binds itself),
+  for any `ast.BinOp`, and for a mutating call (`MUTATIONS`: `append`,
+  `extend`, `insert`, `add`, `update`, `pop`, `remove`, `discard`, `clear`,
+  `setdefault`) on a receiver that is neither `self` nor a domain-named local.
+  A call the body already reports as "computes in an argument" is not reported
+  a second time. The accessor read stays legal on purpose:
+  `domain.Identity(request.jtbd_id)` builds a value object from a field and
+  applies nothing.
+- **Fixture:** `test_a_service_that_operates_on_a_value_itself_is_flagged` —
+  `str`, `+` and `.append` each draw the finding, and the same translation
+  through a mapper draws none. `RULES.md` regenerated; `⟨operation⟩` joins
+  `HOLE_NAMES` so the rulebook can render the row.
+- **Skill:** `python.md` names the check under the service-body rules;
+  `skill-version` 76 (74 and 75 went to #182 and #186 while this branch was open).
+
+### Changed
+- **80 sites now translate through a mapper** in `examples/errorspy`,
+  `examples/llmport`, `examples/ports`, `examples/python-app` (campaign and
+  linkpolicy), `layout` and `tessercheck-py`. Two shapes recur. A
+  `MapToFind…Request(identity)` where the service wrote `str(identity)`
+  inline. And a `MapTo…Response` per outcome where a `match` arm built the
+  response by hand: the match stays in the service and each arm returns its
+  own mapper, because a mapper maps and never decides —
+  `MapToCheckResponseWhenClean` / `MapToCheckResponseWithProblems` in
+  `layout`, six `MapToBookingStateResponse…` classes in `llmport`.
+  `linkpolicy`'s `Policy.evaluate` takes a `TargetURL` instead of having the
+  service build one from the request.
+- **Open in `TODOS.md`:** whether an adapter's public method is under the same
+  rule (today only the held-context rules reach an adapter), whether an
+  f-string is an operation (today it is not), and which builtins are not
+  translations (`isinstance`, `getattr`) and might leave the list.
+
 ## [0.0.107.0] - 2026-09-09
 
 `examples/durable-execution` purchases an order: a parent workflow runs the

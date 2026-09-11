@@ -9,6 +9,12 @@ import scheduling.client as client
 import scheduling.domain as domain
 
 
+class MapToFindBookingRequest(ts.Mapper, ports.FindBookingRequest):
+
+    def __init__(self, booking_id: domain.BookingID) -> None:
+        super().__init__(booking_id=str(booking_id))
+
+
 class MapToBookingSpec(ts.Mapper, domain.BookingSpec):
 
     def __init__(self, find_booking_response: ports.FindBookingResponse) -> None:
@@ -89,6 +95,76 @@ class MapToReoffersSpec(ts.Mapper, domain.ReoffersSpec):
         super().__init__(offered=offered)
 
 
+class MapToReserveSlotRequest(ts.Mapper, ports.ReserveSlotRequest):
+
+    def __init__(
+        self, slot: domain.Slot | None, customer_name: domain.CustomerName | None
+    ) -> None:
+        super().__init__(slot=str(slot), name=str(customer_name))
+
+
+class MapToBookingStateResponseAskingName(ts.Mapper, client.BookingStateResponse):
+
+    def __init__(self, booking: domain.Booking) -> None:
+        super().__init__(
+            step=str(booking.step()),
+            offered_slots=tuple(str(slot) for slot in booking.offered()),
+            reply="ask the caller for their name",
+        )
+
+
+class MapToBookingStateResponseContinuing(ts.Mapper, client.BookingStateResponse):
+
+    def __init__(self, booking: domain.Booking) -> None:
+        super().__init__(
+            step=str(booking.step()),
+            offered_slots=tuple(str(slot) for slot in booking.offered()),
+            reply="continue the booking",
+        )
+
+
+class MapToBookingStateResponseOfferingSlots(ts.Mapper, client.BookingStateResponse):
+
+    def __init__(self, booking: domain.Booking) -> None:
+        super().__init__(
+            step=str(booking.step()),
+            offered_slots=tuple(str(slot) for slot in booking.offered()),
+            reply="offer the caller the available slots",
+        )
+
+
+class MapToBookingStateResponseAwaitingConfirmation(ts.Mapper, client.BookingStateResponse):
+
+    def __init__(self, booking: domain.Booking) -> None:
+        super().__init__(
+            step=str(booking.step()),
+            offered_slots=tuple(str(slot) for slot in booking.offered()),
+            reply=f"slot {booking.chosen()} selected; ask the caller to confirm",
+        )
+
+
+class MapToBookingStateResponseBooked(ts.Mapper, client.BookingStateResponse):
+
+    def __init__(
+        self, booking: domain.Booking, slot: domain.Slot | None, customer_name: domain.CustomerName | None
+    ) -> None:
+        super().__init__(
+            step=str(booking.step()),
+            offered_slots=tuple(str(slot) for slot in booking.offered()),
+            reply=f"booked {slot} for {customer_name}",
+        )
+
+
+class MapToBookingStateResponseReoffered(ts.Mapper, client.BookingStateResponse):
+
+    def __init__(self, booking: domain.Booking, slot: domain.Slot | None) -> None:
+        super().__init__(
+            step=str(booking.step()),
+            offered_slots=tuple(str(offered) for offered in booking.offered()),
+            reply=f"{slot} was just taken; offer the caller the updated slots",
+        )
+
+
 class BookingService(ts.ApplicationService):
 
     def __init__(
@@ -101,36 +177,26 @@ class BookingService(ts.ApplicationService):
         self, begin_booking_request: client.BeginBookingRequest
     ) -> client.BookingStateResponse:
         booking_id = domain.BookingID(begin_booking_request.booking_id)
-        booking_id_text = str(booking_id)
         find_booking_response = self._booking_repository.find(
-            ports.FindBookingRequest(booking_id=booking_id_text)
+            MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBegunBookingSpec(find_booking_response))
-        step = booking.step()
-        step_text = str(step)
-        stored_offered = booking.offered()
-        offered_slots = tuple(str(slot) for slot in stored_offered)
         self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
         resumption = domain.Resumption(MapToResumptionSpec(find_booking_response))
-        begin_reply = ""
         match resumption.resumed():
             case domain.Resumed.RESUMED:
-                begin_reply = "continue the booking"
+                return MapToBookingStateResponseContinuing(booking)
             case domain.Resumed.STARTED:
-                begin_reply = "ask the caller for their name"
+                return MapToBookingStateResponseAskingName(booking)
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        return client.BookingStateResponse(
-            step=step_text, offered_slots=offered_slots, reply=begin_reply
-        )
 
     def provide_name(
         self, provide_name_request: client.ProvideNameRequest
     ) -> client.BookingStateResponse:
         booking_id = domain.BookingID(provide_name_request.booking_id)
-        booking_id_text = str(booking_id)
         find_booking_response = self._booking_repository.find(
-            ports.FindBookingRequest(booking_id=booking_id_text)
+            MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
         available_slots_response = self._slot_directory.available(
@@ -139,82 +205,49 @@ class BookingService(ts.ApplicationService):
         booking.provide_name(
             MapToNamingSpec(provide_name_request, available_slots_response)
         )
-        step = booking.step()
-        step_text = str(step)
-        stored_offered = booking.offered()
-        offered_slots = tuple(str(slot) for slot in stored_offered)
         self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
-        return client.BookingStateResponse(
-            step=step_text,
-            offered_slots=offered_slots,
-            reply="offer the caller the available slots",
-        )
+        return MapToBookingStateResponseOfferingSlots(booking)
 
     def choose_slot(
         self, choose_slot_request: client.ChooseSlotRequest
     ) -> client.BookingStateResponse:
         booking_id = domain.BookingID(choose_slot_request.booking_id)
-        booking_id_text = str(booking_id)
         find_booking_response = self._booking_repository.find(
-            ports.FindBookingRequest(booking_id=booking_id_text)
+            MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
         booking.choose_slot(domain.Slot(choose_slot_request.slot))
-        step = booking.step()
-        step_text = str(step)
-        stored_offered = booking.offered()
-        offered_slots = tuple(str(slot) for slot in stored_offered)
         self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
-        return client.BookingStateResponse(
-            step=step_text,
-            offered_slots=offered_slots,
-            reply=f"slot {booking.chosen()} selected; ask the caller to confirm",
-        )
+        return MapToBookingStateResponseAwaitingConfirmation(booking)
 
     def confirm(
         self, confirm_booking_request: client.ConfirmBookingRequest
     ) -> client.BookingStateResponse:
         booking_id = domain.BookingID(confirm_booking_request.booking_id)
-        booking_id_text = str(booking_id)
         find_booking_response = self._booking_repository.find(
-            ports.FindBookingRequest(booking_id=booking_id_text)
+            MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
         booking.confirm()
         chosen_slot = booking.chosen()
         customer_name = booking.name()
-        slot, name = str(chosen_slot), str(customer_name)
         reserve_slot_response = self._slot_directory.reserve(
-            ports.ReserveSlotRequest(slot=slot, name=name)
+            MapToReserveSlotRequest(chosen_slot, customer_name)
         )
-        confirm_reply = ""
-        match booking.settle(domain.Reoffers(MapToReoffersSpec(reserve_slot_response))):
+        settled = booking.settle(domain.Reoffers(MapToReoffersSpec(reserve_slot_response)))
+        self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
+        match settled:
             case domain.Settled.BOOKED:
-                confirm_reply = f"booked {slot} for {name}"
+                return MapToBookingStateResponseBooked(booking, chosen_slot, customer_name)
             case domain.Settled.REOFFERED:
-                confirm_reply = f"{slot} was just taken; offer the caller the updated slots"
+                return MapToBookingStateResponseReoffered(booking, chosen_slot)
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        step = booking.step()
-        step_text = str(step)
-        stored_offered = booking.offered()
-        offered_slots = tuple(str(slot) for slot in stored_offered)
-        self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
-        return client.BookingStateResponse(
-            step=step_text, offered_slots=offered_slots, reply=confirm_reply
-        )
 
     def status(self, status_request: client.StatusRequest) -> client.BookingStateResponse:
         booking_id = domain.BookingID(status_request.booking_id)
-        booking_id_text = str(booking_id)
         find_booking_response = self._booking_repository.find(
-            ports.FindBookingRequest(booking_id=booking_id_text)
+            MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
-        step = booking.step()
-        step_text = str(step)
-        stored_offered = booking.offered()
-        offered_slots = tuple(str(slot) for slot in stored_offered)
-        return client.BookingStateResponse(
-            step=step_text, offered_slots=offered_slots, reply="continue the booking"
-        )
+        return MapToBookingStateResponseContinuing(booking)

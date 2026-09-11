@@ -119,7 +119,7 @@ def test_policy_rejects_an_empty_blocked_host_at_construction() -> None:
 def test_evaluate_allows_a_url_the_policy_permits() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ("bad.example",)))
 
-    verdict = policy.evaluate("https://ok.example/x")
+    verdict = policy.evaluate(domain.TargetURL("https://ok.example/x"))
 
     assert verdict.target_url == domain.TargetURL("https://ok.example/x")
     assert verdict.allowed == domain.Decision("allowed")
@@ -129,7 +129,7 @@ def test_evaluate_allows_a_url_the_policy_permits() -> None:
 def test_evaluate_denies_a_scheme_outside_the_allowed_set() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ()))
 
-    verdict = policy.evaluate("http://ok.example/x")
+    verdict = policy.evaluate(domain.TargetURL("http://ok.example/x"))
 
     assert verdict.allowed == domain.Decision("denied")
     assert verdict.reason == domain.Reason("scheme 'http' not allowed")
@@ -138,7 +138,7 @@ def test_evaluate_denies_a_scheme_outside_the_allowed_set() -> None:
 def test_evaluate_denies_a_url_that_carries_no_scheme() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ()))
 
-    verdict = policy.evaluate("ok.example/x")
+    verdict = policy.evaluate(domain.TargetURL("ok.example/x"))
 
     assert verdict.allowed == domain.Decision("denied")
     assert verdict.reason == domain.Reason("scheme '(none)' not allowed")
@@ -147,7 +147,7 @@ def test_evaluate_denies_a_url_that_carries_no_scheme() -> None:
 def test_evaluate_denies_a_blocked_host() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ("bad.example",)))
 
-    verdict = policy.evaluate("https://bad.example/x")
+    verdict = policy.evaluate(domain.TargetURL("https://bad.example/x"))
 
     assert verdict.allowed == domain.Decision("denied")
     assert verdict.reason == domain.Reason("host 'bad.example' is blocked")
@@ -156,7 +156,7 @@ def test_evaluate_denies_a_blocked_host() -> None:
 def test_evaluate_matches_a_blocked_host_regardless_of_case() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ("bad.example",)))
 
-    verdict = policy.evaluate("https://BAD.example/x")
+    verdict = policy.evaluate(domain.TargetURL("https://BAD.example/x"))
 
     assert verdict.reason == domain.Reason("host 'bad.example' is blocked")
 
@@ -164,7 +164,7 @@ def test_evaluate_matches_a_blocked_host_regardless_of_case() -> None:
 def test_evaluate_matches_a_blocked_host_regardless_of_port() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ("bad.example",)))
 
-    verdict = policy.evaluate("https://bad.example:8443/x")
+    verdict = policy.evaluate(domain.TargetURL("https://bad.example:8443/x"))
 
     assert verdict.reason == domain.Reason("host 'bad.example' is blocked")
 
@@ -172,7 +172,7 @@ def test_evaluate_matches_a_blocked_host_regardless_of_port() -> None:
 def test_evaluate_reports_the_scheme_before_the_host() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ("bad.example",)))
 
-    verdict = policy.evaluate("http://bad.example/x")
+    verdict = policy.evaluate(domain.TargetURL("http://bad.example/x"))
 
     assert verdict.reason == domain.Reason("scheme 'http' not allowed")
 
@@ -180,7 +180,7 @@ def test_evaluate_reports_the_scheme_before_the_host() -> None:
 def test_evaluate_keeps_the_url_it_was_asked_about_on_a_denial() -> None:
     policy = domain.Policy(domain.PolicySpec(("https",), ()))
 
-    verdict = policy.evaluate("http://ok.example/x")
+    verdict = policy.evaluate(domain.TargetURL("http://ok.example/x"))
 
     assert verdict.target_url == domain.TargetURL("http://ok.example/x")
 

@@ -813,6 +813,26 @@ OPERATOR_COMPARISONS: typing.Final[frozenset[str]] = frozenset(
 
 TRUTH_BUILTINS: typing.Final[frozenset[str]] = frozenset({"bool", "any", "all"})
 
+MUTATIONS: typing.Final[frozenset[str]] = frozenset(
+    {"append", "extend", "insert", "add", "update", "pop", "remove", "discard", "clear", "setdefault"}
+)
+
+BINARY_OPERATORS: typing.Final[dict[str, str]] = {
+    "Add": "+",
+    "Sub": "-",
+    "Mult": "*",
+    "MatMult": "@",
+    "Div": "/",
+    "FloorDiv": "//",
+    "Mod": "%",
+    "Pow": "**",
+    "LShift": "<<",
+    "RShift": ">>",
+    "BitOr": "|",
+    "BitAnd": "&",
+    "BitXor": "^",
+}
+
 RETURN_WRAPPERS: typing.Final[frozenset[str]] = frozenset(
     {
         "tuple",
@@ -3238,6 +3258,7 @@ class Body(ts.ValueObject):
                 continue
             facts.append((stmt.lineno, "accessor", None, ()))
         decided: set[int] = set()
+        computed: set[int] = set()
         matches: list[ast.Match] = []
         for node in ast.walk(fn):
             if isinstance(node, ast.Call):
@@ -3253,7 +3274,25 @@ class Body(ts.ValueObject):
                     facts.append((node.lineno, "delegation", callee.id, ("function",)))
                 for value in list(node.args) + [kw.value for kw in node.keywords]:
                     if isinstance(value, ast.Call) and block_of(value.func) is None:
+                        computed.add(id(value))
                         facts.append((value.lineno, "computed", None, ()))
+                if id(node) in computed:
+                    pass
+                elif (
+                    isinstance(callee, ast.Name)
+                    and callee.id in BUILTIN_NAMES
+                    and callee.id not in TRUTH_BUILTINS
+                    and callee.id not in scope.locals()
+                ):
+                    facts.append((node.lineno, "operation", callee.id, ()))
+                elif (
+                    isinstance(callee, ast.Attribute)
+                    and callee.attr in MUTATIONS
+                    and isinstance(callee.value, ast.Name)
+                    and callee.value.id != "self"
+                    and callee.value.id not in domain_names
+                ):
+                    facts.append((node.lineno, "operation", f".{callee.attr}", ()))
                 if (
                     isinstance(callee, ast.Attribute)
                     and isinstance(callee.value, ast.Attribute)
@@ -3282,6 +3321,8 @@ class Body(ts.ValueObject):
                 facts.append((node.lineno, "branch", "if" if isinstance(node, ast.If) else "while", ()))
             elif isinstance(node, ast.Match):
                 matches.append(node)
+            elif isinstance(node, ast.BinOp):
+                facts.append((node.lineno, "operation", BINARY_OPERATORS.get(type(node.op).__name__, "?"), ()))
             elif isinstance(node, ast.IfExp):
                 decided.update(id(sub) for sub in ast.walk(node.test))
             elif isinstance(node, ast.comprehension) and node.ifs:
@@ -3428,6 +3469,18 @@ class Body(ts.ValueObject):
                         "TB082",
                         f"{where} computes in an argument; a service method names what it "
                         "computes in a local, and passes a name, a reader, or a declared kind",
+                    ))
+                )
+            elif kind == "operation":
+                operation = str(fact.detail())
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB082",
+                        f"{where} applies {operation} itself; a translation is a mapper, because a value "
+                        "that took an operation to make crosses through a MapTo class and never through "
+                        "a service method's own hands",
                     ))
                 )
             elif kind == "branch":
