@@ -5,6 +5,62 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.0.0] - 2026-09-11
+
+The analyzer gets into the loop after every Python write. A consumer's Claude
+Code session installs `tessercheck-hook`, and each Edit or Write of a `.py`
+file comes back with the findings on that file: advisory context by default,
+a self-correcting exit 2 when the machine's conf says so. Whole-tree runs are
+40% faster, and a per-file check costs a fraction of one.
+
+### Added
+- **`tessercheck-hook`**, a Claude Code `PostToolUse` hook shipped in
+  `tessercheck-cli` 0.2.0. It reads the event on stdin; on an Edit or Write
+  of a `.py` file inside the project's declared tree it runs the analyzer in
+  a child process (15-second budget, own session, `python -P` so nothing in
+  the checkout can shadow the installed package) and answers with
+  `additionalContext` (advisory) or stderr + exit 2 (feedback), never a
+  traceback, never blocking the write. Mode and kill switch live in a
+  per-machine, gitignored `.tesser/hook.conf`; `enabled=false` skips the
+  analysis entirely. Every analyzed write appends one line to
+  `.tesser/changes.jsonl`: placement, finding ids with their own paths, mode,
+  the session's guidance events, status, exit code, duration. A `Skill` load
+  of `tesser-build` or a `Read` under the skill directory is recorded per
+  session; session records are pruned after seven days.
+  `tessercheck-cli/README.md` carries the wrapper script and the
+  `settings.json` entries a consumer copies in.
+- **CHECK-ONE.** `CheckFileRequest`/`CheckFileResponse` and
+  `HookRequest`/`HookResponse` on the client: the whole tree is parsed and
+  every tree-level pass runs, then the rule pass runs for the written
+  module only. `Governance` (an outcome) says where a path stands in the
+  walk: governed, skipped, outside, undeclared; a file that does not parse
+  is governed and reports TB043. An equivalence test asserts the scoped
+  answer equals the whole-tree answer filtered to the file, on copies of
+  every example tree and of the analyzer itself with findings injected.
+- The reader reports the directories it pruned (`pruned`), so "skipped" is
+  decided from the walk itself; paths are posix on every platform.
+- `scripts/verify-packaging` drives the installed hook through 27 cases
+  (advise, feedback, disabled, skipped, non-Python, outside the tree, a
+  subdirectory session, a symlinked state directory, a hostile session id,
+  a broken worker, a timeout, skill and doc reads, pruning, an undeclared
+  tree), proves the three distributions' exact pins by refusing a stale
+  analyzer, and runs `mypy --strict` over the console entry points.
+- The skill (skill-version 75): what exists is the convention to imitate
+  unless it carries a `tesser:debt` marker or lives in a skipped directory;
+  the verified exemplar outranks registered non-conformance.
+
+### Changed
+- `Scope.resolve` and `Scope.symbols` read a `ReexportTable` sorted once
+  and looked up by bisect instead of re-walking the re-export list and
+  building `Symbol`/`Text` objects on every call; the dead per-scope
+  `Reexport` tuple is gone. Whole-tree runs: examples/python-app 4.5s →
+  1.7s, tessercheck-py 8.3s → 5.7s; every gated tree still zero findings.
+- The codebase build parses each source once for the syntax check and
+  reuses the tree for the re-export scan.
+- tessercheck-py 0.4.0 pins `tesser==0.1.0`; tessercheck-cli 0.2.0 pins
+  `tessercheck-py==0.4.0`.
+- `.tesser/` is gitignored.
+
 ## [0.0.108.0] - 2026-09-11
 
 A translation is a mapper. A public service, actions, or orchestrator method
