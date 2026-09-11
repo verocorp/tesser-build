@@ -31,9 +31,9 @@ class MapToCampaignSpecFromSlugLookup(ts.Mapper, domain.CampaignSpec):
             case ports.CampaignLookup.FOUND:
                 record = find_campaign_response.campaigns[0]
             case ports.CampaignLookup.MISSING:
-                raise errors.not_found(
-                    "link_missing",
-                    f"no active link for slug {find_campaign_by_slug_request.slug!r}",
+                raise client.Missing(
+                    code="link_missing",
+                    message=f"no active link for slug {find_campaign_by_slug_request.slug!r}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -123,9 +123,9 @@ class MapToCampaignView(ts.Mapper, client.CampaignView):
             case ports.CampaignViewLookup.FOUND:
                 row = find_campaign_view_response.campaigns[0]
             case ports.CampaignViewLookup.MISSING:
-                raise errors.not_found(
-                    "campaign_missing",
-                    f"no campaign with id {find_campaign_view_request.campaign_id!r}",
+                raise client.Missing(
+                    code="campaign_missing",
+                    message=f"no campaign with id {find_campaign_view_request.campaign_id!r}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -161,9 +161,9 @@ class MapToShortLinkSpec(ts.Mapper, domain.ShortLinkSpec):
             case ports.PolicyVerdict.ALLOWED:
                 pass
             case ports.PolicyVerdict.BLOCKED:
-                raise errors.conflict(
-                    "destination_blocked",
-                    f"destination not allowed: {check_target_response.reason}",
+                raise client.Conflict(
+                    code="destination_blocked",
+                    message=f"destination not allowed: {check_target_response.reason}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -171,8 +171,9 @@ class MapToShortLinkSpec(ts.Mapper, domain.ShortLinkSpec):
             case ports.SlugAvailability.FREE:
                 pass
             case ports.SlugAvailability.TAKEN:
-                raise errors.conflict(
-                    "duplicate_slug", f"slug {add_link_request.slug!r} already exists"
+                raise client.Conflict(
+                    code="duplicate_slug",
+                    message=f"slug {add_link_request.slug!r} already exists",
                 )
             case _ as unreachable_availability:
                 typing.assert_never(unreachable_availability)
@@ -192,9 +193,9 @@ class MapToCampaignSpecFromRecord(ts.Mapper, domain.CampaignSpec):
             case ports.CampaignLookup.FOUND:
                 record = find_campaign_response.campaigns[0]
             case ports.CampaignLookup.MISSING:
-                raise errors.not_found(
-                    "campaign_missing",
-                    f"no campaign with id {find_campaign_request.campaign_id!r}",
+                raise client.Missing(
+                    code="campaign_missing",
+                    message=f"no campaign with id {find_campaign_request.campaign_id!r}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -274,11 +275,16 @@ class CampaignService(ts.ApplicationService):
         issue_campaign_identity_response = self._campaign_identity.issue(
             ports.IssueCampaignIdentityRequest()
         )
-        campaign = domain.Campaign(MapToCampaignSpec(
-            create_campaign_request=create_campaign_request,
-            issue_campaign_identity_response=issue_campaign_identity_response,
-            short_links_spec=domain.ShortLinksSpec(links=()),
-        ))
+        try:
+            campaign = domain.Campaign(MapToCampaignSpec(
+                create_campaign_request=create_campaign_request,
+                issue_campaign_identity_response=issue_campaign_identity_response,
+                short_links_spec=domain.ShortLinksSpec(links=()),
+            ))
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         save_campaign_request = MapToSaveCampaignRequest(campaign=campaign)
         self._campaign_repository.save(save_campaign_request)
         find_campaign_view_request = ports.FindCampaignViewRequest(
@@ -293,9 +299,14 @@ class CampaignService(ts.ApplicationService):
         )
 
     def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
-        slug = domain.Slug(add_link_request.slug)
-        target_url = domain.TargetURL(add_link_request.target_url)
-        campaign_id = domain.CampaignID(add_link_request.campaign_id)
+        try:
+            slug = domain.Slug(add_link_request.slug)
+            target_url = domain.TargetURL(add_link_request.target_url)
+            campaign_id = domain.CampaignID(add_link_request.campaign_id)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         check_target_response = self._target_policy.check(
             MapToCheckTargetRequest(target_url=target_url)
         )
@@ -309,11 +320,21 @@ class CampaignService(ts.ApplicationService):
         )
         find_campaign_request = MapToFindCampaignRequest(campaign_id=campaign_id)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
-        campaign = domain.Campaign(MapToCampaignSpecFromRecord(
-            find_campaign_request=find_campaign_request,
-            find_campaign_response=find_campaign_response,
-        ))
-        campaign.add_short_link(short_link_spec)
+        try:
+            campaign = domain.Campaign(MapToCampaignSpecFromRecord(
+                find_campaign_request=find_campaign_request,
+                find_campaign_response=find_campaign_response,
+            ))
+        except errors.DomainError as domain_error:
+            raise client.Unreadable(
+                message=f"stored campaign {find_campaign_request.campaign_id!r} cannot be read back"
+            ) from domain_error
+        try:
+            campaign.add_short_link(short_link_spec)
+        except errors.DomainError as domain_error:
+            raise client.Conflict(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign=campaign))
         find_campaign_view_request = MapToFindCampaignViewRequest(campaign_id=campaign_id)
         find_campaign_view_response = self._campaign_queries.find_view(
@@ -327,15 +348,35 @@ class CampaignService(ts.ApplicationService):
     def deactivate_link(
         self, deactivate_link_request: client.DeactivateLinkRequest
     ) -> client.CampaignView:
-        campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
+        try:
+            campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id=campaign_id)
         find_campaign_response = self._campaign_repository.find(find_campaign_request)
-        campaign = domain.Campaign(MapToCampaignSpecFromRecord(
-            find_campaign_request=find_campaign_request,
-            find_campaign_response=find_campaign_response,
-        ))
-        slug = domain.Slug(deactivate_link_request.slug)
-        campaign.deactivate_short_link(slug)
+        try:
+            campaign = domain.Campaign(MapToCampaignSpecFromRecord(
+                find_campaign_request=find_campaign_request,
+                find_campaign_response=find_campaign_response,
+            ))
+        except errors.DomainError as domain_error:
+            raise client.Unreadable(
+                message=f"stored campaign {find_campaign_request.campaign_id!r} cannot be read back"
+            ) from domain_error
+        try:
+            slug = domain.Slug(deactivate_link_request.slug)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
+        try:
+            campaign.deactivate_short_link(slug)
+        except errors.DomainError as domain_error:
+            raise client.Missing(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign=campaign))
         find_campaign_view_request = MapToFindCampaignViewRequest(campaign_id=campaign_id)
         find_campaign_view_response = self._campaign_queries.find_view(
@@ -349,7 +390,12 @@ class CampaignService(ts.ApplicationService):
     def get_campaign(
         self, get_campaign_request: client.GetCampaignRequest
     ) -> client.CampaignView:
-        campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
+        try:
+            campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         find_campaign_view_request = MapToFindCampaignViewRequest(campaign_id=campaign_id)
         find_campaign_view_response = self._campaign_queries.find_view(
             find_campaign_view_request
@@ -360,16 +406,31 @@ class CampaignService(ts.ApplicationService):
         )
 
     def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
-        slug = domain.Slug(resolve_request.slug)
+        try:
+            slug = domain.Slug(resolve_request.slug)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         find_campaign_by_slug_request = MapToFindCampaignBySlugRequest(slug=slug)
         find_campaign_response = self._campaign_repository.find_by_slug(
             find_campaign_by_slug_request
         )
-        campaign = domain.Campaign(MapToCampaignSpecFromSlugLookup(
-            find_campaign_by_slug_request=find_campaign_by_slug_request,
-            find_campaign_response=find_campaign_response,
-        ))
-        target_url = campaign.active_target(slug)
+        try:
+            campaign = domain.Campaign(MapToCampaignSpecFromSlugLookup(
+                find_campaign_by_slug_request=find_campaign_by_slug_request,
+                find_campaign_response=find_campaign_response,
+            ))
+        except errors.DomainError as domain_error:
+            raise client.Unreadable(
+                message=f"the campaign holding slug {find_campaign_by_slug_request.slug!r} cannot be read back"
+            ) from domain_error
+        try:
+            target_url = campaign.active_target(slug)
+        except errors.DomainError as domain_error:
+            raise client.Missing(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         return MapToResolveResponse(target_url=target_url)
 
     def list_links(

@@ -3,7 +3,6 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 import campaign.application.ports as ports
-import tesser.errors as errors  # tesser:debt TB050
 
 
 class InMemoryCampaignRepository(ts.Repository):
@@ -17,7 +16,7 @@ class InMemoryCampaignRepository(ts.Repository):
         self, save_campaign_request: ports.SaveCampaignRequest
     ) -> ports.SaveCampaignResponse:
         if self._down:
-            raise errors.InfraError("campaign store unavailable")
+            raise ports.StoreUnavailable("campaign store unavailable")
         self._rows[save_campaign_request.id] = ports.CampaignRecord(
             id=save_campaign_request.id, budget=save_campaign_request.budget, links=save_campaign_request.links
         )
@@ -27,7 +26,7 @@ class InMemoryCampaignRepository(ts.Repository):
         self, find_campaign_view_request: ports.FindCampaignViewRequest
     ) -> ports.FindCampaignViewResponse:
         if self._down:
-            raise errors.InfraError("campaign store unavailable")
+            raise ports.StoreUnavailable("campaign store unavailable")
         row = self._rows.get(find_campaign_view_request.campaign_id)
         if row is None:
             return ports.FindCampaignViewResponse(
@@ -54,7 +53,7 @@ class InMemoryCampaignRepository(ts.Repository):
         self, find_campaign_request: ports.FindCampaignRequest
     ) -> ports.FindCampaignResponse:
         if self._down:
-            raise errors.InfraError("campaign store unavailable")
+            raise ports.StoreUnavailable("campaign store unavailable")
         row = self._rows.get(find_campaign_request.campaign_id)
         if row is None:
             return ports.FindCampaignResponse(
@@ -68,7 +67,7 @@ class InMemoryCampaignRepository(ts.Repository):
         self, find_campaign_by_slug_request: ports.FindCampaignBySlugRequest
     ) -> ports.FindCampaignResponse:
         if self._down:
-            raise errors.InfraError("campaign store unavailable")
+            raise ports.StoreUnavailable("campaign store unavailable")
         for row in self._rows.values():
             if any(link.slug == find_campaign_by_slug_request.slug for link in row.links):
                 return ports.FindCampaignResponse(
@@ -82,7 +81,7 @@ class InMemoryCampaignRepository(ts.Repository):
         self, slug_taken_request: ports.SlugTakenRequest
     ) -> ports.SlugTakenResponse:
         if self._down:
-            raise errors.InfraError("campaign store unavailable")
+            raise ports.StoreUnavailable("campaign store unavailable")
         taken = any(link.slug == slug_taken_request.slug for row in self._rows.values() for link in row.links)
         return ports.SlugTakenResponse(
             availability=ports.SlugAvailability.TAKEN
@@ -94,7 +93,7 @@ class InMemoryCampaignRepository(ts.Repository):
         self, list_campaigns_request: ports.ListCampaignsRequest
     ) -> ports.ListCampaignsResponse:
         if self._down:
-            raise errors.InfraError("campaign store unavailable")
+            raise ports.StoreUnavailable("campaign store unavailable")
         return ports.ListCampaignsResponse(campaigns=tuple(self._rows.values()))
 
     def close(self) -> None:

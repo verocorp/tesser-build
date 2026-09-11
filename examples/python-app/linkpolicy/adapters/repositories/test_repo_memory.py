@@ -4,7 +4,6 @@ import pytest
 
 import linkpolicy.adapters.repositories as repositories
 import linkpolicy.application.ports as ports
-import tesser.errors as errors
 
 
 def test_all_answers_nothing_before_anything_is_recorded() -> None:
@@ -64,7 +63,7 @@ def test_recording_the_same_url_twice_keeps_only_the_latest_verdict() -> None:
 def test_record_fails_when_the_store_is_down() -> None:
     in_memory_verdict_repository = repositories.InMemoryVerdictRepository(down=True)
 
-    with pytest.raises(errors.InfraError) as excinfo:
+    with pytest.raises(ports.StoreUnavailable) as excinfo:
         in_memory_verdict_repository.record(
             ports.RecordVerdictRequest("https://ok.example/x", ports.VerdictDecision.ALLOWED, "ok")
         )
@@ -75,7 +74,7 @@ def test_record_fails_when_the_store_is_down() -> None:
 def test_all_fails_when_the_store_is_down() -> None:
     in_memory_verdict_repository = repositories.InMemoryVerdictRepository(down=True)
 
-    with pytest.raises(errors.InfraError) as excinfo:
+    with pytest.raises(ports.StoreUnavailable) as excinfo:
         in_memory_verdict_repository.all(ports.ListVerdictsRequest())
 
     assert str(excinfo.value) == "linkpolicy store unavailable"

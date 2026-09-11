@@ -3,7 +3,6 @@ from __future__ import annotations
 import app as app
 import campaign.client as campaign_client
 import reports.client as reports_client
-import tesser.errors as errors
 import tests.support as support
 
 
@@ -32,7 +31,7 @@ def test_blocked_destination_never_becomes_a_link() -> None:
             python_app.campaign.client.add_link(
                 campaign_client.AddLinkRequest(campaign_view.campaign_id, "bad", "http://ok.example/a")
             )
-        except errors.DomainError:
+        except campaign_client.Conflict:
             pass
         assert (
             python_app.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links

@@ -6,7 +6,6 @@ import tesser.testing as ts
 import reports.adapters.handlers as handlers
 import reports.client as client
 import protocol as protocol
-import tesser.errors as errors
 
 
 @ts.fake
@@ -97,9 +96,9 @@ def test_the_handler_asks_its_own_client_once() -> None:
 
 
 def test_a_client_failure_leaves_the_handler_rather_than_becoming_a_body() -> None:
-    fake_reports_client = FakeReportsClient(error=errors.InfraError("reports unavailable"))
+    fake_reports_client = FakeReportsClient(error=RuntimeError("reports unavailable"))
 
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(RuntimeError):
         handlers.HttpHandler(fake_reports_client).links_by_verdict(
             protocol.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
         )

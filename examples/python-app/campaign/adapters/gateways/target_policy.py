@@ -6,7 +6,6 @@ import tesser.adapters as ts
 
 import campaign.application.ports as ports
 import linkpolicy.client as client
-import tesser.errors as errors  # tesser:debt TB050
 
 _VERDICT_BY_DECISION: typing.Final[dict[str, ports.PolicyVerdict]] = {
     "allowed": ports.PolicyVerdict.ALLOWED,
@@ -27,7 +26,7 @@ class LinkPolicyTargetPolicy(ts.Gateway):
         )
         verdict = _VERDICT_BY_DECISION.get(check_response.decision)
         if verdict is None:
-            raise errors.InfraError(
+            raise ports.PolicyUnavailable(
                 f"link policy answered decision {check_response.decision!r}, which is not a verdict"
             )
         return ports.CheckTargetResponse(verdict=verdict, reason=check_response.reason)

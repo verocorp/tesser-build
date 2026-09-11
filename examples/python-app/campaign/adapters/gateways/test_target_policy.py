@@ -6,7 +6,6 @@ import tesser.testing as ts
 import campaign.adapters.gateways as gateways
 import campaign.application.ports as ports
 import linkpolicy.client as client
-import tesser.errors as errors
 
 
 @ts.fake
@@ -91,7 +90,7 @@ def test_a_neighbour_decision_the_gateway_knows_no_verdict_for_is_refused() -> N
         RecordingPolicyClient("maybe", "unsure")
     )
 
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.PolicyUnavailable):
         link_policy_target_policy.check(
             ports.CheckTargetRequest(target_url="https://ok.example/x")
         )

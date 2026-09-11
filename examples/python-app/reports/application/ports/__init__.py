@@ -7,3 +7,4 @@ from reports.application.ports.verdict_source import ListVerdictsResponse as Lis
 from reports.application.ports.verdict_source import VerdictDecision as VerdictDecision
 from reports.application.ports.verdict_source import VerdictRecord as VerdictRecord
 from reports.application.ports.verdict_source import VerdictSource as VerdictSource
+from reports.application.ports.verdict_source import VerdictSourceUnavailable as VerdictSourceUnavailable

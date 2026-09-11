@@ -5,7 +5,6 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers as handlers
 import campaign.client as client
-import tesser.errors as errors
 import protocol as protocol
 
 
@@ -308,11 +307,94 @@ def test_resolve_refuses_a_request_with_no_slug_on_the_path() -> None:
     assert fake_campaign_client_scripted.requests == []
 
 
-def test_a_client_rejection_travels_out_of_the_handler_unconverted() -> None:
-    fake_campaign_client_scripted = FakeCampaignClientScripted(error=errors.invalid("invalid_slug", "slug is malformed"))
-    http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
+def test_a_rejection_is_422_carrying_the_contexts_code_and_wording() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Rejected("invalid_slug", "slug is malformed")))
 
-    with pytest.raises(errors.DomainError) as caught:
+    http_response = http_handler.add_link(
+        protocol.HttpRequest(
+            "POST",
+            "/",
+            {},
+            {},
+            {},
+            b'{"campaign_id": "0123456789abcdef", "slug": "BAD",'
+            b' "target_url": "https://ok.example/x"}',
+        )
+    )
+
+    assert http_response.status_code == 422
+    assert http_response.json_body() == {
+        "type": "/problems/invalid_slug",
+        "detail": "slug is malformed",
+    }
+
+
+def test_a_missing_campaign_is_404_carrying_the_contexts_code() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Missing("campaign_missing", "no campaign with id 'x'")))
+
+    http_response = http_handler.add_link(
+        protocol.HttpRequest(
+            "POST",
+            "/",
+            {},
+            {},
+            {},
+            b'{"campaign_id": "0123456789abcdef", "slug": "BAD",'
+            b' "target_url": "https://ok.example/x"}',
+        )
+    )
+
+    assert http_response.status_code == 404
+    assert http_response.json_body()["type"] == "/problems/campaign_missing"
+
+
+def test_a_conflict_is_409_carrying_the_contexts_code() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Conflict("duplicate_slug", "slug 'promo' already exists")))
+
+    http_response = http_handler.add_link(
+        protocol.HttpRequest(
+            "POST",
+            "/",
+            {},
+            {},
+            {},
+            b'{"campaign_id": "0123456789abcdef", "slug": "BAD",'
+            b' "target_url": "https://ok.example/x"}',
+        )
+    )
+
+    assert http_response.status_code == 409
+    assert http_response.json_body()["type"] == "/problems/duplicate_slug"
+
+
+def test_an_unreadable_record_is_503_and_leaks_nothing() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Unreadable("stored campaign 'x' cannot be read back")))
+
+    http_response = http_handler.add_link(
+        protocol.HttpRequest(
+            "POST",
+            "/",
+            {},
+            {},
+            {},
+            b'{"campaign_id": "0123456789abcdef", "slug": "BAD",'
+            b' "target_url": "https://ok.example/x"}',
+        )
+    )
+
+    assert http_response.status_code == 503
+    assert http_response.json_body() == {
+        "type": "/problems/unavailable",
+        "detail": "a dependency is unavailable; please retry",
+    }
+
+
+def test_a_failure_the_context_never_declared_leaves_the_handler() -> None:
+    http_handler = handlers.HttpHandler(
+        FakeCampaignClientScripted(error=RuntimeError("a stack trace nobody should see"))
+    )
+
+    with pytest.raises(RuntimeError):
         http_handler.add_link(
             protocol.HttpRequest(
                 "POST",
@@ -324,5 +406,3 @@ def test_a_client_rejection_travels_out_of_the_handler_unconverted() -> None:
                 b' "target_url": "https://ok.example/x"}',
             )
         )
-
-    assert caught.value.code == "invalid_slug"

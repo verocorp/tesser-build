@@ -7,7 +7,6 @@ import campaign.application as application
 import campaign.application.ports as ports
 import campaign.client as client
 import campaign.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -137,7 +136,7 @@ class FakeTargetPolicyDown(ports.TargetPolicy):
     def check(
         self, check_target_request: ports.CheckTargetRequest
     ) -> ports.CheckTargetResponse:
-        raise errors.InfraError("linkpolicy unavailable")
+        raise ports.PolicyUnavailable("linkpolicy unavailable")
 
 
 def test_create_campaign_returns_the_budget_it_was_asked_for() -> None:
@@ -182,7 +181,7 @@ def test_create_campaign_refuses_a_malformed_currency_and_saves_nothing() -> Non
     fake_campaign_store = FakeCampaignStore()
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Rejected) as caught:
         campaign_service.create_campaign(
             client.CreateCampaignRequest(budget_amount="100.00", budget_currency="dollars")
         )
@@ -235,14 +234,13 @@ def test_add_link_refuses_a_blocked_destination_and_saves_nothing() -> None:
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), fake_campaign_store)
     before = len(fake_campaign_store.saved)
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Conflict) as caught:
         campaign_service.add_link(
             client.AddLinkRequest(
                 campaign_id=campaign_view.campaign_id, slug="promo", target_url="https://bad.example/x"
             )
         )
 
-    assert caught.value.kind is errors.Kind.CONFLICT
     assert caught.value.code == "destination_blocked"
     assert "on the deny-list" in caught.value.message
     assert len(fake_campaign_store.saved) == before
@@ -257,7 +255,7 @@ def test_add_link_lets_a_policy_outage_surface_and_saves_nothing() -> None:
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyDown(), FakeCampaignIdentity(), fake_campaign_store)
     before = len(fake_campaign_store.saved)
 
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.PolicyUnavailable):
         campaign_service.add_link(
             client.AddLinkRequest(
                 campaign_id=campaign_view.campaign_id, slug="promo", target_url="https://ok.example/x"
@@ -282,14 +280,13 @@ def test_add_link_refuses_a_slug_another_campaign_already_uses() -> None:
         )
     )
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Conflict) as caught:
         campaign_service.add_link(
             client.AddLinkRequest(
                 campaign_id=second.campaign_id, slug="promo", target_url="https://ok.example/y"
             )
         )
 
-    assert caught.value.kind is errors.Kind.CONFLICT
     assert caught.value.code == "duplicate_slug"
 
 
@@ -298,7 +295,7 @@ def test_add_link_refuses_a_malformed_slug_without_touching_the_policy() -> None
     fake_campaign_store = FakeCampaignStore()
     campaign_service = application.CampaignService(fake_campaign_store, fake_target_policy_allowing, FakeCampaignIdentity(), fake_campaign_store)
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Rejected) as caught:
         campaign_service.add_link(
             client.AddLinkRequest(
                 campaign_id="0123456789abcdef", slug="BAD SLUG", target_url="https://ok.example/x"
@@ -313,14 +310,13 @@ def test_add_link_refuses_a_campaign_that_does_not_exist() -> None:
     fake_campaign_store = FakeCampaignStore()
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Missing) as caught:
         campaign_service.add_link(
             client.AddLinkRequest(
                 campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x"
             )
         )
 
-    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "campaign_missing"
 
 
@@ -351,12 +347,11 @@ def test_deactivate_link_refuses_a_slug_the_campaign_does_not_carry() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Missing) as caught:
         campaign_service.deactivate_link(
             client.DeactivateLinkRequest(campaign_id=campaign_view.campaign_id, slug="nosuch")
         )
 
-    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
 
 
@@ -378,10 +373,9 @@ def test_get_campaign_refuses_a_campaign_that_does_not_exist() -> None:
     fake_campaign_store = FakeCampaignStore()
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Missing) as caught:
         campaign_service.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))
 
-    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "campaign_missing"
 
 
@@ -406,10 +400,9 @@ def test_resolve_refuses_a_slug_nobody_registered() -> None:
     fake_campaign_store = FakeCampaignStore()
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Missing) as caught:
         campaign_service.resolve(client.ResolveRequest(slug="nosuch"))
 
-    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
 
 
@@ -417,7 +410,7 @@ def test_resolve_refuses_a_malformed_slug() -> None:
     fake_campaign_store = FakeCampaignStore()
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Rejected) as caught:
         campaign_service.resolve(client.ResolveRequest(slug="BAD SLUG"))
 
     assert caught.value.code == "invalid_slug"
@@ -530,7 +523,7 @@ def test_the_link_view_mapper_is_the_view_built_from_the_row() -> None:
 
 
 def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Missing) as caught:
         application.MapToCampaignView(
             find_campaign_view_request=ports.FindCampaignViewRequest(
                 campaign_id="0123456789abcdef"
@@ -637,9 +630,8 @@ def test_the_campaign_spec_mapper_from_a_record_rebuilds_the_links_it_was_given(
 def test_deactivate_link_refuses_a_malformed_campaign_id_before_the_repository_is_touched() -> None:
     fake_campaign_store = FakeCampaignStore()
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Rejected) as caught:
         campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id="not-hex", slug="promo"))
-    assert caught.value.kind is errors.Kind.VALIDATION
     assert caught.value.code == "invalid_campaign_id"
     assert fake_campaign_store.saved == []
 
@@ -680,7 +672,7 @@ def test_a_missing_slug_lookup_is_refused_before_anything_is_rebuilt() -> None:
         outcome=ports.CampaignLookup.MISSING, campaigns=()
     )
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Missing) as caught:
         application.MapToCampaignSpecFromSlugLookup(
             find_campaign_by_slug_request=ports.FindCampaignBySlugRequest(
                 slug="promo"
@@ -688,7 +680,6 @@ def test_a_missing_slug_lookup_is_refused_before_anything_is_rebuilt() -> None:
             find_campaign_response=find_campaign_response,
         )
 
-    assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "link_missing"
     assert "promo" in caught.value.message
 

@@ -5,7 +5,6 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers as handlers
 import campaign.client as client
-import tesser.errors as errors
 import protocol as protocol
 
 
@@ -79,8 +78,47 @@ def test_a_missing_argument_raises_a_usage_error() -> None:
     assert fake_campaign_client_scripted.requests == []
 
 
-def test_a_client_failure_propagates_out_of_the_handler() -> None:
-    fake_campaign_client_scripted = FakeCampaignClientScripted(error=errors.invalid("bad_amount", "must be positive"))
-    with pytest.raises(errors.DomainError):
-        handlers.CliHandler(fake_campaign_client_scripted).create_campaign(protocol.CliRequest(("-5", "USD")))
-    assert len(fake_campaign_client_scripted.requests) == 1
+def test_a_rejection_exits_two_and_names_the_contexts_code() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Rejected("bad_amount", "must be positive")))
+
+    cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
+
+    assert cli_response.exit_code == 2
+    assert cli_response.stderr == "[bad_amount] must be positive"
+    assert cli_response.stdout == ""
+
+
+def test_a_missing_campaign_exits_one_and_names_the_contexts_code() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Missing("campaign_missing", "no campaign with id 'x'")))
+
+    cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
+
+    assert cli_response.exit_code == 1
+    assert cli_response.stderr == "[campaign_missing] no campaign with id 'x'"
+
+
+def test_a_conflict_exits_one_and_names_the_contexts_code() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Conflict("duplicate_slug", "slug 'promo' already exists")))
+
+    cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
+
+    assert cli_response.exit_code == 1
+    assert cli_response.stderr == "[duplicate_slug] slug 'promo' already exists"
+
+
+def test_an_unreadable_record_exits_one_and_leaks_nothing() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Unreadable("stored campaign 'x' cannot be read back")))
+
+    cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
+
+    assert cli_response.exit_code == 1
+    assert cli_response.stderr == "a dependency is unavailable; please retry"
+
+
+def test_a_failure_the_context_never_declared_leaves_the_handler() -> None:
+    cli_handler = handlers.CliHandler(
+        FakeCampaignClientScripted(error=RuntimeError("a stack trace nobody should see"))
+    )
+
+    with pytest.raises(RuntimeError):
+        cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))

@@ -22,7 +22,9 @@ from campaign.application.ports.campaign_repository import SaveCampaignResponse 
 from campaign.application.ports.campaign_repository import SlugAvailability as SlugAvailability
 from campaign.application.ports.campaign_repository import SlugTakenRequest as SlugTakenRequest
 from campaign.application.ports.campaign_repository import SlugTakenResponse as SlugTakenResponse
+from campaign.application.ports.campaign_repository import StoreUnavailable as StoreUnavailable
 from campaign.application.ports.target_policy import CheckTargetRequest as CheckTargetRequest
 from campaign.application.ports.target_policy import CheckTargetResponse as CheckTargetResponse
+from campaign.application.ports.target_policy import PolicyUnavailable as PolicyUnavailable
 from campaign.application.ports.target_policy import PolicyVerdict as PolicyVerdict
 from campaign.application.ports.target_policy import TargetPolicy as TargetPolicy

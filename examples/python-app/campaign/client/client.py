@@ -80,6 +80,42 @@ class CampaignView(ts.Response):
         self.links = links
 
 
+class Rejected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Missing(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Conflict(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Unreadable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+ERRORS: typing.Final[
+    tuple[type[Rejected], type[Missing], type[Conflict], type[Unreadable]]
+] = (Rejected, Missing, Conflict, Unreadable)
+
+
 class CampaignClient(ts.Client, typing.Protocol):
 
     def create_campaign(self, create_campaign_request: CreateCampaignRequest) -> CampaignView: ...

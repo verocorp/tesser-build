@@ -48,9 +48,8 @@ def test_resolve_refuses_a_deactivated_link() -> None:
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     assert campaign_service.resolve(client.ResolveRequest(slug="promo")).target_url == "https://ok.example/x"
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    with pytest.raises(errors.DomainError) as e:
+    with pytest.raises(client.Missing) as e:
         campaign_service.resolve(client.ResolveRequest(slug="promo"))
-    assert e.value.kind is errors.Kind.NOT_FOUND
     assert e.value.code == "link_missing"
 
 
@@ -59,9 +58,8 @@ def test_deactivate_link_rejects_an_unknown_slug() -> None:
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
     id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    with pytest.raises(errors.DomainError) as e:
+    with pytest.raises(client.Missing) as e:
         campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="nosuch"))
-    assert e.value.kind is errors.Kind.NOT_FOUND
     assert e.value.code == "link_missing"
 
 
@@ -70,11 +68,10 @@ def test_deactivate_link_rejects_an_unknown_campaign() -> None:
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
     id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    with pytest.raises(errors.DomainError) as e:
+    with pytest.raises(client.Missing) as e:
         campaign_service.deactivate_link(
             client.DeactivateLinkRequest(campaign_id="fedcba9876543210", slug="promo")
         )
-    assert e.value.kind is errors.Kind.NOT_FOUND
     assert e.value.code == "campaign_missing"
 
 
@@ -109,10 +106,6 @@ def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
         http_response = protocol.HttpResponse.problem(413, "payload_too_large", str(e))
     except protocol.StreamingUnsupported as e:
         http_response = protocol.HttpResponse.problem(411, "length_required", str(e))
-    except errors.DomainError as e:
-        http_response = protocol.HttpResponse.problem(errors.status_for(e.kind), e.code, e.message)
-    except errors.InfraError:
-        http_response = protocol.HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
     except Exception:
         http_response = protocol.HttpResponse.problem(500, "internal", "unexpected error")
     assert http_response.status_code == 404
@@ -133,10 +126,6 @@ def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
         http_response = protocol.HttpResponse.problem(413, "payload_too_large", str(e))
     except protocol.StreamingUnsupported as e:
         http_response = protocol.HttpResponse.problem(411, "length_required", str(e))
-    except errors.DomainError as e:
-        http_response = protocol.HttpResponse.problem(errors.status_for(e.kind), e.code, e.message)
-    except errors.InfraError:
-        http_response = protocol.HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
     except Exception:
         http_response = protocol.HttpResponse.problem(500, "internal", "unexpected error")
     assert http_response.status_code == 404
@@ -220,10 +209,6 @@ def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
         http_response = protocol.HttpResponse.problem(413, "payload_too_large", str(e))
     except protocol.StreamingUnsupported as e:
         http_response = protocol.HttpResponse.problem(411, "length_required", str(e))
-    except errors.DomainError as e:
-        http_response = protocol.HttpResponse.problem(errors.status_for(e.kind), e.code, e.message)
-    except errors.InfraError:
-        http_response = protocol.HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
     except Exception:
         http_response = protocol.HttpResponse.problem(500, "internal", "unexpected error")
     assert http_response.status_code == 400
