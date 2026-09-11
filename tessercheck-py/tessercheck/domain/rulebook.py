@@ -105,6 +105,8 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.tesser_init_violations": "tesser distribution `__init__`",
     "Module.tesser_shell_violations": "tesser distribution module",
     "Module.kernel_import_violations": "kernel module",
+    "Module.context_kernel_violations": "context kernel module",
+    "Module.aggregate_root_violations": "domain module",
     "Module.annotation_violations": "every module",
     "Module.type_name_violations": "every module",
     "Module.function_placement_violations": "every module",

@@ -18,6 +18,7 @@ def test_every_place_is_earned_by_a_checked_tree_or_is_a_finding() -> None:
         ("shop.application.client", False, "app-client-file"),
         ("shop.application.orchestrators", False, "orchestrators-file"),
         ("shop.domain", False, "role-file"),
+        ("shop.domain.kernel", False, "context-kernel-file"),
         ("kernel", False, "kernel-file"),
     )
     contexts = frozenset({"shop"})

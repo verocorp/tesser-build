@@ -46,6 +46,8 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
         ("shop/adapters/conftest.py", bait),
         ("app/test_direct.py", test_bait),
         ("shop/domain/sub/deep.py", "import shop.application.service\n"),
+        ("shop/domain/kernel.py", bait),
+        ("shop/domain/kernel/price.py", "import shop.application.service\n"),
         ("shop/stray.py", bait),
         ("shop/stray_pkg/mod.py", bait),
         ("shop/domain/eval_bad.py", test_bait),
@@ -97,6 +99,7 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
             "role-file",
             "ports-init",
             "kernel-init",
+            "context-kernel-init",
             "app-client-init",
             "orchestrators-init",
         }

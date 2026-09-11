@@ -76,7 +76,7 @@ ROLES: typing.Final[tuple[str, ...]] = ("domain", "application", "client", "adap
 
 EXPORT_PACKAGE_PLACES: typing.Final[frozenset[str]] = frozenset({
     "role-init", "ports-init", "app-client-init", "orchestrators-init",
-    "shell-init", "protocol-init",
+    "shell-init", "protocol-init", "context-kernel-init",
 })
 
 STORE_METHOD: typing.Final[str] = "transaction"
@@ -269,6 +269,8 @@ KERNEL_PACKAGE: typing.Final[str] = "kernel"
 
 CONTEXT_KERNEL_HOME: typing.Final[tuple[str, str]] = ("domain", KERNEL_PACKAGE)
 
+CONTEXT_KERNEL_BLOCKS: typing.Final[frozenset[str]] = frozenset({"valueobject", "spec"})
+
 TESSER: typing.Final[str] = "tesser"
 
 TESSER_NAMESPACES: typing.Final[frozenset[str]] = frozenset(
@@ -388,7 +390,15 @@ DATA_BLOCKS: typing.Final[frozenset[str]] = frozenset(
 )
 
 PAIRED_PLACES: typing.Final[frozenset[str]] = frozenset(
-    {"role", "kernel", "shell-srv", "shell-app", "protocol", ORCHESTRATORS_PACKAGE}
+    {
+        "role",
+        "kernel",
+        "context-kernel",
+        "shell-srv",
+        "shell-app",
+        "protocol",
+        ORCHESTRATORS_PACKAGE,
+    }
 )
 
 NORM_IMPORTS: typing.Final[dict[str, frozenset[str]]] = {
@@ -6459,6 +6469,12 @@ class Placement(ts.ValueObject):
             if parts[1] == TESTS_ROLE:
                 return "context-tests-init" if is_package else "context-tests-stray"
             if parts[1] in ROLES:
+                if parts[1] == CONTEXT_KERNEL_HOME[0] and tuple(parts[2:3]) == CONTEXT_KERNEL_HOME[1:]:
+                    if is_package:
+                        return "context-kernel-init"
+                    if len(parts) == 3:
+                        return "context-kernel-file"
+                    return "context-kernel"
                 if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
                     if is_package:
                         return "ports-init"
@@ -7714,6 +7730,16 @@ class Module(ts.Entity):
                     "kernel is a package, never a module",
                 )),
             )
+        if str(place) == "context-kernel-file":
+            return (
+                Violation(ViolationSpec(
+                    self._path,
+                    1,
+                    "TB041",
+                    f"{module_name} is a context's domain kernel as a module; "
+                    "a context kernel is a package, never a module",
+                )),
+            )
         if str(place) == "context-tests-stray":
             return (
                 Violation(ViolationSpec(
@@ -7938,12 +7964,7 @@ class Module(ts.Entity):
             frozenset({KERNEL_PACKAGE})
             | (frozenset({export}) if export is not None else frozenset())
         ) & frozenset(registry.tops())
-        pieces = module_name.split(".")
-        context_kernel = (
-            len(pieces) == 3
-            and pieces[0] in frozenset(registry.contexts())
-            and tuple(pieces[1:]) == CONTEXT_KERNEL_HOME
-        )
+        context_kernel = str(self._placement) == "context-kernel-init"
         named = frozenset(
             (str(symbol.module()), str(symbol.name())) for symbol in registry.package_attrs()
         )
@@ -8013,7 +8034,7 @@ class Module(ts.Entity):
                     ))
                 )
             exported = exported or original
-            if str(DerivedName(exported)) == pieces[-1]:
+            if str(DerivedName(exported)) == module_name.split(".")[-1]:
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
@@ -8675,6 +8696,54 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
+    def context_kernel_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        kind_table = Registry(registry_spec).kinds()
+        found: list[Violation] = []
+        for stmt in self._body:
+            if not isinstance(stmt, ast.ClassDef):
+                continue
+            named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
+            if named is None:
+                continue
+            block = str(named)
+            if block not in CONTEXT_KERNEL_BLOCKS:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        stmt.lineno,
+                        "TB052",
+                        f"{module_name}.{stmt.name} is {KIND_NAME[block]}; a context "
+                        "kernel declares the value objects, specs, and enums two "
+                        "aggregates share, because a root is owned by one module and "
+                        "named elsewhere by its id",
+                    ))
+                )
+        return tuple(found)
+
+    def aggregate_root_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        module_name = self._name
+        kind_table = Registry(registry_spec).kinds()
+        if module_name.split(".")[1:2] != [CONTEXT_KERNEL_HOME[0]]:
+            return ()
+        held = [
+            stmt
+            for stmt in self._class_defs
+            if str(kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name))) or "") == "aggregate"
+        ]
+        if len(held) < 2:
+            return ()
+        return (
+            Violation(ViolationSpec(
+                self._path,
+                held[1].lineno,
+                "TB052",
+                f"{module_name} declares {len(held)} aggregate roots; a domain module "
+                "declares at most one aggregate root, because a second root in one "
+                "module is two consistency boundaries sharing a file",
+            )),
+        )
+
     def kernel_import_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         registry = Registry(registry_spec)
@@ -9245,6 +9314,8 @@ class Module(ts.Entity):
                 if not denied:
                     found.extend(edge.form_violations())
             elif pieces[0] in kernel_tops and registry.modules_under(Text(target)):
+                if str(self._placement) == "context-kernel":
+                    continue
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
@@ -11042,12 +11113,7 @@ class Codebase(ts.AggregateRoot):
                 continue
             if export == TESSER and name.split(".")[0] == TESSER:
                 continue
-            pieces = name.split(".")
-            context_kernel = (
-                len(pieces) == 3
-                and pieces[0] in contexts
-                and tuple(pieces[1:]) == CONTEXT_KERNEL_HOME
-            )
+            context_kernel = place == "context-kernel-init"
             for stmt in ast.parse(source).body:
                 if not isinstance(stmt, ast.ImportFrom) or stmt.level or stmt.module is None:
                     continue
@@ -11181,7 +11247,7 @@ class Codebase(ts.AggregateRoot):
             (module.name(), stmt.name)
             for module in self._modules
             if module.name().split(".")[1:2] == ["domain"]
-            and str(module.place()) == "role"
+            and str(module.place()) in ("role", "context-kernel")
             for stmt in module.class_defs()
             if (module.name(), stmt.name) not in blocks
             and stmt.name in module.enums()
@@ -11492,6 +11558,18 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.role_init_violations(registry))
             elif place == "role-file":
                 found.extend(module.stray_violations())
+            elif place == "context-kernel-init":
+                found.extend(module.role_init_violations(registry))
+            elif place == "context-kernel-file":
+                found.extend(module.stray_violations())
+            elif place == "context-kernel":
+                found.extend(module.role_violations(registry))
+                found.extend(CONTEXT_FUNCTIONS.violations(module))
+                found.extend(CONTEXT_STATEMENTS.violations(module))
+                found.extend(module.stray_import_violations())
+                found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
+                found.extend(module.import_violations(registry))
+                found.extend(module.context_kernel_violations(registry))
             elif place == "role":
                 found.extend(module.role_violations(registry))
                 found.extend(CONTEXT_FUNCTIONS.violations(module))
@@ -11500,6 +11578,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.stray_import_violations())
                 found.extend(ROLE_TESSER_IMPORTS.get(parts[1], CLIENT_TESSER_IMPORTS).violations(module))
                 found.extend(module.import_violations(registry))
+                found.extend(module.aggregate_root_violations(registry))
             else:
                 found.extend(module.stray_violations())
             if str(module.place()) not in TEST_TIER:
@@ -11611,7 +11690,13 @@ class Codebase(ts.AggregateRoot):
         for module in self._modules:
             place = str(module.place())
             shell = place == "kernel" and self._export == TESSER and module.name().split(".")[0] == TESSER
-            if place in ("role", "orchestrators", "orchestrators-file", "kernel") and not shell:
+            if place in (
+                "role",
+                "orchestrators",
+                "orchestrators-file",
+                "kernel",
+                "context-kernel",
+            ) and not shell:
                 for name in module.declared_uses(registry):
                     if name in self._imports:
                         self._used_imports.add(name)

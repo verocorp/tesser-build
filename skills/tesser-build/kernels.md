@@ -22,6 +22,10 @@ that isn't a copy.
   it is, governed by the shells rows — namespace totality, the shell
   stdlib, and inverted tests — because the shells cannot subclass
   themselves.)
+- **Two aggregate roots in ONE context need the same value object** → a
+  **context kernel**: the package `<context>/domain/kernel/`. It is the same
+  answer one level down — a value object neither root owns, imported directly
+  by both, with neither root's module importing the other.
 - **Only one context uses it** → it is that context's domain content. Do not
   lift a type into the kernel speculatively; the second consumer earns the
   move.
@@ -50,6 +54,18 @@ that isn't a copy.
    ordinary app anatomy grown beside it — contexts, `srv/` — not part of
    the kernel.
 5. **A kernel `__init__` only re-exports from its own kernel.**
+6. **A context kernel declares as well as re-exports** (maintainer ruling
+   2026-09-11). `<context>/domain/kernel/` is the home of the value objects
+   two of that context's aggregate roots share, not only a re-export shim over
+   a root kernel. It holds value objects, specs and enums — an entity or an
+   aggregate root there is a finding, because a root is owned by one module and
+   named elsewhere by its id (TB052, TB012) — and it is a package, never a
+   `domain/kernel.py` module (TB041). Unlike a root kernel it **is** an
+   exporting package: its modules do not import each other (TB060), so one
+   module holds one shared concept and two concepts that need each other are
+   one module. Each module carries its sibling test (TB074), and the reverse
+   of rule 3 holds for it too — only that context's own domain modules import
+   it, as `import <context>.domain.kernel as kernel`.
 
 ## Shape
 
@@ -62,8 +78,13 @@ that isn't a copy.
     test_money.py     ← companion test: reaches only the kernel + tesser.testing
   <context>/
     domain/
-      kernel/         ← the one package that imports the root kernel
-        __init__.py   ← re-exports what this context takes
+      order.py        ← one aggregate root per domain module
+      purchase.py     ← the second root; it does not import order.py
+      kernel/         ← the one package that imports the root kernel,
+                        and the home of what two roots here share
+        __init__.py   ← re-exports what this context takes and declares
+        order_id.py   ← a shared value object; no module beside it
+        test_order_id.py
   srv/  app/  protocol/  tests/
 ```
 
@@ -76,6 +97,10 @@ that isn't a copy.
   when a second context needs the *same agreed* type. If the two contexts
   need *different* rules for a similar-looking value, they are different
   types — keep them in their domains.
+- **Which kernel?** Two *contexts* → the root `kernel/`. Two aggregate roots
+  in one *context* → that context's `domain/kernel/`. The test is who has to
+  agree on the type, and the answer decides the home; a type only one root
+  uses stays in that root's module.
 
 ## How the machine sees it
 
@@ -90,4 +115,10 @@ nothing is itself a finding. Kernel modules carry the domain content rules
 (`TB050`/`TB062` — trusted per walked module, and the exported kernel never
 imports the app-scoped one), statement totality (`TB051`), and the kernel
 test tier (`TB070`). The worked example is `examples/python-app/kernel/`
-(`Slug`, shared by the campaign and reports contexts).
+(`Slug`, shared by the campaign and reports contexts). A **context** kernel is
+routed by its own placement — `<context>/domain/kernel/` is not a role package
+— and carries the context-kernel rows (`TB041` package-never-module, `TB042`
+export list, `TB052` shared leaf kinds only, `TB060`/`TB062` the import row) on
+top of the domain content rules. The worked example is
+`examples/durable-execution/ordering/domain/kernel/` (`OrderId`, `Quantity`,
+`PriceSpec` and `Price`, shared by the `Order` and `Purchase` roots).
