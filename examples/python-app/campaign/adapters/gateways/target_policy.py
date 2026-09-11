@@ -21,9 +21,12 @@ class LinkPolicyTargetPolicy(ts.Gateway):
     def check(
         self, check_target_request: ports.CheckTargetRequest
     ) -> ports.CheckTargetResponse:
-        check_response = self._link_policy_client.check(
-            client.CheckRequest(target_url=check_target_request.target_url)
-        )
+        try:
+            check_response = self._link_policy_client.check(
+                client.CheckRequest(target_url=check_target_request.target_url)
+            )
+        except client.Unavailable as policy_error:
+            raise ports.PolicyUnavailable(policy_error.message) from policy_error
         verdict = _VERDICT_BY_DECISION.get(check_response.decision)
         if verdict is None:
             raise ports.PolicyUnavailable(

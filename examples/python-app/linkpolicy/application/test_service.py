@@ -91,12 +91,12 @@ def test_check_records_a_denial_as_the_denied_decision() -> None:
     assert fake_verdict_repository.records[0].reason == "host 'evil.example' is blocked"
 
 
-def test_check_propagates_a_repository_failure() -> None:
+def test_check_crosses_a_repository_failure_as_the_contexts_unavailable() -> None:
     fake_verdict_repository = FakeVerdictRepository(
         error=ports.StoreUnavailable("linkpolicy store unavailable")
     )
 
-    with pytest.raises(ports.StoreUnavailable):
+    with pytest.raises(client.Unavailable):
         application.LinkPolicyService(fake_verdict_repository).check(
             client.CheckRequest("https://ok.example/x")
         )
@@ -144,12 +144,12 @@ def test_list_verdicts_returns_what_check_recorded() -> None:
     ]
 
 
-def test_list_verdicts_propagates_a_repository_failure() -> None:
+def test_list_verdicts_crosses_a_repository_failure_as_the_contexts_unavailable() -> None:
     fake_verdict_repository = FakeVerdictRepository(
         error=ports.StoreUnavailable("linkpolicy store unavailable")
     )
 
-    with pytest.raises(ports.StoreUnavailable):
+    with pytest.raises(client.Unavailable):
         application.LinkPolicyService(fake_verdict_repository).list_verdicts(
             client.ListVerdictsRequest()
         )

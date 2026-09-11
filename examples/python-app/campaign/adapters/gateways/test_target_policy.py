@@ -26,6 +26,21 @@ class RecordingPolicyClient(client.LinkPolicyClient):
         return client.ListVerdictsResponse(verdicts=())
 
 
+@ts.fake
+class RefusingPolicyClient(client.LinkPolicyClient):
+
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+        raise self._error
+
+    def list_verdicts(
+        self, list_verdicts_request: client.ListVerdictsRequest
+    ) -> client.ListVerdictsResponse:
+        raise self._error
+
+
 def test_an_allowed_neighbour_verdict_becomes_the_allowed_verdict() -> None:
     link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
         RecordingPolicyClient("allowed", "clean")
@@ -91,6 +106,29 @@ def test_a_neighbour_decision_the_gateway_knows_no_verdict_for_is_refused() -> N
     )
 
     with pytest.raises(ports.PolicyUnavailable):
+        link_policy_target_policy.check(
+            ports.CheckTargetRequest(target_url="https://ok.example/x")
+        )
+
+
+def test_a_neighbour_that_cannot_answer_is_the_ports_unavailable() -> None:
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
+        RefusingPolicyClient(client.Unavailable("the verdict store is unavailable"))
+    )
+
+    with pytest.raises(ports.PolicyUnavailable) as caught:
+        link_policy_target_policy.check(
+            ports.CheckTargetRequest(target_url="https://ok.example/x")
+        )
+    assert isinstance(caught.value.__cause__, client.Unavailable)
+
+
+def test_a_neighbour_rejection_is_our_bug_and_leaves_the_gateway_untranslated() -> None:
+    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
+        RefusingPolicyClient(client.Rejected("invalid_target_url", "target url must be http(s)"))
+    )
+
+    with pytest.raises(client.Rejected):
         link_policy_target_policy.check(
             ports.CheckTargetRequest(target_url="https://ok.example/x")
         )

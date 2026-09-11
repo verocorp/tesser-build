@@ -5,6 +5,7 @@ import tesser.application as ts
 import reports.application.ports as ports
 import reports.client as client
 import reports.domain as domain
+import tesser.errors as errors
 
 
 class MapToLinkSpec(ts.Mapper, domain.LinkSpec):
@@ -64,9 +65,22 @@ class ReportsService(ts.ApplicationService):
     def links_by_verdict(
         self, links_by_verdict_request: client.LinksByVerdictRequest
     ) -> client.LinksByVerdictResponse:
-        list_links_response = self._link_source.links(ports.ListLinksRequest())
-        list_verdicts_response = self._verdict_source.verdicts(ports.ListVerdictsRequest())
-        link_verdicts = domain.LinkVerdicts(
-            MapToLinkVerdictsSpec(list_links_response, list_verdicts_response)
-        )
+        try:
+            list_links_response = self._link_source.links(ports.ListLinksRequest())
+        except ports.LinkSourceUnavailable as link_error:
+            raise client.Unavailable(message="the link source is unavailable") from link_error
+        try:
+            list_verdicts_response = self._verdict_source.verdicts(ports.ListVerdictsRequest())
+        except ports.VerdictSourceUnavailable as verdict_error:
+            raise client.Unavailable(
+                message="the verdict source is unavailable"
+            ) from verdict_error
+        try:
+            link_verdicts = domain.LinkVerdicts(
+                MapToLinkVerdictsSpec(list_links_response, list_verdicts_response)
+            )
+        except errors.DomainError as domain_error:
+            raise client.Unreadable(
+                message=f"a record the report cannot read: {domain_error.message}"
+            ) from domain_error
         return MapToLinksByVerdictResponse(link_verdicts)

@@ -39,6 +39,8 @@ class HttpHandler(ts.Handler):
                     return protocol.HttpResponse.problem(
                         503, "unavailable", "a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(201, {
@@ -77,6 +79,8 @@ class HttpHandler(ts.Handler):
                     return protocol.HttpResponse.problem(
                         503, "unavailable", "a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
@@ -112,6 +116,8 @@ class HttpHandler(ts.Handler):
                     return protocol.HttpResponse.problem(
                         503, "unavailable", "a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
@@ -140,6 +146,8 @@ class HttpHandler(ts.Handler):
                     return protocol.HttpResponse.problem(
                         503, "unavailable", "a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
@@ -168,6 +176,8 @@ class HttpHandler(ts.Handler):
                     return protocol.HttpResponse.problem(
                         503, "unavailable", "a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.redirect(resolve_response.target_url)

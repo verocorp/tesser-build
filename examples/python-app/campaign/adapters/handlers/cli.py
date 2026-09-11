@@ -42,6 +42,8 @@ class CliHandler(ts.Handler):
                     return protocol.CliResponse(
                         1, stdout="", stderr="a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.CliResponse(1, stdout="", stderr=error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.CliResponse.ok(
@@ -76,6 +78,8 @@ class CliHandler(ts.Handler):
                     return protocol.CliResponse(
                         1, stdout="", stderr="a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.CliResponse(1, stdout="", stderr=error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.CliResponse.ok(f"campaign {campaign_view.campaign_id} now has {len(campaign_view.links)} link(s)")
@@ -106,6 +110,8 @@ class CliHandler(ts.Handler):
                     return protocol.CliResponse(
                         1, stdout="", stderr="a dependency is unavailable; please retry"
                     )
+                case client.Unavailable():
+                    return protocol.CliResponse(1, stdout="", stderr=error.message)
                 case _ as never:
                     typing.assert_never(never)
         active = sum(1 for link in campaign_view.links if link.status == "active")

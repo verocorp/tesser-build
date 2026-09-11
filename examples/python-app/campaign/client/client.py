@@ -111,9 +111,16 @@ class Unreadable(ts.Error):
         self.message = message
 
 
+class Unavailable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 ERRORS: typing.Final[
-    tuple[type[Rejected], type[Missing], type[Conflict], type[Unreadable]]
-] = (Rejected, Missing, Conflict, Unreadable)
+    tuple[type[Rejected], type[Missing], type[Conflict], type[Unreadable], type[Unavailable]]
+] = (Rejected, Missing, Conflict, Unreadable, Unavailable)
 
 
 class CampaignClient(ts.Client, typing.Protocol):

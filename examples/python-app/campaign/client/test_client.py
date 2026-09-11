@@ -38,6 +38,14 @@ class TestUnreadable:
         assert str(unreadable) == "stored campaign '0123456789abcdef' cannot be read back"
 
 
+class TestUnavailable:
+
+    def test_an_unavailable_dependency_carries_its_message(self) -> None:
+        unavailable = client.Unavailable("the campaign store is unavailable")
+        assert unavailable.message == "the campaign store is unavailable"
+        assert str(unavailable) == "the campaign store is unavailable"
+
+
 class TestErrors:
 
     def test_the_declared_set_names_every_error_the_client_raises(self) -> None:

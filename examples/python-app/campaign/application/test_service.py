@@ -91,6 +91,40 @@ class FakeCampaignStore(ports.CampaignRepository):
 
 
 @ts.fake
+class FakeCampaignStoreDown(ports.CampaignRepository):
+
+    def save(
+        self, save_campaign_request: ports.SaveCampaignRequest
+    ) -> ports.SaveCampaignResponse:
+        raise ports.StoreUnavailable("campaign store unavailable")
+
+    def find(
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
+        raise ports.StoreUnavailable("campaign store unavailable")
+
+    def find_by_slug(
+        self, find_campaign_by_slug_request: ports.FindCampaignBySlugRequest
+    ) -> ports.FindCampaignResponse:
+        raise ports.StoreUnavailable("campaign store unavailable")
+
+    def slug_taken(
+        self, slug_taken_request: ports.SlugTakenRequest
+    ) -> ports.SlugTakenResponse:
+        raise ports.StoreUnavailable("campaign store unavailable")
+
+    def all(
+        self, list_campaigns_request: ports.ListCampaignsRequest
+    ) -> ports.ListCampaignsResponse:
+        raise ports.StoreUnavailable("campaign store unavailable")
+
+    def find_view(
+        self, find_campaign_view_request: ports.FindCampaignViewRequest
+    ) -> ports.FindCampaignViewResponse:
+        raise ports.StoreUnavailable("campaign store unavailable")
+
+
+@ts.fake
 class FakeCampaignIdentity(ports.CampaignIdentity):
 
     def __init__(self) -> None:
@@ -255,14 +289,46 @@ def test_add_link_lets_a_policy_outage_surface_and_saves_nothing() -> None:
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyDown(), FakeCampaignIdentity(), fake_campaign_store)
     before = len(fake_campaign_store.saved)
 
-    with pytest.raises(ports.PolicyUnavailable):
+    with pytest.raises(client.Unavailable) as caught:
         campaign_service.add_link(
             client.AddLinkRequest(
                 campaign_id=campaign_view.campaign_id, slug="promo", target_url="https://ok.example/x"
             )
         )
 
+    assert caught.value.message == "the link policy is unavailable"
+    assert isinstance(caught.value.__cause__, ports.PolicyUnavailable)
     assert len(fake_campaign_store.saved) == before
+
+
+def test_a_store_that_is_down_crosses_as_the_contexts_unavailable_on_every_path() -> None:
+    fake_campaign_store_down = FakeCampaignStoreDown()
+    campaign_service = application.CampaignService(fake_campaign_store_down, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store_down)
+
+    with pytest.raises(client.Unavailable) as created:
+        campaign_service.create_campaign(
+            client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
+        )
+    with pytest.raises(client.Unavailable) as added:
+        campaign_service.add_link(
+            client.AddLinkRequest(
+                campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x"
+            )
+        )
+    with pytest.raises(client.Unavailable) as deactivated:
+        campaign_service.deactivate_link(
+            client.DeactivateLinkRequest(campaign_id="0123456789abcdef", slug="promo")
+        )
+    with pytest.raises(client.Unavailable) as fetched:
+        campaign_service.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))
+    with pytest.raises(client.Unavailable) as resolved:
+        campaign_service.resolve(client.ResolveRequest(slug="promo"))
+    with pytest.raises(client.Unavailable) as listed:
+        campaign_service.list_links(client.ListLinksRequest())
+
+    for caught in (created, added, deactivated, fetched, resolved, listed):
+        assert caught.value.message == "the campaign store is unavailable"
+        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 
 
 def test_add_link_refuses_a_slug_another_campaign_already_uses() -> None:

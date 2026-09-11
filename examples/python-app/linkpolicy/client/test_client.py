@@ -12,6 +12,14 @@ class TestRejected:
         assert str(rejected) == "target url 'nope' must be http(s)"
 
 
+class TestUnavailable:
+
+    def test_an_unavailable_store_carries_its_message(self) -> None:
+        unavailable = client.Unavailable("the verdict store is unavailable")
+        assert unavailable.message == "the verdict store is unavailable"
+        assert str(unavailable) == "the verdict store is unavailable"
+
+
 class TestErrors:
 
     def test_the_declared_set_names_every_error_the_client_raises(self) -> None:

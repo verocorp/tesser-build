@@ -115,6 +115,15 @@ def test_an_unreadable_record_exits_one_and_leaks_nothing() -> None:
     assert cli_response.stderr == "a dependency is unavailable; please retry"
 
 
+def test_an_unavailable_dependency_exits_one_in_the_contexts_words() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Unavailable("the campaign store is unavailable")))
+
+    cli_response = cli_handler.create_campaign(protocol.CliRequest(("100.00", "USD")))
+
+    assert cli_response.exit_code == 1
+    assert cli_response.stderr == "the campaign store is unavailable"
+
+
 def test_a_failure_the_context_never_declared_leaves_the_handler() -> None:
     cli_handler = handlers.CliHandler(
         FakeCampaignClientScripted(error=RuntimeError("a stack trace nobody should see"))

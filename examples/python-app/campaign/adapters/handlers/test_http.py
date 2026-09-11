@@ -367,6 +367,20 @@ def test_a_conflict_is_409_carrying_the_contexts_code() -> None:
     assert http_response.json_body()["type"] == "/problems/duplicate_slug"
 
 
+def test_an_unavailable_dependency_is_503_in_the_contexts_words() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Unavailable("the campaign store is unavailable")))
+
+    http_response = http_handler.get_campaign(
+        protocol.HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b"")
+    )
+
+    assert http_response.status_code == 503
+    assert http_response.json_body() == {
+        "type": "/problems/unavailable",
+        "detail": "the campaign store is unavailable",
+    }
+
+
 def test_an_unreadable_record_is_503_and_leaks_nothing() -> None:
     http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Unreadable("stored campaign 'x' cannot be read back")))
 

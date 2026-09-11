@@ -21,9 +21,12 @@ class PolicyVerdictGateway(ts.Gateway):
     def verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
-        list_verdicts_response = self._link_policy_client.list_verdicts(
-            client.ListVerdictsRequest()
-        )
+        try:
+            list_verdicts_response = self._link_policy_client.list_verdicts(
+                client.ListVerdictsRequest()
+            )
+        except client.Unavailable as policy_error:
+            raise ports.VerdictSourceUnavailable(policy_error.message) from policy_error
         records: list[ports.VerdictRecord] = []
         for v in list_verdicts_response.verdicts:
             decision = _DECISION_BY_NAME.get(v.decision)

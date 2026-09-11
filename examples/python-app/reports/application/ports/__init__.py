@@ -1,5 +1,6 @@
 from reports.application.ports.link_source import LinkRecord as LinkRecord
 from reports.application.ports.link_source import LinkSource as LinkSource
+from reports.application.ports.link_source import LinkSourceUnavailable as LinkSourceUnavailable
 from reports.application.ports.link_source import ListLinksRequest as ListLinksRequest
 from reports.application.ports.link_source import ListLinksResponse as ListLinksResponse
 from reports.application.ports.verdict_source import ListVerdictsRequest as ListVerdictsRequest
