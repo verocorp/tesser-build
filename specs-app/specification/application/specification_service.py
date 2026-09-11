@@ -7,6 +7,12 @@ import specification.client as client
 import specification.domain as domain
 
 
+class MapToFindJtbdRequest(ts.Mapper, ports.FindJtbdRequest):
+
+    def __init__(self, identity: domain.Identity) -> None:
+        super().__init__(jtbd_id=str(identity))
+
+
 class MapToJtbdSpec(ts.Mapper, domain.JtbdSpec):
 
     def __init__(self, find_jtbd_response: ports.FindJtbdResponse) -> None:
@@ -54,9 +60,7 @@ class SpecificationService(ts.ApplicationService):
 
     def add_story(self, add_story_request: client.AddStoryRequest) -> client.AddStoryResponse:
         identity = domain.Identity(add_story_request.jtbd_id)
-        identity_text = str(identity)
-        find_jtbd_request = ports.FindJtbdRequest(jtbd_id=identity_text)
-        find_jtbd_response = self._specification_repository.find_jtbd(find_jtbd_request)
+        find_jtbd_response = self._specification_repository.find_jtbd(MapToFindJtbdRequest(identity))
         jtbd = domain.Jtbd(MapToJtbdSpec(find_jtbd_response))
         story = domain.Story(MapToStorySpec(add_story_request))
         placement = jtbd.add_story(story)
