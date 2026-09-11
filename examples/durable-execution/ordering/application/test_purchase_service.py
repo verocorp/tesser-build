@@ -10,7 +10,7 @@ import ordering.client as client
 
 
 @ts.fake
-class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):  # tesser:debt TB072
+class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
 
     def __init__(self) -> None:
         self.ran: list[relays.PurchaseOrchestratorRequest] = []
@@ -46,7 +46,7 @@ class TestPurchaseService:
         assert purchase_response.payment_reference == "pay-o1"
 
     def test_purchasing_runs_the_orchestrator_for_the_order_it_built_and_waits(self) -> None:
-        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()  # tesser:debt TB085
+        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()
         asyncio.run(
             application.PurchaseService(fake_purchase_orchestrator_runner).purchase(
                 purchase_request(order_id="o2", sku="gadget", quantity=3)

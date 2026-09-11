@@ -14,7 +14,7 @@ class TestOrderSnapshot:
         assert snapshots.OrderSnapshot().serialize(order) == b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
 
     def test_an_order_comes_back_whole_through_its_own_constructor(self) -> None:
-        order_snapshot = snapshots.OrderSnapshot()  # tesser:debt TB085
+        order_snapshot = snapshots.OrderSnapshot()
         order = domain.Order(domain.OrderSpec(order_id="o7", sku="gadget", quantity=3))
         back = order_snapshot.deserialize(order_snapshot.serialize(order))
         assert back.identity == domain.OrderId("o7")

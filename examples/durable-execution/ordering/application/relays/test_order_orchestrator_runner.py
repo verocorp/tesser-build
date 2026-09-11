@@ -17,16 +17,16 @@ class TestOrderOrchestratorRequestSnapshot:
         assert raw == b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
 
     def test_a_request_comes_back_around_its_order(self) -> None:
-        order_orchestrator_request_snapshot = relays.OrderOrchestratorRequestSnapshot()  # tesser:debt TB085
+        order_orchestrator_request_snapshot = relays.OrderOrchestratorRequestSnapshot()
         order = domain.Order(domain.OrderSpec(order_id="o7", sku="gadget", quantity=3))
-        back = order_orchestrator_request_snapshot.deserialize(
+        order_orchestrator_request = order_orchestrator_request_snapshot.deserialize(
             order_orchestrator_request_snapshot.serialize(
                 relays.OrderOrchestratorRequest(order=order)
             )
         )
-        assert back.order.identity == domain.OrderId("o7")
-        assert back.order.sku == domain.Sku("gadget")
-        assert back.order.quantity == domain.Quantity(3)
+        assert order_orchestrator_request.order.identity == domain.OrderId("o7")
+        assert order_orchestrator_request.order.sku == domain.Sku("gadget")
+        assert order_orchestrator_request.order.quantity == domain.Quantity(3)
 
 
 class TestOrderOrchestratorResponseSnapshot:
@@ -53,7 +53,7 @@ class TestOrderOrchestratorResponseSnapshot:
             assert excinfo.value.kind is errors.Kind.VALIDATION
 
     def test_a_response_comes_back_equal(self) -> None:
-        order_orchestrator_response_snapshot = relays.OrderOrchestratorResponseSnapshot()  # tesser:debt TB085
+        order_orchestrator_response_snapshot = relays.OrderOrchestratorResponseSnapshot()
         order_orchestrator_response = relays.OrderOrchestratorResponse(order_id="o7", total_cents=750)
         assert order_orchestrator_response_snapshot.deserialize(
             order_orchestrator_response_snapshot.serialize(order_orchestrator_response)

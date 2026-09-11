@@ -31,7 +31,7 @@ class MapToPurchaseResponse(ts.Mapper, client.PurchaseResponse):
 
 class PurchaseService(ts.ApplicationService):
 
-    def __init__(  # tesser:debt TB081
+    def __init__(
         self, purchase_orchestrator_runner: relays.PurchaseOrchestratorRunner
     ) -> None:
         self._purchase_orchestrator_runner = purchase_orchestrator_runner

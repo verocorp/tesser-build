@@ -6,7 +6,7 @@ import tesser.testing as ts
 import pytest
 
 import ordering.application.orchestrators as orchestrators
-import ordering.application.relays as relays  # tesser:debt TB070
+import ordering.application.relays as relays
 import ordering.domain as domain
 import tesser.errors as errors
 
@@ -32,7 +32,7 @@ class FakePurchaseActionsRunner(relays.PurchaseActionsRunner):
 
 
 @ts.fake
-class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:debt TB072
+class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
     def __init__(self) -> None:
         self.started: list[str] = []
@@ -57,7 +57,7 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:deb
 
 
 @ts.fake
-class FakeMisroutedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:debt TB072
+class FakeMisroutedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
     async def start_order_orchestrator(
         self, order_orchestrator_request: relays.OrderOrchestratorRequest
@@ -71,7 +71,7 @@ class FakeMisroutedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # t
 
 
 @ts.fake
-class FakeRefusingOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:debt TB072
+class FakeRefusingOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
     async def start_order_orchestrator(
         self, order_orchestrator_request: relays.OrderOrchestratorRequest
@@ -107,7 +107,7 @@ class TestPurchaseOrchestrator:
 
     def test_running_runs_the_order_as_a_child_and_then_takes_payment_for_its_total(self) -> None:
         fake_purchase_actions_runner = FakePurchaseActionsRunner()
-        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
+        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
         asyncio.run(
             orchestrators.PurchaseOrchestrator(
                 fake_purchase_actions_runner, fake_order_orchestrator_runner

@@ -87,7 +87,7 @@ class OrderOrchestratorRunner(ts.Relay, typing.Protocol):
 
 
 # ordering/application/relays/order_actions_runner.py
-class OrderActionsRunner(ts.JobContext, typing.Protocol):
+class OrderActionsRunner(ts.Relay, typing.Protocol):
 
     async def run_price_product(
         self, price_product_request: PriceProductRequest
@@ -234,29 +234,34 @@ an action's: `422`/`404`/`409` to the kind, as
 `DomainError(kind, "order_rejected")` with the child's message, anything else
 re-raised terminal.
 
-`ts.JobContext` in tesser-py is a bare marker protocol, like `ts.Port` and
-`ts.Relay`. The generic `call[I, O](step, request)` it used to declare is gone:
-a runner says what *this* context's actions are, by name, on the subclass.
+`ts.Relay` in tesser-py is a bare marker protocol, like `ts.Port`. There is
+one relay kind and it says nothing about lifetime: a relay protocol names what
+*this* context's actions or workflows are, by name, and an implementation may
+live as long as the component or as long as one invocation.
+`OrderOrchestratorRunner` has one of each, and the orchestrator holding it
+cannot tell which it has.
 
 `ProductCatalogRepository` (Postgres, or the in-memory stand-in) stays a
 `ts.Port`, because a store is not us.
 
 The distinction is what may cross. A `ts.Client` faces outsiders and a
-`ts.Port` faces a foreign system, so both stay primitives-only. A relay and a
-job context both have us on both ends, and Restate pins an invocation to one
-deployment, so their messages may carry domain objects and they come back
-whole.
+`ts.Port` faces a foreign system, so both stay primitives-only. A relay is
+inward — it has us on both ends, it crosses the engine inside one context, it
+is never operated through the client, and Restate pins an invocation to one
+deployment — so its messages may carry domain objects and they come back
+whole. That is not a widening of the no-outward-representation line; it is the
+line applied to a boundary that faces inward.
 
 ## Six adapters, split by direction and by lifetime
 
 | class | kind declared | direction | lifetime |
 |---|---|---|---|
-| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Job` | Restate → us: registers `OrderActions/price_product`, `OrderOrchestrator/run`, `PurchaseActions/take_payment`, and `PurchaseOrchestrator/run` | process |
-| `RestateOrderOrchestratorRunner` (`adapters/runners/`) | `ts.Gateway` | us → Restate, from outside any invocation (ingress HTTP: `workflow_send` to start, `workflow_call` to run) | process |
-| `RestatePurchaseOrchestratorRunner` (`adapters/runners/`) | `ts.Gateway` | us → Restate, from outside any invocation (ingress HTTP: `workflow_call`) | process |
-| `RestateOrderActionsRunner` (`adapters/runners/`) | `ts.JobContext` | us → Restate, from inside an invocation (`service_call`) | one invocation |
-| `RestatePurchaseActionsRunner` (`adapters/runners/`) | `ts.JobContext` | us → Restate, from inside an invocation (`service_call`) | one invocation |
-| `RestateOrderOrchestratorChildRunner` (`adapters/runners/`) | `ts.JobContext` | us → Restate, from inside an invocation, to a child workflow (`workflow_call` to run, `workflow_send` to start) | one invocation |
+| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Runtime` | Restate → us: registers `OrderActions/price_product`, `OrderOrchestrator/run`, `PurchaseActions/take_payment`, and `PurchaseOrchestrator/run` | process |
+| `RestateOrderOrchestratorRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_send` to start, `workflow_call` to run) | process |
+| `RestatePurchaseOrchestratorRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_call`) | process |
+| `RestateOrderActionsRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
+| `RestatePurchaseActionsRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
+| `RestateOrderOrchestratorChildRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation, to a child workflow (`workflow_call` to run, `workflow_send` to start) | one invocation |
 
 The runtime is the inbound side, the same role the HTTP handler plays for
 `POST /submissions`: the engine's server receives a request, routes it to a
@@ -301,7 +306,7 @@ error. The value objects guard their invariants, not their types, so without
 that check a list where a `sku` should be builds an `Order` that raises a
 `TypeError` later, inside the orchestrator, where Restate would retry it.
 
-## The three application kinds, and where each lives
+## The application kinds, and where each lives
 
 This tree is the worked example for `docs/design-app-service-types.md`:
 
@@ -320,9 +325,9 @@ This tree is the worked example for `docs/design-app-service-types.md`:
   `application/orchestrators/` — not services. Built per invocation by the
   runtime with that invocation's runners; store nothing but them; take the
   relay's own request — reading the `Order` straight off it — and return the
-  relay's response. The purchase orchestrator holds two runners: its job
-  context for the payment action, and the order orchestrator's relay for the
-  child workflow.
+  relay's response. The purchase orchestrator holds two relays: the purchase
+  actions runner for the payment action, and the order orchestrator runner for
+  the child workflow.
 - `OrderActions(ts.Actions)` and `PurchaseActions` beside the services —
   classes of actions over exactly one port each (`ProductCatalogRepository`,
   `PaymentProcessor`), each method making exactly one call on it. Not on the
@@ -416,30 +421,36 @@ between the runtime's handlers and the runners that send to them, both ours.
 ## What this shape costs, in rules
 
 **A serde is an application kind now.** `tesser/application/serde.py` is its
-home, and `tesser.adapters` re-exports it the same direction `JobContext` and
-`Relay` already travel. That follows from where the encodings live: a snapshot
-belongs beside the message it serves, and the messages belong to the relay.
+home, and `tesser.adapters` re-exports it the same direction `Relay` already
+travels. That follows from where the encodings live: a snapshot belongs beside
+the message it serves, and the messages belong to the relay.
 
-**The analyzer has no rows for this shape yet.** `application/relays/`,
-`ts.Relay`, a domain object on a `ts.Request` field, a serde in an application
-module, `adapters/runtimes/` and `adapters/runners/` as kind packages, a job
-context protocol outside `adapters/`, and a component publishing something
-besides `client` and `jobs` all draw findings. Every one carries a
-`# tesser:debt TB0xx` marker at its line — 104 of them, plus twenty-six
-`TB023` markers on nested functions: the four handlers the SDK registers, the
-three route functions `main` declares, and the nineteen fake-ingress
-functions the two orchestrator runners' tests bind to a socket — and that
-marker list is the registration this tree asks of the analyzer. The purchase
-roughly doubled it, because a second workflow is a second relay, a second
-class of actions, a second application client, and three more runners, each
-of the shape the analyzer has no row for; the list grows by the shape, not by
+**The analyzer now carries every row this shape needs.** `application/relays/`
+and `application/snapshots/` are application packages, `ts.Relay` is a kind,
+a relay message may carry a domain object, `ts.Serde` is an application kind
+and a snapshot's body is checked, `adapters/runners/` and `adapters/runtimes/`
+are adapter kind packages holding `ts.Runner` and `ts.Runtime`, and a component
+publishes its client and its runtimes. What is left is ten markers, not a
+registration list: four `TB072` and six `TB085` on
+`FakeRestateWorkflowContext`, a hand-written double of the SDK's
+`restate.WorkflowContext` — a foreign class that is no tesser kind, so the fake
+can name no base and the analyzer can derive no name for the local. Beside them
+sit twenty-six `TB023` markers on nested functions: the four handlers the SDK
+registers, the three route functions `main` declares, and the nineteen
+fake-ingress functions the two orchestrator runners' tests bind to a socket —
+those belong to the separately gated nested-def wave. The purchase roughly
+doubled the shape, because a second workflow is a second relay, a second
+class of actions, a second application client, and three more runners; the
+list grows by the shape, not by
 the scenario. Nothing is hidden: the
 tree is at zero findings because every finding is named, not because any is
 absent.
 
 The remaining rule cost of putting an encoding in the application is `json`:
-the application stdlib allowlist is `{__future__, typing}`, and the four
-relays modules and `snapshots/order_snapshot.py` import it (five of the 104).
+the application stdlib allowlist is `{__future__, typing}`, and `TB062` widens
+it by exactly `json` in `application/relays/` and `application/snapshots/` —
+the four relays modules and `snapshots/order_snapshot.py` — and nowhere else in
+the role.
 
 ## Messages are declared once, beside the protocol that speaks them
 

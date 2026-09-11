@@ -52,7 +52,7 @@ class Ordering(ts.Component):
         self._order_actions = application.OrderActions(self._memory_product_catalog_repository)
         self._memory_payment_processor = gateways.MemoryPaymentProcessor()
         self._purchase_actions = application.PurchaseActions(self._memory_payment_processor)
-        self.restate_order_runtime = runtimes.RestateOrderRuntime(  # tesser:debt TB081
+        self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(
             self._order_actions, self._purchase_actions
         )
         self.client: client.OrderingClient = Ordering.Client(

@@ -31,14 +31,15 @@ myself?* Yes → application service.
   starts.)
 - A **DTO / request struct** — data crossing the boundary. It has no behavior.
 - An **orchestrator** — the body of a workflow on a durable-execution engine.
-  Same four-step shape, but built per invocation by a job, depending on
-  action ports only, storing nothing, and never on the public `Client`. Not
-  an application service; a kind of its own (`ts.Orchestrator`,
-  `python.md#orchestrators-actions-jobs`).
+  Same four-step shape, but built per invocation by a runtime, depending on
+  relays and action ports only, storing nothing, and never on the public
+  `Client`. Not an application service; a kind of its own (`ts.Orchestrator`,
+  `python.md#orchestrators-actions-relays`).
 - A **class of actions** — application-service-shaped, but with exactly one
   port and exactly one call on it per method (the engine's retry unit), and
-  reachable only through an application client a job holds — never on the
-  public `Client` (`ts.Actions`, `python.md#orchestrators-actions-jobs`).
+  reachable only through an application client a runtime holds — never on the
+  public `Client`, and never holding a relay of its own (`ts.Actions`,
+  `python.md#orchestrators-actions-relays`).
 
 ## Rules
 
@@ -68,7 +69,7 @@ myself?* Yes → application service.
    question into the first request** so one answer covers both; or, when the
    steps are genuinely a sequence with their own retries and failures, it is
    a **workflow** — an orchestrator on a durable-execution engine
-   (`python.md#orchestrators-actions-jobs`), not a service method.
+   (`python.md#orchestrators-actions-relays`), not a service method.
 
    What the *arms* do afterwards is not a decision. An arm may drive a
    `-> None` transition that records what it learned as state, and the method

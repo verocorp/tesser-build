@@ -229,7 +229,7 @@ file says *how*, and it is the cross-cutting layer they assume.
 
   **A fake mirrors its port**, and that is `TB072`'s second clause: a
   `@ts.fake` names as a base the contract it doubles — an application port, a
-  store, a protocol port, a client, an actions client, a job context, or a
+  store, a protocol port, a client, an actions client, a relay, or a
   config repository — and a fake that names none of those is a finding. The
   base is what makes the double checkable: it is how the analyzer knows which
   methods the fake owes, and it is what breaks the test when the port's

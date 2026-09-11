@@ -46,7 +46,7 @@ class MapToPlaceOrderResponse(ts.Mapper, client.PlaceOrderResponse):
 
 class OrderService(ts.ApplicationService):
 
-    def __init__(self, order_orchestrator_runner: relays.OrderOrchestratorRunner) -> None:  # tesser:debt TB081
+    def __init__(self, order_orchestrator_runner: relays.OrderOrchestratorRunner) -> None:
         self._order_orchestrator_runner = order_orchestrator_runner
 
     async def submit_order(

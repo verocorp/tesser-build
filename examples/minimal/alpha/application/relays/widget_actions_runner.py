@@ -17,6 +17,6 @@ class QuoteResponse(ts.Response):
         self.name = name
 
 
-class Quoting(ts.Port, typing.Protocol):
+class WidgetActionsRunner(ts.Relay, typing.Protocol):
 
-    def quote(self, job_context: ts.JobContext, quote_request: QuoteRequest) -> QuoteResponse: ...
+    def run_quote(self, quote_request: QuoteRequest) -> QuoteResponse: ...

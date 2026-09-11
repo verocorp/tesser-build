@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json  # tesser:debt TB062
+import json
 
 import tesser.application as ts
 
@@ -8,7 +8,7 @@ import ordering.domain as domain
 import tesser.errors as errors
 
 
-class OrderSnapshot(ts.Serde):  # tesser:debt TB052
+class OrderSnapshot(ts.Serde):
 
     def serialize(self, order: domain.Order) -> bytes:
         return json.dumps(
