@@ -12,7 +12,6 @@ import tesser.srv as ts
 import app as app
 import protocol as protocol
 import specification.adapters.handlers as handlers
-import tesser.errors as errors
 
 MAX_BUFFERED_BODY: typing.Final[int] = 1_048_576
 PAGE: typing.Final[pathlib.Path] = pathlib.Path(__file__).with_name("index.html")
@@ -89,10 +88,6 @@ class HttpHost(ts.Host):
                     http_response = protocol.HttpResponse.problem(413, "payload_too_large", str(e))
                 except protocol.StreamingUnsupported as e:
                     http_response = protocol.HttpResponse.problem(411, "length_required", str(e))
-                except errors.DomainError as e:
-                    http_response = protocol.HttpResponse.problem(errors.status_for(e.kind), e.code, e.message)
-                except errors.InfraError:
-                    http_response = protocol.HttpResponse.problem(503, "unavailable", "a dependency is unavailable; please retry")
                 except Exception:
                     http_response = protocol.HttpResponse.problem(500, "internal", "unexpected error")
                 self.send_response(http_response.status_code)
