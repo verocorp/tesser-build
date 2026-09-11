@@ -16889,6 +16889,198 @@ def test_a_relay_dto_field_is_a_primitive_a_relay_dto_or_a_domain_object() -> No
     ), findings
 
 
+def test_a_snapshot_decides_once_on_shape() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/snapshots/__init__.py",
+                "shop.application.snapshots",
+                "from shop.application.snapshots.loose import LooseSnapshot as LooseSnapshot\n",
+                True,
+            ),
+            (
+                "shop/application/snapshots/loose.py",
+                "shop.application.snapshots.loose",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "import tesser.errors as errors\n"
+                "class LooseSnapshot(ts.Serde):\n"
+                "    def serialize(self, run_quote_request: relays.RunQuoteRequest) -> bytes:\n"
+                "        text = run_quote_request.text.upper()\n"
+                "        if not text:\n"
+                "            text = 'x'\n"
+                "        return json.dumps({'text': text}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> relays.RunQuoteRequest:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        if not isinstance(snapshot, dict):\n"
+                "            raise errors.invalid('bad', 'not a dict')\n"
+                "        if not snapshot.get('text'):\n"
+                "            raise errors.invalid('bad', 'no text')\n"
+                "        return relays.RunQuoteRequest(text=snapshot.get('text', ''))\n",
+                False,
+            ),
+            (
+                "shop/application/snapshots/test_loose.py",
+                "shop.application.snapshots.test_loose",
+                "import shop.application.snapshots as snapshots\n"
+                "def test_loose_exists() -> None:\n"
+                "    assert snapshots.LooseSnapshot is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.snapshots.loose.LooseSnapshot.serialize decides; a snapshot "
+        "decides once, on shape — serialize decides nothing and deserialize carries at "
+        "most one guard, built from isinstance, truthiness, and comparison to constants "
+        "over the loaded value" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.snapshots.loose.LooseSnapshot.deserialize decides; a snapshot "
+        "decides once, on shape" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.snapshots.loose.LooseSnapshot.serialize makes a call a "
+        "snapshot may not make; a snapshot names json.dumps, json.loads, isinstance, "
+        "str, int, errors.invalid, the message and spec constructors, and another "
+        "snapshot's serialize or deserialize, and nothing else" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.snapshots.loose.LooseSnapshot.deserialize makes a call a "
+        "snapshot may not make" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.snapshots.loose.LooseSnapshot.serialize is more than one "
+        "return; serialize is one return of json.dumps over a literal dict of the "
+        "message's attribute reads and canonical exits, or of another snapshot's "
+        "serialize" in f
+        for f in findings
+    ), findings
+
+
+def test_a_snapshot_guard_raises_and_deserialize_ends_in_a_constructor() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/snapshots/__init__.py",
+                "shop.application.snapshots",
+                "from shop.application.snapshots.slack import SlackSnapshot as SlackSnapshot\n",
+                True,
+            ),
+            (
+                "shop/application/snapshots/slack.py",
+                "shop.application.snapshots.slack",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class SlackSnapshot(ts.Serde):\n"
+                "    def serialize(self, run_quote_request: relays.RunQuoteRequest) -> bytes:\n"
+                "        return json.dumps({'text': run_quote_request.text}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> relays.RunQuoteRequest:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        if not isinstance(snapshot, dict):\n"
+                "            snapshot = {'text': ''}\n"
+                "        answer = relays.RunQuoteRequest(text=snapshot['text'])\n",
+                False,
+            ),
+            (
+                "shop/application/snapshots/test_slack.py",
+                "shop.application.snapshots.test_slack",
+                "import shop.application.snapshots as snapshots\n"
+                "def test_slack_exists() -> None:\n"
+                "    assert snapshots.SlackSnapshot is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.snapshots.slack.SlackSnapshot.deserialize carries a guard "
+        "that does not raise; deserialize's one guard raises errors.invalid and does "
+        "nothing else, because a payload of the wrong shape never reaches the "
+        "constructor" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.snapshots.slack.SlackSnapshot.deserialize does not end in a "
+        "return; deserialize ends in one constructor call over what json.loads read" in f
+        for f in findings
+    ), findings
+    assert not any("SlackSnapshot.serialize" in f for f in findings), findings
+
+
+def test_a_snapshot_composes_another_snapshot() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/snapshots/__init__.py",
+                "shop.application.snapshots",
+                "from shop.application.snapshots.carrier import NameSnapshot as NameSnapshot\n",
+                True,
+            ),
+            (
+                "shop/application/snapshots/carrier.py",
+                "shop.application.snapshots.carrier",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "import shop.domain.thing as thing\n"
+                "import tesser.errors as errors\n"
+                "class NameSnapshot(ts.Serde):\n"
+                "    def serialize(self, name: thing.Name) -> bytes:\n"
+                "        return json.dumps({'text': str(name)}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> thing.Name:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        if not (isinstance(snapshot, dict) and isinstance(snapshot.get('text'), str)):\n"
+                "            raise errors.invalid('bad', 'a name is its text')\n"
+                "        return thing.Name(snapshot['text'])\n",
+                False,
+            ),
+            (
+                "shop/application/snapshots/test_carrier.py",
+                "shop.application.snapshots.test_carrier",
+                "import shop.application.snapshots as snapshots\n"
+                "def test_carrier_exists() -> None:\n"
+                "    assert snapshots.NameSnapshot is not None\n",
+                False,
+            ),
+            (
+                "shop/application/relays/wrapped.py",
+                "shop.application.relays.wrapped",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.snapshots as snapshots\n"
+                "import shop.domain.thing as thing\n"
+                "class WrapRequest(ts.Request):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        self.name = name\n"
+                "class WrapRequestSnapshot(ts.Serde):\n"
+                "    def serialize(self, wrap_request: WrapRequest) -> bytes:\n"
+                "        return snapshots.NameSnapshot().serialize(wrap_request.name)\n"
+                "    def deserialize(self, buf: bytes) -> WrapRequest:\n"
+                "        return WrapRequest(name=snapshots.NameSnapshot().deserialize(buf))\n"
+                "class Wrapping(ts.Relay, typing.Protocol):\n"
+                "    async def run_wrap(self, wrap_request: WrapRequest) -> WrapRequest: ...\n",
+                False,
+            ),
+            (
+                "shop/application/relays/test_wrapped.py",
+                "shop.application.relays.test_wrapped",
+                "def test_wrapped_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("NameSnapshot" in f for f in findings), findings
+    assert not any("WrapRequestSnapshot" in f for f in findings), findings
+
 def test_relays_and_snapshots_are_packages_never_modules() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

@@ -190,6 +190,33 @@ SERDE_METHODS: typing.Final[tuple[str, ...]] = ("serialize", "deserialize")
 
 SERDE_HELD: typing.Final[frozenset[str]] = frozenset({"type", "Type"})
 
+JSON_MODULE: typing.Final[str] = "json"
+
+JSON_CALLS: typing.Final[frozenset[str]] = frozenset({"dumps", "loads"})
+
+ERRORS_INVALID: typing.Final[tuple[str, str]] = ("tesser.errors", "invalid")
+
+SNAPSHOT_BUILTINS: typing.Final[frozenset[str]] = frozenset({"isinstance", "str", "int"})
+
+SNAPSHOT_CONSTRUCTED: typing.Final[frozenset[str]] = frozenset(
+    {
+        "request",
+        "response",
+        "port_request",
+        "port_response",
+        "relay_request",
+        "relay_response",
+        "spec",
+        "aggregate",
+        "entity",
+        "valueobject",
+        "outcome",
+        "snapshot",
+    }
+)
+
+SNAPSHOT_READS: typing.Final[frozenset[str]] = frozenset({"encode", "decode"})
+
 SERDE_DECISIONS: typing.Final[tuple[type[ast.stmt | ast.expr], ...]] = (
     ast.If,
     ast.IfExp,
@@ -207,6 +234,23 @@ SERDE_DECISIONS: typing.Final[tuple[type[ast.stmt | ast.expr], ...]] = (
     ast.GeneratorExp,
     ast.Assert,
     ast.Lambda,
+)
+
+SNAPSHOT_LOOPS: typing.Final[tuple[type[ast.stmt | ast.expr], ...]] = (
+    ast.Match,
+    ast.While,
+    ast.For,
+    ast.AsyncFor,
+    ast.Try,
+    ast.TryStar,
+    ast.IfExp,
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+    ast.Assert,
+    ast.Lambda,
+    ast.BinOp,
 )
 
 ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
@@ -4701,6 +4745,93 @@ class ClassDecl(ts.Entity):
                     if id(inner) in allowed or not isinstance(inner, SERDE_DECISIONS):
                         continue
                     serde_facts.append((inner.lineno, "decision", item.name, ()))
+        if own_block is not None and str(own_block) == SNAPSHOT_BLOCK:
+
+            def named_block(text: str) -> str | None:  # tesser:debt TB023
+                resolved = self._scope.resolve(Text(text))
+                found = kind_table.block_of(resolved) if resolved is not None else None
+                return str(found) if found is not None else None
+
+            def snapshot_call_ok(call: ast.Call) -> bool:  # tesser:debt TB023
+                func = call.func
+                if isinstance(func, ast.Name):
+                    if func.id in SNAPSHOT_BUILTINS:
+                        return True
+                    block = named_block(func.id)
+                    return block is not None and block in SNAPSHOT_CONSTRUCTED
+                if not isinstance(func, ast.Attribute):
+                    return False
+                if func.attr in SNAPSHOT_READS and not call.args and not call.keywords:
+                    return True
+                if func.attr == "get" and len(call.args) == 1 and not call.keywords:
+                    return True
+                if isinstance(func.value, ast.Name):
+                    package = self._scope.package_of(Text(func.value.id))
+                    if (
+                        package is not None
+                        and str(package) == JSON_MODULE
+                        and func.attr in JSON_CALLS
+                    ):
+                        return True
+                    resolved = self._scope.resolve(Text(f"{func.value.id}.{func.attr}"))
+                    if resolved is not None and (
+                        str(resolved.module()),
+                        str(resolved.name()),
+                    ) == ERRORS_INVALID:
+                        return True
+                    block = named_block(f"{func.value.id}.{func.attr}")
+                    return block is not None and block in SNAPSHOT_CONSTRUCTED
+                if func.attr in SERDE_METHODS and isinstance(func.value, ast.Call):
+                    return snapshot_call_ok(func.value)
+                return False
+
+            for item in node.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if item.name not in SERDE_METHODS:
+                    continue
+                for inner in ast.walk(item):
+                    if isinstance(inner, ast.Call) and not snapshot_call_ok(inner):
+                        serde_facts.append((inner.lineno, "snapshot_call", item.name, ()))
+                guards = [inner for inner in ast.walk(item) if isinstance(inner, ast.If)]
+                banned = [
+                    inner for inner in ast.walk(item) if isinstance(inner, SNAPSHOT_LOOPS)
+                ]
+                if item.name == "serialize":
+                    for inner in guards + banned:
+                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                    for inner in ast.walk(item):
+                        if isinstance(inner, (ast.BoolOp, ast.Compare)):
+                            serde_facts.append(
+                                (inner.lineno, "snapshot_decides", item.name, ())
+                            )
+                    if len(item.body) != 1 or not isinstance(item.body[0], ast.Return):
+                        serde_facts.append((item.lineno, "snapshot_serialize_shape", item.name, ()))
+                    continue
+                for inner in banned:
+                    serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                if len(guards) > 1:
+                    for inner in guards[1:]:
+                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                tested = (
+                    {id(sub) for sub in ast.walk(guards[0].test)} if guards else set()
+                )
+                for inner in ast.walk(item):
+                    if not isinstance(inner, ast.Compare):
+                        continue
+                    if id(inner) not in tested or not all(
+                        isinstance(other, ast.Constant) for other in inner.comparators
+                    ):
+                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                for guard in guards[:1]:
+                    if guard.orelse or len(guard.body) != 1 or not isinstance(
+                        guard.body[0], ast.Raise
+                    ):
+                        serde_facts.append(
+                            (guard.lineno, "snapshot_guard_shape", item.name, ())
+                        )
+                if not item.body or not isinstance(item.body[-1], ast.Return):
+                    serde_facts.append((item.lineno, "snapshot_return_shape", item.name, ()))
         object.__setattr__(self, "_serde_facts", tuple(Fact(FactSpec(*item)) for item in serde_facts))
         object.__setattr__(
             self,
@@ -5127,6 +5258,66 @@ class ClassDecl(ts.Entity):
                     "writes the same bytes on every replay",
                 ))
             )
+        for fact in self._serde_facts:
+            member = str(fact.detail())
+            if str(fact.kind()) == "snapshot_call":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB082",
+                        f"{where}.{member} makes a call a snapshot may not make; a "
+                        "snapshot names json.dumps, json.loads, isinstance, str, int, "
+                        "errors.invalid, the message and spec constructors, and another "
+                        "snapshot's serialize or deserialize, and nothing else",
+                    ))
+                )
+            elif str(fact.kind()) == "snapshot_decides":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB082",
+                        f"{where}.{member} decides; a snapshot decides once, on shape — "
+                        "serialize decides nothing and deserialize carries at most one "
+                        "guard, built from isinstance, truthiness, and comparison to "
+                        "constants over the loaded value",
+                    ))
+                )
+            elif str(fact.kind()) == "snapshot_serialize_shape":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB081",
+                        f"{where}.{member} is more than one return; serialize is one "
+                        "return of json.dumps over a literal dict of the message's "
+                        "attribute reads and canonical exits, or of another snapshot's "
+                        "serialize",
+                    ))
+                )
+            elif str(fact.kind()) == "snapshot_guard_shape":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB081",
+                        f"{where}.{member} carries a guard that does not raise; "
+                        "deserialize's one guard raises errors.invalid and does nothing "
+                        "else, because a payload of the wrong shape never reaches the "
+                        "constructor",
+                    ))
+                )
+            elif str(fact.kind()) == "snapshot_return_shape":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB081",
+                        f"{where}.{member} does not end in a return; deserialize ends in "
+                        "one constructor call over what json.loads read",
+                    ))
+                )
         return tuple(found)
 
     def serde_violations(self) -> tuple[Violation, ...]:
