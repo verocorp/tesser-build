@@ -34,7 +34,7 @@ no debt marker drawn.
   through a mapper draws none. `RULES.md` regenerated; `⟨operation⟩` joins
   `HOLE_NAMES` so the rulebook can render the row.
 - **Skill:** `python.md` names the check under the service-body rules;
-  `skill-version` 75.
+  `skill-version` 76 (74 and 75 went to #182 and #186 while this branch was open).
 
 ### Changed
 - **80 sites now translate through a mapper** in `examples/errorspy`,
