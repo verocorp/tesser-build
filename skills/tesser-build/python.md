@@ -169,7 +169,7 @@ reads without a suffix. Three shapes:
 
 - A parameter annotated with a class takes that class's name in snake_case:
   `add_request: client.AddRequest`, `widget_repository: ports.WidgetRepository`,
-  `job_context: ts.JobContext`.
+  `order_actions_runner: relays.OrderActionsRunner`.
 - A local assigned from a **call** takes the name of the class the call
   declares it returns — a constructor (`widget = domain.Widget(spec)`), a
   method (`add_response = self._alpha_client.add(...)`,
@@ -217,7 +217,7 @@ the module-import rule exempts, so it costs nothing to add. The reason is
 mechanical: the analyzer reads annotations to decide what a class is, what a
 method takes, and what crosses a boundary, and a quoted annotation resolves to
 nothing — so `spec: 'TagSpec'` is not a spec, `-> 'Reply'` is not an outcome,
-and `job: 'ts.JobContext'` is not a job context. Quoting a type does not make
+and `runner: 'ts.Runner'` is not a runner. Quoting a type does not make
 a rule pass; it makes the rule blind, which is why the quoting itself is what
 gets reported. Strings inside `typing.Literal[...]` are data, not types, and
 are left alone.
@@ -758,7 +758,7 @@ outcome*, and the one loop
 is `while True:` ended by a match arm's `break`. A second decision in the same
 method is a second `match`, and a second `match` is a finding — call the port
 every time, fold the question into the first request, or make it a workflow
-(**Orchestrators, actions, jobs**, below). What an arm does after deciding is
+(**Orchestrators, actions, relays**, below). What an arm does after deciding is
 not itself a decision: it may drive a `-> None` transition that records the
 answer as state, and the method then persists unconditionally. Every
 translation the method needs is a **mapper** — a class that *is* the spec or
@@ -1046,236 +1046,242 @@ repo's silent-site metric in `docs/design-application-ports.md` — the enum is 
 union-free one that scores **zero** silent sites; a `found: bool` flag and a
 0-or-1 tuple each leave the reader silently wrong.
 
-## Orchestrators, actions, and jobs {#orchestrators-actions-jobs}
+## Orchestrators, actions, relays, runners, runtimes {#orchestrators-actions-relays}
 
-A workflow on a durable-execution engine (Restate, Temporal) adds two
-application kinds that are **not** application services, and one adapter kind
-the engine calls back into. The rules and the why are
+A workflow on a durable-execution engine (Restate, Temporal) adds three
+application kinds that are **not** application services, and two adapter kinds
+that carry the engine. The rules and the why are
 `docs/design-app-service-types.md`; the verified impl is
-`examples/durable-execution/`. All three keep the service body rules above
-(one `ts.Request` in, one `ts.Response` out, `match` only, mappers for every
-translation) — what differs is scope, reach, and what each may depend on.
+`examples/durable-execution/` and the small exemplar is `examples/minimal/`.
+All of them keep the service body rules above (one `ts.Request` in, one
+`ts.Response` out, `match` only, mappers for every translation) — what differs
+is scope, reach, and what each may depend on.
 
-- **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`,
-  one per module) is built **per invocation by a job**, with that
-  invocation's **job context** — `ts.JobContext`, the engine-neutral
-  protocol for what a step may do inside an invocation (`call(step,
-  request)` today; `sleep`, `wait_for`, `send` when an orchestrator needs
-  them). It depends on exactly one job context plus **action ports** — a port
-  some application client speaks (below) — never a repository, never the
-  workflow-start port; it stores nothing but those, because everything it
-  does between journaled calls re-runs on replay. It threads the job context
-  as the **leading argument of every action-port call**, the way Go threads
-  `ctx`. It takes the workflow port's own request and returns a response it
-  declares itself (the one `ts.Response` allowed outside a ports module).
+- **A relay** (`ts.Relay`, in `application/relays/`, one per module) is a
+  protocol whose far side is this same context's own application code, reached
+  across the engine. It is declared together with the `ts.Request`/`ts.Response`
+  messages it speaks and a **snapshot** for each. There is one relay kind:
+  lifetime is not a property of the protocol. `OrderOrchestratorRunner` has two
+  implementations — one built once at wiring that enters through the engine's
+  ingress, one built per invocation that runs the workflow as a child — and the
+  orchestrator holding it cannot tell which it has.
+- **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`, one
+  per module) is built **per invocation by a runtime**, with that invocation's
+  runners. It depends on relays and **action ports** — a port some application
+  client speaks (below) — never a repository; it stores nothing but those,
+  because everything it does between journaled calls re-runs on replay. It
+  takes a relay request and returns a relay response.
 - **A class of actions** (`ts.Actions`, beside the services) takes **exactly
-  one port** in `__init__` and each public method calls it **exactly once**:
-  an action is the engine's retry unit, and one side effect per unit is what
-  keeps a retry safe. It speaks the port DTOs of the port an orchestrator
-  calls it through, and it is **not on the public `Client`**.
+  one port** in `__init__` and each public method calls it **exactly once**: an
+  action is the engine's retry unit, and one side effect per unit is what keeps
+  a retry safe. It depends only on ports and the stores that yield them —
+  **never on a relay**, because a relay inside an action is the engine calling
+  the engine. It is **not on the public `Client`**.
 - **An application client** (`tesser.application.Client`, in
   `application/client/`, one protocol per module named for the actions it
-  fronts) is how a job reaches a class of actions — the inbound twin of a
+  fronts) is how a runtime reaches a class of actions — the inbound twin of a
   port. Same word as the context client, different package, exactly as
-  `Request`/`Response` already are. It imports exactly one ports module and
-  speaks its DTOs; only a job may import it.
-- **A job** (`ts.Job`, in `adapters/jobs/`) is where the engine hands work
-  back to us. A handler calls the context client; **a job calls an
-  application client or constructs an orchestrator** — wrapping the
-  invocation's engine context as its own `ts.JobContext` implementation
-  (`RestateJobContext(ctx)`, also in `adapters/jobs/`) first. Every gateway
-  and every repository is built once by the component and **never stores an
-  invocation's context** (TB081); an action-port method takes the job context
-  as its leading parameter and the gateway does
-  `job.call(self._quote, request)`. Jobs carry placement and import rules
-  only for now.
+  `Request`/`Response` already are. It speaks the DTOs of exactly one message
+  package, a `ports` module or a `relays` module; only a runtime may import it.
+- **A runner** (`ts.Runner`, in `adapters/runners/`) is an implementation of a
+  relay. Lifetime is carried by placement, not by the base: a runner may hold
+  an invocation's engine context, a gateway or a repository never does. It
+  reaches `application.relays` and `adapters/runtimes/` and nothing else.
+- **A runtime** (`ts.Runtime`, in `adapters/runtimes/`) is the engine's
+  callback surface. It registers the engine's handlers, builds an orchestrator
+  per invocation with that invocation's runners, binds the serdes over the
+  relay messages, and translates a `DomainError` into the engine's terminal
+  error. **It invokes no relay itself.** It reaches `application.client`,
+  `application.orchestrators`, `application.relays`, and `adapters/runners/`.
+
+**Who may invoke a relay:** a service, through an ingress runner, and an
+orchestrator, through an in-invocation runner. Never an action, never a
+handler, never a runtime, never a component (TB081).
 
 ```python
-# ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)
-class Client(ts.Client, typing.Protocol):
+# ordering/application/relays/order_actions_runner.py (verified impl: examples/durable-execution/)
+class PriceProductRequest(ts.Request):
 
-    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse: ...
+    def __init__(self, sku: str) -> None:
+        self.sku = sku
+
+
+class PriceProductRequestSnapshot(ts.Serde):
+
+    def serialize(self, price_product_request: PriceProductRequest) -> bytes:
+        return json.dumps({"sku": price_product_request.sku}).encode()
+
+    def deserialize(self, buf: bytes) -> PriceProductRequest:
+        snapshot = json.loads(buf)
+        if not (isinstance(snapshot, dict) and isinstance(snapshot.get("sku"), str) and snapshot["sku"]):
+            raise errors.invalid("malformed_price_product_request_snapshot", "a price product request is a sku")
+        return PriceProductRequest(sku=snapshot["sku"])
+
+
+class OrderActionsRunner(ts.Relay, typing.Protocol):
+
+    async def run_price_product(self, price_product_request: PriceProductRequest) -> PriceProductResponse: ...
+
+
+# ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)
+class OrderingApplicationClient(ts.Client, typing.Protocol):
+
+    def price_product(self, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse: ...
 
 
 # ordering/application/order_actions.py (verified impl: examples/durable-execution/)
 class OrderActions(ts.Actions):
 
-    def __init__(self, catalog: catalog_repository.CatalogRepository) -> None:
-        self._catalog = catalog
+    def __init__(self, product_catalog_repository: ports.ProductCatalogRepository) -> None:
+        self._product_catalog_repository = product_catalog_repository
 
-    def quote(self, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
-        quoted_sku = order.Sku(request.sku)
-        priced = self._catalog.price(MapToPriceRequest(quoted_sku))
-        return MapToQuoteResponse(priced)
-
-
-# ordering/application/ports/quoting.py (verified impl: examples/durable-execution/)
-class Quoting(ts.Port, typing.Protocol):
-
-    async def quote(self, job: ts.JobContext, request: QuoteRequest) -> QuoteResponse: ...
+    def price_product(self, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
+        sku = domain.Sku(price_product_request.sku)
+        look_up_price_response = self._product_catalog_repository.look_up_price(MapToLookUpPriceRequest(sku))
+        return MapToPriceProductResponse(look_up_price_response)
 
 
 # ordering/application/orchestrators/order_orchestrator.py (verified impl: examples/durable-execution/)
-class RunResponse(ts.Response):
-
-    def __init__(self, order_id: str, total_cents: int) -> None:
-        self.order_id = order_id
-        self.total_cents = total_cents
-
-
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, job: ts.JobContext, quotes: quoting.Quoting) -> None:
-        self._job = job
-        self._quotes = quotes
+    def __init__(self, order_actions_runner: relays.OrderActionsRunner) -> None:
+        self._order_actions_runner = order_actions_runner
 
-    async def run(self, request: order_workflow.StartRequest) -> RunResponse:
-        running = order.Order(MapToOrderSpec(request))
-        quoted = await self._quotes.quote(self._job, MapToQuoteRequest(running))
-        total = running.total(MapToPriceSpec(quoted))
-        return MapToRunResponse(running, total)
-
-
-# ordering/adapters/gateways/restate_quoting.py (verified impl: examples/durable-execution/)
-class RestateQuoting(ts.Gateway):                       # built once; holds the handler function only
-
-    def __init__(self, quote: abc.Callable[[typing.Any, quoting.QuoteRequest], abc.Awaitable[quoting.QuoteResponse]]) -> None:  # tesser:debt TB022 — see the exception list
-        self._quote = quote
-
-    async def quote(self, job: ts.JobContext, request: quoting.QuoteRequest) -> quoting.QuoteResponse:
-        return await job.call(self._quote, request)
+    async def run(self, order_orchestrator_request: relays.OrderOrchestratorRequest) -> relays.OrderOrchestratorResponse:
+        order = order_orchestrator_request.order
+        price_product_response = await self._order_actions_runner.run_price_product(MapToPriceProductRequest(order))
+        price = order.total(MapToPriceSpec(price_product_response))
+        return MapToOrderOrchestratorResponse(order, price)
 
 
-# ordering/adapters/jobs/restate.py (verified impl: examples/durable-execution/)
-class RestateJobContext(ts.JobContext):                 # the one per-invocation object
+# ordering/adapters/runners/restate_order_actions_runner.py (verified impl: examples/durable-execution/)
+class RestateOrderActionsRunner(ts.Runner):             # holds this invocation's engine context
 
-    def __init__(self, ctx: restate.Context) -> None:
-        self._ctx = ctx
+    def __init__(self, restate_workflow_context: restate.WorkflowContext, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
+        self._restate_workflow_context = restate_workflow_context
+        self._restate_order_runtime = restate_order_runtime
 
-    async def call[I, O](self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I) -> O:  # tesser:debt TB022 — the ts.JobContext signature, unruled
-        return await self._ctx.service_call(step, request)
-
-
-# ordering/adapters/jobs/restate.py (verified impl: examples/durable-execution/)
-class RestateActionJobs(ts.Job):
-
-    def __init__(self, actions: order_actions_client.Client) -> None:
-        self.service = restate.Service("OrderingActions")
-
-        @self.service.handler(...)
-        async def quote(ctx: restate.Context, request: quoting.QuoteRequest) -> quoting.QuoteResponse:  # tesser:debt TB023 — engine registration, unruled
-            return actions.quote(request)
-
-        self.quote = quote
-
-
-class RestateWorkflowJobs(ts.Job):
-
-    def __init__(self, quotes: quoting.Quoting) -> None:
-        self.workflow = restate.Workflow("Ordering")
-
-        @self.workflow.main(...)
-        async def run(ctx: restate.WorkflowContext, request: order_workflow.StartRequest) -> order_orchestrator.RunResponse:  # tesser:debt TB023 — engine registration, unruled
-            orchestrator = order_orchestrator.OrderOrchestrator(
-                restate_context.RestateJobContext(ctx), quotes
+    async def run_price_product(self, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
+        try:
+            return await self._restate_workflow_context.service_call(
+                self._restate_order_runtime.price_product_handler, price_product_request
             )
-            return await orchestrator.run(request)
+        except restate.TerminalError as terminal_error:
+            ...
 
-        self.run = run
+
+# ordering/adapters/runtimes/restate_order_runtime.py (verified impl: examples/durable-execution/)
+class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.PriceProductRequest]):
+
+    def serialize(self, price_product_request: relays.PriceProductRequest | None) -> bytes:
+        if price_product_request is None:
+            return b""
+        return relays.PriceProductRequestSnapshot().serialize(price_product_request)
+
+    def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
+        if not buf:
+            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+        return relays.PriceProductRequestSnapshot().deserialize(buf)
+
+
+class RestateOrderRuntime(ts.Runtime):
+
+    def __init__(self, ordering_application_client: client.OrderingApplicationClient, ...) -> None:
+        self.order_actions_service = restate.Service("OrderActions")
+        self.order_orchestrator_workflow = restate.Workflow("OrderOrchestrator")
+
+        @self.order_actions_service.handler(input_serde=..., output_serde=...)
+        async def price_product(restate_context: restate.Context, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:  # tesser:debt TB023 — engine registration, unruled
+            try:
+                return ordering_application_client.price_product(price_product_request)
+            except errors.DomainError as domain_error:
+                raise restate.TerminalError(domain_error.message, status_code=errors.status_for(domain_error.kind)) from domain_error
+
+        @self.order_orchestrator_workflow.main(input_serde=..., output_serde=...)
+        async def run(restate_workflow_context: restate.WorkflowContext, order_orchestrator_request: relays.OrderOrchestratorRequest) -> relays.OrderOrchestratorResponse:  # tesser:debt TB023
+            return await orchestrators.OrderOrchestrator(
+                runners.RestateOrderActionsRunner(restate_workflow_context, self)
+            ).run(order_orchestrator_request)
+
+        self.price_product_handler = price_product
+        self.order_orchestrator_handler = run
 
 
 # ordering/component/component.py (verified impl: examples/durable-execution/)
 class Ordering(ts.Component):
 
-    def __init__(self, cfg: config.Config) -> None:
-        self._catalog = memory.MemoryCatalogRepository()
-        self._actions = order_actions.OrderActions(self._catalog)
-        action_jobs = restate_jobs.RestateActionJobs(self._actions)
-        workflow_jobs = restate_jobs.RestateWorkflowJobs(restate_quoting.RestateQuoting(action_jobs.quote))
-        self.jobs: tuple[restate_jobs.RestateActionJobs, restate_jobs.RestateWorkflowJobs] = (action_jobs, workflow_jobs)
-        self.client: client.Client = order_service.OrderService(
-            restate_workflow.RestateOrderWorkflow(cfg.ingress, workflow_jobs.run)
+    def __init__(self, config: Config) -> None:
+        self._order_actions = application.OrderActions(self._memory_product_catalog_repository)
+        self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(self._order_actions, ...)
+        self.client: client.OrderingClient = Ordering.Client(
+            application.OrderService(runners.RestateOrderOrchestratorRunner(config.ingress, self.restate_order_runtime))
         )
 ```
 
-- **Messages are declared once, on the port.** The engine is a relay, so the
-  send side and the receive side of one message are not independent: the
-  gateway sends the port's `ts.Request`, the job receives it, and the
-  application client speaks the same shape. No wire types.
-- **Where the SDK cannot serialize a `ts.Request` itself, the job's package
-  brings a serde** (`ts.Serde`, in `adapters/jobs/`, maintainer ruling
-  2026-08-30). It declares exactly `serialize` and `deserialize` over **one
-  type parameter**, may hold at most the target type it was built with, and
-  branches on nothing but the empty payload — a serde with decision logic is
-  a finding (TB081, TB082), because a decision made on the wire is one no
-  domain object owns. It is the **one adapter class allowed a base from
-  outside the tree** (TB052): the engine is the caller and the SDK's ABC is
-  the shape it calls, so the class reads
-  `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`.
-- **A component publishes exactly `client` and `jobs`**, each typed; every
-  other attribute is private (TB081). `jobs` is one job or a tuple of them;
-  where it is a tuple the host mounts the definitions of each — `[d for job in
-  app.<context>.jobs for d in job.definitions()]` — and knows nothing else
+- **A relay message may carry a domain object** (TB080), and that is not a
+  widening of the no-outward-representation line: a relay is **inward**. It
+  crosses the engine inside one context and is never operated through the
+  client, so `OrderOrchestratorRequest(order: domain.Order)` is legal and the
+  order comes back whole. A `ts.Client` faces outsiders and a `ts.Port` faces a
+  foreign system; those stay primitives-only. A bare bool and a union are
+  findings on a relay message too.
+- **A snapshot decides once, on shape** (TB081/TB082). It holds nothing:
+  exactly `serialize` and `deserialize`, no `__init__`, no field, no
+  class-level statement — a relay writes the same bytes on every replay. Its
+  body is fixed too: `serialize` is one return of `json.dumps` over a literal
+  dict whose values are attribute reads or canonical exits (`str(...)`,
+  `int(...)`) of the message, or one return of another snapshot's `serialize`;
+  `deserialize` reads `json.loads`, carries **at most one guard** — built only
+  from `isinstance`, truthiness, and comparison to constants over the loaded
+  value — that raises `errors.invalid`, and ends in one constructor call. The
+  only calls a snapshot may name are `json.dumps`, `json.loads`, `isinstance`,
+  `str`, `int`, `errors.invalid`, `.encode`/`.decode`, `.get` with one
+  argument, the message and spec constructors, and another snapshot's
+  `serialize`/`deserialize`. A second branch, a loop that computes, `.get` with
+  a fallback, arithmetic, and any domain method are findings — checking shape
+  before the constructor sees it is what a snapshot is for; deciding anything
+  else is a decision no domain object owns. A snapshot several relays share —
+  one over a domain aggregate — lives in `application/snapshots/`.
+- **The engine-side serde is narrower** (`tesser.adapters.Serde`, in
+  `adapters/runtimes/`, maintainer ruling 2026-08-30). It declares exactly
+  `serialize` and `deserialize` over **one type** — a type parameter, or the
+  one shape its base is subscripted with — may hold at most the target type it
+  was built with, and branches on nothing but the empty payload before
+  delegating to the snapshot. It is the **one adapter class allowed a base from
+  outside the tree** (TB052): the engine is the caller and the SDK's ABC is the
+  shape it calls, so the class reads
+  `class RestateXSerde(ts.Serde, restate.serde.Serde[relays.X])`.
+- **`json` is legal in `application/relays/` and `application/snapshots/`** and
+  nowhere else in the application role (TB062): a snapshot is the one place a
+  message becomes bytes.
+- **A component publishes only its client and its runtimes** (TB081): `client`
+  typed as the context's `ts.Client`, and every other public attribute typed as
+  a `ts.Runtime` — one runtime or a tuple of them. Every other attribute is
+  private. The host mounts what the runtime registers and knows nothing else
   about the engine.
-- **Reach is carried by the adapter kind package** (TB060): `handlers/` →
-  the context client; `jobs/` → `application.client`,
-  `application.orchestrators`, `application.ports`;
-  `gateways/` and `repositories/` → `application.ports`; a kind imports only
-  its own kind. Every adapters module lives in one of the four kind
-  packages and holds the kind its package names (TB041/TB052).
-### Relays, snapshots, runners, runtimes
-
-`examples/durable-execution/` names a fifth application kind, and the analyzer
-registers it: **a relay** (`ts.Relay`) is a protocol whose far side is this
-same context's own application code, reached across the engine. It lives in
-`application/relays/` — a package beside `ports/`, one relay per module —
-together with the `ts.Request`/`ts.Response` messages it speaks and a
-**snapshot** for each (`ts.Serde`, from `tesser.application`) that writes the
-message to bytes and reads it back.
-
-- **A relay message may carry a domain object** (TB080). A `ts.Client` faces
-  outsiders and a `ts.Port` faces a foreign system, so both stay
-  primitives-only; a relay has us on both ends, so
-  `OrderOrchestratorRequest(order: domain.Order)` is legal and the order comes
-  back whole. A bare bool and a union are still findings.
-- **A snapshot holds nothing** (TB081): exactly `serialize` and `deserialize`,
-  no `__init__`, no field, no class-level statement — a relay writes the same
-  bytes on every replay. It checks the shape of what it reads before the
-  constructor sees it, so a wrong type is a validation error instead of a
-  `TypeError` raised later, inside the orchestrator, where the engine would
-  retry it. A snapshot several relays share — one over a domain aggregate —
-  lives in `application/snapshots/`.
-- **A relay whose implementation lives exactly as long as one invocation is a
-  `ts.JobContext` instead**, declared in the same package. The two differ in
-  how long the implementation lives, not in what it speaks.
-- **A service or an orchestrator may depend on a relay** (TB081), and an
-  orchestrator may store one. Reading the domain object straight off the
-  relay's own request is how that object arrives, so it is not the straight
-  accessor TB082 flags.
-- **An application client may speak a relay's messages** as well as a ports
-  module's (TB067/TB081) — exactly one message package, `ports` or `relays`.
-- **`json` is legal in `application/relays/` and `application/snapshots/`**
-  and nowhere else in the application role (TB062): a snapshot is the one
-  place a message becomes bytes.
-- **The implementations are two adapter kind packages** (TB041/TB052/TB060).
-  `adapters/runners/` holds the relay implementations — a `ts.Gateway` for the
-  one built once at wiring that enters through the engine's ingress, a
-  `ts.JobContext` for the one built per invocation inside a handler — and
-  reaches `application.relays` and `adapters/runtimes/`. `adapters/runtimes/`
-  holds the `ts.Job` that registers the engine's handlers, plus the
-  `ts.Serde`s over the relay messages those handlers bind, and reaches
-  `application.client`, `application.orchestrators`, `application.relays`, and
-  `adapters/runners/`. A serde names one type — a type parameter, or the one
-  shape its base is subscripted with.
-- **`adapters/jobs/` and the `runners`/`runtimes` split are both registered.**
-  `examples/minimal/` uses the first, `examples/durable-execution/` the
-  second, and `docs/design-app-service-types.md` plus the prose above still
-  describe only the first. Which one the norm keeps is an open ruling —
-  `TODOS.md`. Note the gap; don't invent a third.
+- **A gateway, a repository, and a runner inline their logic** (TB082), as a
+  service does: one call on the backend and the mapping of what it answered,
+  read on the page — no delegation to a private method or a module function
+  beside it.
+- **Reach is carried by the adapter kind package** (TB041/TB052/TB060). An
+  adapters module lives in `handlers/`, `gateways/`, `repositories/`,
+  `runners/`, or `runtimes/`, and holds the kind its package names — only a
+  runtimes module holds a runtime beside the serdes it binds. `handlers/` →
+  the context client; `runners/` → `application.relays` and
+  `adapters/runtimes/`; `runtimes/` → `application.client`,
+  `application.orchestrators`, `application.relays`, `adapters/runners/`;
+  `gateways/` and `repositories/` → `application.ports`. A kind imports only
+  its own kind. **Only a runtime imports the application client and the
+  orchestrators**, because an action is reachable only through the engine. A
+  host reaches a context only through its handlers and its runtimes (TB063).
+- **Test placement follows** (TB070): `runners/` and `runtimes/` are test
+  tiers; a test placed in either also reaches `application.client` (it
+  constructs the runtime it addresses) and `domain` (it builds the objects a
+  relay message carries).
 
 - **Not yet ruled:** payload versioning on a durable leg (a field added to a
-  port DTO changes the bytes an in-flight journal holds — port DTOs on a
-  durable leg are append-only until it is); the Temporal mirror binds its
+  relay message changes the bytes an in-flight journal holds — relay messages
+  on a durable leg are append-only until it is); the Temporal mirror binds its
   serde at the client/worker rather than at a decorator, and the kinds are
   expected to survive it unchanged.
 

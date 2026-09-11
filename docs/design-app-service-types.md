@@ -1,15 +1,113 @@
-# Application-service types — orchestrators, actions, jobs
+# Application-service types — orchestrators, actions, relays, runners, runtimes
 
-Status: RULED and BUILT, 2026-08-29 — tesser-py kinds, tessercheck rules,
-the `examples/minimal` exemplar, and the `examples/durable-execution` rework
-(live-verified through a Restate server) all land in the same PR. Amended
-after a codex challenge review (15 findings; the ones taken are marked
-"codex #n" below), once more by the rework (a jobs → gateways row, since
-withdrawn), and finally by the job-context ruling (below).
-Carved from the durable-execution example (PR #138,
-`examples/durable-execution`) after the 2026-08-25 (flow/Temporal chain) and
-2026-08-27/28 (Restate build) sessions. The example is to be reworked to
-match; the rules follow the example.
+Status: **RULED, 2026-09-11 (Chris).** The section immediately below is the
+convention. Everything from "The three application kinds" onward is the
+2026-08-29 record that produced it and is **historical**: it is kept because it
+carries provenance that cannot be reconstructed — the fifteen codex challenge
+findings and which were taken, the survey of seven orchestrators in
+`~/workspace/flow`, the package names considered and rejected, and the two
+options the job-context ruling chose between. Read it for *why*, never for
+*what*. Where the two disagree, this section wins; the tree
+(`examples/durable-execution/`, `examples/minimal/`) and
+`skills/tesser-build/python.md#orchestrators-actions-relays` are the spec.
+
+## The ruling, 2026-09-11 — the word "job" goes
+
+There is no `ts.Job`, no `ts.JobContext`, no `adapters/jobs/` package, and no
+job context threaded as the leading parameter of an action-port call. Three
+kinds replace all of it.
+
+| kind | base | lives in | built | depends on | reached through |
+|---|---|---|---|---|---|
+| relay | `ts.Relay` (`tesser.application.Relay`) | `application/relays/`, one per module, with the messages it speaks and a snapshot for each | declared, not built — it is a protocol | nothing | a service, through an ingress runner; an orchestrator, through an in-invocation runner |
+| runner | `ts.Runner` (`tesser.adapters.Runner`) | `adapters/runners/` | at wiring, or per invocation by a runtime | its relays' messages and the runtimes package | whoever holds the relay it implements |
+| runtime | `ts.Runtime` (`tesser.adapters.Runtime`) | `adapters/runtimes/` | once, by the component | the application client, the orchestrators, the relays, the runners | the engine, and the host that mounts what it registers |
+
+**One relay kind; lifetime is not a property of the protocol.** The two
+actions-runner protocols that were written as `ts.JobContext` are `ts.Relay`
+now, like the orchestrator runners beside them. The proof that lifetime does
+not belong on the protocol is in the tree: `OrderOrchestratorRunner` has two
+implementations — `RestateOrderOrchestratorRunner`, built once at wiring and
+entering through the engine's ingress, and `RestateOrderOrchestratorChildRunner`,
+built per invocation and running the workflow as a child — and the orchestrator
+holding one cannot tell which it has.
+
+**Lifetime is carried by placement instead.** A runner may hold an
+invocation's engine context; a gateway and a repository never do. The old rule
+said the same thing by naming the job context; the analyzer cannot name an
+engine context (a gateway legitimately holds foreign SDK objects), so the
+threading rule is dropped rather than re-keyed on something the analyzer would
+have to guess at. A port method takes exactly one `ts.Request`, with nothing
+before it.
+
+**A runtime registers and builds; it does not invoke.** It registers the
+engine's handlers, binds the serdes over the relay messages, builds an
+orchestrator per invocation with that invocation's runners, and translates a
+`DomainError` into the engine's terminal error. It invokes no relay itself.
+
+**A relay message may carry a domain object, and that is not a widening of the
+no-outward-representation line.** A relay is *inward*: it crosses the engine
+inside one context and is never operated through the client. A `ts.Client`
+faces outsiders and a `ts.Port` faces a foreign system, so those stay
+primitives-only; a relay has us on both ends, so
+`OrderOrchestratorRequest(order: domain.Order)` is legal and the order comes
+back whole. A bare bool and a union are findings on a relay message too.
+
+**Who may invoke a relay.** A service, through an ingress runner, and an
+orchestrator, through an in-invocation runner. Never an action — an action has
+one port and one call on it, and a relay inside an action is the engine calling
+the engine. Never a handler, never a runtime, never a component. An actions
+class depends only on ports and the stores that yield them; a service and an
+orchestrator may depend on ports, relays, and stores; nothing else may hold a
+relay.
+
+**A snapshot decides once, on shape.** A snapshot (`ts.Serde` from
+`tesser.application`, in `application/relays/` beside its messages, or in
+`application/snapshots/` when several relays share one) holds nothing and
+declares exactly `serialize` and `deserialize`. `serialize` is one return of
+`json.dumps` over a literal dict whose values are attribute reads or canonical
+exits (`str(...)`, `int(...)`) of the message, or one return of another
+snapshot's `serialize`. `deserialize` reads `json.loads`, carries at most one
+guard — built only from `isinstance`, truthiness, and comparison to constants
+over the loaded value — that raises `errors.invalid`, and ends in one
+constructor call. The only calls a snapshot may name are `json.dumps`,
+`json.loads`, `isinstance`, `str`, `int`, `errors.invalid`, `.encode`/`.decode`,
+`.get` with one argument, the message and spec constructors, and another
+snapshot's `serialize`/`deserialize`. A second branch, a loop that computes,
+`.get` with a fallback, arithmetic, and any domain method are findings. The
+engine-side serde (`tesser.adapters.Serde`, in `adapters/runtimes/`) keeps its
+narrower form: one guard on the empty payload, then delegation to the snapshot.
+
+**Reach.** An adapters module lives in `handlers/`, `gateways/`,
+`repositories/`, `runners/`, or `runtimes/` and holds the kind its package
+names; only a runtimes module holds a runtime beside the serdes it binds.
+`handlers/` → the context client. `runners/` → `application.relays`,
+`adapters/runtimes/`. `runtimes/` → `application.client`,
+`application.orchestrators`, `application.relays`, `adapters/runners/`.
+`gateways/`, `repositories/` → `application.ports`. `application/relays/` is
+imported by the application (services, orchestrators, and the application
+client modules for the messages they speak), by `adapters/runners/`, and by
+`adapters/runtimes/`, and by nothing else. **Only a runtime imports the
+application client and the orchestrators**, because an action is reachable only
+through the engine. A host reaches a context only through its handlers and its
+runtimes. A component publishes only its client, typed as its `ts.Client`, and
+its runtimes, each typed as a `ts.Runtime`.
+
+**What transfers from the service body rules to the adapter kinds.** Of the
+four call-then-map rules (skill ruling 2026-08-30), exactly one costs nothing
+on the trees as they stand, so exactly one ships: **a gateway, a repository,
+and a runner inline their logic** — no delegation to a private method or a
+module function beside it. The other three were measured over all eleven app
+trees and are not implemented: "name what you compute" would take 79 sites,
+"decide nothing in the open body" 107 (40 of them in `layout/`'s single
+`FilesystemRepoReader.read` and 35 in `tessercheck-py/`'s two filesystem
+repositories), and "one call on the backend per method" 1. "An adapter raises
+no domain kind" was rejected outright. The numbers are in `TODOS.md`.
+
+---
+
+*Everything below is the 2026-08-29 record. It speaks of jobs and job contexts,
+which no longer exist; read it for the reasoning, not for the shape.*
 
 ## The three application kinds
 
@@ -277,37 +375,6 @@ as the intent; only the scaffold context obeys it.
    `orchestrators` and `actions` sibling tests with their packages' reach.
    These are literal tables in `checks.py`, so nothing follows
    automatically (codex #5).
-
-## Drift, 2026-09-10 (the tree moved, this doc did not)
-
-PR #171 reworked `examples/durable-execution/` and this doc was not walked
-with it. Read the tree as the spec and this section as the diff:
-
-- `adapters/jobs/` became **`adapters/runners/`** (the relay implementations —
-  `ts.Gateway` at the ingress, `ts.JobContext` inside an invocation) and
-  **`adapters/runtimes/`** (the `ts.Job` that registers the engine's handlers,
-  and the serdes those handlers bind). `examples/minimal/` still uses
-  `adapters/jobs/`, so all three packages are registered adapter kinds.
-  Which one the norm keeps is an open ruling (`TODOS.md`).
-- The "Messages — declared once, on the port" section is superseded for the
-  workflow leg: a message whose far side is this same context is declared on a
-  **relay** (`tesser.application.Relay`) in **`application/relays/`**, not on a
-  port, and it may carry a domain object because both ends are us. Each message
-  has a `tesser.application.Serde` snapshot beside it, and a snapshot several
-  relays share lives in **`application/snapshots/`**.
-- The `RecordSerde[T]` shape is one of two: the tree's engine serdes are
-  monomorphic (`class RestateXSerde(ts.Serde, restate.serde.Serde[relays.X])`),
-  so the rule now reads "one type — a type parameter, or the one shape its base
-  is subscripted with".
-- `ts.JobContext` is a bare marker protocol; the generic
-  `call[I, O](step, request)` member it declared is gone. A runner names this
-  context's actions by name on the subclass.
-- The component publishes its runtime under the runtime's own name
-  (`restate_order_runtime`), not `jobs`. That is still a finding
-  (`TB081`) and is carried as a debt marker pending a ruling.
-
-`skills/tesser-build/python.md#orchestrators-actions-jobs` carries the same
-diff as a subsection.
 
 ## Deliberately out of scope for this wave
 
