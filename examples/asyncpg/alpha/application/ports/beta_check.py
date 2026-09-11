@@ -11,6 +11,10 @@ class Verdict(enum.Enum):
     REFUSED = "refused"
 
 
+class BetaUnavailable(ts.Error):
+    pass
+
+
 class CheckRequest(ts.Request):
 
     def __init__(self, name: str) -> None:

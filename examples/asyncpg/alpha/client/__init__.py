@@ -9,3 +9,4 @@ from alpha.client.client import Missing as Missing
 from alpha.client.client import Rejected as Rejected
 from alpha.client.client import TakeRequest as TakeRequest
 from alpha.client.client import TakeResponse as TakeResponse
+from alpha.client.client import Unavailable as Unavailable

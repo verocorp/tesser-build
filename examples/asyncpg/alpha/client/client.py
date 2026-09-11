@@ -71,11 +71,16 @@ class Conflict(ts.Error):
         self.message = message
 
 
-ERRORS: typing.Final[tuple[type[Rejected], type[Missing], type[Conflict]]] = (
-    Rejected,
-    Missing,
-    Conflict,
-)
+class Unavailable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+ERRORS: typing.Final[
+    tuple[type[Rejected], type[Missing], type[Conflict], type[Unavailable]]
+] = (Rejected, Missing, Conflict, Unavailable)
 
 
 class AlphaClient(ts.Client, typing.Protocol):

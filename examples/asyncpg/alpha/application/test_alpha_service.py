@@ -106,6 +106,13 @@ class FakeRefusedBetaCheck(ports.BetaCheck):
         return ports.CheckResponse(verdict=ports.Verdict.REFUSED)
 
 
+@ts.fake
+class FakeUnavailableBetaCheck(ports.BetaCheck):
+
+    async def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
+        raise ports.BetaUnavailable("beta cannot be reached")
+
+
 class TestAlphaServiceOverACommittedTransaction:
 
     async def test_a_new_part_is_taken_and_the_widget_saved_kept_in_one_transaction(self) -> None:
@@ -190,27 +197,50 @@ class TestAlphaServiceOverACommittedTransaction:
 
 class TestAlphaServiceOverAFailedTransaction:
 
-    async def test_add_surfaces_the_failure(self) -> None:
+    async def test_add_crosses_as_the_contexts_unavailable(self) -> None:
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(ports.StoreUnavailable):
+        with pytest.raises(client.Unavailable) as caught:
             await alpha_service.add(client.AddRequest(name="a", part="p"))
+        assert caught.value.message == "the widget store is unavailable"
+        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 
-    async def test_take_surfaces_the_failure(self) -> None:
+    async def test_take_crosses_as_the_contexts_unavailable(self) -> None:
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(ports.StoreUnavailable):
+        with pytest.raises(client.Unavailable) as caught:
             await alpha_service.take(client.TakeRequest(name="a", part="q"))
+        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 
-    async def test_find_surfaces_the_failure(self) -> None:
+    async def test_find_crosses_as_the_contexts_unavailable(self) -> None:
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(ports.StoreUnavailable):
+        with pytest.raises(client.Unavailable) as caught:
             await alpha_service.find(client.FindRequest(name="a"))
+        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 
-    async def test_a_held_part_reaches_beta_and_then_surfaces_the_failure_of_the_save(self) -> None:
+    async def test_a_held_part_reaches_beta_and_then_the_failed_save_crosses_as_unavailable(self) -> None:
         fake_refused_beta_check = FakeRefusedBetaCheck()
         alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), fake_refused_beta_check)
-        with pytest.raises(ports.StoreUnavailable):
+        with pytest.raises(client.Unavailable):
             await alpha_service.add(client.AddRequest(name="a", part="a"))
         assert fake_refused_beta_check.checked == ["a"]
+
+
+class TestAlphaServiceOverAnUnavailableBeta:
+
+    async def test_a_held_part_that_beta_cannot_judge_crosses_as_the_contexts_unavailable(self) -> None:
+        fake_committed_widget_store = FakeCommittedWidgetStore()
+        alpha_service = application.AlphaService(fake_committed_widget_store, FakeUnavailableBetaCheck())
+        with pytest.raises(client.Unavailable) as caught:
+            await alpha_service.add(client.AddRequest(name="a", part="a"))
+        assert caught.value.message == "the beta check is unavailable"
+        assert isinstance(caught.value.__cause__, ports.BetaUnavailable)
+        assert fake_committed_widget_store.saved == []
+
+    async def test_a_part_that_needs_no_beta_check_never_reaches_it(self) -> None:
+        fake_committed_widget_store = FakeCommittedWidgetStore()
+        alpha_service = application.AlphaService(fake_committed_widget_store, FakeUnavailableBetaCheck())
+        add_response = await alpha_service.add(client.AddRequest(name="a", part="p"))
+        assert add_response.standing == "kept"
+        assert fake_committed_widget_store.saved == ["a"]
 
 
 class TestAlphaServiceMappers:

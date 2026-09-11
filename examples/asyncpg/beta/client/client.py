@@ -37,7 +37,14 @@ class Rejected(ts.Error):
         self.message = message
 
 
-ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
+class Unavailable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[Rejected], type[Unavailable]]] = (Rejected, Unavailable)
 
 
 class BetaClient(ts.Client, typing.Protocol):

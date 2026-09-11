@@ -148,14 +148,22 @@ class AlphaService(ts.ApplicationService):
             case domain.Taken.TAKEN:
                 pass
             case domain.Taken.HELD:
-                check_response = await self._beta_check.check(MapToCheckRequest(widget))
+                try:
+                    check_response = await self._beta_check.check(MapToCheckRequest(widget))
+                except ports.BetaUnavailable as beta_error:
+                    raise client.Unavailable(
+                        message="the beta check is unavailable"
+                    ) from beta_error
                 widget.clear(MapToClearanceSpec(check_response))
             case _ as never:
                 typing.assert_never(never)
-        async with self._widget_store.transaction() as widget_repository:
-            add_widget_response = await widget_repository.add_widget(
-                MapToAddWidgetRequest(widget)
-            )
+        try:
+            async with self._widget_store.transaction() as widget_repository:
+                add_widget_response = await widget_repository.add_widget(
+                    MapToAddWidgetRequest(widget)
+                )
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the widget store is unavailable") from store_error
         return MapToAddResponse(add_widget_response, widget)
 
     async def take(self, take_request: client.TakeRequest) -> client.TakeResponse:
@@ -165,20 +173,23 @@ class AlphaService(ts.ApplicationService):
             raise client.Rejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        async with self._widget_store.transaction() as widget_repository:
-            load_widget_request = MapToLoadWidgetRequest(name)
-            load_widget_response = await widget_repository.load_widget(load_widget_request)
-            widget = domain.Widget(
-                MapToLoadedWidgetSpec(load_widget_request, load_widget_response)
-            )
-            taken = widget.take(MapToTakenPartSpec(take_request))
-            match taken:
-                case domain.Taken.TAKEN:
-                    await widget_repository.save_widget(MapToSaveWidgetRequest(widget))
-                case domain.Taken.HELD:
-                    pass
-                case _ as never:
-                    typing.assert_never(never)
+        try:
+            async with self._widget_store.transaction() as widget_repository:
+                load_widget_request = MapToLoadWidgetRequest(name)
+                load_widget_response = await widget_repository.load_widget(load_widget_request)
+                widget = domain.Widget(
+                    MapToLoadedWidgetSpec(load_widget_request, load_widget_response)
+                )
+                taken = widget.take(MapToTakenPartSpec(take_request))
+                match taken:
+                    case domain.Taken.TAKEN:
+                        await widget_repository.save_widget(MapToSaveWidgetRequest(widget))
+                    case domain.Taken.HELD:
+                        pass
+                    case _ as never:
+                        typing.assert_never(never)
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the widget store is unavailable") from store_error
         return MapToTakeResponse(widget)
 
     async def find(self, find_request: client.FindRequest) -> client.FindResponse:
@@ -188,8 +199,11 @@ class AlphaService(ts.ApplicationService):
             raise client.Rejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        async with self._widget_store.transaction() as widget_repository:
-            find_widget_response = await widget_repository.find_widget(
-                MapToFindWidgetRequest(name)
-            )
+        try:
+            async with self._widget_store.transaction() as widget_repository:
+                find_widget_response = await widget_repository.find_widget(
+                    MapToFindWidgetRequest(name)
+                )
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the widget store is unavailable") from store_error
         return client.FindResponse(found=find_widget_response.found.value)

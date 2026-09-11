@@ -34,6 +34,10 @@ class Handler(ts.Handler):
                     return protocol.CliResponse(
                         exit_code=1, line=protocol.Line(text=error.message)
                     )
+                case client.Unavailable():
+                    return protocol.CliResponse(
+                        exit_code=1, line=protocol.Line(text=error.message)
+                    )
                 case _ as never:
                     typing.assert_never(never)
         return protocol.CliResponse(

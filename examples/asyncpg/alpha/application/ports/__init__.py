@@ -1,4 +1,5 @@
 from alpha.application.ports.beta_check import BetaCheck as BetaCheck
+from alpha.application.ports.beta_check import BetaUnavailable as BetaUnavailable
 from alpha.application.ports.beta_check import CheckRequest as CheckRequest
 from alpha.application.ports.beta_check import CheckResponse as CheckResponse
 from alpha.application.ports.beta_check import Verdict as Verdict

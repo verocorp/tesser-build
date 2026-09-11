@@ -69,6 +69,14 @@ class TestHandler:
         assert cli_response.exit_code == 1
         assert cli_response.line == protocol.Line(text="widget 'a' is already stored")
 
+    async def test_an_unavailable_dependency_exits_one_and_prints_the_contexts_wording(self) -> None:
+        handler = handlers.Handler(
+            FakeRefusingClient(client.Unavailable("the widget store is unavailable"))
+        )
+        cli_response = await handler.add(protocol.CliRequest(args=("a", "p")))
+        assert cli_response.exit_code == 1
+        assert cli_response.line == protocol.Line(text="the widget store is unavailable")
+
     async def test_a_failure_the_context_never_declared_leaves_the_handler(self) -> None:
         handler = handlers.Handler(
             FakeRefusingClient(RuntimeError("a stack trace nobody should see"))

@@ -32,8 +32,11 @@ class BetaService(ts.ApplicationService):
             raise client.Rejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        async with self._key_store.transaction() as key_repository:
-            has_key_response = await key_repository.has_key(MapToHasKeyRequest(key))
+        try:
+            async with self._key_store.transaction() as key_repository:
+                has_key_response = await key_repository.has_key(MapToHasKeyRequest(key))
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the key store is unavailable") from store_error
         return client.CheckResponse(held=has_key_response.held.value)
 
     async def hold(self, hold_request: client.HoldRequest) -> client.HoldResponse:
@@ -43,6 +46,9 @@ class BetaService(ts.ApplicationService):
             raise client.Rejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        async with self._key_store.transaction() as key_repository:
-            put_key_response = await key_repository.put_key(MapToPutKeyRequest(key))
+        try:
+            async with self._key_store.transaction() as key_repository:
+                put_key_response = await key_repository.put_key(MapToPutKeyRequest(key))
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the key store is unavailable") from store_error
         return client.HoldResponse(key=put_key_response.key)

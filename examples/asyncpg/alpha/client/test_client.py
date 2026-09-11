@@ -30,6 +30,14 @@ class TestConflict:
         assert str(conflict) == "widget 'p' is already stored"
 
 
+class TestUnavailable:
+
+    def test_an_unavailable_dependency_carries_its_message(self) -> None:
+        unavailable = client.Unavailable("the widget store is unavailable")
+        assert unavailable.message == "the widget store is unavailable"
+        assert str(unavailable) == "the widget store is unavailable"
+
+
 class TestErrors:
 
     def test_the_declared_set_names_every_error_the_client_raises(self) -> None:
