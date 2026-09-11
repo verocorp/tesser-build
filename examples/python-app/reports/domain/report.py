@@ -141,6 +141,9 @@ class LinkVerdict(ts.ValueObject):
     def reason(self) -> Reason:
         return self._reason
 
+    def _rank(self) -> tuple[bool, str]:
+        return (self._decision == _ALLOWED, str(self._slug))
+
     _slug: kernel.Slug
     _target_url: TargetURL
     _decision: Decision
@@ -184,7 +187,7 @@ class LinkVerdicts(ts.ValueObject):
                     )
                 )
             )
-        rows.sort(key=lambda row: (row.decision == _ALLOWED, str(row.slug)))  # tesser:debt TB023
+        rows.sort(key=LinkVerdict._rank)
         object.__setattr__(self, "_rows", tuple(rows))
 
     @property

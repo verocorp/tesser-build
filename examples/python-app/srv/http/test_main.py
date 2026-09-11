@@ -146,8 +146,7 @@ def test_the_edge_refuses_to_start_on_an_empty_storage_coordinate() -> None:
 def test_the_server_answers_a_routed_request() -> None:
     python_app = app.load()
     http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-    stop = threading.Event()
-    thread = threading.Thread(target=http_host.run, args=(stop,))
+    thread = threading.Thread(target=http_host.run, args=([],))
     thread.start()
     try:
         port = http_host._server.server_address[1]
@@ -165,7 +164,7 @@ def test_the_server_answers_a_routed_request() -> None:
         assert payload["budget"] == {"amount": "100.00", "currency": "USD"}
         assert payload["links"] == []
     finally:
-        stop.set()
+        http_host.stop()
         thread.join(5)
         python_app.close()
 
@@ -173,8 +172,7 @@ def test_the_server_answers_a_routed_request() -> None:
 def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
     python_app = app.load()
     http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-    stop = threading.Event()
-    thread = threading.Thread(target=http_host.run, args=(stop,))
+    thread = threading.Thread(target=http_host.run, args=([],))
     thread.start()
     try:
         port = http_host._server.server_address[1]
@@ -186,7 +184,7 @@ def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
         assert resp.status == 404
         assert payload == {"type": "/problems/not_found", "detail": "unknown route"}
     finally:
-        stop.set()
+        http_host.stop()
         thread.join(5)
         python_app.close()
 
@@ -194,8 +192,7 @@ def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
 def test_the_server_answers_a_routed_get_with_the_campaign_it_created() -> None:
     python_app = app.load()
     http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-    stop = threading.Event()
-    thread = threading.Thread(target=http_host.run, args=(stop,))
+    thread = threading.Thread(target=http_host.run, args=([],))
     thread.start()
     try:
         port = http_host._server.server_address[1]
@@ -216,7 +213,7 @@ def test_the_server_answers_a_routed_get_with_the_campaign_it_created() -> None:
         assert resp.status == 200
         assert payload["campaign_id"] == created["campaign_id"]
     finally:
-        stop.set()
+        http_host.stop()
         thread.join(5)
         python_app.close()
 
@@ -224,8 +221,7 @@ def test_the_server_answers_a_routed_get_with_the_campaign_it_created() -> None:
 def test_the_server_refuses_a_streaming_body_it_cannot_buffer() -> None:
     python_app = app.load()
     http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-    stop = threading.Event()
-    thread = threading.Thread(target=http_host.run, args=(stop,))
+    thread = threading.Thread(target=http_host.run, args=([],))
     thread.start()
     try:
         port = http_host._server.server_address[1]
@@ -239,7 +235,7 @@ def test_the_server_refuses_a_streaming_body_it_cannot_buffer() -> None:
         assert resp.status == 411
         assert payload["type"] == "/problems/length_required"
     finally:
-        stop.set()
+        http_host.stop()
         thread.join(5)
         python_app.close()
 
@@ -247,8 +243,7 @@ def test_the_server_refuses_a_streaming_body_it_cannot_buffer() -> None:
 def test_the_server_refuses_a_declared_length_that_is_not_ascii_digits() -> None:
     python_app = app.load()
     http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-    stop = threading.Event()
-    thread = threading.Thread(target=http_host.run, args=(stop,))
+    thread = threading.Thread(target=http_host.run, args=([],))
     thread.start()
     try:
         port = http_host._server.server_address[1]
@@ -260,7 +255,7 @@ def test_the_server_refuses_a_declared_length_that_is_not_ascii_digits() -> None
                 status = sock.recv(4096).split(b"\r\n")[0]
             assert b"400" in status, raw
     finally:
-        stop.set()
+        http_host.stop()
         thread.join(5)
         python_app.close()
 
@@ -268,8 +263,7 @@ def test_the_server_refuses_a_declared_length_that_is_not_ascii_digits() -> None
 def test_the_server_refuses_two_disagreeing_declarations_rather_than_framing_one() -> None:
     python_app = app.load()
     http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-    stop = threading.Event()
-    thread = threading.Thread(target=http_host.run, args=(stop,))
+    thread = threading.Thread(target=http_host.run, args=([],))
     thread.start()
     try:
         port = http_host._server.server_address[1]
@@ -281,7 +275,7 @@ def test_the_server_refuses_two_disagreeing_declarations_rather_than_framing_one
             status = sock.recv(4096).split(b"\r\n")[0]
         assert b"400" in status
     finally:
-        stop.set()
+        http_host.stop()
         thread.join(5)
         python_app.close()
 
@@ -289,8 +283,7 @@ def test_the_server_refuses_two_disagreeing_declarations_rather_than_framing_one
 def test_the_server_refuses_a_body_over_the_buffer_limit() -> None:
     python_app = app.load()
     http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-    stop = threading.Event()
-    thread = threading.Thread(target=http_host.run, args=(stop,))
+    thread = threading.Thread(target=http_host.run, args=([],))
     thread.start()
     try:
         port = http_host._server.server_address[1]
@@ -302,20 +295,19 @@ def test_the_server_refuses_a_body_over_the_buffer_limit() -> None:
             status = sock.recv(4096).split(b"\r\n")[0]
         assert b"413" in status
     finally:
-        stop.set()
+        http_host.stop()
         thread.join(5)
         python_app.close()
 
 
-def test_the_host_runs_until_its_stop_is_set() -> None:
+def test_the_host_runs_until_its_stop_is_called() -> None:
     python_app = app.load()
     try:
         http_host = http.HttpHost(("127.0.0.1", 0), python_app)
-        stop = threading.Event()
-        thread = threading.Thread(target=http_host.run, args=(stop,))
+        thread = threading.Thread(target=http_host.run, args=([],))
         thread.start()
         assert thread.is_alive()
-        stop.set()
+        http_host.stop()
         thread.join(5)
         assert not thread.is_alive()
     finally:

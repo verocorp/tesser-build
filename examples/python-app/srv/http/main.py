@@ -176,11 +176,17 @@ class HttpHost(ts.Host):
                 return
 
         self._server = server.ThreadingHTTPServer(addr, _RequestHandler)
+        self._stop = threading.Event()
 
-    def run(self, stop: threading.Event) -> None:
+    def stop(
+        self, signum: int = 0, frame: typing.Optional[types.FrameType] = None
+    ) -> None:
+        self._stop.set()
+
+    def run(self, argv: list[str]) -> None:
         thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         thread.start()
-        stop.wait()
+        self._stop.wait()
         self._server.shutdown()
         self._server.server_close()
         thread.join()
@@ -190,19 +196,15 @@ class HttpEdge(ts.Host):
 
     def __init__(self) -> None:
         self._app = app.load()
-        self._host = HttpHost((self._app.http.host, self._app.http.port), self._app)
-        self._stop = threading.Event()
-
-    def stop(self, signum: int, frame: typing.Optional[types.FrameType]) -> None:
-        self._stop.set()
+        self._http_host = HttpHost((self._app.http.host, self._app.http.port), self._app)
 
     def run(self, argv: list[str]) -> int:
         python_app = self._app
         print(f"campaign+linkpolicy app listening on {python_app.http.host or '0.0.0.0'}:{python_app.http.port}")  # noqa: T201
-        signal.signal(signal.SIGINT, self.stop)  # tesser:debt TB051
-        signal.signal(signal.SIGTERM, self.stop)  # tesser:debt TB051
+        signal.signal(signal.SIGINT, self._http_host.stop)
+        signal.signal(signal.SIGTERM, self._http_host.stop)
         try:
-            self._host.run(self._stop)
+            self._http_host.run(argv)
         finally:
             python_app.close()
         return 0
