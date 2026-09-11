@@ -4,6 +4,7 @@ import tesser.testing as ts
 
 import alpha.application as application
 import alpha.application.ports as ports
+import alpha.application.relays as relays
 
 
 @ts.fake
@@ -21,16 +22,16 @@ class TestWidgetActions:
 
     def test_quote_answers_the_named_widget(self) -> None:
         quote_response = application.WidgetActions(FakeWidgetRepository()).quote(
-            ports.QuoteRequest(name="a")
+            relays.QuoteRequest(name="a")
         )
         assert quote_response.name == "a"
 
     def test_quote_calls_its_port_once(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
-        application.WidgetActions(fake_widget_repository).quote(ports.QuoteRequest(name="a"))
+        application.WidgetActions(fake_widget_repository).quote(relays.QuoteRequest(name="a"))
         assert [name for name, _ in fake_widget_repository.saved] == ["a"]
 
     def test_a_quoted_widget_is_saved_standing_kept(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
-        application.WidgetActions(fake_widget_repository).quote(ports.QuoteRequest(name="a"))
+        application.WidgetActions(fake_widget_repository).quote(relays.QuoteRequest(name="a"))
         assert fake_widget_repository.saved == [("a", "kept")]
