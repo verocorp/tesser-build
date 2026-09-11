@@ -46,18 +46,18 @@ class MapToPurchaseOrchestratorResponse(ts.Mapper, relays.PurchaseOrchestratorRe
 
 class PurchaseOrchestrator(ts.Orchestrator):
 
-    def __init__(  # tesser:debt TB081
+    def __init__(
         self,
         purchase_actions_runner: relays.PurchaseActionsRunner,
         order_orchestrator_runner: relays.OrderOrchestratorRunner,
     ) -> None:
         self._purchase_actions_runner = purchase_actions_runner
-        self._order_orchestrator_runner = order_orchestrator_runner  # tesser:debt TB081
+        self._order_orchestrator_runner = order_orchestrator_runner
 
     async def run(
         self, purchase_orchestrator_request: relays.PurchaseOrchestratorRequest
     ) -> relays.PurchaseOrchestratorResponse:
-        order = purchase_orchestrator_request.order  # tesser:debt TB082
+        order = purchase_orchestrator_request.order
         order_orchestrator_response = await self._order_orchestrator_runner.run_order_orchestrator(
             relays.OrderOrchestratorRequest(order=order)
         )

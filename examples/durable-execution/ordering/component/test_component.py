@@ -11,7 +11,7 @@ import ordering.component as component
 
 
 @ts.fake
-class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:debt TB072
+class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
     def __init__(self) -> None:
         self.started: list[str] = []
@@ -35,7 +35,7 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:deb
 
 
 @ts.fake
-class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):  # tesser:debt TB072
+class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
 
     def __init__(self) -> None:
         self.ran: list[str] = []
@@ -54,8 +54,8 @@ class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):  # tess
 class TestClient:
 
     def test_each_use_case_reaches_the_service_that_owns_it(self) -> None:
-        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
-        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()  # tesser:debt TB085
+        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
+        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()
         ordering_client: client.OrderingClient = component.Ordering.Client(
             application.OrderService(fake_order_orchestrator_runner),
             application.PurchaseService(fake_purchase_orchestrator_runner),

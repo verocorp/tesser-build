@@ -135,10 +135,13 @@ def test_shells_classify_subclasses() -> None:
     class Steps(tesser.application.Actions):
         pass
 
-    class Work(tesser.adapters.Job):
+    class Engine(tesser.adapters.Runtime):
+        pass
+
+    class Leg(tesser.adapters.Runner):
         pass
 
     for cls in (
-        Root, RootSpec, Service, Repo, Ask, Reply, Wire, Inbound, Server, WireAsk, WireReply, Flow, Steps, Work
+        Root, RootSpec, Service, Repo, Ask, Reply, Wire, Inbound, Server, WireAsk, WireReply, Flow, Steps, Engine, Leg
     ):
         assert cls()

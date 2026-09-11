@@ -85,16 +85,22 @@ the `__init__` of the object that takes it, or kept on an object, is a
 finding; a mapper is its target — `ts.Mapper` plus the spec or DTO it maps
 to, one `super().__init__`, nothing stored, no other method (`TB080`);
 `skills/tesser-build/value-objects.md`, `skills/tesser-build/python.md`), and
-the application-service types (an orchestrator, `ts.Orchestrator` in
-`application/orchestrators/`, is built per invocation by a job with that
-invocation's `ts.JobContext` and depends on that one job context plus action
-ports, threading the job context as the leading argument of every
-action-port call; a class of actions, `ts.Actions`, has exactly one port
-and one call on it per method and is reachable only through a
-`tesser.application.Client` in `application/client/`; a job, `ts.Job` in
-`adapters/jobs/`, is the adapter kind the engine calls back into; reach is
-carried by the adapter kind package and a component publishes exactly
-`client` and `jobs` — `TB041`/`TB052`/`TB060`/`TB081`/`TB082`;
+the application-service types (a relay, `ts.Relay` in `application/relays/`,
+is the protocol whose far side is this same context across a
+durable-execution engine, declared with the messages it speaks and a
+snapshot — `ts.Serde` — for each; one relay kind, because lifetime is not a
+property of the protocol. An orchestrator, `ts.Orchestrator` in
+`application/orchestrators/`, is built per invocation by a runtime with that
+invocation's runners and depends on relays and action ports; a class of
+actions, `ts.Actions`, has exactly one port and one call on it per method, is
+reachable only through a `tesser.application.Client` in
+`application/client/`, and never holds a relay; a runner, `ts.Runner` in
+`adapters/runners/`, is an implementation of a relay, and placement is what
+says it may hold an invocation's engine context; a runtime, `ts.Runtime` in
+`adapters/runtimes/`, is the engine's callback surface — it registers the
+handlers, builds the orchestrator, and invokes no relay itself. Reach is
+carried by the adapter kind package and a component publishes only its client
+and its runtimes — `TB041`/`TB052`/`TB060`/`TB081`/`TB082`;
 `docs/design-app-service-types.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.

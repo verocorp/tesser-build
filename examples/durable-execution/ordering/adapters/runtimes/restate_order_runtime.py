@@ -1,17 +1,17 @@
-from __future__ import annotations  # tesser:debt TB041
+from __future__ import annotations
 
 import tesser.adapters as ts
 import restate
 import restate.serde
 
 import ordering.adapters.runners as runners
-import ordering.application.client as client  # tesser:debt TB060
-import ordering.application.orchestrators as orchestrators  # tesser:debt TB060
-import ordering.application.relays as relays  # tesser:debt TB060
+import ordering.application.client as client
+import ordering.application.orchestrators as orchestrators
+import ordering.application.relays as relays
 import tesser.errors as errors
 
 
-class RestateOrderOrchestratorRequestSerde(  # tesser:debt TB081
+class RestateOrderOrchestratorRequestSerde(
     ts.Serde, restate.serde.Serde[relays.OrderOrchestratorRequest]
 ):
 
@@ -28,7 +28,7 @@ class RestateOrderOrchestratorRequestSerde(  # tesser:debt TB081
         return relays.OrderOrchestratorRequestSnapshot().deserialize(buf)
 
 
-class RestateOrderOrchestratorResponseSerde(  # tesser:debt TB081
+class RestateOrderOrchestratorResponseSerde(
     ts.Serde, restate.serde.Serde[relays.OrderOrchestratorResponse]
 ):
 
@@ -45,7 +45,7 @@ class RestateOrderOrchestratorResponseSerde(  # tesser:debt TB081
         return relays.OrderOrchestratorResponseSnapshot().deserialize(buf)
 
 
-class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.PriceProductRequest]):  # tesser:debt TB081
+class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.PriceProductRequest]):
 
     def serialize(self, price_product_request: relays.PriceProductRequest | None) -> bytes:
         if price_product_request is None:
@@ -58,7 +58,7 @@ class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.Price
         return relays.PriceProductRequestSnapshot().deserialize(buf)
 
 
-class RestatePriceProductResponseSerde(  # tesser:debt TB081
+class RestatePriceProductResponseSerde(
     ts.Serde, restate.serde.Serde[relays.PriceProductResponse]
 ):
 
@@ -73,7 +73,7 @@ class RestatePriceProductResponseSerde(  # tesser:debt TB081
         return relays.PriceProductResponseSnapshot().deserialize(buf)
 
 
-class RestatePurchaseOrchestratorRequestSerde(  # tesser:debt TB081
+class RestatePurchaseOrchestratorRequestSerde(
     ts.Serde, restate.serde.Serde[relays.PurchaseOrchestratorRequest]
 ):
 
@@ -90,7 +90,7 @@ class RestatePurchaseOrchestratorRequestSerde(  # tesser:debt TB081
         return relays.PurchaseOrchestratorRequestSnapshot().deserialize(buf)
 
 
-class RestatePurchaseOrchestratorResponseSerde(  # tesser:debt TB081
+class RestatePurchaseOrchestratorResponseSerde(
     ts.Serde, restate.serde.Serde[relays.PurchaseOrchestratorResponse]
 ):
 
@@ -109,7 +109,7 @@ class RestatePurchaseOrchestratorResponseSerde(  # tesser:debt TB081
         return relays.PurchaseOrchestratorResponseSnapshot().deserialize(buf)
 
 
-class RestateTakePaymentRequestSerde(ts.Serde, restate.serde.Serde[relays.TakePaymentRequest]):  # tesser:debt TB081
+class RestateTakePaymentRequestSerde(ts.Serde, restate.serde.Serde[relays.TakePaymentRequest]):
 
     def serialize(self, take_payment_request: relays.TakePaymentRequest | None) -> bytes:
         if take_payment_request is None:
@@ -122,7 +122,7 @@ class RestateTakePaymentRequestSerde(ts.Serde, restate.serde.Serde[relays.TakePa
         return relays.TakePaymentRequestSnapshot().deserialize(buf)
 
 
-class RestateTakePaymentResponseSerde(ts.Serde, restate.serde.Serde[relays.TakePaymentResponse]):  # tesser:debt TB081
+class RestateTakePaymentResponseSerde(ts.Serde, restate.serde.Serde[relays.TakePaymentResponse]):
 
     def serialize(self, take_payment_response: relays.TakePaymentResponse | None) -> bytes:
         if take_payment_response is None:
@@ -135,7 +135,7 @@ class RestateTakePaymentResponseSerde(ts.Serde, restate.serde.Serde[relays.TakeP
         return relays.TakePaymentResponseSnapshot().deserialize(buf)
 
 
-class RestateOrderRuntime(ts.Job):
+class RestateOrderRuntime(ts.Runtime):
 
     def __init__(
         self,

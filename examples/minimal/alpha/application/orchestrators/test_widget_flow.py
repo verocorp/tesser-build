@@ -1,38 +1,31 @@
 from __future__ import annotations
 
-import collections.abc as abc
-import typing
-
 import tesser.testing as ts
 
 import alpha.application.orchestrators as orchestrators
-import alpha.application.ports as ports
+import alpha.application.relays as relays
 
 
 @ts.fake
-class FakeJobContext(ts.JobContext):
-
-    async def call[I, O](
-        self, step: abc.Callable[[typing.Any, I], abc.Awaitable[O]], request: I  # tesser:debt TB022
-    ) -> O:
-        return await step(None, request)
-
-
-@ts.fake
-class FakeQuoting(ports.Quoting):
+class FakeWidgetActionsRunner(relays.WidgetActionsRunner):
 
     def __init__(self) -> None:
         self.quoted: list[str] = []
 
-    def quote(self, job_context: ts.JobContext, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:
+    def run_quote(self, quote_request: relays.QuoteRequest) -> relays.QuoteResponse:
         self.quoted.append(quote_request.name)
-        return ports.QuoteResponse(name=quote_request.name)
+        return relays.QuoteResponse(name=quote_request.name)
 
 
 class TestWidgetFlow:
 
     def test_the_flow_answers_what_the_action_quoted(self) -> None:
-        flow_response = orchestrators.WidgetFlow(FakeJobContext(), FakeQuoting()).run(
-            ports.QuoteRequest(name="a")
+        flow_response = orchestrators.WidgetFlow(FakeWidgetActionsRunner()).run(
+            relays.QuoteRequest(name="a")
         )
         assert flow_response.name == "a"
+
+    def test_the_flow_runs_its_relay_once(self) -> None:
+        fake_widget_actions_runner = FakeWidgetActionsRunner()
+        orchestrators.WidgetFlow(fake_widget_actions_runner).run(relays.QuoteRequest(name="a"))
+        assert fake_widget_actions_runner.quoted == ["a"]

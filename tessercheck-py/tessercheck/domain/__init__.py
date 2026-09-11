@@ -27,6 +27,7 @@ from tessercheck.domain.checks import QUOTE_OPENS as QUOTE_OPENS
 from tessercheck.domain.checks import Placement as Placement
 from tessercheck.domain.checks import PlacementSpec as PlacementSpec
 from tessercheck.domain.checks import ROLES as ROLES
+from tessercheck.domain.checks import RELAY_MESSAGE_BLOCKS as RELAY_MESSAGE_BLOCKS
 from tessercheck.domain.checks import Renaming as Renaming
 from tessercheck.domain.checks import RenamingSpec as RenamingSpec
 from tessercheck.domain.checks import Rewrite as Rewrite

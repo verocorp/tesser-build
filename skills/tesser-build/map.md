@@ -38,7 +38,7 @@ prescribed):
 |---|---|---|
 | **domain** | VOs / entities / aggregates | `value-objects.md`, `entities.md`, `aggregates.md`, `domain-services.md` |
 | **application** | use-case services (Convert → Delegate → Persist → Respond); no business logic — plus the **outbound ports the context owns**, in an `application/ports/` package (one port per module, with the request/response DTOs it speaks), and the domain ↔ port-DTO mapping | `application-services.md`, `repositories.md` |
-| **adapters** | inbound `handlers` and `jobs` + outbound `gateways` and `repositories` — four kind packages (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md`, `python.md#orchestrators-actions-jobs` |
+| **adapters** | inbound `handlers` and `runtimes` + outbound `gateways`, `repositories`, and `runners` — five kind packages (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md`, `python.md#orchestrators-actions-relays` |
 | **component** | the context's own construction + its `Config` | `component.md` |
 
 The context's **`client` role is its public interface**: the `Client` interface +
@@ -66,19 +66,25 @@ split stands on private fields + constructor-only construction; Go's
 `internal/` or Python's `_internal` + import-linter are optional hardening over
 it, not the boundary itself.
 
-## Adapters: handlers, jobs, gateways, repositories {#adapters}
+## Adapters: handlers, runtimes, gateways, repositories, runners {#adapters}
 
 **Adapters** is the umbrella: everything that touches the outside world on a
-context's behalf. Four kinds, split by direction — **inbound needs a server
+context's behalf. Five kinds, split by direction — **inbound needs a server
 (something calls *in*); outbound doesn't (it calls out)** — and each kind is
 its own package, because the package is what carries the module's reach.
 
 - **Handlers (inbound)** — translate one delivery mechanism's wire format to and
   from the context's `Client`: HTTP, CLI, event-consumer. → `handlers.md`
-- **Jobs (inbound, engine)** — where a durable-execution engine hands work
-  back: a job calls an application client (a class of actions) or constructs
-  an orchestrator over the invocation's job context. A handler calls the
-  context client; a job never does. → `python.md#orchestrators-actions-jobs`
+- **Runtimes (inbound, engine)** — where a durable-execution engine hands work
+  back: a runtime registers the engine's handlers, calls an application client
+  (a class of actions), and builds an orchestrator per invocation with that
+  invocation's runners. A handler calls the context client; a runtime never
+  does. → `python.md#orchestrators-actions-relays`
+- **Runners (outbound, engine)** — the implementations of the context's
+  **relays** (`application/relays/`), the protocols whose far side is this same
+  context reached across the engine. A runner may hold an invocation's engine
+  context; a gateway or a repository never does. →
+  `python.md#orchestrators-actions-relays`
 - **Gateways (outbound)** — satisfy a port the context owns, by reaching
   something outside it that is **not** its own storage. The port and its DTOs
   live in the context's `application/ports/`; the gateway imports that ports
@@ -95,7 +101,8 @@ its own package, because the package is what carries the module's reach.
   `adapters/gateways/` (TB052). → `repositories.md`
 
 Enforced layout (TB041/TB052): `adapters/handlers`, `adapters/gateways`,
-`adapters/repositories`, and `adapters/jobs` are the adapter kind packages;
+`adapters/repositories`, `adapters/runners`, and `adapters/runtimes` are the
+adapter kind packages;
 every adapters module lives in one and holds the kind its package names,
 because the package is what carries the module's reach (TB060). Each
 implementation module is named for its backing (`file_repository.py`,

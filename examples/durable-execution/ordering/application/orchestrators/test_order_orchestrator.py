@@ -6,7 +6,7 @@ import tesser.testing as ts
 import pytest
 
 import ordering.application.orchestrators as orchestrators
-import ordering.application.relays as relays  # tesser:debt TB070
+import ordering.application.relays as relays
 import ordering.domain as domain
 import tesser.errors as errors
 

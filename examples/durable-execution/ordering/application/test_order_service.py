@@ -10,7 +10,7 @@ import ordering.client as client
 
 
 @ts.fake
-class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):  # tesser:debt TB072
+class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
     def __init__(self) -> None:
         self.started: list[relays.OrderOrchestratorRequest] = []
@@ -59,7 +59,7 @@ class TestOrderService:
         assert submit_order_response.order_id == "o1"
 
     def test_submitting_starts_the_orchestrator_for_the_order_it_built(self) -> None:
-        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
+        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
         asyncio.run(
             application.OrderService(fake_order_orchestrator_runner).submit_order(
                 submit_order_request(order_id="o2", sku="gadget", quantity=3)
@@ -80,7 +80,7 @@ class TestOrderService:
         assert place_order_response.total_cents == 750
 
     def test_placing_runs_the_orchestrator_for_the_order_it_built_and_waits(self) -> None:
-        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()  # tesser:debt TB085
+        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
         asyncio.run(
             application.OrderService(fake_order_orchestrator_runner).place_order(
                 place_order_request(order_id="o2", sku="gadget", quantity=3)

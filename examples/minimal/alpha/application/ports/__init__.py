@@ -2,9 +2,6 @@ from alpha.application.ports.beta_check import BetaCheck as BetaCheck
 from alpha.application.ports.beta_check import CheckRequest as CheckRequest
 from alpha.application.ports.beta_check import CheckResponse as CheckResponse
 from alpha.application.ports.beta_check import Verdict as Verdict
-from alpha.application.ports.quoting import QuoteRequest as QuoteRequest
-from alpha.application.ports.quoting import QuoteResponse as QuoteResponse
-from alpha.application.ports.quoting import Quoting as Quoting
 from alpha.application.ports.widget_repository import SaveRequest as SaveRequest
 from alpha.application.ports.widget_repository import SaveResponse as SaveResponse
 from alpha.application.ports.widget_repository import WidgetRepository as WidgetRepository

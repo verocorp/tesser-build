@@ -1,4 +1,4 @@
-from __future__ import annotations  # tesser:debt TB070
+from __future__ import annotations
 
 import asyncio
 import typing

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json  # tesser:debt TB062
+import json
 import typing
 
 import tesser.application as ts
@@ -10,13 +10,13 @@ import ordering.domain as domain
 import tesser.errors as errors
 
 
-class PurchaseOrchestratorRequest(ts.Request):  # tesser:debt TB052
+class PurchaseOrchestratorRequest(ts.Request):
 
-    def __init__(self, order: domain.Order) -> None:  # tesser:debt TB080
+    def __init__(self, order: domain.Order) -> None:
         self.order = order
 
 
-class PurchaseOrchestratorRequestSnapshot(ts.Serde):  # tesser:debt TB052
+class PurchaseOrchestratorRequestSnapshot(ts.Serde):
 
     def serialize(self, purchase_orchestrator_request: PurchaseOrchestratorRequest) -> bytes:
         return snapshots.OrderSnapshot().serialize(purchase_orchestrator_request.order)
@@ -25,7 +25,7 @@ class PurchaseOrchestratorRequestSnapshot(ts.Serde):  # tesser:debt TB052
         return PurchaseOrchestratorRequest(order=snapshots.OrderSnapshot().deserialize(buf))
 
 
-class PurchaseOrchestratorResponse(ts.Response):  # tesser:debt TB052
+class PurchaseOrchestratorResponse(ts.Response):
 
     def __init__(self, order_id: str, total_cents: int, payment_reference: str) -> None:
         self.order_id = order_id
@@ -33,7 +33,7 @@ class PurchaseOrchestratorResponse(ts.Response):  # tesser:debt TB052
         self.payment_reference = payment_reference
 
 
-class PurchaseOrchestratorResponseSnapshot(ts.Serde):  # tesser:debt TB052
+class PurchaseOrchestratorResponseSnapshot(ts.Serde):
 
     def serialize(self, purchase_orchestrator_response: PurchaseOrchestratorResponse) -> bytes:
         return json.dumps(
@@ -67,7 +67,7 @@ class PurchaseOrchestratorResponseSnapshot(ts.Serde):  # tesser:debt TB052
         )
 
 
-class PurchaseOrchestratorRunner(ts.Relay, typing.Protocol):  # tesser:debt TB052
+class PurchaseOrchestratorRunner(ts.Relay, typing.Protocol):
 
     async def run_purchase_orchestrator(
         self, purchase_orchestrator_request: PurchaseOrchestratorRequest

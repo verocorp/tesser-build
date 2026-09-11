@@ -1,14 +1,14 @@
-from __future__ import annotations  # tesser:debt TB067
+from __future__ import annotations
 
 import typing
 
 import tesser.application as ts
 
-import ordering.application.relays as relays  # tesser:debt TB067
+import ordering.application.relays as relays
 
 
 class OrderingApplicationClient(ts.Client, typing.Protocol):
 
-    def price_product(  # tesser:debt TB081
+    def price_product(
         self, price_product_request: relays.PriceProductRequest
     ) -> relays.PriceProductResponse: ...
