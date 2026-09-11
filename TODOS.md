@@ -3329,3 +3329,74 @@ three rules. Two were ruled by the app-service-types wave
   `adapters/jobs/` kind (`ts.Job`) that constructs the orchestrator per
   invocation. The `TB060` marker is gone; `RestateJobs` replaces
   `RestateHandlers`.
+
+## The post-write hook and its consumer (2026-09-11, eng review of the pilot design)
+
+Context for all four: the pilot consumer's tree is tens of thousands of lines
+with thousands of `tesser:debt` markers, so the governed tree is the whole
+app. Measured on this repo with the installed CLI: a whole-tree
+`tessercheck-check` is 1.1s on `examples/minimal` (1.6K LOC), 4.5s on
+`examples/python-app` (9K), 8.3s on `tessercheck-py` (33K). Splitting one
+run: building the codebase is ~10% (0.33s / 1.49s) and the per-module rule
+pass is ~90% (4.02s / 6.71s), and a second run in the same process costs the
+same, so there is no parse-level cache to warm. The wave that follows this
+review ships CHECK-ONE (build all, run the rules for the written module only,
+with an equivalence gate against the whole-tree result filtered to that
+module) plus two profiled fixes: `Scope.resolve` (`domain/checks.py`) re-walks
+the reexport list and constructs `Symbol`/`Text` objects per call (12K
+resolves → 1.05M `exports()` calls, 3.4M `Text.__init__`, ~40% of the pass),
+and the build's known double parse.
+
+- [ ] **A resident analyzer process, if the consumer log says the wait is
+  real.** Check-one still rebuilds the whole codebase per write; the only
+  shape whose per-write cost is independent of tree size is a per-repo
+  process that keeps parsed modules in memory, re-parses the files whose
+  mtime changed, and answers the hook over a unix socket. Lifecycle (start
+  lazily from the hook, exit on idle), staleness (stat every file per
+  request), crash recovery, and a `Codebase` that is built whole from one
+  spec (`domain/checks.py`, `Codebase.__init__`) are the work; the first step
+  is a per-module parse cache keyed on (path, mtime, size) that the whole-tree
+  build also uses. Trigger: one week of `duration_ms` from the consumer's
+  change log after check-one ships. Effort L. Priority P2. Depends on:
+  check-one shipped.
+
+- [ ] **Ship `RULES.md` and `examples/minimal/` in the wheel.** The skill
+  names both by checkout-relative path (`skills/tesser-build/python.md:286`,
+  `:662`), the CLAUDE.md block the consumer installs points at both, and
+  neither ships: `tessercheck-py/pyproject.toml` lists packages only and the
+  documented install copies only `skills/tesser-build/`. The pilot works
+  around it by vendoring a pinned checkout inside its repo (and skipping it
+  in `.tesser-root`). The durable shape is package data plus two console
+  entries in `tessercheck-cli`, `tessercheck-rules TB0xx` (prints the rule's
+  rows from the generated `RULES.md`) and `tessercheck-exemplar <role>`, so
+  the block names commands instead of paths and the skill's references can
+  follow. `scripts/verify-packaging` gets a case for each. Effort M.
+  Priority P2. Depends on: none; supersedes the vendoring when it lands.
+
+- [ ] **The catch-all for writes made outside Edit/Write.** A `PostToolUse`
+  hook on `Edit|Write` does not see a file rewritten by `Bash` (`cat >`,
+  `sed -i`, `patch`) or by any process outside Claude Code; the docs say so
+  and name the `FileChanged` hook event for that case
+  (https://code.claude.com/docs/en/hooks#posttooluse). The design's Stop-hook
+  shape (guard on `stop_hook_active`, `git status --porcelain` for changed
+  and untracked files, dedupe by `session_id`, `source=stop`) stays valid,
+  and a Stop hook can carry advisory text via `additionalContext`. Deferred
+  on purpose until the sit-behind shows whether such writes happen at all;
+  then pick `FileChanged` (per file, same check-one path, `source=filechanged`)
+  or Stop (once per turn, whole tree, 10-20s at the consumer's size). Effort
+  S. Priority P2. Depends on: the sit-behind observation and `tessercheck-hook`
+  shipped.
+
+- [ ] **Rule on what `skip <dir>` means.** Three sources disagree. The pilot
+  design says an exact top-level directory name relative to `.tesser-root`;
+  the TB044 rows in `tessercheck-py/RULES.md` say `skip <dir>` with no depth;
+  the reader rejects a value containing `/`
+  (`adapters/repositories/source_reader.py`, the directive parse) and then
+  prunes any directory whose NAME matches at every depth of the walk (the
+  `if name in SKIP_DIRS or name in skips` line), so `skip legacy` also hides
+  `new_context/legacy/`, silently. Reproduced independently by the outside
+  reviewer. Either pin name-at-any-depth with a test and fix the RULES.md and
+  design wording (it matches the built-in `.venv`/`build` set), or change the
+  reader to top-level-only and make a `skip` naming a directory that does not
+  exist at the root a TB044 finding. The consumer's ratchet baseline is
+  built on whichever it is. Effort S. Priority P1. Depends on: none.
