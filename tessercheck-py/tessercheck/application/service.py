@@ -298,16 +298,16 @@ class TessercheckService(ts.ApplicationService):
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
         tree_root = domain.TreeRoot(check_file_request.tree)
-        tree = str(tree_root)
-        read_sources_response = self._source_reader.sources(ports.ReadSourcesRequest(tree=tree))
+        read_sources_request = MapToReadSourcesRequest(tree_root)
+        read_sources_response = self._source_reader.sources(read_sources_request)
         path = domain.Path(check_file_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
         return MapToCheckFileResponse(codebase, path)
 
     def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
         tree_root = domain.TreeRoot(hook_request.tree)
-        tree = str(tree_root)
-        read_sources_response = self._source_reader.sources(ports.ReadSourcesRequest(tree=tree))
+        read_sources_request = MapToReadSourcesRequest(tree_root)
+        read_sources_response = self._source_reader.sources(read_sources_request)
         path = domain.Path(hook_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
         return MapToHookResponse(codebase, hook_request)

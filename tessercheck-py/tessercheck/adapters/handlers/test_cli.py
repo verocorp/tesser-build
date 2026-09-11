@@ -47,6 +47,12 @@ class FakeRejectingClient(client.TessercheckClient):
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
+    def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
+        raise client.Rejected("unreadable", "checks.py cannot be read")
+
+    def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
+        raise client.Rejected("unreadable", "checks.py cannot be read")
+
     def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
