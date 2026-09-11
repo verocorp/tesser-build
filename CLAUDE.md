@@ -182,8 +182,8 @@ Three things to know:
   shipped analyzer runs a zero-findings gate over every example tree
   (the eight `examples/*` `app` rows in `manifest.json`: `asyncpg`,
   `durable-execution`, `errorspy`, `llmport`, `minimal`, `ports`,
-  `python-app`, `serdepy` — the other three `app` rows are `layout`,
-  `tesser-py`, and `tessercheck-py`), so a
+  `python-app`, `serdepy` — the other four `app` rows are `layout`,
+  `specs-app`, `tesser-py`, and `tessercheck-py`), so a
   layout change in an example can break the analyzer without touching a file
   under `tessercheck-py/`. That is not hypothetical — it is how PR #56
   failed.

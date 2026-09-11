@@ -1,0 +1,5 @@
+from specification.application.ports.specification_repository import FindJtbdRequest as FindJtbdRequest
+from specification.application.ports.specification_repository import FindJtbdResponse as FindJtbdResponse
+from specification.application.ports.specification_repository import SaveStoryRequest as SaveStoryRequest
+from specification.application.ports.specification_repository import SaveStoryResponse as SaveStoryResponse
+from specification.application.ports.specification_repository import SpecificationRepository as SpecificationRepository
