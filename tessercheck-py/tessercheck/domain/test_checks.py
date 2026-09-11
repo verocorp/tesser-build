@@ -1589,30 +1589,6 @@ def test_a_port_method_reports_its_shape_after_its_signature() -> None:
     assert takes < returns < names, body
 
 
-def test_an_orchestrator_reports_its_dependencies_before_its_job_contexts() -> None:
-    findings = tuple(
-        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_kinds_spec(sources=(
-            (
-                "shop/application/orchestrators/leading.py",
-                "shop.application.orchestrators.leading",
-                "import tesser.application as ts\n"
-                "class Leading(ts.Orchestrator):\n"
-                "    def __init__(self, text: str) -> None:\n"
-                "        self._text = text\n",
-                False,
-            ),
-        ))).violations()
-    )
-    body = [f for f in findings if "Leading.__init__" in f]
-    depends = next(
-        index for index, f in enumerate(body)
-        if "is not a ts.Port, a ts.Relay, or a ts.Store" in f
-    )
-    contexts = next(index for index, f in enumerate(body) if "job contexts" in f)
-    assert depends < contexts, body
-
-
 def test_an_application_client_reports_each_class_before_the_count() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -2256,36 +2232,36 @@ def test_an_adapters_module_holds_one_kind() -> None:
     assert any(
         "shop.adapters.gateways mixes adapter kinds" in f
         and "an adapters module holds the kinds of its own kind package, and only a "
-        "jobs module holds a job beside the job context it builds" in f
+        "runtimes module holds a runtime beside the serdes it binds" in f
         for f in findings
     ), findings
 
 
-def test_a_jobs_module_holds_the_job_context_the_job_beside_it_builds() -> None:
+def test_a_runtimes_module_holds_the_serdes_the_runtime_beside_it_binds() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in domain.Codebase(_spec(sources=(
             (
-                "shop/adapters/jobs/engine.py",
-                "shop.adapters.jobs.engine",
+                "shop/adapters/runtimes/engine.py",
+                "shop.adapters.runtimes.engine",
                 "import tesser.adapters as ts\n"
-                "class InlineJobContext(ts.JobContext):\n"
+                "class RecordSerde(ts.Serde):\n"
                 "    pass\n"
-                "class EngineJob(ts.Job):\n"
+                "class EngineRuntime(ts.Runtime):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "shop/adapters/jobs/test_engine.py",
-                "shop.adapters.jobs.test_engine",
+                "shop/adapters/runtimes/test_engine.py",
+                "shop.adapters.runtimes.test_engine",
                 "def test_engine() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "shop/adapters/jobs/__init__.py",
-                "shop.adapters.jobs",
-                "from shop.adapters.jobs.engine import EngineJob as EngineJob\n",
+                "shop/adapters/runtimes/__init__.py",
+                "shop.adapters.runtimes",
+                "from shop.adapters.runtimes.engine import EngineRuntime as EngineRuntime\n",
                 True,
             ),
             (
@@ -2314,12 +2290,12 @@ def test_a_jobs_module_holds_the_job_context_the_job_beside_it_builds() -> None:
         ))).violations()
                )
     assert not any(
-        "shop.adapters.jobs.engine mixes adapter kinds" in f for f in findings
+        "shop.adapters.runtimes.engine mixes adapter kinds" in f for f in findings
     ), findings
     assert any(
         "shop.adapters.repositories.mixed mixes adapter kinds; an adapters module "
-        "holds the kinds of its own kind package, and only a jobs module holds a job "
-        "beside the job context it builds" in f
+        "holds the kinds of its own kind package, and only a runtimes module holds a "
+        "runtime beside the serdes it binds" in f
         for f in findings
     ), findings
 
@@ -2520,9 +2496,9 @@ def test_only_a_handler_imports_its_own_client() -> None:
     assert any(
         "two.adapters.gateways.sneaky" in f and "imports two.client.client" in f
         and "an adapters kind package reaches only what its kind reaches — a handler "
-        "the context client, a job the application client, the orchestrators, and "
-        "the ports, a gateway or a repository the ports, a runner its relays, a "
-        "runtime what it registers" in f
+        "the context client, a gateway or a repository the ports, a runner its "
+        "relays, a runtime the application client, the orchestrators, and the "
+        "relays it registers" in f
         for f in findings
     )
 
@@ -4596,7 +4572,7 @@ def test_a_srv_test_reaches_a_context_only_through_its_handlers() -> None:
                )
     assert any(
         "srv.test_router imports shop.application.service, but a test placed in "
-        "srv reaches a context only through its handlers and its jobs; "
+        "srv reaches a context only through its handlers and its runtimes; "
         "a test reaches only what its placement allows" in f
         for f in findings
     )
@@ -4894,13 +4870,15 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
     assert any(
         "shop.adapters.test_flat resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, jobs), or the orchestrators package" in f
+        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "orchestrators package" in f
         for f in findings
     )
     assert any(
         "shop.adapters.blobs.test_blob resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, jobs), or the orchestrators package" in f
+        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "orchestrators package" in f
         for f in findings
     )
 
@@ -5137,7 +5115,8 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
     assert any(
         "weird.test_nested resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, jobs), or the orchestrators package" in f
+        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "orchestrators package" in f
         for f in findings
     )
     assert any("test_solo resolves to no test tier" in f for f in findings)
@@ -7011,8 +6990,7 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.save parameter 'text' is not a ts.Request; "
-        "a port method takes one ts.Request, which a leading ts.JobContext "
-        "may precede" in f
+        "a port method takes exactly one ts.Request" in f
         for f in findings
     )
     assert any(
@@ -7022,8 +7000,7 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
     )
     assert any(
         "shop.application.ports.sink.Sink.both takes 2 parameters; "
-        "a port method takes one ts.Request, which a leading ts.JobContext "
-        "may precede" in f
+        "a port method takes exactly one ts.Request" in f
         for f in findings
     )
 
@@ -7061,9 +7038,9 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
     assert any(
         "shop.adapters.gateways.memory imports shop.application.service; "
         "an adapters kind package reaches only what its kind reaches — a handler "
-        "the context client, a job the application client, the orchestrators, and "
-        "the ports, a gateway or a repository the ports, a runner its relays, a "
-        "runtime what it registers" in f
+        "the context client, a gateway or a repository the ports, a runner its "
+        "relays, a runtime the application client, the orchestrators, and the "
+        "relays it registers" in f
         for f in findings
     )
     assert not any("imports shop.application.ports.sink;" in f for f in findings)
@@ -7374,8 +7351,7 @@ def test_a_port_method_shape_survives_async_and_dunder_call() -> None:
                )
     assert any(
         "shop.application.ports.sink.Sink.fetch takes 2 parameters; "
-        "a port method takes one ts.Request, which a leading ts.JobContext "
-        "may precede" in f
+        "a port method takes exactly one ts.Request" in f
         for f in findings
     ), f"async def bypassed the port shape rule: {findings}"
     assert any(
@@ -11733,7 +11709,7 @@ def _kinds_spec(
             "from shop.application.ports.catalog import LookupResponse as LookupResponse\n"
             "from shop.application.ports.quotes import QuoteRequest as QuoteRequest\n"
             "from shop.application.ports.quotes import QuoteResponse as QuoteResponse\n"
-            "from shop.application.ports.quotes import Quotes as Quotes\n",
+            "",
             True,
         ),
         (
@@ -11748,8 +11724,7 @@ def _kinds_spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Quotes(ts.Port, typing.Protocol):\n"
-            "    async def quote(self, job_context: ts.JobContext, quote_request: QuoteRequest)"
-            " -> QuoteResponse: ...\n",
+            "    async def quote(self, quote_request: QuoteRequest) -> QuoteResponse: ...\n",
             False,
         ),
         (
@@ -11768,6 +11743,30 @@ def _kinds_spec(
             False,
         ),
         (
+            "shop/application/relays/__init__.py",
+            "shop.application.relays",
+            "from shop.application.relays.quotes_runner import QuotesRunner as QuotesRunner\n"
+            "from shop.application.relays.quotes_runner import RunQuoteRequest as RunQuoteRequest\n"
+            "from shop.application.relays.quotes_runner import RunQuoteResponse as RunQuoteResponse\n",
+            True,
+        ),
+        (
+            "shop/application/relays/quotes_runner.py",
+            "shop.application.relays.quotes_runner",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "class RunQuoteRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class RunQuoteResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class QuotesRunner(ts.Relay, typing.Protocol):\n"
+            "    async def run_quote(self, run_quote_request: RunQuoteRequest)"
+            " -> RunQuoteResponse: ...\n",
+            False,
+        ),
+        (
             "shop/application/client/__init__.py",
             "shop.application.client",
             "from shop.application.client.quotes import ShopApplicationClient as ShopApplicationClient\n",
@@ -11778,9 +11777,10 @@ def _kinds_spec(
             "shop.application.client.quotes",
             "import typing\n"
             "import tesser.application as ts\n"
-            "import shop.application.ports as ports\n"
+            "import shop.application.relays as relays\n"
             "class ShopApplicationClient(ts.Client, typing.Protocol):\n"
-            "    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse: ...\n",
+            "    def quote(self, run_quote_request: relays.RunQuoteRequest)"
+            " -> relays.RunQuoteResponse: ...\n",
             False,
         ),
         (
@@ -11788,20 +11788,22 @@ def _kinds_spec(
             "shop.application.quotes",
             "import tesser.application as ts\n"
             "import shop.application.ports as ports\n"
+            "import shop.application.relays as relays\n"
             "import shop.domain.thing as thing\n"
             "class MapToLookupRequest(ts.Mapper, ports.LookupRequest):\n"
             "    def __init__(self, name: thing.Name) -> None:\n"
             "        super().__init__(text=str(name))\n"
-            "class MapToQuoteResponse(ts.Mapper, ports.QuoteResponse):\n"
+            "class MapToRunQuoteResponse(ts.Mapper, relays.RunQuoteResponse):\n"
             "    def __init__(self, name: thing.Name) -> None:\n"
             "        super().__init__(text=str(name))\n"
             "class Quotes(ts.Actions):\n"
             "    def __init__(self, catalog: ports.Catalog) -> None:\n"
             "        self._catalog = catalog\n"
-            "    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
-            "        name = thing.Name(quote_request.text)\n"
+            "    def quote(self, run_quote_request: relays.RunQuoteRequest)"
+            " -> relays.RunQuoteResponse:\n"
+            "        name = thing.Name(run_quote_request.text)\n"
             "        self._catalog.lookup(MapToLookupRequest(name))\n"
-            "        return MapToQuoteResponse(name)\n",
+            "        return MapToRunQuoteResponse(name)\n",
             False,
         ),
         (
@@ -11839,25 +11841,24 @@ def _kinds_spec(
             "shop/application/orchestrators/flow.py",
             "shop.application.orchestrators.flow",
             "import tesser.application as ts\n"
-            "import shop.application.ports as ports\n"
+            "import shop.application.relays as relays\n"
             "import shop.domain.thing as thing\n"
             "class FlowResponse(ts.Response):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
-            "class MapToQuoteRequest(ts.Mapper, ports.QuoteRequest):\n"
+            "class MapToRunQuoteRequest(ts.Mapper, relays.RunQuoteRequest):\n"
             "    def __init__(self, name: thing.Name) -> None:\n"
             "        super().__init__(text=str(name))\n"
             "class MapToFlowResponse(ts.Mapper, FlowResponse):\n"
-            "    def __init__(self, quote_response: ports.QuoteResponse) -> None:\n"
-            "        super().__init__(text=quote_response.text)\n"
+            "    def __init__(self, run_quote_response: relays.RunQuoteResponse) -> None:\n"
+            "        super().__init__(text=run_quote_response.text)\n"
             "class Flow(ts.Orchestrator):\n"
-            "    def __init__(self, job_context: ts.JobContext, quotes: ports.Quotes) -> None:\n"
-            "        self._job_context = job_context\n"
-            "        self._quotes = quotes\n"
-            "    async def run(self, quote_request: ports.QuoteRequest) -> FlowResponse:\n"
-            "        name = thing.Name(quote_request.text)\n"
-            "        quote_response = await self._quotes.quote(self._job_context, MapToQuoteRequest(name))\n"
-            "        return MapToFlowResponse(quote_response)\n",
+            "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
+            "        self._quotes_runner = quotes_runner\n"
+            "    async def run(self, run_quote_request: relays.RunQuoteRequest) -> FlowResponse:\n"
+            "        name = thing.Name(run_quote_request.text)\n"
+            "        run_quote_response = await self._quotes_runner.run_quote(MapToRunQuoteRequest(name))\n"
+            "        return MapToFlowResponse(run_quote_response)\n",
             False,
         ),
         (
@@ -11865,10 +11866,12 @@ def _kinds_spec(
             "shop.application.orchestrators.test_flow",
             "import tesser.testing as ts\n"
             "import shop.application.orchestrators as orchestrators\n"
+            "import shop.application.relays as relays\n"
             "@ts.fake\n"
-            "class FakeJobContext(ts.JobContext):\n"
-            "    async def call[I, O](self, step, request) -> O:\n"
-            "        return await step(None, request)\n"
+            "class FakeQuotesRunner(relays.QuotesRunner):\n"
+            "    async def run_quote(self, run_quote_request: relays.RunQuoteRequest)"
+            " -> relays.RunQuoteResponse:\n"
+            "        return relays.RunQuoteResponse(text=run_quote_request.text)\n"
             "def test_flow_exists() -> None:\n"
             "    assert orchestrators.Flow is not None\n",
             False,
@@ -11881,7 +11884,7 @@ def _kinds_spec(
             "import tesser.adapters as ts\n"
             "import shop.application.ports as ports\n"
             "class QuoteGateway(ts.Gateway):\n"
-            "    async def quote(self, job_context: ts.JobContext, quote_request: ports.QuoteRequest)"
+            "    async def quote(self, quote_request: ports.QuoteRequest)"
             " -> ports.QuoteResponse:\n"
             "        return ports.QuoteResponse(text=quote_request.text)\n",
             False,
@@ -11929,38 +11932,61 @@ def _kinds_spec(
             False,
         ),
         (
-            "shop/adapters/jobs/__init__.py",
-            "shop.adapters.jobs",
-            "from shop.adapters.jobs.engine import EngineJob as EngineJob\n",
+            "shop/adapters/runners/__init__.py",
+            "shop.adapters.runners",
+            "from shop.adapters.runners.inline import InlineRunner as InlineRunner\n",
             True,
         ),
         (
-            "shop/adapters/jobs/engine.py",
-            "shop.adapters.jobs.engine",
+            "shop/adapters/runners/inline.py",
+            "shop.adapters.runners.inline",
             "import tesser.adapters as ts\n"
-            "import shop.application.client as client\n"
-            "import shop.application.orchestrators as orchestrators\n"
-            "import shop.application.ports as ports\n"
-            "class EngineJobContext(ts.JobContext):\n"
-            "    def __init__(self, inner: object) -> None:\n"
-            "        self._inner = inner\n"
-            "    async def call(self, step: object, request: object) -> object:\n"
-            "        return request\n"
-            "class EngineJob(ts.Job):\n"
-            "    def __init__(self, shop_application_client: client.ShopApplicationClient, quotes: ports.Quotes) -> None:\n"
-            "        self._shop_application_client = shop_application_client\n"
-            "        self._quotes = quotes\n"
-            "    def quote(self, quote_request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
-            "        return self._shop_application_client.quote(quote_request)\n"
-            "    async def run(self, inner: object, quote_request: ports.QuoteRequest)"
-            " -> orchestrators.FlowResponse:\n"
-            "        return await orchestrators.Flow(EngineJobContext(inner), self._quotes)"
-            ".run(quote_request)\n",
+            "import shop.adapters.runtimes as runtimes\n"
+            "import shop.application.relays as relays\n"
+            "class InlineRunner(ts.Runner):\n"
+            "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
+            "        self._engine_runtime = engine_runtime\n"
+            "    async def run_quote(self, run_quote_request: relays.RunQuoteRequest)"
+            " -> relays.RunQuoteResponse:\n"
+            "        return self._engine_runtime.quote_handler(run_quote_request)\n",
             False,
         ),
         (
-            "shop/adapters/jobs/test_engine.py",
-            "shop.adapters.jobs.test_engine",
+            "shop/adapters/runners/test_inline.py",
+            "shop.adapters.runners.test_inline",
+            "def test_inline_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        (
+            "shop/adapters/runtimes/__init__.py",
+            "shop.adapters.runtimes",
+            "from shop.adapters.runtimes.engine import EngineRuntime as EngineRuntime\n",
+            True,
+        ),
+        (
+            "shop/adapters/runtimes/engine.py",
+            "shop.adapters.runtimes.engine",
+            "import tesser.adapters as ts\n"
+            "import shop.adapters.runners as runners\n"
+            "import shop.application.client as client\n"
+            "import shop.application.orchestrators as orchestrators\n"
+            "import shop.application.relays as relays\n"
+            "class EngineRuntime(ts.Runtime):\n"
+            "    def __init__(self, shop_application_client: client.ShopApplicationClient) -> None:\n"
+            "        self._shop_application_client = shop_application_client\n"
+            "    def quote_handler(self, run_quote_request: relays.RunQuoteRequest)"
+            " -> relays.RunQuoteResponse:\n"
+            "        return self._shop_application_client.quote(run_quote_request)\n"
+            "    async def run(self, run_quote_request: relays.RunQuoteRequest)"
+            " -> orchestrators.FlowResponse:\n"
+            "        return await orchestrators.Flow(runners.InlineRunner(self))"
+            ".run(run_quote_request)\n",
+            False,
+        ),
+        (
+            "shop/adapters/runtimes/test_engine.py",
+            "shop.adapters.runtimes.test_engine",
             "def test_engine_exists() -> None:\n"
             "    assert True\n",
             False,
@@ -11970,7 +11996,7 @@ def _kinds_spec(
             "shop.component.component",
             "import tesser.component as ts\n"
             "import shop.adapters.gateways as gateways\n"
-            "import shop.adapters.jobs as jobs\n"
+            "import shop.adapters.runtimes as runtimes\n"
             "import shop.application.quotes as quotes\n"
             "import shop.application.service as service\n"
             "import shop.client.client as client\n"
@@ -11980,8 +12006,8 @@ def _kinds_spec(
             "        self._listing = gateways.CatalogGateway()\n"
             "        self._actions = quotes.Quotes(self._listing)\n"
             "        self.client: client.Client = service.AskService()\n"
-            "        self.jobs: tuple[jobs.EngineJob, ...] = (\n"
-            "            jobs.EngineJob(self._actions, self._quotes),\n"
+            "        self.engine_runtimes: tuple[runtimes.EngineRuntime, ...] = (\n"
+            "            runtimes.EngineRuntime(self._actions),\n"
             "        )\n"
             "    def close(self) -> None:\n"
             "        return None\n",
@@ -11999,7 +12025,7 @@ def _kinds_spec(
             "srv.main",
             "import tesser.srv as ts\n"
             "import shop.adapters.handlers as handlers\n"
-            "import shop.adapters.jobs as jobs\n"
+            "import shop.adapters.runtimes as runtimes\n"
             "class Host(ts.Host):\n"
             "    def run(self, argv: list[str]) -> int:\n"
             "        return 0\n",
@@ -12050,7 +12076,7 @@ def test_a_reserved_name_inside_the_application_client_is_a_stray() -> None:
         "shop.application.client.test_quotes is not an application client module; "
         "an application client package holds only client protocols, and "
         "test_/eval_/conftest are reserved names, because a fake here would be an "
-        "implementation a job may import" in f
+        "implementation a runtime may import" in f
         for f in findings
     )
 
@@ -12268,7 +12294,7 @@ def test_an_application_client_module_holds_only_imports_and_one_protocol() -> N
     assert any(
         "shop.application.client.loose.Client runs an expression at import; an "
         "application client module holds no expression that runs at import, "
-        "because a job imports it" in f
+        "because a runtime imports it" in f
         for f in findings
     )
     assert any(
@@ -12301,12 +12327,12 @@ def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
     )
     assert any(
         "shop.application.client.wide.Client.quote carries a body; an application "
-        "client method declares a shape and never a body, because a job imports "
+        "client method declares a shape and never a body, because a runtime imports "
         "it for the shape" in f
         for f in findings
     )
     assert any(
-        "shop.application.client.wide.Client._hidden is not a call a job may make; "
+        "shop.application.client.wide.Client._hidden is not a call a runtime may make; "
         "an application client declares only its public calls and __call__" in f
         for f in findings
     )
@@ -12391,9 +12417,8 @@ def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
     )
     assert any(
         "shop.adapters.loose is not in an adapter kind package; an adapters "
-        "module lives in handlers, gateways, repositories, jobs, runners, or "
-        "runtimes, because "
-        "placement is what carries an adapter's reach" in f
+        "module lives in handlers, gateways, repositories, runners, or runtimes, "
+        "because placement is what carries an adapter's reach" in f
         for f in findings
     )
     assert any(
@@ -12473,8 +12498,8 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/adapters/jobs/wire.py",
-                "shop.adapters.jobs.wire",
+                "shop/adapters/runtimes/wire.py",
+                "shop.adapters.runtimes.wire",
                 "import tesser.adapters as ts\n"
                 "class RecordSerde[T](ts.Serde):\n"
                 "    def __init__(self, kind: type[T]) -> None:\n"
@@ -12490,15 +12515,15 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
                 False,
             ),
             (
-                "shop/adapters/jobs/test_wire.py",
-                "shop.adapters.jobs.test_wire",
+                "shop/adapters/runtimes/test_wire.py",
+                "shop.adapters.runtimes.test_wire",
                 "def test_wire_exists() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "shop/adapters/jobs/sloppy.py",
-                "shop.adapters.jobs.sloppy",
+                "shop/adapters/runtimes/sloppy.py",
+                "shop.adapters.runtimes.sloppy",
                 "import tesser.adapters as ts\n"
                 "class LooseSerde(ts.Serde):\n"
                 "    CACHE: int = 0\n"
@@ -12528,45 +12553,45 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
             ),
         ))).violations()
     )
-    assert not any("shop.adapters.jobs.wire.RecordSerde" in f for f in findings)
+    assert not any("shop.adapters.runtimes.wire.RecordSerde" in f for f in findings)
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde declares 0 types" in f
+        "shop.adapters.runtimes.sloppy.LooseSerde declares 0 types" in f
         and "a serde names one type — a type parameter, or the one shape its base is subscripted with — the shape it carries in both directions" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde declares no deserialize" in f
+        "shop.adapters.runtimes.sloppy.LooseSerde declares no deserialize" in f
         and "a serde declares serialize and deserialize and nothing else, because "
         "those two are what the engine calls" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde.helper is a method" in f
+        "shop.adapters.runtimes.sloppy.LooseSerde.helper is a method" in f
         and "a serde declares serialize and deserialize and nothing else, because "
         "those two are what the engine calls" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde carries a class-level statement" in f
+        "shop.adapters.runtimes.sloppy.LooseSerde carries a class-level statement" in f
         and "a serde holds its two calls and the target type it is built with, "
         "and nothing else" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde.__init__ parameter 'label' is not a "
+        "shop.adapters.runtimes.sloppy.LooseSerde.__init__ parameter 'label' is not a "
         "target type" in f
         and "a serde is built with at most the type it deserializes into, because "
         "anything else is state the engine cannot see" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde stores '_label'" in f
+        "shop.adapters.runtimes.sloppy.LooseSerde stores '_label'" in f
         and "a serde is built with at most the type it deserializes into, because "
         "anything else is state the engine cannot see" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.jobs.sloppy.LooseSerde.serialize decides" in f
+        "shop.adapters.runtimes.sloppy.LooseSerde.serialize decides" in f
         and "a serde branches only on the empty payload, because anything else is a "
         "decision that belongs where the domain can see it" in f
         for f in findings
@@ -12590,7 +12615,7 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
     )
 
 
-def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> None:
+def test_only_a_runtime_reaches_the_application_client_and_the_orchestrators() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -12619,7 +12644,7 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
                 "shop.adapters.handlers.peek",
                 "import tesser.adapters as ts\n"
                 "import shop.application.client.quotes as quotes_client\n"
-                "import shop.adapters.jobs.engine as engine\n"
+                "import shop.adapters.runtimes.engine as engine\n"
                 "class PeekHandler(ts.Handler):\n"
                 "    pass\n",
                 False,
@@ -12628,14 +12653,14 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
                 "shop/adapters/gateways/peek.py",
                 "shop.adapters.gateways.peek",
                 "import tesser.adapters as ts\n"
-                "import shop.adapters.jobs.engine as engine\n"
+                "import shop.adapters.runtimes.engine as engine\n"
                 "class PeekGateway(ts.Gateway):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "shop/adapters/jobs/test_reach.py",
-                "shop.adapters.jobs.test_reach",
+                "shop/adapters/runtimes/test_reach.py",
+                "shop.adapters.runtimes.test_reach",
                 "import shop.client.client as client\n"
                 "def test_x() -> None:\n    assert True\n",
                 False,
@@ -12664,50 +12689,50 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
     )
     assert any(
         "shop.application.peeker imports shop.application.client.quotes; only a "
-        "job imports the application client and the orchestrators, because an "
+        "runtime imports the application client and the orchestrators, because an "
         "action is reachable only through the engine" in f
         for f in findings
     )
     assert any(
         "shop.application.peeker imports shop.application.orchestrators; "
-        "only a job imports the application client and the orchestrators" in f
+        "only a runtime imports the application client and the orchestrators" in f
         for f in findings
     )
     assert any(
         "shop.component.peek imports shop.application.orchestrators; only a "
-        "job imports the application client and the orchestrators" in f
+        "runtime imports the application client and the orchestrators" in f
         for f in findings
     )
     assert any(
         "shop.adapters.handlers.peek imports shop.application.client.quotes; only "
-        "a job imports the application client and the orchestrators" in f
+        "a runtime imports the application client and the orchestrators" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.handlers.peek imports shop.adapters.jobs.engine; an "
+        "shop.adapters.handlers.peek imports shop.adapters.runtimes.engine; an "
         "adapters kind package reaches only what its kind reaches" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.gateways.peek imports shop.adapters.jobs.engine; an "
+        "shop.adapters.gateways.peek imports shop.adapters.runtimes.engine; an "
         "adapters kind package reaches only what its kind reaches" in f
         for f in findings
     )
     assert any(
-        "shop.adapters.jobs.test_reach imports shop.client.client, but a test "
-        "placed in jobs reaches only" in f
+        "shop.adapters.runtimes.test_reach imports shop.client.client, but a test "
+        "placed in runtimes reaches only" in f
         for f in findings
     )
     assert any(
         "shop.application.test_peek imports shop.application.client.quotes, but "
-        "only a test placed in jobs reaches the application client and the "
-        "orchestrators; a test reaches only what its placement allows" in f
+        "only a test placed in runners or runtimes reaches the application client "
+        "and the orchestrators; a test reaches only what its placement allows" in f
         for f in findings
     )
     assert any(
         "shop.tests.test_peek imports shop.application.orchestrators, but "
-        "only a test placed in jobs reaches the application client and the "
-        "orchestrators; a test reaches only what its placement allows" in f
+        "only a test placed in runners or runtimes reaches the application client "
+        "and the orchestrators; a test reaches only what its placement allows" in f
         for f in findings
     )
     assert not any(
@@ -12716,7 +12741,7 @@ def test_only_a_job_reaches_the_application_client_and_the_orchestrators() -> No
     )
 
 
-def test_a_host_reaches_a_context_through_its_handlers_and_its_jobs() -> None:
+def test_a_host_reaches_a_context_through_its_handlers_and_its_runtimes() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -12734,12 +12759,12 @@ def test_a_host_reaches_a_context_through_its_handlers_and_its_jobs() -> None:
     )
     assert any(
         "srv.wide imports shop.application.service; "
-        "a host reaches a context only through its handlers and its jobs" in f
+        "a host reaches a context only through its handlers and its runtimes" in f
         for f in findings
     )
     assert not any(
-        "srv.main imports shop.adapters.jobs.engine; "
-        "a host reaches a context only through its handlers and its jobs" in f
+        "srv.main imports shop.adapters.runtimes.engine; "
+        "a host reaches a context only through its handlers and its runtimes" in f
         for f in findings
     )
 
@@ -12917,7 +12942,7 @@ def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
     )
     assert any(
         "shop.application.orchestrators.bad.Bad keeps _state; "
-        "an orchestrator stores only its job context, its action ports, and the relays it runs" in f
+        "an orchestrator stores only its action ports and the relays it runs" in f
         for f in findings
     )
     assert any(
@@ -12932,7 +12957,7 @@ def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
     )
 
 
-def test_a_component_publishes_only_its_client_and_its_jobs() -> None:
+def test_a_component_publishes_only_its_client_and_its_runtimes() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -12952,166 +12977,108 @@ def test_a_component_publishes_only_its_client_and_its_jobs() -> None:
     )
     assert any(
         "shop.component.bad.Bad publishes extra; "
-        "a component publishes only its client and its jobs" in f
+        "a component publishes only its client, typed as its ts.Client, and its "
+        "runtimes, each typed as a ts.Runtime" in f
         for f in findings
     )
     assert any(
-        "shop.component.bad.Bad publishes client untyped; "
-        "a component publishes only its client and its jobs" in f
+        "shop.component.bad.Bad publishes client; "
+        "a component publishes only its client, typed as its ts.Client, and its "
+        "runtimes, each typed as a ts.Runtime" in f
         for f in findings
     )
 
 
-def test_an_orchestrator_takes_and_threads_exactly_one_job_context() -> None:
+def test_a_relay_is_held_only_by_a_service_or_an_orchestrator() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/application/orchestrators/bare.py",
-                "shop.application.orchestrators.bare",
-                "import tesser.application as ts\n"
-                "import shop.application.ports.quotes as quotes\n"
-                "class Bare(ts.Orchestrator):\n"
-                "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
-                "        self._quoting = quoting\n"
-                "    async def run(self, request: quotes.QuoteRequest)"
-                " -> quotes.QuoteResponse:\n"
-                "        return await self._quoting.quote(request)\n",
+                "shop/adapters/gateways/holding.py",
+                "shop.adapters.gateways.holding",
+                "import tesser.adapters as ts\n"
+                "import shop.application.relays as relays\n"
+                "class HoldingGateway(ts.Gateway):\n"
+                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
+                "        self._quotes_runner = quotes_runner\n",
                 False,
             ),
             (
-                "shop/application/orchestrators/twice.py",
-                "shop.application.orchestrators.twice",
+                "shop/adapters/gateways/test_holding.py",
+                "shop.adapters.gateways.test_holding",
+                "def test_holding_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/application/relaying.py",
+                "shop.application.relaying",
                 "import tesser.application as ts\n"
-                "import shop.application.ports.quotes as quotes\n"
-                "class Twice(ts.Orchestrator):\n"
-                "    def __init__(\n"
-                "        self, job: ts.JobContext, other: ts.JobContext, quoting: quotes.Quotes\n"
-                "    ) -> None:\n"
-                "        self._job = job\n"
-                "        self._other = other\n"
-                "        self._quoting = quoting\n"
-                "        self._state = 1\n",
+                "import shop.application.relays as relays\n"
+                "class Relaying(ts.Actions):\n"
+                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
+                "        self._quotes_runner = quotes_runner\n",
+                False,
+            ),
+            (
+                "shop/application/test_relaying.py",
+                "shop.application.test_relaying",
+                "def test_relaying_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
     )
     assert any(
-        "shop.application.orchestrators.bare.Bare.__init__ takes 0 job contexts; "
-        "an orchestrator takes exactly one job context and its action ports" in f
+        "shop.adapters.gateways.holding.HoldingGateway.__init__ parameter "
+        "'quotes_runner' is a ts.Relay; a relay is invoked only by a service, "
+        "through an ingress runner, or by an orchestrator, through an "
+        "in-invocation runner" in f
         for f in findings
-    )
+    ), findings
     assert any(
-        "shop.application.orchestrators.twice.Twice.__init__ takes 2 job contexts; "
-        "an orchestrator takes exactly one job context and its action ports" in f
+        "shop.application.relaying.Relaying.__init__ parameter 'quotes_runner' is "
+        "not a ts.Port or a ts.Store; a class of actions depends only on ports and "
+        "the stores that yield them" in f
         for f in findings
-    )
-    assert any(
-        "shop.application.orchestrators.bare.Bare.run calls _quoting without its "
-        "job context first; an orchestrator threads its job context into every "
-        "action port call" in f
-        for f in findings
-    )
-    assert any(
-        "shop.application.orchestrators.twice.Twice keeps _state; an orchestrator "
-        "stores only its job context, its action ports, and the relays it runs" in f
-        for f in findings
-    )
+    ), findings
     assert not any(
-        "shop.application.orchestrators.twice.Twice keeps _job;" in f for f in findings
-    )
+        "shop.application.orchestrators.flow.Flow.__init__ parameter" in f
+        for f in findings
+    ), findings
 
 
-def test_a_job_context_is_led_with_or_it_is_a_finding() -> None:
+def test_a_service_and_an_orchestrator_may_hold_a_relay() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/application/ports/trailing.py",
-                "shop.application.ports.trailing",
-                "import typing\n"
+                "shop/application/running.py",
+                "shop.application.running",
                 "import tesser.application as ts\n"
-                "class SendRequest(ts.Request):\n"
-                "    def __init__(self, text: str) -> None:\n"
-                "        self.text = text\n"
-                "class SendResponse(ts.Response):\n"
-                "    def __init__(self, text: str) -> None:\n"
-                "        self.text = text\n"
-                "class Trailing(ts.Port, typing.Protocol):\n"
-                "    async def send(self, request: SendRequest, job: ts.JobContext)"
-                " -> SendResponse: ...\n",
-                False,
-            ),
-            (
-                "shop/adapters/gateways/trailing.py",
-                "shop.adapters.gateways.trailing",
-                "import tesser.adapters as ts\n"
-                "import shop.application.ports.trailing as trailing\n"
-                "class TrailingGateway(ts.Gateway):\n"
-                "    async def send(self, request: trailing.SendRequest, job: ts.JobContext)"
-                " -> trailing.SendResponse:\n"
-                "        return trailing.SendResponse(text=request.text)\n"
-                "    def handed(self, job: ts.JobContext) -> ts.JobContext:\n"
-                "        return job\n",
-                False,
-            ),
-            (
-                "shop/adapters/handlers/leading.py",
-                "shop.adapters.handlers.leading",
-                "import tesser.adapters as ts\n"
-                "class LeadingHandler(ts.Handler):\n"
-                "    def serve(self, job: ts.JobContext, body: str) -> str:\n"
-                "        return body\n",
-                False,
-            ),
-            (
-                "shop/application/leaking.py",
-                "shop.application.leaking",
-                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
                 "import shop.client.client as client\n"
-                "class LeakService(ts.ApplicationService):\n"
-                "    def ask(self, job: ts.JobContext, request: client.AskRequest)"
-                " -> client.AskResponse:\n"
-                "        return client.AskResponse(text=request.text)\n",
+                "class RunService(ts.ApplicationService):\n"
+                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
+                "        self._quotes_runner = quotes_runner\n"
+                "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
+                "        return client.AskResponse(text=ask_request.text)\n",
+                False,
+            ),
+            (
+                "shop/application/test_running.py",
+                "shop.application.test_running",
+                "def test_running_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
     )
-    assert any(
-        "shop.application.ports.trailing.Trailing.send parameter 'job' is a "
-        "ts.JobContext; a job context is threaded as the leading parameter of an "
-        "action port call and nowhere else" in f
-        for f in findings
-    )
-    assert any(
-        "shop.adapters.gateways.trailing.TrailingGateway.send parameter 'job' is a "
-        "ts.JobContext; a job context is threaded as the leading parameter of an "
-        "action port call and nowhere else" in f
-        for f in findings
-    )
-    assert any(
-        "shop.adapters.gateways.trailing.TrailingGateway.handed returns a "
-        "ts.JobContext; a job context is threaded as the leading parameter of an "
-        "action port call and nowhere else" in f
-        for f in findings
-    )
-    assert any(
-        "shop.application.leaking.LeakService.ask parameter 'job' is a ts.JobContext; "
-        "a job context is threaded as the leading parameter of an action port call "
-        "and nowhere else" in f
-        for f in findings
-    )
-    assert any(
-        "shop.adapters.handlers.leading.LeadingHandler.serve parameter 'job' is a "
-        "ts.JobContext; a job context is threaded as the leading parameter of an "
-        "action port call and nowhere else" in f
-        for f in findings
-    )
     assert not any(
-        "shop.adapters.gateways.quotes.QuoteGateway.quote parameter 'job'" in f
+        "shop.application.running.RunService.__init__ parameter" in f
         for f in findings
-    )
-
+    ), findings
+    assert not any("shop.application.running.RunService keeps" in f for f in findings), findings
 
 def test_a_quoted_return_is_the_quoting_finding_and_resolves_to_nothing() -> None:
     findings = tuple(
@@ -13122,14 +13089,14 @@ def test_a_quoted_return_is_the_quoting_finding_and_resolves_to_nothing() -> Non
                 "shop.adapters.gateways.quoted",
                 "import tesser.adapters as ts\n"
                 "class QuotedGateway(ts.Gateway):\n"
-                "    def handed(self, job: ts.JobContext) -> \"ts.JobContext\":\n"
-                "        return job\n",
+                "    def handed(self, runner: ts.Runner) -> \"ts.Runner\":\n"
+                "        return runner\n",
                 False,
             ),
         ))).violations()
     )
     assert any(
-        "quoted.py:3: TB021 shop.adapters.gateways.quoted quotes 'ts.JobContext'; "
+        "quoted.py:3: TB021 shop.adapters.gateways.quoted quotes 'ts.Runner'; "
         "an annotation is written unquoted — a quoted type is a string the analyzer "
         "cannot read, and from __future__ import annotations is what defers a name "
         "the module has not defined yet" in f
@@ -13137,30 +13104,7 @@ def test_a_quoted_return_is_the_quoting_finding_and_resolves_to_nothing() -> Non
     )
     assert not any(
         "shop.adapters.gateways.quoted.QuotedGateway.handed returns a "
-        "ts.JobContext" in f
-        for f in findings
-    )
-
-
-def test_an_unquoted_return_still_draws_the_job_context_finding() -> None:
-    findings = tuple(
-        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_kinds_spec(sources=(
-            (
-                "shop/adapters/gateways/handed.py",
-                "shop.adapters.gateways.handed",
-                "import tesser.adapters as ts\n"
-                "class HandedGateway(ts.Gateway):\n"
-                "    def handed(self, job: ts.JobContext) -> ts.JobContext:\n"
-                "        return job\n",
-                False,
-            ),
-        ))).violations()
-    )
-    assert any(
-        "shop.adapters.gateways.handed.HandedGateway.handed returns a "
-        "ts.JobContext; a job context is threaded as the leading parameter of an "
-        "action port call and nowhere else" in f
+        "ts.Runner" in f
         for f in findings
     )
 
@@ -13394,61 +13338,7 @@ def test_a_banned_type_is_named_outside_an_annotation_too() -> None:
     )
 
 
-def test_a_gateway_never_holds_an_invocations_job_context() -> None:
-    findings = tuple(
-        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_kinds_spec(sources=(
-            (
-                "shop/adapters/gateways/holding.py",
-                "shop.adapters.gateways.holding",
-                "import tesser.adapters as ts\n"
-                "import shop.application.ports.quotes as quotes\n"
-                "class HoldingGateway(ts.Gateway):\n"
-                "    def __init__(self, job: ts.JobContext) -> None:\n"
-                "        self._job = job\n"
-                "    async def quote(self, job: ts.JobContext, request: quotes.QuoteRequest)"
-                " -> quotes.QuoteResponse:\n"
-                "        return quotes.QuoteResponse(text=request.text)\n",
-                False,
-            ),
-        ))).violations()
-    )
-    assert any(
-        "shop.adapters.gateways.holding.HoldingGateway keeps _job, a job context; "
-        "an adapter is built once and never holds an invocation's job context" in f
-        for f in findings
-    )
-    assert not any(
-        "HoldingGateway.quote parameter 'job' is a ts.JobContext" in f for f in findings
-    )
-
-
-def test_a_repository_never_holds_an_invocations_job_context() -> None:
-    findings = tuple(
-        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_kinds_spec(sources=(
-            (
-                "shop/adapters/repositories/holding.py",
-                "shop.adapters.repositories.holding",
-                "import tesser.adapters as ts\n"
-                "import shop.application.ports.quotes as quotes\n"
-                "class HoldingRepository(ts.Repository):\n"
-                "    async def quote(self, job: ts.JobContext, request: quotes.QuoteRequest)"
-                " -> quotes.QuoteResponse:\n"
-                "        self._job = job\n"
-                "        return quotes.QuoteResponse(text=request.text)\n",
-                False,
-            ),
-        ))).violations()
-    )
-    assert any(
-        "shop.adapters.repositories.holding.HoldingRepository keeps _job, a job context; "
-        "an adapter is built once and never holds an invocation's job context" in f
-        for f in findings
-    )
-
-
-def test_a_component_publishes_its_jobs_as_one_job_or_a_tuple_of_them() -> None:
+def test_a_component_publishes_its_runtimes_as_one_or_a_tuple_of_them() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -13456,12 +13346,12 @@ def test_a_component_publishes_its_jobs_as_one_job_or_a_tuple_of_them() -> None:
                 "shop/component/mixed.py",
                 "shop.component.mixed",
                 "import tesser.component as ts\n"
-                "import shop.adapters.jobs.engine as engine\n"
+                "import shop.adapters.runtimes.engine as engine\n"
                 "import shop.client.client as client\n"
                 "class Mixed(ts.Component):\n"
                 "    def __init__(self) -> None:\n"
                 "        self.client: client.Client = None\n"
-                "        self.jobs: tuple[engine.EngineJob, client.Client] = ()\n"
+                "        self.engine_runtimes: tuple[engine.EngineRuntime, client.Client] = ()\n"
                 "    def close(self) -> None:\n"
                 "        return None\n",
                 False,
@@ -13469,11 +13359,12 @@ def test_a_component_publishes_its_jobs_as_one_job_or_a_tuple_of_them() -> None:
         ))).violations()
     )
     assert any(
-        "shop.component.mixed.Mixed publishes jobs untyped; "
-        "a component publishes only its client and its jobs" in f
+        "shop.component.mixed.Mixed publishes engine_runtimes; "
+        "a component publishes only its client, typed as its ts.Client, and its "
+        "runtimes, each typed as a ts.Runtime" in f
         for f in findings
     )
-    assert not any("shop.component.component.Shop publishes jobs" in f for f in findings)
+    assert not any("shop.component.component.Shop publishes engine_runtimes" in f for f in findings)
 
 
 def test_a_service_decides_once_and_only_on_a_domain_answer() -> None:
@@ -17001,7 +16892,7 @@ def test_a_relay_dto_field_is_a_primitive_a_relay_dto_or_a_domain_object() -> No
 def test_relays_and_snapshots_are_packages_never_modules() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_kinds_spec(sources=(
+        for v in domain.Codebase(_spec(sources=(
             (
                 "shop/application/relays.py",
                 "shop.application.relays",
@@ -17087,9 +16978,9 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
     assert any(
         "shop.adapters.runners.engine imports shop.application.service; "
         "an adapters kind package reaches only what its kind reaches — a handler "
-        "the context client, a job the application client, the orchestrators, and "
-        "the ports, a gateway or a repository the ports, a runner its relays, a "
-        "runtime what it registers" in f
+        "the context client, a gateway or a repository the ports, a runner its "
+        "relays, a runtime the application client, the orchestrators, and the "
+        "relays it registers" in f
         for f in findings
     ), findings
     assert not any("imports shop.application.relays;" in f for f in findings), findings

@@ -21,7 +21,6 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Client"): "actions_client",
     ("tesser.application", "Orchestrator"): "orchestrator",
     ("tesser.application", "Actions"): "actions",
-    ("tesser.application", "JobContext"): "job_context",
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
     ("tesser.context", "Request"): "request",
@@ -35,12 +34,11 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Repository"): "repository",
     ("tesser.adapters", "Gateway"): "gateway",
     ("tesser.adapters", "Handler"): "handler",
-    ("tesser.adapters", "Job"): "job",
+    ("tesser.adapters", "Runner"): "runner",
+    ("tesser.adapters", "Runtime"): "runtime",
     ("tesser.adapters", "Mapper"): "mapper",
     ("tesser.adapters", "Serde"): "serde",
-    ("tesser.adapters", "JobContext"): "job_context",
     ("tesser.adapters", "Relay"): "relay",
-    ("tesser.testing", "JobContext"): "job_context",
     ("tesser.testing", "Relay"): "relay",
     ("tesser.component", "Component"): "component",
     ("tesser.component", "Config"): "component_config",
@@ -134,6 +132,8 @@ RELAY_MESSAGE_BLOCKS: typing.Final[dict[str, str]] = {
 
 RELAY_DTO_BLOCKS: typing.Final[frozenset[str]] = frozenset(RELAY_MESSAGE_BLOCKS.values())
 
+RELAY_CALLERS: typing.Final[frozenset[str]] = frozenset({"service", "actions", "orchestrator"})
+
 PACKAGE_HOMES: typing.Final[frozenset[str]] = frozenset(
     {PORTS_HOME, APPLICATION_CLIENT_HOME, ORCHESTRATORS_HOME, RELAYS_HOME, SNAPSHOTS_HOME}
 )
@@ -143,23 +143,23 @@ MESSAGE_PACKAGES: typing.Final[frozenset[str]] = frozenset({PORTS_PACKAGE, RELAY
 PLACEMENT_KINDS: typing.Final[dict[str, frozenset[str]]] = {
     "orchestrators": frozenset({"orchestrator", "port_response"}),
     "orchestrators-file": frozenset({"orchestrator", "port_response"}),
-    "relays": frozenset(
-        {RELAY_BLOCK, "job_context", SNAPSHOT_BLOCK} | RELAY_DTO_BLOCKS
-    ),
-    "relays-file": frozenset(
-        {RELAY_BLOCK, "job_context", SNAPSHOT_BLOCK} | RELAY_DTO_BLOCKS
-    ),
+    "relays": frozenset({RELAY_BLOCK, SNAPSHOT_BLOCK} | RELAY_DTO_BLOCKS),
+    "relays-file": frozenset({RELAY_BLOCK, SNAPSHOT_BLOCK} | RELAY_DTO_BLOCKS),
     "snapshots": frozenset({SNAPSHOT_BLOCK}),
     "snapshots-file": frozenset({SNAPSHOT_BLOCK}),
 }
 
-JOB_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (
+RUNTIME_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (
     APPLICATION_CLIENT_IMPORT,
     ORCHESTRATORS_IMPORT,
 )
 
+RUNNER_BLOCK: typing.Final[str] = "runner"
+
+RUNTIME_BLOCK: typing.Final[str] = "runtime"
+
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"handler", "gateway", "repository", "job", "job_context"}
+    {"handler", "gateway", "repository", RUNNER_BLOCK, RUNTIME_BLOCK}
 )
 
 RUNNERS_PACKAGE: typing.Final[str] = "runners"
@@ -170,18 +170,17 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
     "gateways": frozenset({"gateway"}),
     "repositories": frozenset({"repository"}),
-    "jobs": frozenset({"job", "job_context", "serde"}),
-    RUNNERS_PACKAGE: frozenset({"gateway", "job_context"}),
-    RUNTIMES_PACKAGE: frozenset({"job", "serde"}),
+    RUNNERS_PACKAGE: frozenset({RUNNER_BLOCK}),
+    RUNTIMES_PACKAGE: frozenset({RUNTIME_BLOCK, "serde"}),
 }
 
-JOB_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({"jobs", RUNTIMES_PACKAGE})
+RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
 
-JOB_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
-    {"jobs", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
+ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
+    {RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
 )
 
-ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, jobs, runners, or runtimes"
+ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, or runtimes"
 
 SERDE_BLOCK: typing.Final[str] = "serde"
 
@@ -214,7 +213,6 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
-    "jobs": (APPLICATION_CLIENT_IMPORT, ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH),
     RUNNERS_PACKAGE: (RELAYS_IMPORT, f"adapters.{RUNTIMES_PACKAGE}"),
     RUNTIMES_PACKAGE: (
         APPLICATION_CLIENT_IMPORT,
@@ -224,7 +222,7 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     ),
 }
 
-HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", "job"})
+HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", RUNTIME_BLOCK})
 
 APP_PACKAGES: typing.Final[tuple[str, ...]] = ("srv", "app")
 
@@ -257,8 +255,8 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "repository": "adapters",
     "gateway": "adapters",
     "handler": "adapters",
-    "job": "adapters",
-    "job_context": "adapters",
+    RUNNER_BLOCK: "adapters",
+    RUNTIME_BLOCK: "adapters",
     "serde": "adapters",
     "component": "component",
     "component_config": "component",
@@ -299,8 +297,8 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "repository": "a repository adapter",
     "gateway": "a gateway adapter",
     "handler": "an inbound handler",
-    "job": "a job",
-    "job_context": "a job context",
+    RUNNER_BLOCK: "a runner",
+    RUNTIME_BLOCK: "a runtime",
     "serde": "a serde",
     "component": "a component",
     "component_config": "a component config",
@@ -436,6 +434,9 @@ DECLARATION_BLOCKS: typing.Final[frozenset[str]] = frozenset(
         "port",
         "port_request",
         "port_response",
+        "relay",
+        "relay_request",
+        "relay_response",
         "protocol_port",
         "protocol_record",
         "protocol_rejection",
@@ -518,7 +519,6 @@ TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
     "handlers": ("adapters", "handlers"),
     "gateways": ("adapters", "gateways"),
     "repositories": ("adapters", "repositories"),
-    "jobs": ("adapters", "jobs"),
     RUNNERS_PACKAGE: ("adapters", RUNNERS_PACKAGE),
     RUNTIMES_PACKAGE: ("adapters", RUNTIMES_PACKAGE),
     ORCHESTRATORS_PACKAGE: ("application", ORCHESTRATORS_PACKAGE),
@@ -534,7 +534,6 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
-    "jobs": ADAPTER_KIND_REACH["jobs"],
     RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE]
     + (APPLICATION_CLIENT_IMPORT, "domain"),
     RUNTIMES_PACKAGE: ADAPTER_KIND_REACH[RUNTIMES_PACKAGE] + ("domain",),
@@ -553,7 +552,7 @@ TEST_TIER_FOREIGN: typing.Final[dict[str, tuple[str, ...]]] = {
 }
 
 ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
-    {"handlers", "gateways", "repositories", "jobs", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
+    {"handlers", "gateways", "repositories", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
 )
 
 SRV_TIER: typing.Final[str] = "srv"
@@ -583,7 +582,6 @@ TEST_TIER_SHELL: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"protocol"}),
     "gateways": frozenset(),
     "repositories": frozenset(),
-    "jobs": frozenset(),
     RUNNERS_PACKAGE: frozenset(),
     RUNTIMES_PACKAGE: frozenset(),
     ORCHESTRATORS_PACKAGE: frozenset(),
@@ -597,8 +595,6 @@ PRIMITIVES: typing.Final[frozenset[str]] = frozenset({"str", "int", "float", "bo
 MAPPER_PREFIX: typing.Final[str] = "MapTo"
 
 PORT_DTO_PRIMITIVES: typing.Final[frozenset[str]] = PRIMITIVES - frozenset({"bool"})
-
-JOB_CONTEXT_BLOCK: typing.Final[str] = "job_context"
 
 ENUM_BASES: typing.Final[frozenset[str]] = frozenset({"Enum"})
 
@@ -2647,13 +2643,11 @@ class SlotSpec(ts.Spec):
         name: str,
         block: str | None,
         touched: tuple[str, ...],
-        context: bool,
         symbol: SymbolSpec | None = None,
     ) -> None:
         self.name = name
         self.block = block
         self.touched = touched
-        self.context = context
         self.symbol = symbol
 
 
@@ -2662,14 +2656,12 @@ class Slot(ts.ValueObject):
     _name: Text
     _block: Text | None
     _touched: tuple[Text, ...]
-    _context: Names
     _symbol: Symbol | None
 
     def __init__(self, spec: SlotSpec) -> None:
         object.__setattr__(self, "_name", Text(spec.name))
         object.__setattr__(self, "_block", Text(spec.block) if spec.block else None)
         object.__setattr__(self, "_touched", tuple(Text(block) for block in spec.touched))
-        object.__setattr__(self, "_context", Names((JOB_CONTEXT_BLOCK,) if spec.context else ()))
         object.__setattr__(self, "_symbol", Symbol(spec.symbol) if spec.symbol is not None else None)
 
     def symbol(self) -> Symbol | None:
@@ -2683,9 +2675,6 @@ class Slot(ts.ValueObject):
 
     def touched(self) -> tuple[Text, ...]:
         return self._touched
-
-    def context(self) -> Names:
-        return self._context
 
 
 class SignatureSpec(ts.Spec):
@@ -2766,7 +2755,6 @@ class SignaturePolicySpec(ts.Spec):
         subject: str,
         code: str,
         taking: str,
-        leading_context: bool = False,
         constructs: str = "",
         relayed: bool = False,
     ) -> None:
@@ -2775,7 +2763,6 @@ class SignaturePolicySpec(ts.Spec):
         self.subject = subject
         self.code = code
         self.taking = taking
-        self.leading_context = leading_context
         self.constructs = constructs
         self.relayed = relayed
 
@@ -2787,7 +2774,6 @@ class SignaturePolicy(ts.ValueObject):
     _subject: Text
     _code: Code
     _taking: Text
-    _leading_context: Names
     _constructs: Text | None
     _relayed: Names
 
@@ -2797,7 +2783,6 @@ class SignaturePolicy(ts.ValueObject):
         object.__setattr__(self, "_subject", Text(spec.subject))
         object.__setattr__(self, "_code", Code(spec.code))
         object.__setattr__(self, "_taking", Text(spec.taking))
-        object.__setattr__(self, "_leading_context", Names(("leading",) if spec.leading_context else ()))
         object.__setattr__(self, "_constructs", Text(spec.constructs) if spec.constructs else None)
         object.__setattr__(self, "_relayed", Names(("relayed",) if spec.relayed else ()))
 
@@ -2828,32 +2813,7 @@ class SignaturePolicy(ts.ValueObject):
         )
         found: list[Violation] = []
         params = list(signature.params())
-        if self._leading_context and params and str(params[0].block()) == JOB_CONTEXT_BLOCK:
-            params = params[1:]
-        for slot in params:
-            if str(slot.block()) == JOB_CONTEXT_BLOCK:
-                arg = str(slot.name())
-                found.append(
-                    Violation(ViolationSpec(
-                        path,
-                        line,
-                        "TB081",
-                        f"{where} parameter {arg!r} is a ts.JobContext; a job context "
-                        "is threaded as the leading parameter of an action port call and "
-                        "nowhere else",
-                    ))
-                )
         returns = signature.returns()
-        if returns is not None and returns.context():
-            found.append(
-                Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB081",
-                    f"{where} returns a ts.JobContext; a job context is threaded as the "
-                    "leading parameter of an action port call and nowhere else",
-                ))
-            )
         if signature.open():
             found.append(
                 Violation(ViolationSpec(
@@ -2925,19 +2885,16 @@ class SignaturePolicy(ts.ValueObject):
 
 class RecordSignaturePolicySpec(ts.Spec):
 
-    def __init__(self, subject: str, leading_context: bool) -> None:
+    def __init__(self, subject: str) -> None:
         self.subject = subject
-        self.leading_context = leading_context
 
 
 class RecordSignaturePolicy(ts.ValueObject):
 
     _subject: Text
-    _leading_context: Names
 
     def __init__(self, spec: RecordSignaturePolicySpec) -> None:
         object.__setattr__(self, "_subject", Text(spec.subject))
-        object.__setattr__(self, "_leading_context", Names(("leading",) if spec.leading_context else ()))
 
     def violations(self, class_decl: ClassDecl) -> tuple[Violation, ...]:
         subject = str(self._subject)
@@ -2946,31 +2903,7 @@ class RecordSignaturePolicy(ts.ValueObject):
             where = str(signature.where())
             path = str(signature.path())
             line = int(signature.lineno())
-            taken = list(signature.params())
-            for slot in taken[1:] if self._leading_context else taken:
-                if str(slot.block()) == JOB_CONTEXT_BLOCK:
-                    arg = str(slot.name())
-                    found.append(
-                        Violation(ViolationSpec(
-                            path,
-                            line,
-                            "TB081",
-                            f"{where} parameter {arg!r} is a ts.JobContext; a job "
-                            "context is threaded as the leading parameter of an action "
-                            "port call and nowhere else",
-                        ))
-                    )
             returns = signature.returns()
-            if returns is not None and returns.context():
-                found.append(
-                    Violation(ViolationSpec(
-                        path,
-                        line,
-                        "TB081",
-                        f"{where} returns a ts.JobContext; a job context is threaded as "
-                        "the leading parameter of an action port call and nowhere else",
-                    ))
-                )
             first = signature.leading()
             slots = ([first] if first is not None else []) + list(signature.params())
             if returns is not None:
@@ -3038,7 +2971,6 @@ class BodySpec(ts.Spec):
         path: str,
         class_methods: tuple[str, ...],
         held_ports: tuple[str, ...],
-        held_contexts: tuple[str, ...],
         signature: SignatureSpec,
         scope: ScopeSpec,
         registry: RegistrySpec,
@@ -3048,7 +2980,6 @@ class BodySpec(ts.Spec):
         self.path = path
         self.class_methods = class_methods
         self.held_ports = held_ports
-        self.held_contexts = held_contexts
         self.signature = signature
         self.scope = scope
         self.registry = registry
@@ -3071,7 +3002,6 @@ class Body(ts.ValueObject):
         class_methods = frozenset(spec.class_methods)
         names = scope.functions()
         held_ports = frozenset(spec.held_ports)
-        held_contexts = frozenset(spec.held_contexts)
         facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
 
         def ref_of(node: ast.expr) -> str | None:  # tesser:debt TB023
@@ -3280,14 +3210,7 @@ class Body(ts.ValueObject):
                 ):
                     holder = callee.value.attr
                     if holder in held_ports:
-                        leading = node.args[0] if node.args else None
-                        threaded = (
-                            isinstance(leading, ast.Attribute)
-                            and isinstance(leading.value, ast.Name)
-                            and leading.value.id == "self"
-                            and leading.attr in held_contexts
-                        )
-                        facts.append((node.lineno, "port_call", holder, ("threaded",) if threaded else ()))
+                        facts.append((node.lineno, "port_call", holder, ()))
                     if request is not None:
                         for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
                             if isinstance(passed, ast.Name) and passed.id == request:
@@ -3343,26 +3266,6 @@ class Body(ts.ValueObject):
             ):
                 traits.append("members")
             facts.append((node.lineno, "match", None, tuple(traits)))
-        handed = {
-            arg.arg
-            for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-            if arg.arg != "self" and block_of(arg.annotation) == JOB_CONTEXT_BLOCK
-        }
-        if handed:
-            for node in ast.walk(fn):
-                if isinstance(node, ast.AnnAssign):
-                    targets: list[ast.expr] = [node.target]
-                    assigned: ast.expr | None = node.value
-                elif isinstance(node, ast.Assign):
-                    targets = list(node.targets)
-                    assigned = node.value
-                else:
-                    continue
-                if not (isinstance(assigned, ast.Name) and assigned.id in handed):
-                    continue
-                for target in targets:
-                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
-                        facts.append((node.lineno, "keeps_context", target.attr, ()))
         object.__setattr__(self, "_where", Text(spec.where))
         object.__setattr__(self, "_path", Path(spec.path))
         object.__setattr__(self, "_lineno", Line(fn.lineno))
@@ -3600,43 +3503,6 @@ class Body(ts.ValueObject):
             )),
         )
 
-    def thread_violations(self) -> tuple[Violation, ...]:
-        where = str(self._where)
-        found: list[Violation] = []
-        for fact in self._facts:
-            if str(fact.kind()) != "port_call" or "threaded" in fact.traits():
-                continue
-            published = str(fact.detail())
-            found.append(
-                Violation(ViolationSpec(
-                    str(self._path),
-                    int(fact.lineno()),
-                    "TB082",
-                    f"{where} calls {published} without its job context first; "
-                    "an orchestrator threads its job context into every action port call",
-                ))
-            )
-        return tuple(found)
-
-    def held_context_violations(self) -> tuple[Violation, ...]:
-        owner = str(self._where).rsplit(".", 1)[0]
-        found: list[Violation] = []
-        for fact in self._facts:
-            if str(fact.kind()) != "keeps_context":
-                continue
-            published = str(fact.detail())
-            found.append(
-                Violation(ViolationSpec(
-                    str(self._path),
-                    int(fact.lineno()),
-                    "TB081",
-                    f"{owner} keeps {published}, a job "
-                    "context; an adapter is built once and never holds an "
-                    "invocation's job context",
-                ))
-            )
-        return tuple(found)
-
 
 class ClientClassSpec(ts.Spec):
 
@@ -3706,7 +3572,7 @@ class ClientClass(ts.ValueObject):
                         int(fact.lineno()),
                         "TB051",
                         f"{where} runs an expression at import; an application client module "
-                        "holds no expression that runs at import, because a job imports it",
+                        "holds no expression that runs at import, because a runtime imports it",
                     ))
                 )
             else:
@@ -3837,13 +3703,11 @@ class DependencyPolicySpec(ts.Spec):
         subject: str,
         expected: str,
         allowed: str,
-        context_ok: bool = False,
         relay_ok: bool = False,
     ) -> None:
         self.subject = subject
         self.expected = expected
         self.allowed = allowed
-        self.context_ok = context_ok
         self.relay_ok = relay_ok
 
 
@@ -3852,14 +3716,12 @@ class DependencyPolicy(ts.ValueObject):
     _subject: Text
     _expected: Text
     _allowed: Text
-    _context_ok: Names
     _relay_ok: Names
 
     def __init__(self, spec: DependencyPolicySpec) -> None:
         object.__setattr__(self, "_subject", Text(spec.subject))
         object.__setattr__(self, "_expected", Text(spec.expected))
         object.__setattr__(self, "_allowed", Text(spec.allowed))
-        object.__setattr__(self, "_context_ok", Names(("context",) if spec.context_ok else ()))
         object.__setattr__(self, "_relay_ok", Names(("relay",) if spec.relay_ok else ()))
 
     def violations(self, signature: Signature) -> tuple[Violation, ...]:
@@ -3870,8 +3732,6 @@ class DependencyPolicy(ts.ValueObject):
         found: list[Violation] = []
         for slot in signature.params():
             block = str(slot.block()) if slot.block() is not None else None
-            if self._context_ok and block == JOB_CONTEXT_BLOCK:
-                continue
             if self._relay_ok and block == RELAY_BLOCK:
                 continue
             if block not in ("port", "store"):
@@ -4536,7 +4396,6 @@ class ClassDecl(ts.Entity):
     _signatures: tuple[Signature, ...]
     _bodies: tuple[Body, ...]
     _held_ports: Names
-    _held_contexts: Names
     _held_relays: Names
     _stores: tuple[Fact, ...]
     _self_annotations: tuple[Field, ...]
@@ -4586,11 +4445,11 @@ class ClassDecl(ts.Entity):
         scope = self._scope
         kind_table = self._registry.kinds()
 
-        SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None, bool]
+        SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None]
 
         def slot(name: str, annotation: Annotation | None) -> SlotRow:  # tesser:debt TB023
             if annotation is None:
-                return (name, None, (), None, False)
+                return (name, None, (), None)
             primary = annotation.primary()
             resolved = scope.resolve(primary) if primary is not None else None
             named_block = kind_table.block_of(resolved) if resolved is not None else None
@@ -4605,7 +4464,6 @@ class ClassDecl(ts.Entity):
                 block,
                 tuple(touched),
                 (str(resolved.module()), str(resolved.name())) if resolved is not None else None,
-                block is not None and block == JOB_CONTEXT_BLOCK,
             )
 
         SignatureRow = tuple[
@@ -4618,7 +4476,6 @@ class ClassDecl(ts.Entity):
                 row[0],
                 row[1],
                 row[2],
-                row[4],
                 SymbolSpec(symbol[0], symbol[1]) if symbol is not None else None,
             )
 
@@ -4688,10 +4545,8 @@ class ClassDecl(ts.Entity):
             return tuple(sorted(kept))
 
         held_ports = held("port")
-        held_contexts = held(JOB_CONTEXT_BLOCK)
         held_relays = held(RELAY_BLOCK)
         object.__setattr__(self, "_held_ports", Names(held_ports))
-        object.__setattr__(self, "_held_contexts", Names(held_contexts))
         object.__setattr__(self, "_held_relays", Names(held_relays))
         stores: list[tuple[int, str, str | None, tuple[str, ...]]] = []
         for inner in ast.walk(node):
@@ -4905,7 +4760,6 @@ class ClassDecl(ts.Entity):
                     spec.path,
                     class_methods,
                     held_ports,
-                    held_contexts,
                     signature_spec(row),
                     spec.scope,
                     spec.registry,
@@ -5618,9 +5472,6 @@ class ClassDecl(ts.Entity):
                     continue
                 primary = annotation.primary() if annotation is not None else None
                 symbol = self._scope.resolve(primary) if primary is not None else None
-                block = kind_table.block_of(symbol) if symbol is not None else None
-                if block is not None and str(block) == JOB_CONTEXT_BLOCK:
-                    continue
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -5722,7 +5573,7 @@ class ClassDecl(ts.Entity):
                         int(method.lineno()),
                         "TB051",
                         f"{where} carries a body; an application client method declares "
-                        "a shape and never a body, because a job imports it for the shape",
+                        "a shape and never a body, because a runtime imports it for the shape",
                     ))
                 )
             if str(method.name()).startswith("_") and str(method.name()) != PUBLIC_CALL:
@@ -5731,7 +5582,7 @@ class ClassDecl(ts.Entity):
                         str(self._path),
                         int(method.lineno()),
                         "TB081",
-                        f"{where} is not a call a job may make; an application client "
+                        f"{where} is not a call a runtime may make; an application client "
                         "declares only its public calls and __call__",
                     ))
                 )
@@ -5779,28 +5630,17 @@ class ClassDecl(ts.Entity):
             for field in self._self_annotations:
                 if int(field.lineno()) <= int(fact.lineno()):
                     annotated[str(field.name())] = field.annotation()
-            if published not in ("client", "jobs"):
-                found.append(
-                    Violation(ViolationSpec(
-                        str(self._path),
-                        int(fact.lineno()),
-                        "TB081",
-                        f"{self._module}.{self._name} publishes {published}; "
-                        "a component publishes only its client and its jobs",
-                    ))
-                )
-                continue
-            expected = "client" if published == "client" else "job"
+            expected = "client" if published == "client" else RUNTIME_BLOCK
             annotation = annotated.get(published)
             primary = annotation.primary() if annotation is not None else None
             symbol = self._scope.resolve(primary) if primary is not None else None
             block = kind_table.block_of(symbol) if symbol is not None else None
             named = block is not None and str(block) == expected
-            if not named and expected == "job" and annotation is not None and str(annotation.head()) == "tuple":
+            if not named and expected == RUNTIME_BLOCK and annotation is not None and str(annotation.head()) == "tuple":
                 elements = list(annotation.slice_names())
                 named = bool(elements) and all(
                     element != "?" and (
-                        lambda resolved: resolved is not None and str(kind_table.block_of(resolved)) == "job"  # tesser:debt TB023
+                        lambda resolved: resolved is not None and str(kind_table.block_of(resolved)) == RUNTIME_BLOCK  # tesser:debt TB023
                     )(self._scope.resolve(Text(element)))
                     for element in elements
                 )
@@ -5810,8 +5650,9 @@ class ClassDecl(ts.Entity):
                         str(self._path),
                         int(fact.lineno()),
                         "TB081",
-                        f"{self._module}.{self._name} publishes {published} untyped; "
-                        "a component publishes only its client and its jobs",
+                        f"{self._module}.{self._name} publishes {published}; "
+                        "a component publishes only its client, typed as its ts.Client, "
+                        "and its runtimes, each typed as a ts.Runtime",
                     ))
                 )
         return tuple(found)
@@ -5902,6 +5743,28 @@ class ClassDecl(ts.Entity):
         found.extend(dependency_policy.violations(init))
         return tuple(found)
 
+    def relay_dependency_violations(self) -> tuple[Violation, ...]:
+        init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
+        if init is None:
+            return ()
+        where = str(init.where())
+        found: list[Violation] = []
+        for slot in init.params():
+            if slot.block() is None or str(slot.block()) != RELAY_BLOCK:
+                continue
+            arg = str(slot.name())
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(init.lineno()),
+                    "TB081",
+                    f"{where} parameter {arg!r} is a ts.Relay; a relay is invoked "
+                    "only by a service, through an ingress runner, or by an orchestrator, "
+                    "through an in-invocation runner",
+                ))
+            )
+        return tuple(found)
+
     def orchestrator_violations(self, dependency_policy: DependencyPolicy) -> tuple[Violation, ...]:
         found: list[Violation] = []
         init = next((item for item in self._signatures if str(item.name()) == "__init__"), None)
@@ -5919,17 +5782,6 @@ class ClassDecl(ts.Entity):
         else:
             where = str(init.where())
             found.extend(dependency_policy.violations(init))
-            taken = [slot for slot in init.params() if str(slot.block()) == JOB_CONTEXT_BLOCK]
-            if len(taken) != 1:
-                found.append(
-                    Violation(ViolationSpec(
-                        str(self._path),
-                        int(init.lineno()),
-                        "TB081",
-                        f"{where} takes {len(taken)} job contexts; "
-                        "an orchestrator takes exactly one job context and its action ports",
-                    ))
-                )
             for slot in init.params():
                 if str(slot.block()) != "port":
                     continue
@@ -5946,7 +5798,7 @@ class ClassDecl(ts.Entity):
                         "an application client speaks",
                     ))
                 )
-        held = self._held_ports | self._held_contexts | self._held_relays
+        held = self._held_ports | self._held_relays
         for fact in self._stores:
             published = str(fact.detail())
             if published in held:
@@ -5957,8 +5809,7 @@ class ClassDecl(ts.Entity):
                     int(fact.lineno()),
                     "TB081",
                     f"{self._module}.{self._name} keeps {published}; "
-                    "an orchestrator stores only its job context, its action ports, and "
-                    "the relays it runs",
+                    "an orchestrator stores only its action ports and the relays it runs",
                 ))
             )
         return tuple(found)
@@ -6371,7 +6222,6 @@ SERVICE_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(Dependen
     "a service",
     "a ts.Port, a ts.Relay, or a ts.Store",
     "ports, relays, and the stores that yield them",
-    False,
     True,
 ))
 
@@ -6386,22 +6236,18 @@ ORCHESTRATOR_DEPENDENCIES: typing.Final[DependencyPolicy] = DependencyPolicy(Dep
     "a ts.Port, a ts.Relay, or a ts.Store",
     "ports, relays, and the stores that yield them",
     True,
-    True,
 ))
 
-ADAPTER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter", True))
+ADAPTER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter"))
 
-HANDLER_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("an adapter", False))
-
-PORT_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("a port", True))
+PORT_RECORDS: typing.Final[RecordSignaturePolicy] = RecordSignaturePolicy(RecordSignaturePolicySpec("a port"))
 
 PORT_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
     "port_request",
     "port_response",
     "a port method",
     "TB081",
-    "a port method takes one ts.Request, which a leading ts.JobContext may precede",
-    True,
+    "a port method takes exactly one ts.Request",
 ))
 
 APP_CLIENT_METHOD: typing.Final[SignaturePolicy] = SignaturePolicy(SignaturePolicySpec(
@@ -8067,7 +7913,7 @@ class Module(ts.Entity):
                     f"{module_name} is not an application client module; an application "
                     "client package holds only client protocols, and test_/eval_/conftest "
                     "are reserved names, because a fake here would be an implementation "
-                    "a job may import",
+                    "a runtime may import",
                 )),
             )
         if str(place) == "app-client-file":
@@ -9151,7 +8997,7 @@ class Module(ts.Entity):
                             lineno,
                             "TB063",
                             f"{module_name} imports {target}; "
-                            "a host reaches a context only through its handlers and its jobs",
+                            "a host reaches a context only through its handlers and its runtimes",
                         ))
                     )
                 elif package == "app" and tail not in ("component", "client", "adapters"):
@@ -9302,7 +9148,7 @@ class Module(ts.Entity):
                     1,
                     "TB041",
                     f"{module_name} is not in an adapter kind package; an adapters "
-                    "module lives in handlers, gateways, repositories, jobs, runners, or "
+                    "module lives in handlers, gateways, repositories, runners, or "
                     "runtimes, because placement is what carries an adapter's reach",
                 ))
             )
@@ -9419,8 +9265,8 @@ class Module(ts.Entity):
                     1,
                     "TB052",
                     f"{module_name} mixes adapter kinds; an adapters module holds the "
-                    "kinds of its own kind package, and only a jobs module holds a job "
-                    "beside the job context it builds",
+                    "kinds of its own kind package, and only a runtimes module holds a "
+                    "runtime beside the serdes it binds",
                 ))
             )
         for cls in self._class_defs:
@@ -9496,9 +9342,9 @@ class Module(ts.Entity):
                 tail = pieces[1] if len(pieces) > 1 else ""
                 denied: list[Violation] = []
                 inner = ".".join(pieces[1:])
-                job_only = any(
+                runtime_only = any(
                     inner == entry or inner.startswith(f"{entry}.")
-                    for entry in JOB_ONLY_IMPORTS
+                    for entry in RUNTIME_ONLY_IMPORTS
                 )
                 own_kernel = ".".join((context,) + CONTEXT_KERNEL_HOME)
                 if pieces[0] == context and role != CONTEXT_KERNEL_HOME[0] and (
@@ -9515,15 +9361,15 @@ class Module(ts.Entity):
                             "__init__",
                         ))
                     )
-                elif pieces[0] == context and job_only and kind_package not in JOB_KIND_PACKAGES:
+                elif pieces[0] == context and runtime_only and kind_package not in RUNTIME_KIND_PACKAGES:
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a job imports the "
-                            "application client and the orchestrators, because an action "
-                            "is reachable only through the engine",
+                            f"{module_name} imports {target}; only a runtime imports "
+                            "the application client and the orchestrators, because an "
+                            "action is reachable only through the engine",
                         ))
                     )
                 elif pieces[0] == context and role == "adapters" and kind_reach is not None:
@@ -9538,10 +9384,9 @@ class Module(ts.Entity):
                                 "TB060",
                                 f"{module_name} imports {target}; an adapters kind "
                                 "package reaches only what its kind reaches — a handler "
-                                "the context client, a job the application client, the "
-                                "orchestrators, and the ports, a gateway or a repository "
-                                "the ports, a runner its relays, a runtime what it "
-                                "registers",
+                                "the context client, a gateway or a repository the ports, "
+                                "a runner its relays, a runtime the application client, "
+                                "the orchestrators, and the relays it registers",
                             ))
                         )
                 elif pieces[0] == context:
@@ -10319,7 +10164,6 @@ class Module(ts.Entity):
                             "store",
                             "client",
                             "actions_client",
-                            "job_context",
                             RELAY_BLOCK,
                             "protocol_port",
                             "config_repository",
@@ -10363,7 +10207,8 @@ class Module(ts.Entity):
                     "TB070",
                     f"{module_name} resolves to no test tier; "
                     "a sibling test lives in a role package, an adapter kind package "
-                    "(handlers, gateways, repositories, jobs), or the orchestrators package",
+                    "(handlers, gateways, repositories, runners, or runtimes), or the "
+                    "orchestrators package",
                 )),
             )
         allowed_shell = TEST_TIER_SHELL[tier]
@@ -10429,7 +10274,7 @@ class Module(ts.Entity):
                 pieces = target.split(".")
                 if pieces[0] not in contexts:
                     continue
-                if len(pieces) >= 3 and pieces[1] == "adapters" and pieces[2] in ("handlers", "jobs"):
+                if len(pieces) >= 3 and pieces[1] == "adapters" and pieces[2] in ("handlers", RUNTIMES_PACKAGE):
                     continue
                 found.append(
                     Violation(ViolationSpec(
@@ -10437,7 +10282,7 @@ class Module(ts.Entity):
                         lineno,
                         "TB070",
                         f"{module_name} imports {target}, but a test placed in "
-                        "srv reaches a context only through its handlers and its jobs; "
+                        "srv reaches a context only through its handlers and its runtimes; "
                         "a test reaches only what its placement allows",
                     ))
                 )
@@ -10512,9 +10357,9 @@ class Module(ts.Entity):
                     and len(pieces) >= 3
                     and pieces[2] == home[1]
                 )
-                if allowed and tier not in JOB_TEST_TIERS and not at_home and any(
+                if allowed and tier not in ENGINE_TEST_TIERS and not at_home and any(
                     inner == entry or inner.startswith(f"{entry}.")
-                    for entry in JOB_ONLY_IMPORTS
+                    for entry in RUNTIME_ONLY_IMPORTS
                 ):
                     found.append(
                         Violation(ViolationSpec(
@@ -10522,8 +10367,8 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "jobs reaches the application client and the orchestrators; "
-                            "a test reaches only what its placement allows",
+                            "runners or runtimes reaches the application client and the "
+                            "orchestrators; a test reaches only what its placement allows",
                         ))
                     )
                 elif not allowed:
@@ -11899,6 +11744,8 @@ class Codebase(ts.AggregateRoot):
                 continue
             for cls, decl in zip(module.class_defs(), module.class_decls(registry)):
                 block = blocks.get((module.name(), cls.name))
+                if block is not None and block not in RELAY_CALLERS:
+                    found.extend(decl.relay_dependency_violations())
                 if block == "aggregate":
                     found.extend(constructed(AGGREGATE_CONSTRUCTOR, decl))
                 elif block == "entity":
@@ -11943,10 +11790,7 @@ class Codebase(ts.AggregateRoot):
                             continue
                         found.extend(CLIENT_METHOD.violations(signature))
                 elif block in ("repository", "gateway", "handler"):
-                    found.extend((HANDLER_RECORDS if block == "handler" else ADAPTER_RECORDS).violations(decl))
-                    if block != "handler":
-                        for body in decl.bodies():
-                            found.extend(body.held_context_violations())
+                    found.extend(ADAPTER_RECORDS.violations(decl))
                 elif block == "port":
                     found.extend(PORT_RECORDS.violations(decl))
                     if str(module.place()) in (
@@ -11997,7 +11841,6 @@ class Codebase(ts.AggregateRoot):
                             continue
                         found.extend(ORCHESTRATOR_METHOD.violations(body.signature()))
                         found.extend(body.violations())
-                        found.extend(body.thread_violations())
                 elif block == "actions_client" and str(module.place()) in ("app-client", "app-client-file"):
                     found.extend(decl.actions_client_violations())
                     for signature in decl.signatures():
