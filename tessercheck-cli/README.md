@@ -111,8 +111,11 @@ analysis runs in a child process with a 15-second budget
 (`TESSERCHECK_HOOK_BUDGET` overrides it, clamped to a finite 0–600s), started
 with `python -P` so a `tessercheck_cli` package inside the checkout can never
 shadow the installed one, and a timeout or an error is a log line, not output.
-State files are read only when they are regular files under 1 MiB; a symlinked
-`.tesser/`, `sessions/`, or log file is refused, and `session_id` must match
+State files are read only when they are regular files under 1 MiB;
+`hook.conf` may be a symlink to a per-machine file (it is only read, and the
+target must still be a regular file), while a symlinked `.tesser/`,
+`sessions/`, or log file is refused for everything the hook writes or prunes;
+`session_id` must match
 `[A-Za-z0-9_.-]{1,64}` or it is recorded as `unknown`. A write is analyzed only
 when the file sits inside the project (the nearest ancestor of `cwd` holding
 `.git`, else `cwd`) under a `.tesser-root`; a session started in a
@@ -127,8 +130,10 @@ load, and a skill-doc `Read` do not; the latter two write only to
  status: ok|timeout|error|disabled, exit_code, duration_ms}
 ```
 
-`placement` is `unknown` when the analysis did not run (disabled, timeout, or
-error; `error` then carries the worker's exit and a stderr excerpt). The
+`placement` is `outside` when the written file sits under no `.tesser-root`,
+and `unknown` when a tree was found but the worker did not answer (disabled,
+timeout, or error; `error` then carries the worker's exit and a stderr
+excerpt). The
 project is the nearest git checkout above `cwd` (else `cwd` itself), so a
 sibling directory of the session's start under the same checkout counts as
 inside. `guidance` is the list of guidance events recorded so far in the session

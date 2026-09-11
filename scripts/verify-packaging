@@ -407,8 +407,8 @@ if [ $? -ne 0 ] || ! grep -q '"additionalContext"' "$VENV/hook.out" || ! tail -n
   echo "tessercheck-hook did not find the declared tree above a subdirectory session" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
 fi
 
-# State paths that are symlinks are refused: a hostile checkout must not turn
-# the hook into a writer or a pruner of files elsewhere.
+# The conf is only read, so it may be a symlink to a per-machine file; every
+# path the hook writes or prunes is refused when symlinked (next two cases).
 step "tessercheck-hook honors a conf that is a symlink to a per-machine file"
 printf 'enabled=false\n' > "$VENV/machine.conf"
 mkdir -p "$HOOKED/.tesser" && rm -f "$HOOKED/.tesser/hook.conf" && ln -s "$VENV/machine.conf" "$HOOKED/.tesser/hook.conf"
@@ -417,6 +417,20 @@ if [ $? -ne 0 ] || [ -s "$VENV/hook.out" ] || ! last_log | grep -q '"status": "d
   echo "tessercheck-hook ignored a symlinked hook.conf" >&2; cat "$VENV/hook.out" >&2; last_log >&2; exit 1
 fi
 rm -f "$HOOKED/.tesser/hook.conf"
+
+# State paths that are symlinks are refused: a hostile checkout must not turn
+# the hook into a writer or a pruner of files elsewhere. A symlinked cwd is
+# not a state path: Claude Code supplies it, and the write must still land.
+step "tessercheck-hook still logs when the session's cwd is itself a symlink"
+REAL="$VENV/real-project"
+mkdir -p "$REAL" || exit 1
+printf 'app\n' > "$REAL/.tesser-root"
+printf 'x = 1\n' > "$REAL/loose.py"
+ln -s "$REAL" "$VENV/linked-project"
+(cd "$VENV" && printf '{"session_id":"s9","cwd":"%s","hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"%s"},"tool_response":{}}' "$VENV/linked-project" "$VENV/linked-project/loose.py" | "$VENV/venv/bin/tessercheck-hook" >"$VENV/hook.out" 2>"$VENV/hook.err")
+if [ $? -ne 0 ] || ! grep -q '"additionalContext"' "$VENV/hook.out" || ! tail -n 1 "$REAL/.tesser/changes.jsonl" | grep -q '"placement": "governed"'; then
+  echo "tessercheck-hook dropped the log for a session whose cwd is a symlink" >&2; cat "$VENV/hook.out" "$VENV/hook.err" >&2; exit 1
+fi
 
 step "tessercheck-hook refuses a symlinked state directory"
 SYMLINKED="$VENV/symlinked"
