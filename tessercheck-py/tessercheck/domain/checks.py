@@ -1524,7 +1524,11 @@ class Comment(ts.ValueObject):
 
 
 BODY_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"service", "actions", "orchestrator", "repository", "gateway", "handler"}
+    {"service", "actions", "orchestrator", "repository", "gateway", "handler", "runner"}
+)
+
+INLINING_BLOCKS: typing.Final[frozenset[str]] = frozenset(
+    {"repository", "gateway", "runner"}
 )
 
 
@@ -3349,6 +3353,26 @@ class Body(ts.ValueObject):
                         f"{where} delegates to {function}; a service inlines its logic",
                     ))
                 )
+        return tuple(found)
+
+    def adapter_delegation_violations(self) -> tuple[Violation, ...]:
+        where = str(self._where)
+        found: list[Violation] = []
+        for fact in self._facts:
+            if str(fact.kind()) != "delegation":
+                continue
+            delegate = str(fact.detail())
+            target = f"self.{delegate}" if "self" in fact.traits() else delegate
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB082",
+                    f"{where} delegates to {target}; a gateway, a repository, and a "
+                    "runner inline their logic, as a service does — one call on the "
+                    "backend and the mapping of what it answered, read on the page",
+                ))
+            )
         return tuple(found)
 
     def violations(self) -> tuple[Violation, ...]:
@@ -11937,6 +11961,11 @@ class Codebase(ts.AggregateRoot):
                 block = blocks.get((module.name(), cls.name))
                 if block is not None and block not in RELAY_CALLERS:
                     found.extend(decl.relay_dependency_violations())
+                if block is not None and block in INLINING_BLOCKS:
+                    for body in decl.bodies():
+                        if str(body.name()).startswith("_") and str(body.name()) != PUBLIC_CALL:
+                            continue
+                        found.extend(body.adapter_delegation_violations())
                 if block == "aggregate":
                     found.extend(constructed(AGGREGATE_CONSTRUCTOR, decl))
                 elif block == "entity":

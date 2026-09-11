@@ -16889,6 +16889,71 @@ def test_a_relay_dto_field_is_a_primitive_a_relay_dto_or_a_domain_object() -> No
     ), findings
 
 
+def test_a_gateway_a_repository_and_a_runner_inline_their_logic() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/split.py",
+                "shop.adapters.gateways.split",
+                "import tesser.adapters as ts\n"
+                "import shop.application.ports as ports\n"
+                "def _shout(text: str) -> str:\n"
+                "    return text\n"
+                "class SplitGateway(ts.Gateway):\n"
+                "    def lookup(self, lookup_request: ports.LookupRequest)"
+                " -> ports.LookupResponse:\n"
+                "        return ports.LookupResponse(text=self._answer(lookup_request))\n"
+                "    def _answer(self, lookup_request: ports.LookupRequest) -> str:\n"
+                "        return _shout(lookup_request.text)\n",
+                False,
+            ),
+            (
+                "shop/adapters/gateways/test_split.py",
+                "shop.adapters.gateways.test_split",
+                "def test_split_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/split.py",
+                "shop.adapters.runners.split",
+                "import tesser.adapters as ts\n"
+                "import shop.application.relays as relays\n"
+                "class SplitRunner(ts.Runner):\n"
+                "    def run_quote(self, run_quote_request: relays.RunQuoteRequest)"
+                " -> relays.RunQuoteResponse:\n"
+                "        return relays.RunQuoteResponse(text=self._answer(run_quote_request))\n"
+                "    def _answer(self, run_quote_request: relays.RunQuoteRequest) -> str:\n"
+                "        return run_quote_request.text\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/test_split.py",
+                "shop.adapters.runners.test_split",
+                "def test_split_runner_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.gateways.split.SplitGateway.lookup delegates to self._answer; "
+        "a gateway, a repository, and a runner inline their logic, as a service does "
+        "— one call on the backend and the mapping of what it answered, read on the "
+        "page" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.adapters.runners.split.SplitRunner.run_quote delegates to self._answer; "
+        "a gateway, a repository, and a runner inline their logic" in f
+        for f in findings
+    ), findings
+    assert not any(
+        "shop.adapters.gateways.split.SplitGateway._answer delegates" in f
+        for f in findings
+    ), findings
+
 def test_a_snapshot_decides_once_on_shape() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
