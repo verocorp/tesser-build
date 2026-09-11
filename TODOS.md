@@ -1022,7 +1022,18 @@ where it lands.
   from this step: a ports module may hold only imports and classes
   (TB051/TB069), so port errors are caught by class name with no `ERRORS`
   tuple to register against; `durable-execution/ordering/application/ports/engine.py`
-  holds only errors and carries a file-scope `# tesser:debt TB052`; an
+  holds only errors and carries a file-scope `# tesser:debt TB052`; **the
+  collision with the relay wave (#186), registered as 27 markers by
+  `tessercheck-mark` on 2026-09-11 (Chris: register, do not redesign
+  here)** — a runner and the runtime import `ports` for the engine
+  errors where their kind reaches only relays / client, orchestrators,
+  relays (TB060 ×6), the relay and order snapshots raise
+  `ports.EngineRejected` where a snapshot may name only `errors.invalid`
+  (TB082 ×9, TB081 ×1), and the tests beside runners, the runtime, the
+  relays, and the snapshot import `ports` to assert on them (TB070 ×11) — the
+  follow-on is where an engine error lives so a runner reaches it through
+  what it already reaches, and what a snapshot raises once `tesser.errors`
+  leaves the application role too; an
   *action* lets the payment port's `ChargeDeclined` reach the runtime
   untranslated (a port-to-port hop inside the engine, not a service
   crossing a `Client` — not ruled); and the per-endpoint `try`/`match` in
