@@ -6,7 +6,6 @@ import pytest
 
 import campaign.adapters.repositories as repositories
 import campaign.application.ports as ports
-import tesser.errors as errors
 import storage
 
 
@@ -136,11 +135,11 @@ def test_two_repositories_over_separate_storage_do_not_share_their_rows() -> Non
     assert find_campaign_response.outcome is ports.CampaignLookup.MISSING
 
 
-def test_an_outage_is_translated_into_infra_and_names_the_campaign() -> None:
+def test_an_outage_is_translated_into_the_port_error_and_names_the_campaign() -> None:
     storage_campaign_repository = repositories.StorageCampaignRepository(
         storage.FakeStorage(down=True)
     )
-    with pytest.raises(errors.InfraError) as ei:
+    with pytest.raises(ports.StorageUnavailable) as ei:
         storage_campaign_repository.find(ports.FindCampaignRequest(campaign_id="c1"))
     assert str(ei.value) == "storage unavailable loading campaign 'c1'"
 
@@ -149,7 +148,7 @@ def test_an_outage_keeps_the_storage_failure_as_the_cause() -> None:
     storage_campaign_repository = repositories.StorageCampaignRepository(
         storage.FakeStorage(down=True)
     )
-    with pytest.raises(errors.InfraError) as ei:
+    with pytest.raises(ports.StorageUnavailable) as ei:
         storage_campaign_repository.find(ports.FindCampaignRequest(campaign_id="c1"))
     assert isinstance(ei.value.__cause__, storage.StorageUnavailable)
 
@@ -165,7 +164,7 @@ def test_an_outage_does_not_masquerade_as_a_missing_campaign() -> None:
         )
     )
     backend.down = True
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.StorageUnavailable):
         storage_campaign_repository.find(ports.FindCampaignRequest(campaign_id="c1"))
 
 

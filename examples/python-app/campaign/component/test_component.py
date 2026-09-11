@@ -104,7 +104,7 @@ def test_a_component_hands_the_policy_it_was_given_to_the_service() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Conflict) as caught:
         campaign.client.add_link(
             client.AddLinkRequest(
                 campaign_id=campaign_view.campaign_id,
@@ -127,7 +127,7 @@ def test_two_components_do_not_share_a_store() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(errors.DomainError) as caught:
+    with pytest.raises(client.Missing) as caught:
         second.client.get_campaign(
             client.GetCampaignRequest(campaign_id=campaign_view.campaign_id)
         )
@@ -142,5 +142,5 @@ def test_a_component_closes_what_it_built() -> None:
 
     campaign.close()
 
-    with pytest.raises(errors.DomainError):
+    with pytest.raises(client.Missing):
         campaign.client.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))

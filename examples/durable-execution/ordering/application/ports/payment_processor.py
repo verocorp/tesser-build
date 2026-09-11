@@ -20,6 +20,12 @@ class ChargeResponse(ts.Response):
         self.cents = cents
 
 
+class ChargeDeclined(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+
 class PaymentProcessor(ts.Port, typing.Protocol):
 
     def charge(self, charge_request: ChargeRequest) -> ChargeResponse: ...

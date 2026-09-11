@@ -4,8 +4,8 @@ import tesser.adapters as ts
 import restate
 
 import ordering.adapters.runtimes as runtimes
+import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
-import tesser.errors as errors
 
 
 class RestateOrderActionsRunner(ts.Runner):
@@ -28,11 +28,10 @@ class RestateOrderActionsRunner(ts.Runner):
         except restate.TerminalError as terminal_error:
             match terminal_error.status_code:
                 case 422:
-                    kind = errors.Kind.VALIDATION
+                    raise ports.EngineRejected(terminal_error.message) from terminal_error
                 case 404:
-                    kind = errors.Kind.NOT_FOUND
+                    raise ports.EngineMissing(terminal_error.message) from terminal_error
                 case 409:
-                    kind = errors.Kind.CONFLICT
+                    raise ports.EngineConflict(terminal_error.message) from terminal_error
                 case _:
                     raise
-            raise errors.DomainError(kind, "action_rejected", terminal_error.message) from terminal_error

@@ -19,6 +19,17 @@ class AddResponse(ts.Response):
         self.standing = standing
 
 
+class Rejected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
+
+
 class AlphaClient(ts.Client, typing.Protocol):
 
     def add(self, add_request: AddRequest) -> AddResponse: ...

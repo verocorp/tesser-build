@@ -4,7 +4,7 @@ import pytest
 
 import ordering.application.relays as relays
 import ordering.domain as domain
-import tesser.errors as errors
+import ordering.application.ports as ports  # tesser:debt TB070
 
 
 class TestPurchaseOrchestratorRequestSnapshot:
@@ -51,9 +51,8 @@ class TestPurchaseOrchestratorResponseSnapshot:
             b'{"order_id": {}, "total_cents": 500, "payment_reference": "pay-o1"}',
             b'["o1", 500, "pay-o1"]',
         ):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected):
                 relays.PurchaseOrchestratorResponseSnapshot().deserialize(raw)
-            assert excinfo.value.kind is errors.Kind.VALIDATION
 
     def test_a_response_comes_back_equal(self) -> None:
         purchase_orchestrator_response_snapshot = relays.PurchaseOrchestratorResponseSnapshot()

@@ -21,12 +21,18 @@ class PostgresKeyRepository(ts.Repository):
         self._connection = connection
 
     async def has_key(self, has_key_request: ports.HasKeyRequest) -> ports.HasKeyResponse:
-        row = await self._connection.fetchrow(_HAS, has_key_request.key)
+        try:
+            row = await self._connection.fetchrow(_HAS, has_key_request.key)
+        except (asyncpg.PostgresError, OSError) as e:
+            raise ports.StoreUnavailable("the key store cannot answer") from e
         held = ports.Held.NO if row is None else ports.Held.YES
         return ports.HasKeyResponse(held=held)
 
     async def put_key(self, put_key_request: ports.PutKeyRequest) -> ports.PutKeyResponse:
-        await self._connection.execute(_PUT, put_key_request.key)
+        try:
+            await self._connection.execute(_PUT, put_key_request.key)
+        except (asyncpg.PostgresError, OSError) as e:
+            raise ports.StoreUnavailable("the key store cannot answer") from e
         return ports.PutKeyResponse(key=put_key_request.key)
 
 
@@ -40,7 +46,10 @@ class PostgresKeyStore(ts.Repository):
     async def transaction(self) -> typing.AsyncIterator[ports.KeyRepository]:
         async with self._database.acquire() as connection:
             if not self._schema_ready:
-                await connection.execute(_SCHEMA)
+                try:
+                    await connection.execute(_SCHEMA)
+                except (asyncpg.PostgresError, OSError) as e:
+                    raise ports.StoreUnavailable("the key store cannot answer") from e
                 self._schema_ready = True
             async with connection.transaction():
                 yield PostgresKeyRepository(connection)

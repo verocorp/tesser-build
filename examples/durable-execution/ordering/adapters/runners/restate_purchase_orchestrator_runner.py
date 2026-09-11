@@ -10,8 +10,8 @@ import restate
 import restate.client
 
 import ordering.adapters.runtimes as runtimes
+import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
-import tesser.errors as errors
 
 _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
 
@@ -43,26 +43,25 @@ class RestatePurchaseOrchestratorRunner(ts.Runner):
                 and isinstance(outcome.get("message"), str)
                 and outcome.get("code") == http_error.status_code
             ):
-                raise errors.InfraError(
+                raise ports.EngineUnavailable(
                     f"restate ingress refused the workflow: {http_error}"
                 ) from http_error
             match http_error.status_code:
                 case 409:
-                    kind = errors.Kind.CONFLICT
+                    raise ports.EngineConflict(outcome["message"]) from http_error
                 case 422:
-                    kind = errors.Kind.VALIDATION
+                    raise ports.EngineRejected(outcome["message"]) from http_error
                 case 404:
-                    kind = errors.Kind.NOT_FOUND
+                    raise ports.EngineMissing(outcome["message"]) from http_error
                 case _:
-                    raise errors.InfraError(
+                    raise ports.EngineUnavailable(
                         f"the workflow ended with a status that is not the domain's: {http_error}"
                     ) from http_error
-            raise errors.DomainError(kind, "purchase_rejected", outcome["message"]) from http_error
         except httpx.TransportError as transport_error:
-            raise errors.InfraError(
+            raise ports.EngineUnavailable(
                 f"restate ingress unreachable: {transport_error}"
             ) from transport_error
-        except (errors.DomainError, ValueError, RecursionError) as decode_error:
-            raise errors.InfraError(
+        except (ports.EngineRejected, ValueError, RecursionError) as decode_error:
+            raise ports.EngineUnavailable(
                 f"restate ingress answered with a body that is not the workflow's result: {decode_error}"
             ) from decode_error

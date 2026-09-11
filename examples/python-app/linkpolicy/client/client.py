@@ -38,6 +38,24 @@ class ListVerdictsResponse(ts.Response):
         self.verdicts = verdicts
 
 
+class Rejected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Unavailable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[Rejected], type[Unavailable]]] = (Rejected, Unavailable)
+
+
 class LinkPolicyClient(ts.Client, typing.Protocol):
 
     def check(self, check_request: CheckRequest) -> CheckResponse: ...

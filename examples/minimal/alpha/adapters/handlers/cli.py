@@ -18,5 +18,12 @@ class Handler(ts.Handler):
     def add(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
         name = cli_request.arg(0, "name", _ADD_USAGE)
         part = cli_request.arg(1, "part", _ADD_USAGE)
-        add_response = self._alpha_client.add(client.AddRequest(name=name, part=part))
+        try:
+            add_response = self._alpha_client.add(client.AddRequest(name=name, part=part))
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    return protocol.CliResponse(exit_code=2, line=protocol.Line(text=error.message))
+                case _ as never:
+                    typing.assert_never(never)
         return protocol.CliResponse(exit_code=0, line=protocol.Line(text=add_response.name))

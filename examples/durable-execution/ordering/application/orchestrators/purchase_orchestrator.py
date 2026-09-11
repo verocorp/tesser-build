@@ -3,7 +3,9 @@ from __future__ import annotations
 import tesser.application as ts
 
 import ordering.application.relays as relays
+import ordering.application.ports as ports
 import ordering.domain as domain
+import tesser.errors as errors
 
 
 class MapToPurchaseSpec(ts.Mapper, domain.PurchaseSpec):
@@ -61,9 +63,15 @@ class PurchaseOrchestrator(ts.Orchestrator):
         order_orchestrator_response = await self._order_orchestrator_runner.run_order_orchestrator(
             relays.OrderOrchestratorRequest(order=order)
         )
-        purchase = domain.Purchase(MapToPurchaseSpec(order, order_orchestrator_response))
+        try:
+            purchase = domain.Purchase(MapToPurchaseSpec(order, order_orchestrator_response))
+        except errors.DomainError as domain_error:
+            raise ports.EngineRejected(domain_error.message) from domain_error
         take_payment_response = await self._purchase_actions_runner.run_take_payment(
             MapToTakePaymentRequest(purchase)
         )
-        payment = purchase.paid(MapToPaymentSpec(take_payment_response))
+        try:
+            payment = purchase.paid(MapToPaymentSpec(take_payment_response))
+        except errors.DomainError as domain_error:
+            raise ports.EngineRejected(domain_error.message) from domain_error
         return MapToPurchaseOrchestratorResponse(purchase, payment)

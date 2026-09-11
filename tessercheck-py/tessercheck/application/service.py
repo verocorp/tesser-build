@@ -2,6 +2,7 @@ import typing
 
 import tesser.application as ts
 
+import tesser.errors as errors
 import tessercheck.application.ports as ports
 import tessercheck.client as client
 import tessercheck.domain as domain
@@ -248,5 +249,8 @@ class TessercheckService(ts.ApplicationService):
         tree_root = domain.TreeRoot(rulebook_request.tree)
         read_rulebook_request = MapToReadRulebookRequest(tree_root)
         read_rulebook_response = self._rulebook_sources.read(read_rulebook_request)
-        rulebook = domain.Rulebook(MapToRulebookSpec(read_rulebook_response))
+        try:
+            rulebook = domain.Rulebook(MapToRulebookSpec(read_rulebook_response))
+        except errors.DomainError as domain_error:
+            raise client.Rejected(domain_error.code, domain_error.message) from domain_error
         return MapToRulebookResponse(rulebook)

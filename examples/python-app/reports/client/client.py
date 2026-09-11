@@ -26,6 +26,23 @@ class LinksByVerdictResponse(ts.Response):
         self.links = links
 
 
+class Unavailable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class Unreadable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[Unavailable], type[Unreadable]]] = (Unavailable, Unreadable)
+
+
 class ReportsClient(ts.Client, typing.Protocol):
 
     def links_by_verdict(

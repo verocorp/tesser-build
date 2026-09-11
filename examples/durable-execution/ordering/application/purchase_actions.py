@@ -5,6 +5,7 @@ import tesser.application as ts
 import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.domain as domain
+import tesser.errors as errors
 
 
 class MapToChargeRequest(ts.Mapper, ports.ChargeRequest):
@@ -31,7 +32,10 @@ class PurchaseActions(ts.Actions):
     def take_payment(
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
-        order_id = domain.OrderId(take_payment_request.order_id)
-        price = domain.Price(domain.PriceSpec(cents=take_payment_request.cents))
+        try:
+            order_id = domain.OrderId(take_payment_request.order_id)
+            price = domain.Price(domain.PriceSpec(cents=take_payment_request.cents))
+        except errors.DomainError as domain_error:
+            raise ports.EngineRejected(domain_error.message) from domain_error
         charge_response = self._payment_processor.charge(MapToChargeRequest(order_id, price))
         return MapToTakePaymentResponse(charge_response)

@@ -45,6 +45,10 @@ class ListVerdictsResponse(ts.Response):
         self.verdicts = verdicts
 
 
+class StoreUnavailable(ts.Error):
+    pass
+
+
 class VerdictRepository(ts.Port, typing.Protocol):
 
     def record(self, record_verdict_request: RecordVerdictRequest) -> RecordVerdictResponse: ...

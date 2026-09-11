@@ -53,6 +53,17 @@ class RenameResponse(ts.Response):
         self.remaining = remaining
 
 
+class Rejected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
+
+
 class TessercheckClient(ts.Client, typing.Protocol):
 
     def check(self, check_request: CheckRequest) -> CheckResponse: ...

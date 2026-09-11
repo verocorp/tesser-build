@@ -9,9 +9,9 @@ import restate
 
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
+import ordering.application.ports as ports  # tesser:debt TB070
 import ordering.application.relays as relays
 import ordering.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -42,7 +42,7 @@ class FakeRefusingOrderingApplicationClient(client.OrderingApplicationClient):
     def price_product(
         self, price_product_request: relays.PriceProductRequest
     ) -> relays.PriceProductResponse:
-        raise errors.not_found("unknown_sku", f"no price for sku {price_product_request.sku!r}")
+        raise ports.EngineMissing(f"no price for sku {price_product_request.sku!r}")
 
 
 @ts.fake
@@ -51,8 +51,8 @@ class FakeRefusingPurchaseApplicationClient(client.PurchaseApplicationClient):
     def take_payment(
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
-        raise errors.conflict(
-            "charge_declined", f"the processor declined the charge for order {take_payment_request.order_id!r}"
+        raise ports.ChargeDeclined(
+            f"the processor declined the charge for order {take_payment_request.order_id!r}"
         )
 
 
@@ -302,6 +302,5 @@ class TestRestateSerdes:
             runtimes.RestateTakePaymentResponseSerde(),
         ):
             assert serde.serialize(None) == b""
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(ports.EngineRejected):
                 serde.deserialize(b"")
-            assert excinfo.value.kind is errors.Kind.VALIDATION

@@ -27,9 +27,9 @@ class MapToCampaignSpec(ts.Mapper, domain.CampaignSpec):
             case ports.CampaignLookup.FOUND:
                 record = find_campaign_response.campaigns[0]
             case ports.CampaignLookup.MISSING:
-                raise errors.not_found(
-                    "campaign_missing",
-                    f"no campaign {find_campaign_request.campaign_id!r}",
+                raise client.Missing(
+                    code="campaign_missing",
+                    message=f"no campaign {find_campaign_request.campaign_id!r}",
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -58,6 +58,24 @@ class MapToCampaignSpecFromCreateRequest(ts.Mapper, domain.CampaignSpec):
             links=tuple(
                 MapToShortLinkSpecFromLinkBody(link_body)
                 for link_body in create_campaign_request.links
+            ),
+        )
+
+
+class MapToRejection(ts.Mapper, client.Rejection):
+
+    def __init__(self, domain_error: errors.DomainError) -> None:
+        super().__init__(
+            code=domain_error.code,
+            message=domain_error.message,
+            field=domain_error.field or "",
+            problems=tuple(
+                client.Problem(
+                    code=problem.code,
+                    field=problem.field or "",
+                    message=problem.message,
+                )
+                for problem in domain_error.problems
             ),
         )
 
@@ -108,71 +126,117 @@ class CampaignService(ts.ApplicationService):
         self, create_campaign_request: client.CreateCampaignRequest
     ) -> client.CampaignView:
         campaign_spec = MapToCampaignSpecFromCreateRequest(create_campaign_request)
-        campaign = domain.Campaign(campaign_spec)
+        try:
+            campaign = domain.Campaign(campaign_spec)
+        except errors.DomainError as domain_error:
+            rejection = MapToRejection(domain_error)
+            raise client.Rejected(rejection) from domain_error
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
         return MapToCampaignView(campaign)
 
     def get_campaign(
         self, get_campaign_request: client.GetCampaignRequest
     ) -> client.CampaignView:
-        campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
+        try:
+            campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
+        except errors.DomainError as domain_error:
+            rejection = MapToRejection(domain_error)
+            raise client.Rejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
-        find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        try:
+            find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        except ports.StorageUnavailable as port_error:
+            raise client.Unavailable(
+                message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
+            ) from port_error
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
         try:
             campaign = domain.Campaign(campaign_spec)
-        except errors.DomainError as e:
-            raise errors.InfraError(
-                f"corrupted campaign record {find_campaign_request.campaign_id!r}: {e}"
-            ) from e
+        except errors.DomainError as domain_error:
+            raise client.Unreadable(
+                message=f"corrupted campaign record {find_campaign_request.campaign_id!r}: {domain_error}"
+            ) from domain_error
         return MapToCampaignView(campaign)
 
     def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
-        errors.collect(
-            campaign_id=lambda: domain.CampaignID(add_link_request.campaign_id),  # tesser:debt TB023
-            slug=lambda: domain.Slug(add_link_request.slug),  # tesser:debt TB023
-            target_url=lambda: domain.TargetURL(add_link_request.target_url),  # tesser:debt TB023
-        )
-        campaign_id = domain.CampaignID(add_link_request.campaign_id)
+        try:
+            errors.collect(
+                campaign_id=lambda: domain.CampaignID(add_link_request.campaign_id),  # tesser:debt TB023
+                slug=lambda: domain.Slug(add_link_request.slug),  # tesser:debt TB023
+                target_url=lambda: domain.TargetURL(add_link_request.target_url),  # tesser:debt TB023
+            )
+            campaign_id = domain.CampaignID(add_link_request.campaign_id)
+        except errors.DomainError as domain_error:
+            rejection = MapToRejection(domain_error)
+            raise client.Rejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
-        find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        try:
+            find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        except ports.StorageUnavailable as port_error:
+            raise client.Unavailable(
+                message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
+            ) from port_error
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
         try:
             campaign = domain.Campaign(campaign_spec)
-        except errors.DomainError as e:
-            raise errors.InfraError(
-                f"corrupted campaign record {find_campaign_request.campaign_id!r}: {e}"
-            ) from e
-        campaign.add_link(
-            domain.ShortLinkSpec(
-                slug=add_link_request.slug, target_url=add_link_request.target_url
+        except errors.DomainError as domain_error:
+            raise client.Unreadable(
+                message=f"corrupted campaign record {find_campaign_request.campaign_id!r}: {domain_error}"
+            ) from domain_error
+        try:
+            campaign.add_link(
+                domain.ShortLinkSpec(
+                    slug=add_link_request.slug, target_url=add_link_request.target_url
+                )
             )
-        )
+        except errors.DomainError as domain_error:
+            raise client.Conflict(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
         return MapToCampaignView(campaign)
 
     def deactivate_link(
         self, deactivate_link_request: client.DeactivateLinkRequest
     ) -> client.CampaignView:
-        campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
+        try:
+            campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
+        except errors.DomainError as domain_error:
+            rejection = MapToRejection(domain_error)
+            raise client.Rejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
-        find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        try:
+            find_campaign_response = self._campaign_repository.find(find_campaign_request)
+        except ports.StorageUnavailable as port_error:
+            raise client.Unavailable(
+                message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
+            ) from port_error
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
         try:
             campaign = domain.Campaign(campaign_spec)
-        except errors.DomainError as e:
-            raise errors.InfraError(
-                f"corrupted campaign record {find_campaign_request.campaign_id!r}: {e}"
-            ) from e
-        campaign.deactivate_link(domain.Slug(deactivate_link_request.slug))
+        except errors.DomainError as domain_error:
+            raise client.Unreadable(
+                message=f"corrupted campaign record {find_campaign_request.campaign_id!r}: {domain_error}"
+            ) from domain_error
+        try:
+            slug = domain.Slug(deactivate_link_request.slug)
+        except errors.DomainError as domain_error:
+            rejection = MapToRejection(domain_error)
+            raise client.Rejected(rejection) from domain_error
+        try:
+            campaign.deactivate_link(slug)
+        except errors.DomainError as domain_error:
+            raise client.Missing(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
         self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
         return MapToCampaignView(campaign)

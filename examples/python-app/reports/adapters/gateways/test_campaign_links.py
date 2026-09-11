@@ -6,7 +6,6 @@ import tesser.testing as ts
 import campaign.client as client
 import reports.adapters.gateways as gateways
 import reports.application.ports as ports
-import tesser.errors as errors
 
 
 @ts.fake
@@ -90,8 +89,18 @@ def test_a_campaign_context_with_no_links_yields_no_records() -> None:
     assert list_links_response.links == ()
 
 
-def test_a_failure_inside_the_campaign_context_reaches_the_caller() -> None:
-    fake_campaign_client = FakeCampaignClient(error=errors.InfraError("campaign store unreachable"))
+def test_a_campaign_context_that_cannot_answer_is_the_ports_unavailable() -> None:
+    fake_campaign_client = FakeCampaignClient(
+        error=client.Unavailable("the campaign store is unavailable")
+    )
 
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.LinkSourceUnavailable) as caught:
+        gateways.CampaignLinkGateway(fake_campaign_client).links(ports.ListLinksRequest())
+    assert isinstance(caught.value.__cause__, client.Unavailable)
+
+
+def test_a_failure_the_campaign_context_never_declared_reaches_the_caller() -> None:
+    fake_campaign_client = FakeCampaignClient(error=RuntimeError("campaign store unreachable"))
+
+    with pytest.raises(RuntimeError):
         gateways.CampaignLinkGateway(fake_campaign_client).links(ports.ListLinksRequest())

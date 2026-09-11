@@ -3,7 +3,6 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 import campaign.application.ports as ports
-import tesser.errors as errors
 import storage
 
 
@@ -38,7 +37,7 @@ class StorageCampaignRepository(ts.Repository):
                 outcome=ports.CampaignLookup.MISSING, campaigns=()
             )
         except storage.StorageUnavailable as e:
-            raise errors.InfraError(
+            raise ports.StorageUnavailable(
                 f"storage unavailable loading campaign {find_campaign_request.campaign_id!r}"
             ) from e
         campaign_record = ports.CampaignRecord(

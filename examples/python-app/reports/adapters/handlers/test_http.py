@@ -6,7 +6,6 @@ import tesser.testing as ts
 import reports.adapters.handlers as handlers
 import reports.client as client
 import protocol as protocol
-import tesser.errors as errors
 
 
 @ts.fake
@@ -96,10 +95,42 @@ def test_the_handler_asks_its_own_client_once() -> None:
     assert isinstance(fake_reports_client.requests[0], client.LinksByVerdictRequest)
 
 
-def test_a_client_failure_leaves_the_handler_rather_than_becoming_a_body() -> None:
-    fake_reports_client = FakeReportsClient(error=errors.InfraError("reports unavailable"))
+def test_an_unavailable_source_is_503_in_the_contexts_words() -> None:
+    fake_reports_client = FakeReportsClient(
+        error=client.Unavailable("the link source is unavailable")
+    )
 
-    with pytest.raises(errors.InfraError):
+    http_response = handlers.HttpHandler(fake_reports_client).links_by_verdict(
+        protocol.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+    )
+
+    assert http_response.status_code == 503
+    assert http_response.json_body() == {
+        "type": "/problems/unavailable",
+        "detail": "the link source is unavailable",
+    }
+
+
+def test_an_unreadable_record_is_503_and_leaks_nothing() -> None:
+    fake_reports_client = FakeReportsClient(
+        error=client.Unreadable("a record the report cannot read: target url 'x' must be http(s)")
+    )
+
+    http_response = handlers.HttpHandler(fake_reports_client).links_by_verdict(
+        protocol.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
+    )
+
+    assert http_response.status_code == 503
+    assert http_response.json_body() == {
+        "type": "/problems/unavailable",
+        "detail": "a dependency is unavailable; please retry",
+    }
+
+
+def test_a_failure_the_context_never_declared_leaves_the_handler() -> None:
+    fake_reports_client = FakeReportsClient(error=RuntimeError("reports unavailable"))
+
+    with pytest.raises(RuntimeError):
         handlers.HttpHandler(fake_reports_client).links_by_verdict(
             protocol.HttpRequest("GET", "/reports/links", {}, {}, {}, b"")
         )

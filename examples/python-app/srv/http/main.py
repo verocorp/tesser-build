@@ -12,7 +12,6 @@ import app as app
 import campaign.adapters.handlers as campaign_handlers
 import protocol as protocol
 import reports.adapters.handlers as reports_handlers
-import tesser.errors as errors
 
 MAX_BUFFERED_BODY: typing.Final[int] = 1_048_576
 
@@ -87,12 +86,6 @@ class HttpHost(ts.Host):
                     http_response = protocol.HttpResponse.problem(413, "payload_too_large", str(e))
                 except protocol.StreamingUnsupported as e:
                     http_response = protocol.HttpResponse.problem(411, "length_required", str(e))
-                except errors.DomainError as e:
-                    http_response = protocol.HttpResponse.problem(errors.status_for(e.kind), e.code, e.message)
-                except errors.InfraError:
-                    http_response = protocol.HttpResponse.problem(
-                        503, "unavailable", "a dependency is unavailable; please retry"
-                    )
                 except Exception:
                     http_response = protocol.HttpResponse.problem(500, "internal", "unexpected error")
                 self.send_response(http_response.status_code)
@@ -155,12 +148,6 @@ class HttpHost(ts.Host):
                     http_response = protocol.HttpResponse.problem(413, "payload_too_large", str(e))
                 except protocol.StreamingUnsupported as e:
                     http_response = protocol.HttpResponse.problem(411, "length_required", str(e))
-                except errors.DomainError as e:
-                    http_response = protocol.HttpResponse.problem(errors.status_for(e.kind), e.code, e.message)
-                except errors.InfraError:
-                    http_response = protocol.HttpResponse.problem(
-                        503, "unavailable", "a dependency is unavailable; please retry"
-                    )
                 except Exception:
                     http_response = protocol.HttpResponse.problem(500, "internal", "unexpected error")
                 self.send_response(http_response.status_code)

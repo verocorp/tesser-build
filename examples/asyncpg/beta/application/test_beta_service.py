@@ -11,7 +11,6 @@ import beta.application as application
 import beta.application.ports as ports
 import beta.client as client
 import beta.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -47,7 +46,7 @@ class FakeUnavailableKeyStore(ports.KeyStore):
 
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[ports.KeyRepository]:
-        raise errors.InfraError("key store unavailable")
+        raise ports.StoreUnavailable("key store unavailable")
         yield FakeKeyRepository(set())
 
 
@@ -72,15 +71,19 @@ class TestBetaServiceOverACommittedTransaction:
 
 class TestBetaServiceOverAFailedTransaction:
 
-    async def test_check_surfaces_the_failure(self) -> None:
+    async def test_check_crosses_as_the_contexts_unavailable(self) -> None:
         beta_service = application.BetaService(FakeUnavailableKeyStore())
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(client.Unavailable) as caught:
             await beta_service.check(client.CheckRequest(key="k"))
+        assert caught.value.message == "the key store is unavailable"
+        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 
-    async def test_hold_surfaces_the_failure(self) -> None:
+    async def test_hold_crosses_as_the_contexts_unavailable(self) -> None:
         beta_service = application.BetaService(FakeUnavailableKeyStore())
-        with pytest.raises(errors.InfraError):
+        with pytest.raises(client.Unavailable) as caught:
             await beta_service.hold(client.HoldRequest(key="k"))
+        assert caught.value.message == "the key store is unavailable"
+        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 
 
 class TestBetaServiceMappers:

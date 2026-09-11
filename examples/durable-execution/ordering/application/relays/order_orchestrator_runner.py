@@ -6,8 +6,8 @@ import typing
 import tesser.application as ts
 
 import ordering.application.snapshots as snapshots
+import ordering.application.ports as ports
 import ordering.domain as domain
-import tesser.errors as errors
 
 
 class OrderOrchestratorRequest(ts.Request):
@@ -58,9 +58,8 @@ class OrderOrchestratorResponseSnapshot(ts.Serde):
             and not isinstance(snapshot.get("total_cents"), bool)
             and snapshot["total_cents"] >= 0
         ):
-            raise errors.invalid(
-                "malformed_order_orchestrator_response_snapshot",
-                "an order orchestrator response is an order_id and a total in cents",
+            raise ports.EngineRejected(  # tesser:debt TB082
+                "an order orchestrator response is an order_id and a total in cents"
             )
         return OrderOrchestratorResponse(
             order_id=snapshot["order_id"], total_cents=snapshot["total_cents"]

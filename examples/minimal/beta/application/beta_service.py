@@ -5,6 +5,7 @@ import tesser.application as ts
 import beta.application.ports as ports
 import beta.client as client
 import beta.domain as domain
+import tesser.errors as errors
 
 
 class MapToHasKeyRequest(ts.Mapper, ports.HasKeyRequest):
@@ -19,6 +20,9 @@ class BetaService(ts.ApplicationService):
         self._key_repository = key_repository
 
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
-        key = domain.Key(check_request.key)
+        try:
+            key = domain.Key(check_request.key)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(domain_error.code, domain_error.message) from domain_error
         has_key_response = self._key_repository.has(MapToHasKeyRequest(key))
         return client.CheckResponse(held=has_key_response.held.value)

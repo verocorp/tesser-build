@@ -6,9 +6,9 @@ import tesser.testing as ts
 import pytest
 
 import ordering.application.orchestrators as orchestrators
+import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.domain as domain
-import tesser.errors as errors
 
 
 @ts.fake
@@ -76,12 +76,12 @@ class FakeRefusingOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
     async def start_order_orchestrator(
         self, order_orchestrator_request: relays.OrderOrchestratorRequest
     ) -> relays.StartOrderOrchestratorResponse:
-        raise errors.not_found("unknown_sku", f"no price for sku {order_orchestrator_request.order.sku!s}")
+        raise ports.EngineMissing(f"no price for sku {order_orchestrator_request.order.sku!s}")
 
     async def run_order_orchestrator(
         self, order_orchestrator_request: relays.OrderOrchestratorRequest
     ) -> relays.OrderOrchestratorResponse:
-        raise errors.not_found("unknown_sku", f"no price for sku {order_orchestrator_request.order.sku!s}")
+        raise ports.EngineMissing(f"no price for sku {order_orchestrator_request.order.sku!s}")
 
 
 @ts.helper
@@ -117,43 +117,41 @@ class TestPurchaseOrchestrator:
         assert fake_order_orchestrator_runner.started == []
         assert fake_purchase_actions_runner.taken == [("o2", 1000)]
 
-    def test_a_payment_of_another_amount_ends_the_run_as_a_conflict(self) -> None:
-        with pytest.raises(errors.DomainError) as excinfo:
+    def test_a_payment_of_another_amount_ends_the_run_as_the_engines_rejection(self) -> None:
+        with pytest.raises(ports.EngineRejected) as excinfo:
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
                     FakePurchaseActionsRunner(cents_charged=700), FakeOrderOrchestratorRunner()
                 ).run(purchase_orchestrator_request())
             )
-        assert excinfo.value.kind is errors.Kind.CONFLICT
-        assert excinfo.value.code == "payment_mismatch"
+        assert "does not settle" in excinfo.value.message
 
     def test_a_refused_child_order_ends_the_run_before_any_payment(self) -> None:
         fake_purchase_actions_runner = FakePurchaseActionsRunner()
-        with pytest.raises(errors.DomainError) as excinfo:
+        with pytest.raises(ports.EngineMissing):
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
                     fake_purchase_actions_runner, FakeRefusingOrderOrchestratorRunner()
                 ).run(purchase_orchestrator_request(sku="nothing"))
             )
-        assert excinfo.value.kind is errors.Kind.NOT_FOUND
         assert fake_purchase_actions_runner.taken == []
 
     def test_a_child_that_answered_for_another_order_ends_the_run_before_any_payment(self) -> None:
         fake_purchase_actions_runner = FakePurchaseActionsRunner()
-        with pytest.raises(errors.DomainError) as excinfo:
+        with pytest.raises(ports.EngineRejected) as excinfo:
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
                     fake_purchase_actions_runner, FakeMisroutedOrderOrchestratorRunner()
                 ).run(purchase_orchestrator_request())
             )
-        assert excinfo.value.code == "priced_another_order"
+        assert "pricing of order 'other'" in excinfo.value.message
         assert fake_purchase_actions_runner.taken == []
 
-    def test_a_receipt_for_another_order_ends_the_run_as_a_conflict(self) -> None:
-        with pytest.raises(errors.DomainError) as excinfo:
+    def test_a_receipt_for_another_order_ends_the_run_as_the_engines_rejection(self) -> None:
+        with pytest.raises(ports.EngineRejected) as excinfo:
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
                     FakePurchaseActionsRunner(order_charged="other"), FakeOrderOrchestratorRunner()
                 ).run(purchase_orchestrator_request())
             )
-        assert excinfo.value.code == "payment_for_another_order"
+        assert "does not settle order o1" in excinfo.value.message

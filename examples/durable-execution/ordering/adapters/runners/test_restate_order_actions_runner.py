@@ -11,7 +11,7 @@ import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
-import tesser.errors as errors
+import ordering.application.ports as ports  # tesser:debt TB070
 
 
 @ts.fake
@@ -68,9 +68,9 @@ class TestRestateOrderActionsRunner:
             (restate_order_runtime.price_product_handler, price_product_request)
         ]
 
-    def test_a_terminal_error_from_the_call_is_a_domain_error(self) -> None:
+    def test_a_terminal_error_from_the_call_is_the_engines_own_error(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient())
-        with pytest.raises(errors.DomainError) as excinfo:
+        with pytest.raises(ports.EngineMissing) as excinfo:
             asyncio.run(
                 runners.RestateOrderActionsRunner(
                     typing.cast(
@@ -79,14 +79,15 @@ class TestRestateOrderActionsRunner:
                     restate_order_runtime,
                 ).run_price_product(relays.PriceProductRequest(sku="nothing"))
             )
-        assert excinfo.value.kind is errors.Kind.NOT_FOUND
-        assert excinfo.value.code == "action_rejected"
         assert excinfo.value.message == "no such sku"
 
-    def test_each_terminal_status_comes_back_as_its_kind(self) -> None:
+    def test_each_terminal_status_comes_back_as_the_engine_error_it_names(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient())
-        for status_code, kind in ((422, errors.Kind.VALIDATION), (409, errors.Kind.CONFLICT)):
-            with pytest.raises(errors.DomainError) as excinfo:
+        for status_code, engine_error in (
+            (422, ports.EngineRejected),
+            (409, ports.EngineConflict),
+        ):
+            with pytest.raises(engine_error) as excinfo:
                 asyncio.run(
                     runners.RestateOrderActionsRunner(
                         typing.cast(
@@ -96,7 +97,7 @@ class TestRestateOrderActionsRunner:
                         restate_order_runtime,
                     ).run_price_product(relays.PriceProductRequest(sku="widget"))
                 )
-            assert excinfo.value.kind is kind
+            assert str(excinfo.value) == "refused"
 
     def test_a_terminal_error_of_no_domain_status_stays_terminal(self) -> None:
         with pytest.raises(restate.TerminalError) as excinfo:

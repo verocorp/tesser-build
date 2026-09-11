@@ -24,6 +24,10 @@ class CheckTargetResponse(ts.Response):
         self.reason = reason
 
 
+class PolicyUnavailable(ts.Error):
+    pass
+
+
 class TargetPolicy(ts.Port, typing.Protocol):
 
     def check(self, check_target_request: CheckTargetRequest) -> CheckTargetResponse: ...

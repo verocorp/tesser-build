@@ -76,23 +76,27 @@ Yes → handler.
    model) still gets a handler the moment it is routed — reaching peers
    through injected `Client`s is an *outbound* property and says nothing about
    the inbound edge.
-7. **Errors map to the wire at the edge, exhaustively — and the host uses the
-   same table.** One `respond` path catches: shape failures (malformed JSON,
-   wrong-typed field) → 400; domain errors → status via the one pure kind→status
-   mapper (the closed `Kind` set, `tesser.errors.status_for`); infra errors → 503;
-   anything unexpected → 500 with no internals leaked. The host's *transport*
-   rejections go through the **same** `respond`/`problem` vocabulary — an
-   oversized body → 413, a streaming body it can't buffer → 411, an unmatched
-   route → 404 — so a client sees one error format from the whole process, not
-   the framework's default HTML for the host's failures and problem-JSON for the
-   handler's. No per-endpoint ad-hoc mapping — two endpoints must not disagree on
-   what `not_found` means.
+7. **The handler maps the context's own errors to the wire, exhaustively, and
+   the host knows none of them.** A context declares the errors that cross its
+   `Client` beside its DTOs in `client/` — each a subclass of `ts.Error`, the
+   set named once in a `ERRORS` tuple — and the service raises only those
+   (`application-services.md`). The handler catches the tuple and `match`es it,
+   one arm per error, closing on `assert_never`, so an error the context adds
+   fails to type-check in every handler until it has a status. A status is the
+   handler's choice, exactly as it already chooses 202 or 201 on success.
+   The host catches two things and nothing else: its own protocol rejections
+   (`ts.Rejection` — an unmatched route, an oversized body, a missing CLI
+   argument) and `Exception`, which it renders as a generic body with no
+   internals leaked. A host that names `tesser.errors`, or a context's error
+   type, is a TB050 finding. What a failed request *says* is therefore the
+   context's wording, the status is the handler's, and the bytes are the
+   protocol's — three owners, none of them the host.
 
 ## Shape
 
 ```
 <context>/adapters/handlers/
-  http.py          ← Handler(client), one method per endpoint, one respond path
+  http.py          ← Handler(client), one method per endpoint, one error match per method
 
 class Handler:
     def __init__(self, client: Client) -> None: ...     # injected, held as the contract
@@ -143,14 +147,15 @@ read endpoint over a cross-context read model).
    `CliRequest` (positional `args`, and stdin/options if ever needed) and
    `CliResponse` (`exit_code`, `stdout`, `stderr`) are the CLI's request/response
    DTOs; `protocol/cli.py` is their shared vocabulary, the analog of `protocol/http.py`.
-   The one CLI-specific piece is the error mapper: the same closed domain `Kind`
-   set maps to an **exit code** (`tesser.errors.exit_code_for`) exactly as HTTP maps it
-   to a status (`status_for`) — one taxonomy, two total edge mappers. It obeys
+   The one CLI-specific piece is the error match: the context's `ERRORS`
+   tuple maps to an **exit code** exactly as the HTTP handler maps it to a
+   status — one declared set, one exhaustive match per mechanism. It obeys
    the same rules: no domain math, no repository, no transport in the signature.
-3. **What is the problem-shape on the wire?** The verified impl renders
-   errors as a problem object (`type` + `detail`, RFC 9457-shaped) with the
-   domain error's open `Code` as the type — decided once at the `respond`
-   path for the whole mechanism.
+3. **What is the problem-shape on the wire?** The handler renders the
+   context's error into the protocol's problem shape (`protocol/http.py`'s
+   `HttpResponse.problem`, RFC 9457-shaped, with the error's `code` as the
+   type and its `message` as the detail). The shape is the protocol's, the
+   words are the context's, and the status is the handler's.
 4. **Where does the shared protocol vocabulary live?** The request/response
    DTOs, the problem renderer, and the rejection words describe the
    *mechanism*, not any one context — so once a second context serves the same
@@ -211,13 +216,15 @@ transform. Everything else is review plus the domain-logic leakage signal list
 
 - **Wire → DTO translation:** a well-formed request produces exactly the
   `Client` call's DTO (assert on a recording fake `Client`).
-- **The error table, one row per class:** malformed wire → 400; each domain
-  `Kind` → its mapped status through the shared mapper; infra → 503;
-  unexpected → 500 with a generic body. The mapper itself is tested once,
-  exhaustively, at the errors layer — the handler test locks that the respond path
-  *uses* it.
-- **No leak on the unexpected path:** the 500 body carries no exception
-  text/stack.
+- **One test per error in the context's `ERRORS` tuple:** a fake `Client`
+  that raises each declared error, and the status and body the handler
+  answers with. The tuple itself is pinned by the client's sibling test (every
+  `ts.Error` subclass the module declares is in it), and `assert_never` proves
+  the match covers the tuple — so the handler test only has to show what each
+  arm renders.
+- **No leak on the unexpected path:** a host test drives an unexpected
+  exception through and asserts the generic body carries no exception
+  text/stack. That test lives with the host, because the host owns that arm.
 - **The handler is testable with no transport:** every endpoint test builds a
   request DTO by hand and asserts on the returned response DTO — no server, no
   socket, no client library. If a handler test needs one, the handler is
@@ -231,9 +238,13 @@ transform. Everything else is review plus the domain-logic leakage signal list
 - **Wire-as-contract.** Handing the parsed JSON dict (or the deserialized
   request struct) down into the service — now the wire format *is* the API
   and every wire change ripples inward.
-- **Ad-hoc statuses.** `except DomainError: return 400` — collapsing the
-  kind set at one endpoint; conflict and not-found become indistinguishable
-  on the wire. Always the shared mapper.
+- **Catching a tesser type.** `except errors.DomainError` in a handler or a
+  host — the edge now knows how the domain fails, and a context that changes
+  what it surfaces edits every edge. An adapters or srv module importing
+  `tesser.errors` is a TB050 finding. Catch the context's `ERRORS` tuple.
+- **A chain of `except` arms instead of a match.** `except client.Rejected:
+  ... except client.Missing: ...` type-checks with an arm missing. Catch the
+  tuple once and `match` it, closing on `assert_never`.
 - **Handler builds its dependencies.** Constructing the service or fetching
   the `Client` from a registry — construction belongs to component/bootstrap;
   the handler receives.
@@ -253,16 +264,17 @@ transform. Everything else is review plus the domain-logic leakage signal list
   looked too small to deserve a class. The rule it broke is rule 6, and the
   cost is that the wire shape of that context now lives outside it: its DTO
   rename is a host edit, and the two endpoints drift on error mapping because
-  only one of them goes through `respond`.
+  only one of them matches the context's `ERRORS`.
 
 ## Now build it
 
 <!-- tb-allow-missing: examples/app -->
 
 - Python: `python.md#inbound-handlers-and-hosts` — the `Handler` class, the
-  transport guard, and the one `respond` path, backed by
-  `examples/python-app/campaign/adapters/handlers/http.py` and
-  `examples/python-app/reports/adapters/handlers/http.py`.
+  transport guard, and the error match over the context's `ERRORS`, backed by
+  `examples/minimal/alpha/adapters/handlers/cli.py` (the migrated shape) and
+  `examples/python-app/campaign/adapters/handlers/http.py` (HTTP, still on
+  the host-owned table under `# tesser:debt TB050` markers until it migrates).
 - Go: not yet materialized — the settled anatomy's Go mirror
   (`examples/app`) is pending; note the gap, don't invent a convention. The
   same role split (handler translates, host mounts) applies; the v3

@@ -12,7 +12,7 @@ import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
 import ordering.domain as domain
-import tesser.errors as errors
+import ordering.application.ports as ports  # tesser:debt TB070
 
 
 @ts.fake
@@ -115,16 +115,16 @@ class TestRestateOrderOrchestratorChildRunner:
         ]
         assert fake_restate_workflow_context.called == []
 
-    def test_each_terminal_status_of_the_child_comes_back_as_its_kind(self) -> None:
+    def test_each_terminal_status_of_the_child_comes_back_as_its_engine_error(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
-        for status_code, kind in (
-            (404, errors.Kind.NOT_FOUND),
-            (422, errors.Kind.VALIDATION),
-            (409, errors.Kind.CONFLICT),
+        for status_code, engine_error in (
+            (404, ports.EngineMissing),
+            (422, ports.EngineRejected),
+            (409, ports.EngineConflict),
         ):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(engine_error) as excinfo:
                 asyncio.run(
                     runners.RestateOrderOrchestratorChildRunner(
                         typing.cast(
@@ -134,9 +134,7 @@ class TestRestateOrderOrchestratorChildRunner:
                         restate_order_runtime,
                     ).run_order_orchestrator(order_orchestrator_request(sku="nothing"))
                 )
-            assert excinfo.value.kind is kind
-            assert excinfo.value.code == "order_rejected"
-            assert excinfo.value.message == "no such sku"
+            assert str(excinfo.value) == "no such sku"
 
     def test_a_terminal_error_of_no_domain_status_stays_terminal(self) -> None:
         with pytest.raises(restate.TerminalError) as excinfo:

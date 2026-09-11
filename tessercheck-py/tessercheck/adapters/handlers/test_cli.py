@@ -31,6 +31,42 @@ class FakeCheckClient(client.TessercheckClient):
         return client.RulebookResponse(rendered="| rendered |")
 
 
+@ts.fake
+class FakeRejectingClient(client.TessercheckClient):
+
+    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+        raise client.Rejected("unreadable", "checks.py cannot be read")
+
+    def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
+        raise client.Rejected("unreadable", "checks.py cannot be read")
+
+    def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
+        raise client.Rejected("unreadable", "checks.py cannot be read")
+
+    def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
+        raise client.Rejected("unreadable", "checks.py cannot be read")
+
+
+def test_a_rejected_check_exits_two_with_the_context_s_message() -> None:
+    cli_response = handlers.Handler(FakeRejectingClient()).check(protocol.CliRequest(("tree",)))
+    assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
+
+
+def test_a_rejected_mark_exits_two_with_the_context_s_message() -> None:
+    cli_response = handlers.Handler(FakeRejectingClient()).mark(protocol.CliRequest(("tree",)))
+    assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
+
+
+def test_a_rejected_rename_exits_two_with_the_context_s_message() -> None:
+    cli_response = handlers.Handler(FakeRejectingClient()).rename(protocol.CliRequest(("tree",)))
+    assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
+
+
+def test_a_rejected_rulebook_exits_two_with_the_context_s_message() -> None:
+    cli_response = handlers.Handler(FakeRejectingClient()).rulebook(protocol.CliRequest(("tree",)))
+    assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
+
+
 def test_the_tree_argument_reaches_the_client() -> None:
     fake_check_client = FakeCheckClient()
     cli_response = handlers.Handler(fake_check_client).check(protocol.CliRequest(("some/tree",)))

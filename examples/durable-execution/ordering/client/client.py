@@ -50,6 +50,42 @@ class PurchaseResponse(ts.Response):
         self.payment_reference = payment_reference
 
 
+class Rejected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Missing(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Conflict(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class Unavailable(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+ERRORS: typing.Final[
+    tuple[type[Rejected], type[Missing], type[Conflict], type[Unavailable]]
+] = (Rejected, Missing, Conflict, Unavailable)
+
+
 class OrderingClient(ts.Client, typing.Protocol):
 
     async def submit_order(self, submit_order_request: SubmitOrderRequest) -> SubmitOrderResponse: ...

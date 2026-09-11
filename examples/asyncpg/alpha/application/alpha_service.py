@@ -7,6 +7,7 @@ import tesser.application as ts
 import alpha.application.ports as ports
 import alpha.client as client
 import alpha.domain as domain
+import tesser.errors as errors
 
 
 class MapToWidgetSpec(ts.Mapper, domain.WidgetSpec):
@@ -19,11 +20,25 @@ class MapToWidgetSpec(ts.Mapper, domain.WidgetSpec):
 
 class MapToLoadedWidgetSpec(ts.Mapper, domain.WidgetSpec):
 
-    def __init__(self, load_widget_response: ports.LoadWidgetResponse) -> None:
+    def __init__(
+        self,
+        load_widget_request: ports.LoadWidgetRequest,
+        load_widget_response: ports.LoadWidgetResponse,
+    ) -> None:
+        match load_widget_response.outcome:
+            case ports.Loaded.FOUND:
+                record = load_widget_response.widgets[0]
+            case ports.Loaded.MISSING:
+                raise client.Missing(
+                    code="unknown_widget",
+                    message=f"no widget {load_widget_request.name!r}",
+                )
+            case _ as never:
+                typing.assert_never(never)
         super().__init__(
-            name=load_widget_response.name,
-            part=domain.PartSpec(id=load_widget_response.part),
-            standing=load_widget_response.standing,
+            name=record.name,
+            part=domain.PartSpec(id=record.part),
+            standing=record.standing,
         )
 
 
@@ -85,7 +100,19 @@ class MapToFindWidgetRequest(ts.Mapper, ports.FindWidgetRequest):
 
 class MapToAddResponse(ts.Mapper, client.AddResponse):
 
-    def __init__(self, widget: domain.Widget) -> None:
+    def __init__(
+        self, add_widget_response: ports.AddWidgetResponse, widget: domain.Widget
+    ) -> None:
+        match add_widget_response.outcome:
+            case ports.Added.ADDED:
+                pass
+            case ports.Added.EXISTS:
+                raise client.Conflict(
+                    code="widget_exists",
+                    message=f"widget {add_widget_response.name!r} is already stored",
+                )
+            case _ as never:
+                typing.assert_never(never)
         super().__init__(
             name=str(widget.identity),
             part=str(widget.part.identity),
@@ -110,38 +137,73 @@ class AlphaService(ts.ApplicationService):
         self._beta_check = beta_check
 
     async def add(self, add_request: client.AddRequest) -> client.AddResponse:
-        widget = domain.Widget(MapToWidgetSpec(add_request))
-        match widget.take(MapToPartSpec(add_request)):
+        try:
+            widget = domain.Widget(MapToWidgetSpec(add_request))
+            taken = widget.take(MapToPartSpec(add_request))
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
+        match taken:
             case domain.Taken.TAKEN:
                 pass
             case domain.Taken.HELD:
-                check_response = await self._beta_check.check(MapToCheckRequest(widget))
+                try:
+                    check_response = await self._beta_check.check(MapToCheckRequest(widget))
+                except ports.BetaUnavailable as beta_error:
+                    raise client.Unavailable(
+                        message="the beta check is unavailable"
+                    ) from beta_error
                 widget.clear(MapToClearanceSpec(check_response))
             case _ as never:
                 typing.assert_never(never)
-        async with self._widget_store.transaction() as widget_repository:
-            await widget_repository.add_widget(MapToAddWidgetRequest(widget))
-        return MapToAddResponse(widget)
+        try:
+            async with self._widget_store.transaction() as widget_repository:
+                add_widget_response = await widget_repository.add_widget(
+                    MapToAddWidgetRequest(widget)
+                )
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the widget store is unavailable") from store_error
+        return MapToAddResponse(add_widget_response, widget)
 
     async def take(self, take_request: client.TakeRequest) -> client.TakeResponse:
-        name = domain.Name(take_request.name)
-        async with self._widget_store.transaction() as widget_repository:
-            load_widget_response = await widget_repository.load_widget(MapToLoadWidgetRequest(name))
-            widget = domain.Widget(MapToLoadedWidgetSpec(load_widget_response))
-            taken = widget.take(MapToTakenPartSpec(take_request))
-            match taken:
-                case domain.Taken.TAKEN:
-                    await widget_repository.save_widget(MapToSaveWidgetRequest(widget))
-                case domain.Taken.HELD:
-                    pass
-                case _ as never:
-                    typing.assert_never(never)
+        try:
+            name = domain.Name(take_request.name)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
+        try:
+            async with self._widget_store.transaction() as widget_repository:
+                load_widget_request = MapToLoadWidgetRequest(name)
+                load_widget_response = await widget_repository.load_widget(load_widget_request)
+                widget = domain.Widget(
+                    MapToLoadedWidgetSpec(load_widget_request, load_widget_response)
+                )
+                taken = widget.take(MapToTakenPartSpec(take_request))
+                match taken:
+                    case domain.Taken.TAKEN:
+                        await widget_repository.save_widget(MapToSaveWidgetRequest(widget))
+                    case domain.Taken.HELD:
+                        pass
+                    case _ as never:
+                        typing.assert_never(never)
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the widget store is unavailable") from store_error
         return MapToTakeResponse(widget)
 
     async def find(self, find_request: client.FindRequest) -> client.FindResponse:
-        name = domain.Name(find_request.name)
-        async with self._widget_store.transaction() as widget_repository:
-            find_widget_response = await widget_repository.find_widget(
-                MapToFindWidgetRequest(name)
-            )
+        try:
+            name = domain.Name(find_request.name)
+        except errors.DomainError as domain_error:
+            raise client.Rejected(
+                code=domain_error.code, message=domain_error.message
+            ) from domain_error
+        try:
+            async with self._widget_store.transaction() as widget_repository:
+                find_widget_response = await widget_repository.find_widget(
+                    MapToFindWidgetRequest(name)
+                )
+        except ports.StoreUnavailable as store_error:
+            raise client.Unavailable(message="the widget store is unavailable") from store_error
         return client.FindResponse(found=find_widget_response.found.value)

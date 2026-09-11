@@ -81,6 +81,28 @@ def test_conflict_is_409() -> None:
     assert response.body["type"] == "/problems/duplicate_slug"
 
 
+def test_two_identical_slugs_in_one_create_body_is_422_not_409() -> None:
+    handler = handlers.Handler(
+        application.CampaignService(
+            repositories.StorageCampaignRepository(storage.FakeStorage())
+        )
+    )
+    body = json.dumps(
+        {
+            "window": {"start": "2026-01-01", "end": "2026-02-01"},
+            "links": [
+                {"slug": "spring-sale", "target_url": "https://x.com"},
+                {"slug": "spring-sale", "target_url": "https://y.com"},
+            ],
+        }
+    )
+
+    response = handler.create_campaign("c1", body)
+
+    assert response.status == 422
+    assert response.body["type"] == "/problems/duplicate_slug"
+
+
 def test_malformed_json_is_400_not_422() -> None:
     handler = handlers.Handler(
         application.CampaignService(
@@ -121,7 +143,7 @@ def test_aggregated_validation_lists_all_invalid_params() -> None:
     assert codes == {"bad_slug", "bad_target_url"}
 
 
-def test_infra_is_503() -> None:
+def test_an_unavailable_store_is_503() -> None:
     handler = handlers.Handler(
         application.CampaignService(
             repositories.StorageCampaignRepository(storage.FakeStorage(down=True))

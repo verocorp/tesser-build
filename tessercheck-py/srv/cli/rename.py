@@ -7,7 +7,6 @@ import tesser.srv as ts
 
 import app
 import protocol
-import tesser.errors as errors
 import tessercheck.adapters.handlers as handlers
 
 _USAGE: typing.Final[str] = "usage: python -m srv.cli.rename [tree]"
@@ -23,12 +22,6 @@ class RenameHost(ts.Host):
                 resp = handler.rename(protocol.CliRequest(args=tuple(argv)))
             except protocol.UsageError as e:
                 resp = protocol.CliResponse(2, stdout="", stderr=f"{e}\n{_USAGE}")
-            except errors.DomainError as e:
-                resp = protocol.CliResponse(
-                    errors.exit_code_for(e.kind), stdout="", stderr=e.message
-                )
-            except errors.InfraError:
-                resp = protocol.CliResponse(1, stdout="", stderr="unavailable")
             except Exception:
                 resp = protocol.CliResponse(1, stdout="", stderr="unexpected error")
             if resp.stdout:

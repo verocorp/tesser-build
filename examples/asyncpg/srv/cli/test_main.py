@@ -6,7 +6,6 @@ import os
 import asyncpg
 
 import srv.cli as cli
-import tesser.errors as errors
 
 
 class TestCliHost:
@@ -28,6 +27,4 @@ class TestCliHost:
             runner.run(connection.close())
 
         assert cli.CliHost().run(["srv-cli-twice", "p"]) == 0
-        assert cli.CliHost().run(["srv-cli-twice", "p"]) == errors.exit_code_for(
-            errors.Kind.CONFLICT
-        )
+        assert cli.CliHost().run(["srv-cli-twice", "p"]) == 1

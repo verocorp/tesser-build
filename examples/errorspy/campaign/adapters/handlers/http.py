@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import json
+import typing
 
 import tesser.adapters as ts
 
 import campaign.client as client
 import protocol
-import tesser.errors as errors
+
+_UNAVAILABLE: typing.Final[dict[str, object]] = {
+    "type": "/problems/unavailable",
+    "title": "Service Unavailable",
+    "status": 503,
+    "detail": "please retry",
+}
 
 
 class Handler(ts.Handler):
@@ -57,43 +64,64 @@ class Handler(ts.Handler):
                     links=tuple(link_bodies),
                 )
             )
-            return protocol.Response(201, {"id": campaign_id})
-        except protocol.BadRequest as e:
+        except protocol.BadRequest as bad_request:
             return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
                     "title": "Bad Request",
                     "status": 400,
-                    "detail": str(e),
+                    "detail": str(bad_request),
                 },
             )
-        except errors.DomainError as e:
-            status = errors.status_for(e.kind)
-            problem: dict[str, object] = {
-                "type": f"/problems/{e.code}",
-                "title": e.code.replace("_", " "),
-                "status": status,
-                "detail": e.message,
-            }
-            if e.field is not None:
-                problem["field"] = e.field
-            if e.problems:
-                problem["invalid-params"] = [
-                    {"name": p.field, "code": p.code, "reason": p.message}
-                    for p in e.problems
-                ]
-            return protocol.Response(status, problem)
-        except errors.InfraError:
-            return protocol.Response(
-                503,
-                {
-                    "type": "/problems/unavailable",
-                    "title": "Service Unavailable",
-                    "status": 503,
-                    "detail": "please retry",
-                },
-            )
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    rejection = error.rejection
+                    problem: dict[str, object] = {
+                        "type": f"/problems/{rejection.code}",
+                        "title": rejection.code.replace("_", " "),
+                        "status": 422,
+                        "detail": rejection.message,
+                    }
+                    if rejection.field:
+                        problem["field"] = rejection.field
+                    if rejection.problems:
+                        problem["invalid-params"] = [
+                            {
+                                "name": reported.field,
+                                "code": reported.code,
+                                "reason": reported.message,
+                            }
+                            for reported in rejection.problems
+                        ]
+                    return protocol.Response(422, problem)
+                case client.Missing():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Conflict():
+                    return protocol.Response(
+                        409,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 409,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Unavailable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case client.Unreadable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case _ as never:
+                    typing.assert_never(never)
         except Exception:
             return protocol.Response(
                 500,
@@ -104,52 +132,71 @@ class Handler(ts.Handler):
                     "detail": "unexpected error",
                 },
             )
+        return protocol.Response(201, {"id": campaign_id})
 
     def get_campaign(self, campaign_id: str) -> protocol.Response:
         try:
             campaign_view = self._campaign_client.get_campaign(
                 client.GetCampaignRequest(campaign_id=campaign_id)
             )
-            return protocol.Response(
-                200,
-                {"id": campaign_view.campaign_id, "links": list(campaign_view.links)},
-            )
-        except protocol.BadRequest as e:
+        except protocol.BadRequest as bad_request:
             return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
                     "title": "Bad Request",
                     "status": 400,
-                    "detail": str(e),
+                    "detail": str(bad_request),
                 },
             )
-        except errors.DomainError as e:
-            status = errors.status_for(e.kind)
-            problem: dict[str, object] = {
-                "type": f"/problems/{e.code}",
-                "title": e.code.replace("_", " "),
-                "status": status,
-                "detail": e.message,
-            }
-            if e.field is not None:
-                problem["field"] = e.field
-            if e.problems:
-                problem["invalid-params"] = [
-                    {"name": p.field, "code": p.code, "reason": p.message}
-                    for p in e.problems
-                ]
-            return protocol.Response(status, problem)
-        except errors.InfraError:
-            return protocol.Response(
-                503,
-                {
-                    "type": "/problems/unavailable",
-                    "title": "Service Unavailable",
-                    "status": 503,
-                    "detail": "please retry",
-                },
-            )
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    rejection = error.rejection
+                    problem: dict[str, object] = {
+                        "type": f"/problems/{rejection.code}",
+                        "title": rejection.code.replace("_", " "),
+                        "status": 422,
+                        "detail": rejection.message,
+                    }
+                    if rejection.field:
+                        problem["field"] = rejection.field
+                    if rejection.problems:
+                        problem["invalid-params"] = [
+                            {
+                                "name": reported.field,
+                                "code": reported.code,
+                                "reason": reported.message,
+                            }
+                            for reported in rejection.problems
+                        ]
+                    return protocol.Response(422, problem)
+                case client.Missing():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Conflict():
+                    return protocol.Response(
+                        409,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 409,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Unavailable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case client.Unreadable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case _ as never:
+                    typing.assert_never(never)
         except Exception:
             return protocol.Response(
                 500,
@@ -160,6 +207,10 @@ class Handler(ts.Handler):
                     "detail": "unexpected error",
                 },
             )
+        return protocol.Response(
+            200,
+            {"id": campaign_view.campaign_id, "links": list(campaign_view.links)},
+        )
 
     def add_link(self, campaign_id: str, raw: str) -> protocol.Response:
         try:
@@ -183,43 +234,64 @@ class Handler(ts.Handler):
                     target_url=target_url,
                 )
             )
-            return protocol.Response(200, {"status": "added"})
-        except protocol.BadRequest as e:
+        except protocol.BadRequest as bad_request:
             return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
                     "title": "Bad Request",
                     "status": 400,
-                    "detail": str(e),
+                    "detail": str(bad_request),
                 },
             )
-        except errors.DomainError as e:
-            status = errors.status_for(e.kind)
-            problem: dict[str, object] = {
-                "type": f"/problems/{e.code}",
-                "title": e.code.replace("_", " "),
-                "status": status,
-                "detail": e.message,
-            }
-            if e.field is not None:
-                problem["field"] = e.field
-            if e.problems:
-                problem["invalid-params"] = [
-                    {"name": p.field, "code": p.code, "reason": p.message}
-                    for p in e.problems
-                ]
-            return protocol.Response(status, problem)
-        except errors.InfraError:
-            return protocol.Response(
-                503,
-                {
-                    "type": "/problems/unavailable",
-                    "title": "Service Unavailable",
-                    "status": 503,
-                    "detail": "please retry",
-                },
-            )
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    rejection = error.rejection
+                    problem: dict[str, object] = {
+                        "type": f"/problems/{rejection.code}",
+                        "title": rejection.code.replace("_", " "),
+                        "status": 422,
+                        "detail": rejection.message,
+                    }
+                    if rejection.field:
+                        problem["field"] = rejection.field
+                    if rejection.problems:
+                        problem["invalid-params"] = [
+                            {
+                                "name": reported.field,
+                                "code": reported.code,
+                                "reason": reported.message,
+                            }
+                            for reported in rejection.problems
+                        ]
+                    return protocol.Response(422, problem)
+                case client.Missing():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Conflict():
+                    return protocol.Response(
+                        409,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 409,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Unavailable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case client.Unreadable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case _ as never:
+                    typing.assert_never(never)
         except Exception:
             return protocol.Response(
                 500,
@@ -230,49 +302,71 @@ class Handler(ts.Handler):
                     "detail": "unexpected error",
                 },
             )
+        return protocol.Response(200, {"status": "added"})
 
     def deactivate_link(self, campaign_id: str, slug: str) -> protocol.Response:
         try:
             self._campaign_client.deactivate_link(
                 client.DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
             )
-            return protocol.Response(200, {"status": "deactivated"})
-        except protocol.BadRequest as e:
+        except protocol.BadRequest as bad_request:
             return protocol.Response(
                 400,
                 {
                     "type": "/problems/malformed_request",
                     "title": "Bad Request",
                     "status": 400,
-                    "detail": str(e),
+                    "detail": str(bad_request),
                 },
             )
-        except errors.DomainError as e:
-            status = errors.status_for(e.kind)
-            problem: dict[str, object] = {
-                "type": f"/problems/{e.code}",
-                "title": e.code.replace("_", " "),
-                "status": status,
-                "detail": e.message,
-            }
-            if e.field is not None:
-                problem["field"] = e.field
-            if e.problems:
-                problem["invalid-params"] = [
-                    {"name": p.field, "code": p.code, "reason": p.message}
-                    for p in e.problems
-                ]
-            return protocol.Response(status, problem)
-        except errors.InfraError:
-            return protocol.Response(
-                503,
-                {
-                    "type": "/problems/unavailable",
-                    "title": "Service Unavailable",
-                    "status": 503,
-                    "detail": "please retry",
-                },
-            )
+        except client.ERRORS as error:
+            match error:
+                case client.Rejected():
+                    rejection = error.rejection
+                    problem: dict[str, object] = {
+                        "type": f"/problems/{rejection.code}",
+                        "title": rejection.code.replace("_", " "),
+                        "status": 422,
+                        "detail": rejection.message,
+                    }
+                    if rejection.field:
+                        problem["field"] = rejection.field
+                    if rejection.problems:
+                        problem["invalid-params"] = [
+                            {
+                                "name": reported.field,
+                                "code": reported.code,
+                                "reason": reported.message,
+                            }
+                            for reported in rejection.problems
+                        ]
+                    return protocol.Response(422, problem)
+                case client.Missing():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Conflict():
+                    return protocol.Response(
+                        409,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 409,
+                            "detail": error.message,
+                        },
+                    )
+                case client.Unavailable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case client.Unreadable():
+                    return protocol.Response(503, _UNAVAILABLE)
+                case _ as never:
+                    typing.assert_never(never)
         except Exception:
             return protocol.Response(
                 500,
@@ -283,3 +377,4 @@ class Handler(ts.Handler):
                     "detail": "unexpected error",
                 },
             )
+        return protocol.Response(200, {"status": "deactivated"})

@@ -135,10 +135,13 @@ The same route-and-transform split holds per mechanism: the **HTTP** host maps
 `(method, path)` → handler and moves bytes; the **CLI** host maps a command name
 → handler and moves argv/text. The CLI dispatcher is thinner — a command lookup
 in a dict, no pattern-matching module needed — but the shape is identical: a
-route table, one handler per command (`CliRequest → CliResponse`), the domain
-`Kind` set mapped to an exit code (`errors.exit_code_for`) as HTTP maps it to a
-status, and the host's own failures (unknown command → exit 2) rendered through
-the same `respond` vocabulary. Both hosts import only a context's
+route table, one handler per command (`CliRequest → CliResponse`), the
+context's `ERRORS` mapped to an exit code by the handler as HTTP's handler
+maps it to a status, and the host's own failures (unknown command → exit 2,
+anything unexpected → exit 1 with a generic line) rendered in the protocol's
+vocabulary. A host names no context's error type and no `tesser.errors`
+type (TB050); it catches its protocol's `ts.Rejection`s and `Exception`,
+nothing between. Both hosts import only a context's
 `adapters.handlers`, never its `Client` — locked for all of `srv/` by a
 `forbidden` contract in `.importlinter`.
 

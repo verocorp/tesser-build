@@ -986,16 +986,92 @@ code, and three places the rulebook is thinner than the code Chris wants were
 found by building it. Each is a ruling, not a bug; each is marked in the tree
 where it lands.
 
-- [ ] **Error handling: the host should not know the error types.** Today
-  `examples/minimal/srv/cli/main.py` (and the verified
-  `examples/python-app/srv/cli/main.py`) catch `UsageError`, `DomainError`,
-  and `InfraError` and map them to exit codes — `handlers.md` rule 7 and
-  the error-norms ruling put the one respond path at the edge. Chris
+- [ ] **Error handling: the host should not know the error types.** Chris
   (2026-08-26): the application should decide what and how application
   errors are surfaced to the user, not the host; the host should be unaware
-  of those types. Needs a design: what crosses the `Client` on failure (an
-  outcome on the response? a single edge-facing rejection?), what the
-  handler returns, and what — if anything — the host still maps.
+  of those types. **Designed and half-landed 2026-09-11 (step 1, the
+  boundary).** Every failure is one of three classes with one owner each:
+  (1) a *host* failure the host can detect knowing nothing of the body — an
+  unmatched route, an oversized body, a missing CLI argument — a `ts.Rejection`
+  the protocol raises and the host renders; (2) a *context* failure — a
+  subclass of `ts.Error` (`tesser.context`, re-exported by
+  `tesser.application` for ports) the context declares beside its DTOs in
+  `client/`, names once in an `ERRORS` tuple, words itself, and raises across
+  the `Client`; the handler catches the tuple and `match`es it to a status,
+  closing on `assert_never`; (3) anything else, which the host's `except
+  Exception` renders as a generic body. `tesser.errors` is no longer granted
+  to `adapters` or `srv` (TB050), so a host or handler naming `DomainError`
+  is a finding rather than a review comment. Inside a context the chain is
+  two translations, not four: the service translates a domain raise into
+  the context's error (`except errors.DomainError` whose only statement
+  raises `client.Rejected` from it — the one legal `try` in a service;
+  transition refusals raise the context's error from their `match` arm),
+  and the handler translates the context's error into the transport. A
+  port error is declared on the port (`class StoreUnavailable(ts.Error)`
+  in the port module), the adapter raises it, fake and real alike, and
+  the service translates it by the same one-arm rule (`except
+  ports.StoreUnavailable` whose only statement raises
+  `client.Unavailable` from it). **Chris, 2026-09-11: an application
+  service only ever raises client-defined errors; it never passes a port
+  error through.** Across contexts the chain stays total: a gateway
+  translates a peer's `client.Unavailable` into the port error its own
+  context declares, and a peer's `Rejected` is the caller's bug, left for
+  the backstop. Migrated: every gated tree — `examples/minimal`,
+  `tessercheck-py`, errorspy, python-app, asyncpg, durable-execution — and
+  no adapters or srv module imports `tesser.errors` anywhere. Still open
+  from this step: a ports module may hold only imports and classes
+  (TB051/TB069), so port errors are caught by class name with no `ERRORS`
+  tuple to register against; `durable-execution/ordering/application/ports/engine.py`
+  holds only errors and carries a file-scope `# tesser:debt TB052`; **the
+  collision with the relay wave (#186), registered as 27 markers by
+  `tessercheck-mark` on 2026-09-11 (Chris: register, do not redesign
+  here)** — a runner and the runtime import `ports` for the engine
+  errors where their kind reaches only relays / client, orchestrators,
+  relays (TB060 ×6), the relay and order snapshots raise
+  `ports.EngineRejected` where a snapshot may name only `errors.invalid`
+  (TB082 ×9, TB081 ×1), and the tests beside runners, the runtime, the
+  relays, and the snapshot import `ports` to assert on them (TB070 ×11) — the
+  follow-on is where an engine error lives so a runner reaches it through
+  what it already reaches, and what a snapshot raises once `tesser.errors`
+  leaves the application role too; an
+  *action* lets the payment port's `ChargeDeclined` reach the runtime
+  untranslated (a port-to-port hop inside the engine, not a service
+  crossing a `Client` — not ruled); and the per-endpoint `try`/`match` in
+  a handler with many endpoints (tessercheck's has four identical copies;
+  a handler-declared table the host applies generically is the shape that
+  removes them, not ruled).
+- [ ] **A port's error set is closed the way a client's is: one `ERRORS`
+  tuple on the port module, caught and matched with `assert_never`.**
+  Chris, 2026-09-11, ruled in direction on #184, deferred to a follow-up
+  wave so the boundary PR ships as it is. The gap: a service catches a
+  port error by class name, so a second error a port declares later
+  escapes the service to the backstop and nothing structural notices —
+  the exact violation of "a service raises only client-defined errors".
+  The rules are what we make them: TB051/TB069 admit one `typing.Final`
+  tuple in a ports module; the service writes `except ports.STORE_ERRORS
+  as store_error:` and matches it, closing on `assert_never`, the same
+  shape the handler has over `client.ERRORS`; the `test_client` totality
+  test ("the tuple names every `Exception` subclass in the module") gets a
+  ports twin; the analyzer checks the arm shape (an except arm's only
+  statement raises a `client.*` error). Why a port can need more than one:
+  unavailable (retry), unreadable (the row is there and the domain rejects
+  it), refused on write (a constraint the schema has that the aggregate
+  does not) are three things an operator does differently, even where two
+  collapse to one status for the caller — the one-error-per-port shape
+  the trees converged on was the migration brief and the tuple ban, not
+  a finding. `ts.Outcome` on the response was weighed and loses on the
+  transaction-open case (`async with store.transaction()` cannot return
+  an outcome when it fails to enter) and on the one-match-per-method
+  rule. Bundle with: `ports/engine.py` holding only errors (TB052 marker),
+  the 27 durable-execution markers (where an engine error lives so a
+  runner reaches it), and the four-error engine port that is this
+  question's first real case. Item 4 of #184 (errorspy's duplicate slug
+  in one create body is 422, in a later add_link 409) is pinned by a
+  transport test so the aggregate step changes it deliberately or not at
+  all; item 5 (asyncpg answers missing/conflict as outcomes) stands — can
+  the caller act on it, then it is a return at the port and a raise at
+  the client; item 6 (tessercheck's four identical `try`/`match` blocks)
+  is a handler-shape question for every multi-endpoint handler, separate.
 - [ ] **The wording of a public error belongs to the application, not the
   handler.** Chris, 2026-09-06, reading #172. `Handler.submit_order` in
   `examples/durable-execution` reads the body one field at a time
@@ -1017,7 +1093,51 @@ where it lands.
   `ordering/client/` — the `TB062` marker
   `relays/order_orchestrator_runner.py` already carries — and a sibling test
   the package does not have today. Evidence: #172 counts 11 places a
-  required field lands, and this handler is one of them.
+  required field lands, and this handler is one of them. **Ruled in
+  direction 2026-09-11, deferred to the aggregate-construction step:** the
+  host knows nothing of fields or formats (a CLI host has no JSON), so "this
+  body is not the shape I take" is a *context* failure, class 2 above, not
+  a host one — the context owns the decoding of its own request from bytes
+  beside its DTO, the way the relay owns `OrderSnapshot`, and the handler
+  hands the bytes over and names no field. It lands with the aggregate
+  design because a decode failure and a constructor rejection are the same
+  answer to the caller (invalid at this path for this reason, every issue
+  at once) and share the issue/path/problem shape below.
+- [ ] **Aggregate construction reports every issue at once, and the domain
+  names them.** Designed 2026-09-11, not built; the boundary step above
+  went first so this can take its time. The shape converged on: a value
+  object's constructor stays the only validating path and still raises, but
+  it raises one exception, `ts.Invalid`, carrying *issues* — `ts.Issue`
+  subclasses the domain declares beside the object that raises them
+  (`class EmptyNote(ts.Issue)` above `Note`), each located by a `ts.Path` of
+  field names and indices so `links[1].slug` is an address, not a string.
+  A composite attempts every part and collects: parts first, then its own
+  cross-part rules only over a clean set of parts, so a rule about parts
+  that were never valid is never reported. The collector is the author's
+  code, not tesser's: `try: self._sku = Sku(spec.sku) except ts.Invalid as
+  invalid: issues.extend(invalid.under("sku"))` per part, `raise
+  ts.Invalid(tuple(issues))` at the end — four visible lines per part, no
+  context manager, no lambda (the old `errors.collect` cost four debt
+  markers for exactly that). The application never inspects an issue: it
+  holds one template per context, a table from issue kind to wording the
+  analyzer checks is total over the domain's exported issue kinds, folds
+  the `Invalid` into `ts.Problem(path, code, message)` records, and raises
+  its `client.Rejected(problems)`; the handler renders every problem in one
+  body (`invalid-params` for HTTP, a line each for the CLI). Wording is
+  never load-bearing — nothing branches on a message, tests assert code
+  and path. Tesser keeps four data types (`Issue`, `Path`, `Invalid`,
+  `Problem`) and no control flow; the analyzer's two rules are the shape of
+  the domain's `except ts.Invalid` arm (extend only) and the service's
+  (raise the context's error only). Rejected on the way: a `check`
+  classmethod per object (a second construction path), a validating base
+  class (magic), Vernon's `Validator`/`ValidationNotificationHandler` (the
+  client holds the validator), tesser-owned families (`errors.domain.
+  Validation`) matched beside domain leaves (not ubiquitous language, and
+  arm order silently matters). Open inside it: a value object used in two
+  fields of one aggregate cannot be attributed by leaf alone; whether an
+  issue can be a warning that does not block; `Order.FAILURES`-style
+  declared tuples were dropped in favour of one `Invalid` — the dead-arm
+  check they enabled is deferred until a dead arm is seen.
 - [x] **Adapter-side mappers have no home in the rulebook.** Ruled (Chris,
   2026-08-30) and shipped: `tesser.adapters.Mapper` carries the same contract
   as `tesser.application.Mapper` (a mapper is its target), and `KIND_EXTRA_ROLES`

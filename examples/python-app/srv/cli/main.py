@@ -8,7 +8,6 @@ import tesser.srv as ts
 import app as app
 import campaign.adapters.handlers as handlers
 import protocol as protocol
-import tesser.errors as errors
 
 _USAGE: typing.Final[str] = (
     "usage: python -m srv.cli.main <command> [args]\n"
@@ -37,14 +36,6 @@ class CliHost(ts.Host):
                     cli_response = commands[argv[0]](protocol.CliRequest(args=tuple(argv[1:])))
                 except protocol.UsageError as e:
                     cli_response = protocol.CliResponse(2, stdout="", stderr=str(e))
-                except errors.DomainError as e:
-                    cli_response = protocol.CliResponse(
-                        errors.exit_code_for(e.kind), stdout="", stderr=f"[{e.code}] {e.message}"
-                    )
-                except errors.InfraError:
-                    cli_response = protocol.CliResponse(
-                        1, stdout="", stderr="a dependency is unavailable; please retry"
-                    )
                 except Exception:
                     cli_response = protocol.CliResponse(1, stdout="", stderr="unexpected error")
             if cli_response.stdout:

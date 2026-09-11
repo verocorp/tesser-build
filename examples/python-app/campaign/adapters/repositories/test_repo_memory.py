@@ -4,7 +4,6 @@ import pytest
 
 import campaign.adapters.repositories as repositories
 import campaign.application.ports as ports
-import tesser.errors as errors
 
 
 def test_a_saved_campaign_is_found_by_its_id() -> None:
@@ -167,7 +166,7 @@ def test_every_saved_campaign_is_listed() -> None:
 def test_an_unavailable_store_fails_closed_on_every_read_and_write() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository(down=True)
 
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.StoreUnavailable):
         in_memory_campaign_repository.save(
             ports.SaveCampaignRequest(
                 id="0123456789abcdef",
@@ -175,13 +174,13 @@ def test_an_unavailable_store_fails_closed_on_every_read_and_write() -> None:
                 links=(),
             )
         )
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.StoreUnavailable):
         in_memory_campaign_repository.find(ports.FindCampaignRequest(campaign_id="0123456789abcdef"))
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.StoreUnavailable):
         in_memory_campaign_repository.find_by_slug(ports.FindCampaignBySlugRequest(slug="promo"))
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.StoreUnavailable):
         in_memory_campaign_repository.slug_taken(ports.SlugTakenRequest(slug="promo"))
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(ports.StoreUnavailable):
         in_memory_campaign_repository.all(ports.ListCampaignsRequest())
 
 

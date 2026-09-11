@@ -9,3 +9,4 @@ from tesser.application.response import Response as Response
 from tesser.application.serde import Serde as Serde
 from tesser.application.service import ApplicationService as ApplicationService
 from tesser.application.store import Store as Store
+from tesser.context.error import Error as Error

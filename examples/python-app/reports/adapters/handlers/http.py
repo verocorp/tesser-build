@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.adapters as ts
 
 import protocol as protocol
@@ -11,9 +13,20 @@ class HttpHandler(ts.Handler):
         self._reports_client = reports_client
 
     def links_by_verdict(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
-        links_by_verdict_response = self._reports_client.links_by_verdict(
-            client.LinksByVerdictRequest()
-        )
+        try:
+            links_by_verdict_response = self._reports_client.links_by_verdict(
+                client.LinksByVerdictRequest()
+            )
+        except client.ERRORS as error:
+            match error:
+                case client.Unavailable():
+                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
+                case client.Unreadable():
+                    return protocol.HttpResponse.problem(
+                        503, "unavailable", "a dependency is unavailable; please retry"
+                    )
+                case _ as never:
+                    typing.assert_never(never)
         rows: list[dict[str, object]] = [
             {
                 "slug": view.slug,

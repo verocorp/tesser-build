@@ -6,7 +6,6 @@ import tesser.testing as ts
 import linkpolicy.application as application
 import linkpolicy.application.ports as ports
 import linkpolicy.client as client
-import tesser.errors as errors
 
 
 @ts.fake
@@ -92,12 +91,12 @@ def test_check_records_a_denial_as_the_denied_decision() -> None:
     assert fake_verdict_repository.records[0].reason == "host 'evil.example' is blocked"
 
 
-def test_check_propagates_a_repository_failure() -> None:
+def test_check_crosses_a_repository_failure_as_the_contexts_unavailable() -> None:
     fake_verdict_repository = FakeVerdictRepository(
-        error=errors.InfraError("linkpolicy store unavailable")
+        error=ports.StoreUnavailable("linkpolicy store unavailable")
     )
 
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(client.Unavailable):
         application.LinkPolicyService(fake_verdict_repository).check(
             client.CheckRequest("https://ok.example/x")
         )
@@ -145,12 +144,12 @@ def test_list_verdicts_returns_what_check_recorded() -> None:
     ]
 
 
-def test_list_verdicts_propagates_a_repository_failure() -> None:
+def test_list_verdicts_crosses_a_repository_failure_as_the_contexts_unavailable() -> None:
     fake_verdict_repository = FakeVerdictRepository(
-        error=errors.InfraError("linkpolicy store unavailable")
+        error=ports.StoreUnavailable("linkpolicy store unavailable")
     )
 
-    with pytest.raises(errors.InfraError):
+    with pytest.raises(client.Unavailable):
         application.LinkPolicyService(fake_verdict_repository).list_verdicts(
             client.ListVerdictsRequest()
         )
@@ -158,7 +157,7 @@ def test_list_verdicts_propagates_a_repository_failure() -> None:
 
 def test_check_refuses_an_empty_url_and_records_nothing() -> None:
     fake_verdict_repository = FakeVerdictRepository()
-    with pytest.raises(errors.DomainError) as ei:
+    with pytest.raises(client.Rejected) as ei:
         application.LinkPolicyService(fake_verdict_repository).check(client.CheckRequest(""))
     assert ei.value.code == "invalid_target_url"
     assert fake_verdict_repository.records == []

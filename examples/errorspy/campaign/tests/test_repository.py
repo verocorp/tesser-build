@@ -6,7 +6,6 @@ import campaign.adapters.repositories as repositories
 import campaign.application as application
 import campaign.application.ports as ports
 import campaign.client as client
-import tesser.errors as errors
 import storage
 
 
@@ -31,32 +30,30 @@ def test_save_then_find_roundtrip() -> None:
     assert campaign_spec.links[0].slug == "spring-sale"
 
 
-def test_missing_is_domain_not_found() -> None:
+def test_missing_is_the_contexts_missing() -> None:
     storage_campaign_repository = repositories.StorageCampaignRepository(
         storage.FakeStorage()
     )
     find_campaign_request = ports.FindCampaignRequest(campaign_id="nope")
     find_campaign_response = storage_campaign_repository.find(find_campaign_request)
-    with pytest.raises(errors.DomainError) as ei:
+    with pytest.raises(client.Missing) as ei:
         application.MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
-    assert ei.value.kind is errors.Kind.NOT_FOUND
     assert ei.value.code == "campaign_missing"
 
 
-def test_outage_is_infra_not_domain() -> None:
+def test_outage_is_the_port_error_not_the_vendors() -> None:
     storage_campaign_repository = repositories.StorageCampaignRepository(
         storage.FakeStorage(down=True)
     )
-    with pytest.raises(errors.InfraError) as ei:
+    with pytest.raises(ports.StorageUnavailable) as ei:
         storage_campaign_repository.find(ports.FindCampaignRequest(campaign_id="c1"))
-    assert not isinstance(ei.value, errors.DomainError)
     assert not isinstance(ei.value, storage.StorageError)
 
 
-def test_corrupted_record_is_infra_not_validation() -> None:
+def test_corrupted_record_is_unreadable_not_a_rejection() -> None:
     backend = storage.FakeStorage()
     backend.put(
         "c1",
@@ -67,8 +64,7 @@ def test_corrupted_record_is_infra_not_validation() -> None:
     )
     storage_campaign_repository = repositories.StorageCampaignRepository(backend)
     campaign_service = application.CampaignService(storage_campaign_repository)
-    with pytest.raises(errors.InfraError) as ei:
+    with pytest.raises(client.Unreadable) as ei:
         campaign_service.get_campaign(client.GetCampaignRequest(campaign_id="c1"))
-    assert not isinstance(ei.value, errors.DomainError)
-    assert isinstance(ei.value.__cause__, errors.DomainError)
-    assert ei.value.__cause__.kind is errors.Kind.VALIDATION
+    assert isinstance(ei.value.__cause__, Exception)
+    assert "bad_slug" in str(ei.value.__cause__)

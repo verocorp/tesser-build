@@ -9,7 +9,6 @@ import pytest
 import alpha.adapters.repositories as repositories
 import alpha.application.ports as ports
 import pgdatabase.database as pgdatabase
-import tesser.errors as errors
 
 
 class TestPostgresWidgetStore:
@@ -30,8 +29,9 @@ class TestPostgresWidgetStore:
             missing = await widget_repository.find_widget(ports.FindWidgetRequest(name="x"))
         await database.close()
         assert saved.name == "a"
-        assert loaded.part == "p"
-        assert loaded.standing == "kept"
+        assert loaded.outcome is ports.Loaded.FOUND
+        assert loaded.widgets[0].part == "p"
+        assert loaded.widgets[0].standing == "kept"
         assert found.found is ports.Found.YES
         assert missing.found is ports.Found.NO
 
@@ -50,9 +50,9 @@ class TestPostgresWidgetStore:
         async with postgres_widget_store.transaction() as widget_repository:
             loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
         await database.close()
-        assert loaded.standing == "released"
+        assert loaded.widgets[0].standing == "released"
 
-    async def test_adding_a_stored_name_conflicts_and_leaves_the_row_alone(self) -> None:
+    async def test_adding_a_stored_name_answers_exists_and_leaves_the_row_alone(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
@@ -64,17 +64,16 @@ class TestPostgresWidgetStore:
             await widget_repository.add_widget(
                 ports.AddWidgetRequest(name="a", part="p", standing="released")
             )
-        with pytest.raises(errors.DomainError) as caught:
-            async with postgres_widget_store.transaction() as widget_repository:
-                await widget_repository.add_widget(
-                    ports.AddWidgetRequest(name="a", part="q", standing="kept")
-                )
+        async with postgres_widget_store.transaction() as widget_repository:
+            again = await widget_repository.add_widget(
+                ports.AddWidgetRequest(name="a", part="q", standing="kept")
+            )
         async with postgres_widget_store.transaction() as widget_repository:
             loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
         await database.close()
-        assert caught.value.kind is errors.Kind.CONFLICT
-        assert loaded.part == "p"
-        assert loaded.standing == "released"
+        assert again.outcome is ports.Added.EXISTS
+        assert loaded.widgets[0].part == "p"
+        assert loaded.widgets[0].standing == "released"
 
     async def test_the_schema_step_adds_the_standing_column_to_an_older_table(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
@@ -91,9 +90,9 @@ class TestPostgresWidgetStore:
         async with postgres_widget_store.transaction() as widget_repository:
             loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="old"))
         await database.close()
-        assert loaded.standing == "kept"
+        assert loaded.widgets[0].standing == "kept"
 
-    async def test_loading_an_unknown_widget_is_not_found(self) -> None:
+    async def test_loading_an_unknown_widget_answers_missing(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
@@ -101,11 +100,11 @@ class TestPostgresWidgetStore:
         database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
-        with pytest.raises(errors.DomainError) as caught:
-            async with postgres_widget_store.transaction() as widget_repository:
-                await widget_repository.load_widget(ports.LoadWidgetRequest(name="x"))
+        async with postgres_widget_store.transaction() as widget_repository:
+            loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="x"))
         await database.close()
-        assert caught.value.kind is errors.Kind.NOT_FOUND
+        assert loaded.outcome is ports.Loaded.MISSING
+        assert loaded.widgets == ()
 
     async def test_a_transaction_that_raises_is_rolled_back(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
@@ -124,7 +123,7 @@ class TestPostgresWidgetStore:
         async with postgres_widget_store.transaction() as widget_repository:
             loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
         await database.close()
-        assert loaded.part == "p"
+        assert loaded.widgets[0].part == "p"
 
     async def test_the_schema_outlives_a_first_transaction_that_rolls_back(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]
@@ -170,7 +169,7 @@ class TestPostgresWidgetStore:
             await first_loaded.wait()
             async with postgres_widget_store.transaction() as widget_repository:
                 loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
-                order.append(f"second saw {loaded.part}")
+                order.append(f"second saw {loaded.widgets[0].part}")
 
         second_task = asyncio.create_task(second())
         first_task = asyncio.create_task(first())

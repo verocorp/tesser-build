@@ -6,7 +6,6 @@ import tesser.testing as ts
 
 import campaign.adapters.handlers as handlers
 import campaign.client as client
-import tesser.errors as errors
 
 
 @ts.fake
@@ -163,7 +162,9 @@ def test_a_window_start_that_is_not_a_string_is_400() -> None:
 
 def test_a_validation_failure_is_422_carrying_the_code_title_and_field() -> None:
     fake_campaign_client = FakeCampaignClient(
-        error=errors.invalid("bad_slug", "invalid slug 'BAD'", field="links[0].slug")
+        error=client.Rejected(
+            client.Rejection("bad_slug", "invalid slug 'BAD'", "links[0].slug", ())
+        )
     )
     response = handlers.Handler(fake_campaign_client).create_campaign(
         "c1", json.dumps({"window": {"start": "2026-01-01", "end": "2026-02-01"}, "links": []})
@@ -180,14 +181,18 @@ def test_a_validation_failure_is_422_carrying_the_code_title_and_field() -> None
 
 def test_an_aggregated_validation_failure_lists_every_invalid_param() -> None:
     fake_campaign_client = FakeCampaignClient(
-        error=errors.DomainError(
-            errors.Kind.VALIDATION,
-            "validation_failed",
-            "one or more fields are invalid",
-            problems=(
-                errors.NeedsDesignFieldProblem("bad_slug", "slug", "invalid slug 'BAD'"),
-                errors.NeedsDesignFieldProblem("bad_target_url", "target_url", "invalid target url 'ftp://x'"),
-            ),
+        error=client.Rejected(
+            client.Rejection(
+                "validation_failed",
+                "one or more fields are invalid",
+                "",
+                (
+                    client.Problem("bad_slug", "slug", "invalid slug 'BAD'"),
+                    client.Problem(
+                        "bad_target_url", "target_url", "invalid target url 'ftp://x'"
+                    ),
+                ),
+            )
         )
     )
     response = handlers.Handler(fake_campaign_client).add_link(
@@ -202,7 +207,9 @@ def test_an_aggregated_validation_failure_lists_every_invalid_param() -> None:
 
 
 def test_a_missing_campaign_is_404() -> None:
-    fake_campaign_client = FakeCampaignClient(error=errors.not_found("campaign_missing", "no campaign 'nope'"))
+    fake_campaign_client = FakeCampaignClient(
+        error=client.Missing("campaign_missing", "no campaign 'nope'")
+    )
     response = handlers.Handler(fake_campaign_client).get_campaign("nope")
     assert response.status == 404
     assert response.body == {
@@ -214,7 +221,9 @@ def test_a_missing_campaign_is_404() -> None:
 
 
 def test_a_conflict_is_409() -> None:
-    fake_campaign_client = FakeCampaignClient(error=errors.conflict("duplicate_slug", "slug spring-sale already in c1"))
+    fake_campaign_client = FakeCampaignClient(
+        error=client.Conflict("duplicate_slug", "slug spring-sale already in c1")
+    )
     response = handlers.Handler(fake_campaign_client).add_link(
         "c1", json.dumps({"slug": "spring-sale", "target_url": "https://x.com"})
     )
@@ -223,8 +232,10 @@ def test_a_conflict_is_409() -> None:
     assert response.body["detail"] == "slug spring-sale already in c1"
 
 
-def test_an_infrastructure_failure_is_503_and_leaks_nothing() -> None:
-    fake_campaign_client = FakeCampaignClient(error=errors.InfraError("storage unavailable loading 'c1'"))
+def test_an_unavailable_store_is_503_and_leaks_nothing() -> None:
+    fake_campaign_client = FakeCampaignClient(
+        error=client.Unavailable("campaign storage cannot answer for 'c1'")
+    )
     response = handlers.Handler(fake_campaign_client).get_campaign("c1")
     assert response.body == {
         "type": "/problems/unavailable",
@@ -296,3 +307,17 @@ def test_deactivating_a_link_answers_200_and_hands_the_client_the_slug() -> None
     req = fake_campaign_client.requests[0]
     assert isinstance(req, client.DeactivateLinkRequest)
     assert (req.campaign_id, req.slug) == ("c1", "spring-sale")
+
+
+def test_an_unreadable_record_is_503_and_leaks_nothing() -> None:
+    fake_campaign_client = FakeCampaignClient(
+        error=client.Unreadable("corrupted campaign record 'c1': [bad_slug] bad")
+    )
+    response = handlers.Handler(fake_campaign_client).get_campaign("c1")
+    assert response.body == {
+        "type": "/problems/unavailable",
+        "title": "Service Unavailable",
+        "status": 503,
+        "detail": "please retry",
+    }
+    assert response.status == 503

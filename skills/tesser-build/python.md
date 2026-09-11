@@ -43,10 +43,13 @@ them.
 > structural typing vs Go's struct embedding, the absence of
 > `context.Context` — it is called out inline.
 
-(`tesser.errors` and `tesser.serialization` need no debt markers: they are
-tesser norm modules every placement may import — as modules, like everything
-else: `import tesser.errors as errors`, then `errors.invalid(...)`. The
-`# tesser:debt TB062` markers earlier revisions of these excerpts
+(`tesser.errors` and `tesser.serialization` need no debt markers where they
+are granted: `tesser.serialization` in domain and test modules, `tesser.errors`
+in domain, application, component, app, and test modules — as modules, like
+everything else: `import tesser.errors as errors`, then `errors.invalid(...)`.
+An adapters or srv module is **not** granted `tesser.errors` (TB050): the
+edge speaks the errors a context declares in `client/`, never a tesser type.
+The `# tesser:debt TB062` markers earlier revisions of these excerpts
 carried are gone — the app-level `errors`/`serialization` root modules they
 excused moved into the tesser runtime.)
 
@@ -1589,12 +1592,17 @@ class Handler(ts.Handler):
   `HttpRequest`, so a test builds one by hand (bytes body included) and
   asserts on the returned `HttpResponse`. Only a handler imports its own
   context's client (TB060).
-- **`respond` is the whole error table for the mechanism** (it lives with the
-  host, `srv/http/main.py`): shape guard → 400, domain kind → status through
-  the one pure mapper (`status_for` over the closed `Kind` set), infra → 503,
-  unexpected → 500 — plus the host's own framing rejections (413, 411)
-  through the same table. `HttpResponse.problem` renders the RFC 9457-shaped
-  object — decided once, at this path.
+- **The handler matches the context's `ERRORS`; the host catches only its
+  own.** A context declares what crosses its `Client` in `client/`
+  (`class Rejected(ts.Error)`, and `ERRORS = (Rejected, ...)`); the handler
+  wraps the client call in `except client.ERRORS as error:` and `match`es it,
+  one arm per error, `case _ as never: typing.assert_never(never)`. The host's
+  table is two arms: its protocol rejections (a `ts.Rejection` → 400/413/411,
+  or exit 2) and `except Exception` → a generic 500 / exit 1 with the
+  traceback on stderr and nothing else leaked. `tesser.errors` is not granted
+  to adapters or srv (TB050). The excerpt below predates this and still shows
+  the host-owned `respond`; `examples/minimal/srv/cli/main.py` and
+  `examples/minimal/alpha/adapters/handlers/cli.py` are the migrated shape.
 
 ```python
 # srv/http/main.py (verified impl) — the route table: the whole URL surface, one place
@@ -1673,8 +1681,9 @@ if __name__ == "__main__":
   exactly once, as `ts` (TB050).
 - **The host's own failures use the same vocabulary** — an unmatched route
   (404), an oversized body (413), a streaming body (411) all render through
-  the same `respond`/`problem` path a handler uses, so a client sees one
-  error format from the whole process.
+  the same `HttpResponse.problem` shape a handler uses, so a client sees one
+  error format from the whole process. Those are the only failures the host
+  names; a context's errors never reach it.
 - **One loader, one env read.** `from_env` (`bootstrap/config.py`) is the
   single place the app reads the environment, loading app config **and** the
   host's launch config into one `Config`; it stays a pure function (`getenv`
@@ -1694,8 +1703,8 @@ if __name__ == "__main__":
   `srv/cli/main.py` routes a command name through a table, prints
   `stdout`/`stderr`, exits the `exit_code`; the handler
   (`campaign/adapters/handlers/cli.py`) never touches `argv`, `print`, or
-  the process, and the host's error table maps the closed domain `Kind` to
-  an exit code via `tesser.errors.exit_code_for` — the CLI's `status_for`. Piped
+  the process, and the handler's error match maps the context's `ERRORS` to
+  an exit code — the CLI's status. Piped
   **stdin** would be the CLI's "body" and reopens the same
   buffered-vs-stream question as HTTP; none of these commands read it, so it
   stays a named boundary.

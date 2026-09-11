@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import typing
 
 import tesser.application as ts
@@ -11,10 +12,22 @@ class GetProductPriceRequest(ts.Request):
         self.sku = sku
 
 
-class GetProductPriceResponse(ts.Response):
+class Priced(enum.Enum):
+    FOUND = "found"
+    MISSING = "missing"
+
+
+class PriceRecord(ts.Response):
 
     def __init__(self, cents: int) -> None:
         self.cents = cents
+
+
+class GetProductPriceResponse(ts.Response):
+
+    def __init__(self, outcome: Priced, prices: tuple[PriceRecord, ...]) -> None:
+        self.outcome = outcome
+        self.prices = prices
 
 
 class ProductCatalogRepository(ts.Port, typing.Protocol):

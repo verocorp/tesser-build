@@ -6,7 +6,6 @@ import pytest
 import ordering.application as application
 import ordering.application.ports as ports
 import ordering.application.relays as relays
-import tesser.errors as errors
 
 
 @ts.fake
@@ -28,8 +27,8 @@ class FakePaymentProcessor(ports.PaymentProcessor):
 class FakeRefusingPaymentProcessor(ports.PaymentProcessor):
 
     def charge(self, charge_request: ports.ChargeRequest) -> ports.ChargeResponse:
-        raise errors.conflict(
-            "charge_declined", f"the processor declined the charge for order {charge_request.order_id!r}"
+        raise ports.ChargeDeclined(
+            f"the processor declined the charge for order {charge_request.order_id!r}"
         )
 
 
@@ -50,16 +49,16 @@ class TestPurchaseActions:
         )
         assert fake_payment_processor.charged == [("o2", 3000)]
 
-    def test_a_refused_charge_is_the_processors_conflict(self) -> None:
-        with pytest.raises(errors.DomainError) as excinfo:
+    def test_a_refused_charge_crosses_as_the_ports_own_error(self) -> None:
+        with pytest.raises(ports.ChargeDeclined) as excinfo:
             application.PurchaseActions(FakeRefusingPaymentProcessor()).take_payment(
                 relays.TakePaymentRequest(order_id="o1", cents=750)
             )
-        assert excinfo.value.kind is errors.Kind.CONFLICT
+        assert "declined the charge" in excinfo.value.message
 
     def test_a_negative_amount_is_refused_before_the_processor_is_asked(self) -> None:
         fake_payment_processor = FakePaymentProcessor()
-        with pytest.raises(errors.DomainError):
+        with pytest.raises(ports.EngineRejected):
             application.PurchaseActions(fake_payment_processor).take_payment(
                 relays.TakePaymentRequest(order_id="o1", cents=-1)
             )

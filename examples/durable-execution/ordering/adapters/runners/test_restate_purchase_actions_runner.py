@@ -11,7 +11,7 @@ import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
-import tesser.errors as errors
+import ordering.application.ports as ports  # tesser:debt TB070
 
 
 @ts.fake
@@ -71,16 +71,16 @@ class TestRestatePurchaseActionsRunner:
             (restate_order_runtime.take_payment_handler, take_payment_request)
         ]
 
-    def test_each_terminal_status_comes_back_as_its_kind(self) -> None:
+    def test_each_terminal_status_comes_back_as_the_engine_error_it_names(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
-        for status_code, kind in (
-            (409, errors.Kind.CONFLICT),
-            (422, errors.Kind.VALIDATION),
-            (404, errors.Kind.NOT_FOUND),
+        for status_code, engine_error in (
+            (409, ports.EngineConflict),
+            (422, ports.EngineRejected),
+            (404, ports.EngineMissing),
         ):
-            with pytest.raises(errors.DomainError) as excinfo:
+            with pytest.raises(engine_error) as excinfo:
                 asyncio.run(
                     runners.RestatePurchaseActionsRunner(
                         typing.cast(
@@ -90,9 +90,7 @@ class TestRestatePurchaseActionsRunner:
                         restate_order_runtime,
                     ).run_take_payment(relays.TakePaymentRequest(order_id="o1", cents=750))
                 )
-            assert excinfo.value.kind is kind
-            assert excinfo.value.code == "action_rejected"
-            assert excinfo.value.message == "refused"
+            assert str(excinfo.value) == "refused"
 
     def test_a_terminal_error_of_no_domain_status_stays_terminal(self) -> None:
         with pytest.raises(restate.TerminalError) as excinfo:
