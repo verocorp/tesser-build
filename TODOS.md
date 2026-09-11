@@ -1193,6 +1193,40 @@ too — so today the analyzer reports a metadata string as a quoted type.
   `test_a_client_dto_bool_is_read_through_the_annotations_that_wrap_it`
   locks the present behaviour so a change is visible.
 
+## Operations belong in mappers (2026-09-11, Chris ruling)
+
+Chris, reading specs-app's `identity_text = str(identity)` feeding a
+port request by hand: `domain.Identity(request.jtbd_id)` is fine because it
+is an accessor read, but the `str(...)` "must be a mapper because it
+includes an operation — so we should create a rule for this for all places
+that allow mappers". Shipped as a TB082 row: a builtin call, an arithmetic
+operator, or a collection mutation (`.append`, …) in a public service,
+actions, or orchestrator method is a finding — "a translation is a mapper,
+because a value that took an operation to make crosses through a MapTo
+class and never through a service method's own hands". 81 sites across
+seven trees moved into mappers in the same change (the by-hand find-by-id
+request was the examples' most-copied shape).
+
+Left open:
+
+- [ ] **The adapters side.** Repositories, gateways, and handlers have
+  their own `tesser.adapters.Mapper` (which may take a primitive), but their
+  bodies are not under this rule — `Body.violations()` runs for service,
+  actions, and orchestrator blocks only. A handler's `isinstance` checks and
+  `json_body()` reads are operations; so is every SQL-row-to-record
+  conversion in a repository. *For:* "all places that allow mappers" names
+  them. *Against:* an adapter's whole job is operations at the boundary, and
+  the rule would have to name which ones are the mapping.
+- [ ] **Formatting is not an operation.** An f-string (`f"corrupted record
+  {campaign_id}"`) in a `raise` stays legal — it reads `__str__`, and the
+  2026-09-06 wording ruling puts a public error's text in the service. A
+  `+` between strings IS a finding. Confirm that line, or move wording into
+  a domain object too.
+- [ ] **Builtins that are not translations.** `super()`, `isinstance`,
+  `getattr`, `iter`/`next`, `range`, `print` all fire the same way. Each is
+  arguably a finding of its own kind (the getattr/setattr ban is already
+  queued); none has a separate message yet.
+
 ## How far TB022/TB023's families reach (2026-09-06, v0.0.97.0)
 
 `TB022` bans exactly three names — `Any`, `Callable`, `Awaitable` — wherever a

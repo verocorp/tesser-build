@@ -17,6 +17,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "module.name()": "⟨module⟩",
     "cls.name": "⟨class⟩",
     "callee.id": "⟨function⟩",
+    "operation": "⟨operation⟩",
     "len(params)": "⟨count⟩",
     "len(ports)": "⟨count⟩",
     "len(stores)": "⟨count⟩",
