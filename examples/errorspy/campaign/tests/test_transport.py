@@ -121,7 +121,7 @@ def test_aggregated_validation_lists_all_invalid_params() -> None:
     assert codes == {"bad_slug", "bad_target_url"}
 
 
-def test_infra_is_503() -> None:
+def test_an_unavailable_store_is_503() -> None:
     handler = handlers.Handler(
         application.CampaignService(
             repositories.StorageCampaignRepository(storage.FakeStorage(down=True))
