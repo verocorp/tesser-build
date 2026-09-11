@@ -15075,8 +15075,7 @@ def _ports_sources(
                 "    def __init__(self, value: str) -> None:\n"
                 "        self.value = value\n"
                 "class Quotes(ts.Port, typing.Protocol):\n"
-                "    def quote(self, job: ts.JobContext, request: QuoteRequest)"
-                " -> QuoteResponse: ...\n",
+                "    def quote(self, request: QuoteRequest) -> QuoteResponse: ...\n",
                 False,
             ),
             (
@@ -15318,11 +15317,10 @@ def test_an_action_port_read_through_a_re_export() -> None:
                 "import tesser.application as ts\n"
                 "import mod.application.ports as ports\n"
                 "class Flow(ts.Orchestrator):\n"
-                "    def __init__(self, job: ts.JobContext, quoting: ports.Quotes) -> None:\n"
-                "        self._job = job\n"
+                "    def __init__(self, quoting: ports.Quotes) -> None:\n"
                 "        self._quoting = quoting\n"
                 "    def run(self, request: ports.QuoteRequest) -> ports.QuoteResponse:\n"
-                "        return self._quoting.quote(self._job, request)\n",
+                "        return self._quoting.quote(request)\n",
                 False,
             ),
         ))).violations()
@@ -15340,8 +15338,7 @@ def test_an_action_port_read_through_a_re_export() -> None:
                 "import tesser.application as ts\n"
                 "import mod.application.ports as ports\n"
                 "class Flow(ts.Orchestrator):\n"
-                "    def __init__(self, job: ts.JobContext, other: ports.Other) -> None:\n"
-                "        self._job = job\n"
+                "    def __init__(self, other: ports.Other) -> None:\n"
                 "        self._other = other\n"
                 "    def run(self, request: ports.OtherRequest) -> ports.OtherResponse:\n"
                 "        return self._other.other(request)\n",
