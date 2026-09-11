@@ -29,7 +29,7 @@ class FakeRefusingPaymentProcessor(ports.PaymentProcessor):
 
     def charge(self, charge_request: ports.ChargeRequest) -> ports.ChargeResponse:
         raise errors.conflict(
-            "payment_already_taken", f"order {charge_request.order_id!r} has already been charged"
+            "charge_declined", f"the processor declined the charge for order {charge_request.order_id!r}"
         )
 
 

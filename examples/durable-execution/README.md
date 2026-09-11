@@ -157,16 +157,36 @@ and no catalog, so the child's total is the child's word, and
 what it was asked, never a wrong price.
 `PurchaseActions.take_payment` is the class of actions over the
 `PaymentProcessor` port. `adapters/gateways/memory_payment_processor.py` is
-the stand-in, and it is idempotent by order: an identical repeat answers the
-original receipt, and only a repeat for a different amount is
-`CONFLICT payment_already_taken`. A processor behind an action has to be
-idempotent on something the request carries, because an action is the
-engine's retry unit: if the connection drops after the charge but before
-Restate records the action's result, the action runs again, and a processor
-that refused the repeat would turn a paid purchase into a failed one. This
-stand-in keys on the order and the amount, which is enough only because the
+the stand-in, and it decides nothing: `charge` answers the receipt it
+already holds for the order, or takes the charge and holds the receipt it
+made, in one `setdefault` with no branch, and the receipt is built by an
+adapters mapper (`MapToChargeResponse`) so the method reads as store-then-map
+the way every gateway in the tree reads as call-then-map. A repeat for
+another amount gets the original receipt too, and it is `Purchase.paid` that
+refuses it as `payment_mismatch`, because whether a receipt settles a
+purchase is the domain's rule and not the processor's. An earlier version of
+this stand-in raised its own `CONFLICT` on that repeat, a decision made in
+an adapter and a copy of a rule the aggregate already owned; the gateway is
+where a payment is taken, never where it is judged. A processor behind an
+action has to be idempotent on something the request carries, because an
+action is the engine's retry unit: if the connection drops after the charge
+but before Restate records the action's result, the action runs again, and a
+processor that refused the repeat would turn a paid purchase into a failed
+one. This stand-in keys on the order, which is enough only because the
 shared key namespace already refuses a second purchase of one order; a real
 processor takes an idempotency key on the request.
+
+`Order` and `Purchase` are two aggregate roots, and they live in two domain
+modules — `domain/order.py` and `domain/purchase.py` — because a domain module
+declares at most one root, and a second root in one module is two consistency
+boundaries sharing a file. Neither module imports the other: a purchase names
+its order by `OrderId`. What both roots need lives in `domain/kernel/`, the
+context kernel — `OrderId` in `order_id.py`, and `Quantity`, `PriceSpec` and
+`Price` in `price.py`. A context kernel is an exporting package, so its
+modules do not import each other either, which is why `Quantity` sits beside
+`Price` rather than in a module of its own: `Price.times` takes a `Quantity`.
+Both roots write `import ordering.domain.kernel as kernel` and name
+`kernel.OrderId`.
 
 Two value objects gained bounds in this change, because both were measured
 as holes the purchase widens. `Quantity` is at most 1,000,000 units and

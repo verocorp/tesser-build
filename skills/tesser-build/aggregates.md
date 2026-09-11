@@ -57,6 +57,13 @@ aggregate tax.
    objects with no shared rule belong outside it. Rules that span *other*
    aggregates are coordinated above (eventually via domain events), not by
    inflating the boundary.
+7. **One root per module** (maintainer ruling 2026-09-11). A domain module
+   declares at most one aggregate root, because a second root in one module is
+   two consistency boundaries sharing a file. When a second root appears,
+   split it into its own module — and neither module imports the other, since
+   one root names another by its id value object (rule 1). What the two roots
+   shared moves to the context kernel, `<context>/domain/kernel/`
+   (`kernels.md#rules`).
 
 ## Shape
 
