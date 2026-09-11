@@ -10,7 +10,7 @@ import alpha.adapters.handlers as handlers
 import alpha.application.ports as ports
 import alpha.client as client
 import alpha.component as component
-import pgdatabase.database as pgdatabase
+import pgdatabase.database as pgdatabase_database
 import protocol
 
 
@@ -32,7 +32,7 @@ class TestAlphaContext:
 
     async def test_a_cli_add_reaches_the_wired_service_and_the_widget_is_stored(self) -> None:
         config = component.Config(component.Spec(storage=os.environ["ALPHA_STORAGE"]))
-        database = pgdatabase.Database(config.database)
+        database = pgdatabase_database.Database(config.database)
         await database.open()
         async with database.acquire() as connection:
             await connection.execute("DROP TABLE IF EXISTS widgets")
@@ -50,7 +50,7 @@ class TestAlphaContext:
 
     async def test_a_taken_part_is_stored_and_read_back_through_the_client(self) -> None:
         config = component.Config(component.Spec(storage=os.environ["ALPHA_STORAGE"]))
-        database = pgdatabase.Database(config.database)
+        database = pgdatabase_database.Database(config.database)
         await database.open()
         async with database.acquire() as connection:
             await connection.execute("DROP TABLE IF EXISTS widgets")
@@ -65,7 +65,7 @@ class TestAlphaContext:
 
     async def test_adding_a_stored_name_conflicts_and_the_stored_standing_survives(self) -> None:
         config = component.Config(component.Spec(storage=os.environ["ALPHA_STORAGE"]))
-        database = pgdatabase.Database(config.database)
+        database = pgdatabase_database.Database(config.database)
         await database.open()
         async with database.acquire() as connection:
             await connection.execute("DROP TABLE IF EXISTS widgets")

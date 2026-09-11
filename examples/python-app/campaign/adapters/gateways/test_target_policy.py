@@ -5,39 +5,39 @@ import tesser.testing as ts
 
 import campaign.adapters.gateways as gateways
 import campaign.application.ports as ports
-import linkpolicy.client as client
+import linkpolicy.client as linkpolicy_client
 
 
 @ts.fake
-class RecordingPolicyClient(client.LinkPolicyClient):
+class RecordingPolicyClient(linkpolicy_client.LinkPolicyClient):
 
     def __init__(self, decision: str, reason: str) -> None:
         self._decision = decision
         self._reason = reason
         self.asked: list[str] = []
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+    def check(self, check_request: linkpolicy_client.CheckRequest) -> linkpolicy_client.CheckResponse:
         self.asked.append(check_request.target_url)
-        return client.CheckResponse(decision=self._decision, reason=self._reason)
+        return linkpolicy_client.CheckResponse(decision=self._decision, reason=self._reason)
 
     def list_verdicts(
-        self, list_verdicts_request: client.ListVerdictsRequest
-    ) -> client.ListVerdictsResponse:
-        return client.ListVerdictsResponse(verdicts=())
+        self, list_verdicts_request: linkpolicy_client.ListVerdictsRequest
+    ) -> linkpolicy_client.ListVerdictsResponse:
+        return linkpolicy_client.ListVerdictsResponse(verdicts=())
 
 
 @ts.fake
-class RefusingPolicyClient(client.LinkPolicyClient):
+class RefusingPolicyClient(linkpolicy_client.LinkPolicyClient):
 
     def __init__(self, error: Exception) -> None:
         self._error = error
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+    def check(self, check_request: linkpolicy_client.CheckRequest) -> linkpolicy_client.CheckResponse:
         raise self._error
 
     def list_verdicts(
-        self, list_verdicts_request: client.ListVerdictsRequest
-    ) -> client.ListVerdictsResponse:
+        self, list_verdicts_request: linkpolicy_client.ListVerdictsRequest
+    ) -> linkpolicy_client.ListVerdictsResponse:
         raise self._error
 
 
@@ -113,22 +113,22 @@ def test_a_neighbour_decision_the_gateway_knows_no_verdict_for_is_refused() -> N
 
 def test_a_neighbour_that_cannot_answer_is_the_ports_unavailable() -> None:
     link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
-        RefusingPolicyClient(client.Unavailable("the verdict store is unavailable"))
+        RefusingPolicyClient(linkpolicy_client.Unavailable("the verdict store is unavailable"))
     )
 
     with pytest.raises(ports.PolicyUnavailable) as caught:
         link_policy_target_policy.check(
             ports.CheckTargetRequest(target_url="https://ok.example/x")
         )
-    assert isinstance(caught.value.__cause__, client.Unavailable)
+    assert isinstance(caught.value.__cause__, linkpolicy_client.Unavailable)
 
 
 def test_a_neighbour_rejection_is_our_bug_and_leaves_the_gateway_untranslated() -> None:
     link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
-        RefusingPolicyClient(client.Rejected("invalid_target_url", "target url must be http(s)"))
+        RefusingPolicyClient(linkpolicy_client.Rejected("invalid_target_url", "target url must be http(s)"))
     )
 
-    with pytest.raises(client.Rejected):
+    with pytest.raises(linkpolicy_client.Rejected):
         link_policy_target_policy.check(
             ports.CheckTargetRequest(target_url="https://ok.example/x")
         )

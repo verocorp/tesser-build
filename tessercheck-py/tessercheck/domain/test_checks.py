@@ -2420,7 +2420,7 @@ def test_import_matrix_is_flagged() -> None:
                 "two/adapters/gateways.py",
                 "two.adapters.gateways",
                 "import tesser.adapters as ts\n"
-                "import shop.client.client as client\n"
+                "import shop.client.client as shop_client\n"
                 "class Bridge(ts.Gateway):\n"
                 "    pass\n",
                 False,
@@ -2439,7 +2439,7 @@ def test_import_matrix_is_flagged() -> None:
                 "two/application/service.py",
                 "two.application.service",
                 "import tesser.application as ts\n"
-                "import shop.domain.thing as thing\n",
+                "import shop.domain.thing as shop_thing\n",
                 False,
             ),
         ))).violations()
@@ -2489,19 +2489,19 @@ def test_srv_and_app_import_rows() -> None:
             (
                 "srv/http.py",
                 "srv.http",
-                "import shop.application.service as service\n"
+                "import shop.application.service as shop_service\n"
                 "import shop.adapters.gateways as shop_gateways\n"
                 "import two.adapters.gateways as two_gateways\n"
-                "import app.wire as wire\n",
+                "import app.wire as app_wire\n",
                 False,
             ),
             (
                 "app/wire.py",
                 "app.wire",
-                "import shop.domain.thing as thing\n"
-                "import shop.component.component as wiring\n"
-                "import shop.client.client as client\n"
-                "import srv.http as http\n",
+                "import shop.domain.thing as shop_thing\n"
+                "import shop.component.component as shop_component\n"
+                "import shop.client.client as shop_client\n"
+                "import srv.http as srv_http\n",
                 False,
             ),
         ))).violations()
@@ -4046,7 +4046,7 @@ def test_a_classless_module_inside_handlers_may_speak_protocol() -> None:
                 "shop/adapters/handlers/usage.py",
                 "shop.adapters.handlers.usage",
                 "import tesser.adapters as ts\n"
-                "import protocol.http as http\n",
+                "import protocol.http as protocol_http\n",
                 False,
             ),
         ))).violations()
@@ -4063,7 +4063,7 @@ def test_a_shell_name_missing_from_the_tree_is_not_the_shell() -> None:
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
-                "import protocol.thirdparty\n"
+                "import protocol.thirdparty as protocol_thirdparty\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -4801,7 +4801,7 @@ def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
                 "shop/component/test_component.py",
                 "shop.component.test_component",
                 "import shop.application.service as service\n"
-                "import far.client as client\n"
+                "import far.client as far_client\n"
                 "import shop.domain.thing as thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
@@ -4892,8 +4892,8 @@ def test_an_app_test_reaches_a_context_like_a_production_app() -> None:
             (
                 "app/test_boot.py",
                 "app.test_boot",
-                "import shop.client.client as client\n"
-                "import shop.domain.thing as thing\n"
+                "import shop.client.client as shop_client\n"
+                "import shop.domain.thing as shop_thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -4995,7 +4995,7 @@ def test_a_context_tier_test_reaches_its_whole_context_and_a_neighbours_applicat
             "near.tests.test_wiring",
             "import tesser.testing as ts\n"
             "import near.domain as domain\n"
-            "import shop.application.service as service\n"
+            "import shop.application.service as shop_service\n"
             "def test_x() -> None:\n"
             "    assert True\n",
             False,
@@ -5042,11 +5042,11 @@ def test_a_root_test_reaches_a_context_only_through_component_and_client() -> No
             (
                 "tests/test_app.py",
                 "tests.test_app",
-                "import shop.client.client as client\n"
-                "import shop.component.component as component\n"
-                "import shop.domain.thing as thing\n"
-                "import shop.application.service as service\n"
-                "import app.wire as wire\n"
+                "import shop.client.client as shop_client\n"
+                "import shop.component.component as shop_component\n"
+                "import shop.domain.thing as shop_thing\n"
+                "import shop.application.service as shop_service\n"
+                "import app.wire as app_wire\n"
                 "import tests.support as support\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
@@ -5054,7 +5054,7 @@ def test_a_root_test_reaches_a_context_only_through_component_and_client() -> No
             (
                 "tests/support.py",
                 "tests.support",
-                "import shop.domain.thing as thing\n",
+                "import shop.domain.thing as shop_thing\n",
                 False,
             ),
             ("app/component.py", "app.wire", "", False),
@@ -5093,15 +5093,15 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
             (
                 "shop/domain/test_thing.py",
                 "shop.domain.test_thing",
-                "import srv.http as http\n"
+                "import srv.http as srv_http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
             (
                 "srv/test_host.py",
                 "srv.test_host",
-                "import app.wire as wire\n"
-                "import tests.test_root as test_root\n"
+                "import app.wire as app_wire\n"
+                "import tests.test_root as tests_test_root\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -5114,7 +5114,7 @@ def test_a_placed_test_reaches_the_app_shell_only_where_its_placement_does() -> 
             (
                 "app/test_component.py",
                 "app.test_component",
-                "import srv.http as http\n"
+                "import srv.http as srv_http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
             ),
@@ -5247,14 +5247,14 @@ def test_a_placed_conftest_carries_its_tier() -> None:
             (
                 "tests/conftest.py",
                 "tests.conftest",
-                "import app.wire as wire\nimport shop.domain.thing as thing\n",
+                "import app.wire as app_wire\nimport shop.domain.thing as shop_thing\n",
                 False,
             ),
             ("shop/tests/__init__.py", "shop.tests", "", True),
             (
                 "shop/tests/conftest.py",
                 "shop.tests.conftest",
-                "import shop.domain.thing as thing\nimport srv.http as http\n",
+                "import shop.domain.thing as thing\nimport srv.http as srv_http\n",
                 False,
             ),
             ("app/wire.py", "app.wire", "", False),
@@ -5304,7 +5304,7 @@ def test_adapter_kind_and_protocol_tests_shell_reach() -> None:
             (
                 "protocol/test_http.py",
                 "protocol.test_http",
-                "import protocol.http as protocol_http\n"
+                "import protocol.http as http\n"
                 "import srv.http as srv_http\n"
                 "def test_ok() -> None:\n    assert True\n",
                 False,
@@ -9189,13 +9189,16 @@ def _stdlib_spec(
     pure_stdlib: tuple[str, ...] = (),
     extra: tuple[tuple[str, str, str | None, bool], ...] = (),
 ) -> domain.CodebaseSpec:
+    aliased_import = (
+        f"import {module} as {module.replace('.', '_')}\n" if "." in module else f"import {module}\n"
+    )
     return _spec(
         sources=(
             (
                 "coll/domain/thing.py",
                 "coll.domain.thing",
                 "import tesser.domain as ts\n"
-                f"import {module}\n"
+                f"{aliased_import}"
                 "class CollSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n",
@@ -9213,7 +9216,7 @@ def _stdlib_spec(
                 "kernel/money.py",
                 "kernel.money",
                 "import tesser.domain as ts\n"
-                f"import {module}\n"
+                f"{aliased_import}"
                 "class Money(ts.ValueObject):\n"
                 "    _amount: int\n"
                 "    def __init__(self, amount: int) -> None:\n"
@@ -9392,8 +9395,8 @@ def test_the_default_pure_stdlib_carries_the_shapes_a_domain_reaches_for() -> No
                 "wide/domain/thing.py",
                 "wide.domain.thing",
                 "import tesser.domain as ts\n"
-                "import collections.abc\n"
-                "import urllib.parse\n"
+                "import collections.abc as collections_abc\n"
+                "import urllib.parse as urllib_parse\n"
                 "import copy\n"
                 "class WideSpec(ts.Spec):\n"
                 "    def __init__(self, text: str) -> None:\n"
@@ -9522,7 +9525,7 @@ def test_the_exported_kernel_never_imports_the_private_kernel() -> None:
 def test_a_declared_import_matches_on_the_package_boundary() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel.sub\nimport money_kernel_evil\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=('money_kernel',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel.sub as money_kernel_sub\nimport money_kernel_evil\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=('money_kernel',))).violations()
     )
     assert any("imports money_kernel_evil" in f for f in findings), findings
     assert not any("imports money_kernel.sub" in f for f in findings), findings
@@ -9623,7 +9626,7 @@ def test_an_export_naming_a_bare_module_is_a_finding() -> None:
 def test_a_kernel_test_may_reach_the_trees_other_kernel() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import kernel.money as money\nimport shells.base as base\ndef test_money() -> None:\n    assert money.Money(1) == money.Money(1)\n    assert base.BaseSpec("x") is not None\n', False)), exports=('shells',))).violations()
+        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('shells/__init__.py', 'shells', '', True), ('shells/base.py', 'shells.base', 'import tesser.domain as ts\nclass BaseSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False), ('kernel/test_money.py', 'kernel.test_money', 'import kernel.money as money\nimport shells.base as shells_base\ndef test_money() -> None:\n    assert money.Money(1) == money.Money(1)\n    assert shells_base.BaseSpec("x") is not None\n', False)), exports=('shells',))).violations()
     )
     assert not any("kernel/test_money.py" in f for f in findings), findings
 
@@ -12386,8 +12389,8 @@ def _kinds_spec(
             "srv/main.py",
             "srv.main",
             "import tesser.srv as ts\n"
-            "import shop.adapters.handlers as handlers\n"
-            "import shop.adapters.runtimes as runtimes\n"
+            "import shop.adapters.handlers as shop_handlers\n"
+            "import shop.adapters.runtimes as shop_runtimes\n"
             "class Host(ts.Host):\n"
             "    def run(self, argv: list[str]) -> int:\n"
             "        return 0\n",
@@ -15716,7 +15719,7 @@ def test_an_action_port_read_through_a_re_export() -> None:
     ), bad
 
 
-def test_a_package_is_imported_under_its_last_segment() -> None:
+def test_a_package_from_the_modules_own_top_is_imported_under_its_last_segment() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_spec(sources=(
@@ -15743,35 +15746,166 @@ def test_a_package_is_imported_under_its_last_segment() -> None:
                 False,
             ),
             (
-                "two/domain/__init__.py",
-                "two.domain",
-                "from two.domain.tag import Label as Label\n",
+                "mod/application/test_service.py",
+                "mod.application.test_service",
+                "import mod.domain as mod_domain\n"
+                "def test_service() -> None:\n"
+                "    assert mod_domain.Tag('a') is not None\n",
+                False,
+            ),
+            (
+                "mod/application/test_other.py",
+                "mod.application.test_other",
+                "import mod.domain as domain\n"
+                "def test_other() -> None:\n"
+                "    assert domain.Tag('a') is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "mod.application.test_service imports mod.domain as mod_domain, not domain; a "
+        "package is imported under its last segment from the module's own top, under its "
+        "first and last segments from any other top, and under its whole path where two "
+        "imports would share a name" in f
+        for f in findings
+    ), findings
+    assert not any("mod.application.test_other imports mod.domain as" in f for f in findings), findings
+
+
+def test_a_package_from_another_top_is_imported_under_its_first_and_last_segments() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n",
                 True,
             ),
             (
-                "two/domain/tag.py",
-                "two.domain.tag",
+                "mod/domain/tag.py",
+                "mod.domain.tag",
                 "import tesser.domain as ts\n"
-                "class Label(ts.ValueObject):\n"
+                "class Tag(ts.ValueObject):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        object.__setattr__(self, '_text', text)\n",
                 False,
             ),
             (
-                "two/domain/test_tag.py",
-                "two.domain.test_tag",
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
                 "def test_tag() -> None:\n"
                 "    assert True\n",
                 False,
             ),
             (
-                "tests/test_both.py",
-                "tests.test_both",
-                "import mod.domain as tags\n"
-                "import two.domain as two_domain\n"
-                "def test_both() -> None:\n"
-                "    assert tags.Tag('a') is not None\n"
-                "    assert two_domain.Label('a') is not None\n",
+                "tests/test_one.py",
+                "tests.test_one",
+                "import mod.domain as domain\n"
+                "import livekit.agents as agents\n"
+                "import urllib.parse\n"
+                "import restate\n"
+                "def test_one() -> None:\n"
+                "    assert domain.Tag(urllib.parse.quote('a')) is not None\n"
+                "    assert agents is not None\n"
+                "    assert restate is not None\n",
+                False,
+            ),
+            (
+                "tests/test_two.py",
+                "tests.test_two",
+                "import mod.domain as mod_domain\n"
+                "import livekit.agents as livekit_agents\n"
+                "import urllib.parse as urllib_parse\n"
+                "def test_two() -> None:\n"
+                "    assert mod_domain.Tag(urllib_parse.quote('a')) is not None\n"
+                "    assert livekit_agents is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("tests.test_one imports mod.domain as domain, not mod_domain" in f for f in findings), findings
+    assert any("tests.test_one imports livekit.agents as agents, not livekit_agents" in f for f in findings), findings
+    assert any("tests.test_one imports urllib.parse as urllib.parse, not urllib_parse" in f for f in findings), findings
+    assert not any("tests.test_one imports restate as" in f for f in findings), findings
+    assert not any("tests.test_two imports" in f and "TB053" in f and ", not " in f for f in findings), findings
+
+
+def test_two_imports_that_would_share_a_name_each_take_their_whole_path() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "mod/application/test_service.py",
+                "mod.application.test_service",
+                "import mod.client as client\n"
+                "import mod.application.client as client\n"
+                "import restate.client as restate_client\n"
+                "import restate.serde.client as restate_serde_client\n"
+                "def test_service() -> None:\n"
+                "    assert client is not None\n"
+                "    assert restate_client is not None\n"
+                "    assert restate_serde_client is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("mod.application.test_service imports mod.client as client, not mod_client" in f for f in findings), findings
+    assert any(
+        "mod.application.test_service imports mod.application.client as client, not mod_application_client" in f
+        for f in findings
+    ), findings
+    assert not any("imports restate.client as" in f for f in findings), findings
+    assert not any("imports restate.serde.client as" in f for f in findings), findings
+
+
+def test_an_alias_finding_carries_the_rename_that_repairs_it() -> None:
+    violations = tuple(
+        v
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/__init__.py",
+                "mod.domain",
+                "from mod.domain.tag import Tag as Tag\n",
+                True,
+            ),
+            (
+                "mod/domain/tag.py",
+                "mod.domain.tag",
+                "import tesser.domain as ts\n"
+                "class Tag(ts.ValueObject):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        object.__setattr__(self, '_text', text)\n",
+                False,
+            ),
+            (
+                "mod/domain/test_tag.py",
+                "mod.domain.test_tag",
+                "def test_tag() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -15783,15 +15917,13 @@ def test_a_package_is_imported_under_its_last_segment() -> None:
                 False,
             ),
         ))).violations()
+        if str(v.code()) == "TB053" and "not mod_domain" in str(v.text())
     )
-    assert any(
-        "tests.test_both imports mod.domain as tags, not mod_domain; a package is "
-        "imported under its last segment, and where two imported packages share that "
-        "segment each takes its context as a prefix" in f
-        for f in findings
-    ), findings
-    assert not any("tests.test_both imports two.domain as" in f for f in findings), findings
-    assert not any("tests.test_one imports mod.domain as" in f for f in findings), findings
+    assert len(violations) == 1, violations
+    rename = violations[0].rename()
+    assert rename is not None
+    assert str(rename.actual()) == "domain"
+    assert str(rename.derived()) == "mod_domain"
 
 
 def test_two_packages_bound_to_one_alias_are_both_findings() -> None:
@@ -16337,6 +16469,94 @@ def test_a_rewrite_outside_any_function_changes_nothing() -> None:
         text="made = 1\n", renames=((1, "made", "tag_spec"),)
     ))
     assert str(rewrite) == "made = 1\n"
+
+
+def test_a_rewrite_renames_a_module_alias_and_every_reading_of_it() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "import two.client as client\n"
+            "class Gate:\n"
+            "    def __init__(self, two_gate: client.Client) -> None:\n"
+            "        self._two_gate = two_gate\n"
+            "    def run(self) -> client.Verdict:\n"
+            "        return client.Verdict('client')\n"
+        ),
+        renames=((1, "client", "two_client"),),
+    ))
+    assert "import two.client as two_client\n" in str(rewrite)
+    assert "two_gate: two_client.Client" in str(rewrite)
+    assert "-> two_client.Verdict:" in str(rewrite)
+    assert "return two_client.Verdict('client')" in str(rewrite)
+
+
+def test_a_rewrite_gives_an_unaliased_dotted_import_its_alias_and_rewrites_its_readings() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "import urllib.parse\n"
+            "import urllib.request\n"
+            "def quoted(text: str) -> str:\n"
+            "    return urllib.parse.quote(text) + urllib.request.__name__\n"
+        ),
+        renames=((1, "urllib.parse", "urllib_parse"),),
+    ))
+    assert "import urllib.parse as urllib_parse\n" in str(rewrite)
+    assert "import urllib.request\n" in str(rewrite)
+    assert "return urllib_parse.quote(text) + urllib.request.__name__" in str(rewrite)
+
+
+def test_a_rewrite_renames_a_module_alias_a_parameter_of_the_same_name_only_annotates() -> None:
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=(
+            "import two.client as client\n"
+            "class Gate:\n"
+            "    def __init__(self, two_client: client.Client) -> None:\n"
+            "        self._two_client = two_client\n"
+            "    def run(self) -> client.Verdict:\n"
+            "        return client.Verdict(self._two_client.ask(client.Ask()))\n"
+        ),
+        renames=((1, "client", "two_client"),),
+    ))
+    assert "import two.client as two_client\n" in str(rewrite)
+    assert "def __init__(self, two_client: two_client.Client) -> None:" in str(rewrite)
+    assert "self._two_client = two_client" in str(rewrite)
+    assert "return two_client.Verdict(self._two_client.ask(two_client.Ask()))" in str(rewrite)
+
+
+def test_a_rewrite_refuses_a_module_alias_a_function_also_binds() -> None:
+    text = (
+        "import two.client as client\n"
+        "def run(client: int) -> int:\n"
+        "    return client\n"
+    )
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=text, renames=((1, "client", "two_client"),)
+    ))
+    assert str(rewrite) == text
+
+
+def test_a_rewrite_refuses_a_module_alias_another_import_also_binds() -> None:
+    text = (
+        "import two.client as client\n"
+        "import mod.client as client\n"
+        "def run() -> object:\n"
+        "    return client.Client\n"
+    )
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=text, renames=((1, "client", "two_client"),)
+    ))
+    assert str(rewrite) == text
+
+
+def test_a_rewrite_refuses_a_module_alias_whose_new_name_is_already_in_use() -> None:
+    text = (
+        "import two.client as client\n"
+        "def run(two_client: int) -> object:\n"
+        "    return client.Client\n"
+    )
+    rewrite = domain.Rewrite(domain.RewriteSpec(
+        text=text, renames=((1, "client", "two_client"),)
+    ))
+    assert str(rewrite) == text
 
 
 def test_a_renaming_rewrites_only_the_modules_a_rename_names() -> None:

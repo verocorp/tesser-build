@@ -76,7 +76,7 @@ def test_a_dotted_import_declaration_parses_and_reaches_a_domain(tmp_path: pathl
         tmp_path,
         "shop/domain/price.py",
         "import tesser.domain as ts\n"
-        "import money.kernel\n"
+        "import money.kernel as money_kernel\n"
         "class PriceSpec(ts.Spec):\n"
         "    def __init__(self, text: str) -> None:\n"
         "        self.text = text\n",

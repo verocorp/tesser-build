@@ -4,7 +4,7 @@ import os
 
 import tesser.testing as ts
 
-import alpha.client as client
+import alpha.client as alpha_client
 import alpha.component as alpha_component
 import app as app
 import beta.component as beta_component
@@ -39,7 +39,7 @@ class TestApp:
     def test_the_app_wires_alpha_through_beta(self) -> None:
         spec = app.Spec(alpha_component.Config(alpha_component.Spec("memory")), beta_component.Config(beta_component.Spec("a")))
         minimal_app = app.MinimalApp(app.AppConfig(spec))
-        add_response = minimal_app.alpha.client.add(client.AddRequest(name="a", part="p"))
+        add_response = minimal_app.alpha.client.add(alpha_client.AddRequest(name="a", part="p"))
         assert add_response.name == "a"
 
 
@@ -48,5 +48,5 @@ class TestAppLoader:
     def test_the_loader_builds_an_app_from_its_repository(self) -> None:
         app_loader = app.AppLoader(FakeConfigRepository())
         minimal_app = app_loader.load()
-        add_response = minimal_app.alpha.client.add(client.AddRequest(name="a", part="p"))
+        add_response = minimal_app.alpha.client.add(alpha_client.AddRequest(name="a", part="p"))
         assert add_response.name == "a"

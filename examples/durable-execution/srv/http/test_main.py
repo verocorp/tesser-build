@@ -7,8 +7,8 @@ import socket
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
+import urllib.error as urllib_error
+import urllib.request as urllib_request
 
 import app as app
 
@@ -22,14 +22,14 @@ class TestHttpHost:
         env = dict(os.environ, RESTATE_INGRESS="http://localhost:8080", PYTHONPATH=os.pathsep.join(sys.path))
         host = subprocess.Popen([sys.executable, "-m", "srv.http.main", f"127.0.0.1:{port}"], env=env)
         try:
-            discover = urllib.request.Request(
+            discover = urllib_request.Request(
                 f"http://127.0.0.1:{port}/restate/discover",
                 headers={"Accept": "application/vnd.restate.endpointmanifest.v2+json"},
             )
             manifest: dict[str, object] = {}
             for _ in range(100):
                 try:
-                    with urllib.request.urlopen(discover, timeout=1) as answer:
+                    with urllib_request.urlopen(discover, timeout=1) as answer:
                         manifest = json.loads(answer.read())
                     break
                 except OSError:
@@ -84,17 +84,17 @@ class TestHttpHost:
                 b'{"order_id": "o1", "sku": "gadget", "quantity": 0}',
                 b'{"order_id": "o1", "sku": "gadget", "quantity": 2}',
             ):
-                order = urllib.request.Request(
+                order = urllib_request.Request(
                     f"http://127.0.0.1:{port}/submissions",
                     data=body,
                     headers={"Content-Type": "application/json"},
                 )
                 for _ in range(100):
                     try:
-                        with urllib.request.urlopen(order, timeout=5) as answer:
+                        with urllib_request.urlopen(order, timeout=5) as answer:
                             answers.append(answer.status)
                         break
-                    except urllib.error.HTTPError as e:
+                    except urllib_error.HTTPError as e:
                         answers.append(e.code)
                         break
                     except OSError:
@@ -128,17 +128,17 @@ class TestHttpHost:
                 b'{"order_id": "o1", "sku": "gadget", "quantity": 0}',
                 b'{"order_id": "o1", "sku": "gadget", "quantity": 2}',
             ):
-                order = urllib.request.Request(
+                order = urllib_request.Request(
                     f"http://127.0.0.1:{port}/orders",
                     data=body,
                     headers={"Content-Type": "application/json"},
                 )
                 for _ in range(100):
                     try:
-                        with urllib.request.urlopen(order, timeout=5) as answer:
+                        with urllib_request.urlopen(order, timeout=5) as answer:
                             answers.append(answer.status)
                         break
-                    except urllib.error.HTTPError as e:
+                    except urllib_error.HTTPError as e:
                         answers.append(e.code)
                         break
                     except OSError:
@@ -172,17 +172,17 @@ class TestHttpHost:
                 b'{"order_id": "o1", "sku": "gadget", "quantity": 0}',
                 b'{"order_id": "o1", "sku": "gadget", "quantity": 2}',
             ):
-                order = urllib.request.Request(
+                order = urllib_request.Request(
                     f"http://127.0.0.1:{port}/purchases",
                     data=body,
                     headers={"Content-Type": "application/json"},
                 )
                 for _ in range(100):
                     try:
-                        with urllib.request.urlopen(order, timeout=5) as answer:
+                        with urllib_request.urlopen(order, timeout=5) as answer:
                             answers.append(answer.status)
                         break
-                    except urllib.error.HTTPError as e:
+                    except urllib_error.HTTPError as e:
                         answers.append(e.code)
                         break
                     except OSError:

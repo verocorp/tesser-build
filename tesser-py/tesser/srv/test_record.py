@@ -1,4 +1,4 @@
-import collections.abc as abc
+import collections.abc as collections_abc
 import typing
 
 import pytest
@@ -8,11 +8,11 @@ import tesser.srv
 
 class Ask(tesser.srv.Request):
 
-    def __init__(self, path: str = "/", headers: abc.Mapping[str, str] | None = None) -> None:
+    def __init__(self, path: str = "/", headers: collections_abc.Mapping[str, str] | None = None) -> None:
         super().__init__(path=path, headers=dict(headers or {}))
 
     path: str
-    headers: abc.Mapping[str, str]
+    headers: collections_abc.Mapping[str, str]
 
 
 class Reply(tesser.srv.Response):

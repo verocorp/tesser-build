@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.testing as ts
 
 import app
-import tessercheck.component as component
+import tessercheck.component as tessercheck_component
 
 
 @ts.fake
@@ -15,12 +15,12 @@ class FakeConfigRepository(app.ConfigRepository):
     def get(self) -> app.AppConfig:
         self.reads += 1
         return app.AppConfig(
-            app.Spec(tessercheck=component.Config(component.Spec()))
+            app.Spec(tessercheck=tessercheck_component.Config(tessercheck_component.Spec()))
         )
 
 
 def test_a_config_carries_the_slice_its_component_reads() -> None:
-    config = component.Config(component.Spec())
+    config = tessercheck_component.Config(tessercheck_component.Spec())
 
     app_config = app.AppConfig(app.Spec(tessercheck=config))
 
@@ -29,10 +29,10 @@ def test_a_config_carries_the_slice_its_component_reads() -> None:
 
 def test_each_config_carries_its_own_slice() -> None:
     first = app.AppConfig(
-        app.Spec(tessercheck=component.Config(component.Spec()))
+        app.Spec(tessercheck=tessercheck_component.Config(tessercheck_component.Spec()))
     )
     second = app.AppConfig(
-        app.Spec(tessercheck=component.Config(component.Spec()))
+        app.Spec(tessercheck=tessercheck_component.Config(tessercheck_component.Spec()))
     )
 
     assert first.tessercheck is not second.tessercheck
@@ -50,7 +50,7 @@ def test_each_read_returns_its_own_config() -> None:
 
 def test_an_app_builds_one_component_per_slice() -> None:
     app_config = app.AppConfig(
-        app.Spec(tessercheck=component.Config(component.Spec()))
+        app.Spec(tessercheck=tessercheck_component.Config(tessercheck_component.Spec()))
     )
 
     assert app.TessercheckApp(app_config).tessercheck.client is not None
@@ -58,7 +58,7 @@ def test_an_app_builds_one_component_per_slice() -> None:
 
 def test_an_app_closes_its_components() -> None:
     app_config = app.AppConfig(
-        app.Spec(tessercheck=component.Config(component.Spec()))
+        app.Spec(tessercheck=tessercheck_component.Config(tessercheck_component.Spec()))
     )
     tessercheck_app = app.TessercheckApp(app_config)
 

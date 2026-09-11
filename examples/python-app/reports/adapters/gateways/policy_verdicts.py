@@ -4,7 +4,7 @@ import typing
 
 import tesser.adapters as ts
 
-import linkpolicy.client as client
+import linkpolicy.client as linkpolicy_client
 import reports.application.ports as ports
 
 _DECISION_BY_NAME: typing.Final[dict[str, ports.VerdictDecision]] = {
@@ -15,7 +15,7 @@ _DECISION_BY_NAME: typing.Final[dict[str, ports.VerdictDecision]] = {
 
 class PolicyVerdictGateway(ts.Gateway):
 
-    def __init__(self, link_policy_client: client.LinkPolicyClient) -> None:
+    def __init__(self, link_policy_client: linkpolicy_client.LinkPolicyClient) -> None:
         self._link_policy_client = link_policy_client
 
     def verdicts(
@@ -23,9 +23,9 @@ class PolicyVerdictGateway(ts.Gateway):
     ) -> ports.ListVerdictsResponse:
         try:
             list_verdicts_response = self._link_policy_client.list_verdicts(
-                client.ListVerdictsRequest()
+                linkpolicy_client.ListVerdictsRequest()
             )
-        except client.Unavailable as policy_error:
+        except linkpolicy_client.Unavailable as policy_error:
             raise ports.VerdictSourceUnavailable(policy_error.message) from policy_error
         records: list[ports.VerdictRecord] = []
         for v in list_verdicts_response.verdicts:

@@ -6,7 +6,7 @@ import campaign.client as campaign_client
 import linkpolicy.client as linkpolicy_client
 import reports.adapters.gateways as gateways
 import reports.application as application
-import reports.client as reports_client
+import reports.client as client
 
 
 class Spec(ts.Spec):
@@ -29,7 +29,7 @@ class Reports(ts.Component):
         campaign_client: campaign_client.CampaignClient,
         link_policy_client: linkpolicy_client.LinkPolicyClient,
     ) -> None:
-        self.client: reports_client.ReportsClient = application.ReportsService(
+        self.client: client.ReportsClient = application.ReportsService(
             gateways.CampaignLinkGateway(campaign_client),
             gateways.PolicyVerdictGateway(link_policy_client),
         )

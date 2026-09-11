@@ -5,7 +5,7 @@ import typing
 
 import tesser.app as ts
 
-import campaign.adapters.gateways as gateways
+import campaign.adapters.gateways as campaign_gateways
 import campaign.component as campaign_component
 import linkpolicy.component as linkpolicy_component
 import reports.component as reports_component
@@ -56,7 +56,7 @@ class PythonApp(ts.App):
         link_policy = linkpolicy_component.LinkPolicy(app_config.linkpolicy)
         try:
             campaign = campaign_component.Campaign(
-                app_config.campaign, gateways.LinkPolicyTargetPolicy(link_policy.client)
+                app_config.campaign, campaign_gateways.LinkPolicyTargetPolicy(link_policy.client)
             )
         except Exception:
             link_policy.close()

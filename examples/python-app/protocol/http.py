@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import urllib.parse
-import collections.abc as abc
+import urllib.parse as urllib_parse
+import collections.abc as collections_abc
 import typing
 
 import tesser.srv as ts
@@ -26,9 +26,9 @@ class HttpRequest(ts.Request):
         self,
         method: str,
         path: str,
-        path_params: abc.Mapping[str, str],
-        query_params: abc.Mapping[str, str],
-        headers: abc.Mapping[str, str],
+        path_params: collections_abc.Mapping[str, str],
+        query_params: collections_abc.Mapping[str, str],
+        headers: collections_abc.Mapping[str, str],
         body: bytes,
     ) -> None:
         super().__init__(
@@ -42,9 +42,9 @@ class HttpRequest(ts.Request):
 
     method: str
     path: str
-    path_params: abc.Mapping[str, str]
-    query_params: abc.Mapping[str, str]
-    headers: abc.Mapping[str, str]
+    path_params: collections_abc.Mapping[str, str]
+    query_params: collections_abc.Mapping[str, str]
+    headers: collections_abc.Mapping[str, str]
     body: bytes
 
     def json_body(self) -> dict[str, object]:
@@ -68,7 +68,7 @@ class HttpRequest(ts.Request):
 
 class HttpResponse(ts.Response):
 
-    def __init__(self, status_code: int, body: bytes, headers: abc.Mapping[str, str]) -> None:
+    def __init__(self, status_code: int, body: bytes, headers: collections_abc.Mapping[str, str]) -> None:
         super().__init__(
             status_code=status_code,
             body=body,
@@ -77,10 +77,10 @@ class HttpResponse(ts.Response):
 
     status_code: int
     body: bytes
-    headers: abc.Mapping[str, str]
+    headers: collections_abc.Mapping[str, str]
 
     @classmethod
-    def json(cls, status_code: int, body: dict[str, object], headers: abc.Mapping[str, str] | None = None) -> HttpResponse:
+    def json(cls, status_code: int, body: dict[str, object], headers: collections_abc.Mapping[str, str] | None = None) -> HttpResponse:
         payload = json.dumps(body).encode("utf-8")
         declared = dict(headers or {})
         if not any(name.lower() == "content-type" for name in declared):
@@ -131,8 +131,8 @@ class Match(ts.Record):
     def __init__(
         self,
         endpoint: Endpoint,
-        path_params: abc.Mapping[str, str],
-        query_params: abc.Mapping[str, str],
+        path_params: collections_abc.Mapping[str, str],
+        query_params: collections_abc.Mapping[str, str],
     ) -> None:
         super().__init__(
             endpoint=endpoint,
@@ -141,8 +141,8 @@ class Match(ts.Record):
         )
 
     endpoint: Endpoint
-    path_params: abc.Mapping[str, str]
-    query_params: abc.Mapping[str, str]
+    path_params: collections_abc.Mapping[str, str]
+    query_params: collections_abc.Mapping[str, str]
 
 
 class Router(ts.Record):
@@ -153,10 +153,10 @@ class Router(ts.Record):
     routes: tuple[Route, ...]
 
     def match(self, method: str, raw_path: str) -> Match | None:
-        parts = urllib.parse.urlsplit(raw_path)
+        parts = urllib_parse.urlsplit(raw_path)
         query_params = {
             name: values[-1]
-            for name, values in urllib.parse.parse_qs(parts.query).items()
+            for name, values in urllib_parse.parse_qs(parts.query).items()
         }
         for route in self.routes:
             if route.method != method:
@@ -172,7 +172,7 @@ class Router(ts.Record):
                     if not got:
                         matched = False
                         break
-                    params[want[1:-1]] = urllib.parse.unquote(got)
+                    params[want[1:-1]] = urllib_parse.unquote(got)
                     continue
                 if want != got:
                     matched = False

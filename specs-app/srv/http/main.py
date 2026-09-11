@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import http.server as server
+import http.server as http_server
 import pathlib
 import signal
 import threading
@@ -11,7 +11,7 @@ import tesser.srv as ts
 
 import app as app
 import protocol as protocol
-import specification.adapters.handlers as handlers
+import specification.adapters.handlers as specification_handlers
 
 MAX_BUFFERED_BODY: typing.Final[int] = 1_048_576
 PAGE: typing.Final[pathlib.Path] = pathlib.Path(__file__).with_name("index.html")
@@ -20,14 +20,14 @@ PAGE: typing.Final[pathlib.Path] = pathlib.Path(__file__).with_name("index.html"
 class HttpHost(ts.Host):
 
     def __init__(self, addr: tuple[str, int], specs_app: app.SpecsApp) -> None:
-        http_handler = handlers.HttpHandler(specs_app.specification.client)
+        http_handler = specification_handlers.HttpHandler(specs_app.specification.client)
         routes = (
             protocol.Route("POST", "/jtbd/{jtbd_id}/stories", http_handler.add_story),
         )
         router = protocol.Router(routes)
         page = PAGE.read_bytes()
 
-        class _RequestHandler(server.BaseHTTPRequestHandler):
+        class _RequestHandler(http_server.BaseHTTPRequestHandler):
             timeout = 30
 
             def do_GET(self) -> None:
@@ -102,7 +102,7 @@ class HttpHost(ts.Host):
             def log_message(self, format: str, *args: object) -> None:
                 return
 
-        self._server = server.ThreadingHTTPServer(addr, _RequestHandler)
+        self._server = http_server.ThreadingHTTPServer(addr, _RequestHandler)
 
     @property
     def port(self) -> int:

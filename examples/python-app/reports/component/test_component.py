@@ -5,7 +5,7 @@ import tesser.testing as ts
 
 import campaign.client as campaign_client
 import linkpolicy.client as linkpolicy_client
-import reports.client as reports_client
+import reports.client as client
 import reports.component as component
 import tesser.errors as errors
 
@@ -85,7 +85,7 @@ def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
     )
     try:
         links_by_verdict_response = reports.client.links_by_verdict(
-            reports_client.LinksByVerdictRequest()
+            client.LinksByVerdictRequest()
         )
         assert [
             (view.slug, view.decision, view.reason)
@@ -106,7 +106,7 @@ def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
     )
     try:
         links_by_verdict_response = reports.client.links_by_verdict(
-            reports_client.LinksByVerdictRequest()
+            client.LinksByVerdictRequest()
         )
         assert [
             (view.slug, view.decision, view.reason)
@@ -129,7 +129,7 @@ def test_a_config_wires_a_client_that_serves_a_report() -> None:
     )
     try:
         links_by_verdict_response = reports.client.links_by_verdict(
-            reports_client.LinksByVerdictRequest()
+            client.LinksByVerdictRequest()
         )
         assert [view.slug for view in links_by_verdict_response.links] == ["spring-sale"]
     finally:
@@ -142,7 +142,7 @@ def test_the_wired_client_reports_nothing_when_neither_context_has_anything() ->
     )
     try:
         assert reports.client.links_by_verdict(
-            reports_client.LinksByVerdictRequest()
+            client.LinksByVerdictRequest()
         ).links == ()
     finally:
         reports.close()
@@ -154,7 +154,7 @@ def test_a_config_carries_nothing_a_caller_must_set() -> None:
     )
     try:
         assert reports.client.links_by_verdict(
-            reports_client.LinksByVerdictRequest()
+            client.LinksByVerdictRequest()
         ).links == ()
     finally:
         reports.close()
@@ -168,7 +168,7 @@ def test_closing_the_wired_graph_is_safe_to_repeat() -> None:
     reports.close()
     reports.close()
 
-    assert reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links == ()
+    assert reports.client.links_by_verdict(client.LinksByVerdictRequest()).links == ()
 
 
 def test_two_builds_hand_back_two_independent_clients() -> None:
@@ -209,6 +209,6 @@ def test_a_failure_in_a_wired_neighbour_reaches_the_caller() -> None:
     )
     try:
         with pytest.raises(errors.InfraError):
-            reports.client.links_by_verdict(reports_client.LinksByVerdictRequest())
+            reports.client.links_by_verdict(client.LinksByVerdictRequest())
     finally:
         reports.close()

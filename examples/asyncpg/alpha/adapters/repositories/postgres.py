@@ -8,7 +8,7 @@ import asyncpg
 import tesser.adapters as ts
 
 import alpha.application.ports as ports
-import pgdatabase.database as pgdatabase
+import pgdatabase.database as pgdatabase_database
 
 _SCHEMA: typing.Final[str] = (
     "CREATE TABLE IF NOT EXISTS widgets "
@@ -82,7 +82,7 @@ class PostgresWidgetRepository(ts.Repository):
 
 class PostgresWidgetStore(ts.Repository):
 
-    def __init__(self, database: pgdatabase.Database) -> None:
+    def __init__(self, database: pgdatabase_database.Database) -> None:
         self._database = database
         self._schema_ready = False
 

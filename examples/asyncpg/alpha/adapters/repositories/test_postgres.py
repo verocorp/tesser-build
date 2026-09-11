@@ -8,7 +8,7 @@ import pytest
 
 import alpha.adapters.repositories as repositories
 import alpha.application.ports as ports
-import pgdatabase.database as pgdatabase
+import pgdatabase.database as pgdatabase_database
 
 
 class TestPostgresWidgetStore:
@@ -18,7 +18,7 @@ class TestPostgresWidgetStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:
@@ -40,7 +40,7 @@ class TestPostgresWidgetStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:
@@ -57,7 +57,7 @@ class TestPostgresWidgetStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:
@@ -84,7 +84,7 @@ class TestPostgresWidgetStore:
         )
         await connection.execute("INSERT INTO widgets (name, part) VALUES ('old', 'p')")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:
@@ -97,7 +97,7 @@ class TestPostgresWidgetStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:
@@ -111,7 +111,7 @@ class TestPostgresWidgetStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:
@@ -130,7 +130,7 @@ class TestPostgresWidgetStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         with pytest.raises(RuntimeError):
@@ -148,7 +148,7 @@ class TestPostgresWidgetStore:
         connection = await asyncpg.connect(dsn)
         await connection.execute("DROP TABLE IF EXISTS widgets")
         await connection.close()
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(dsn), min_size=1, max_size=2)
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn), min_size=1, max_size=2)
         await database.open()
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:

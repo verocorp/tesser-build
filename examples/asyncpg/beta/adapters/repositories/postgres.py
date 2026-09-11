@@ -8,7 +8,7 @@ import asyncpg
 import tesser.adapters as ts
 
 import beta.application.ports as ports
-import pgdatabase.database as pgdatabase
+import pgdatabase.database as pgdatabase_database
 
 _SCHEMA: typing.Final[str] = "CREATE TABLE IF NOT EXISTS keys (key text PRIMARY KEY)"
 _HAS: typing.Final[str] = "SELECT 1 FROM keys WHERE key = $1"
@@ -38,7 +38,7 @@ class PostgresKeyRepository(ts.Repository):
 
 class PostgresKeyStore(ts.Repository):
 
-    def __init__(self, database: pgdatabase.Database) -> None:
+    def __init__(self, database: pgdatabase_database.Database) -> None:
         self._database = database
         self._schema_ready = False
 

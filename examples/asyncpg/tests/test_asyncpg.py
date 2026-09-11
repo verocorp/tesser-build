@@ -5,13 +5,13 @@ import os
 import alpha.client as alpha_client
 import app
 import beta.client as beta_client
-import pgdatabase.database as pgdatabase
+import pgdatabase.database as pgdatabase_database
 
 
 class TestLoadedApp:
 
     async def test_the_loaded_app_writes_and_reads_both_contexts(self) -> None:
-        database = pgdatabase.Database(pgdatabase.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(os.environ["ALPHA_STORAGE"]))
         await database.open()
         async with database.acquire() as connection:
             await connection.execute("DROP TABLE IF EXISTS widgets")

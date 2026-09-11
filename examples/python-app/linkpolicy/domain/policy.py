@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing
-import urllib.parse
+import urllib.parse as urllib_parse
 
 import tesser.domain as ts
 
@@ -140,7 +140,7 @@ class Policy(ts.ValueObject):
 
     def evaluate(self, target_url: TargetURL) -> Verdict:
         target_url_text = str(target_url)
-        parsed = urllib.parse.urlparse(target_url_text)
+        parsed = urllib_parse.urlparse(target_url_text)
         if parsed.scheme not in {str(s) for s in self._allowed_schemes}:
             return Verdict(
                 VerdictSpec(

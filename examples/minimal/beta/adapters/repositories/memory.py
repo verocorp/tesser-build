@@ -3,7 +3,7 @@ from __future__ import annotations
 import tesser.adapters as ts
 
 import beta.application.ports as ports
-import memoryclient.client as memoryclient
+import memoryclient.client as memoryclient_client
 
 
 class MapToHasKeyResponse(ts.Mapper, ports.HasKeyResponse):
@@ -15,7 +15,7 @@ class MapToHasKeyResponse(ts.Mapper, ports.HasKeyResponse):
 class MemoryKeyRepository(ts.Repository):
 
     def __init__(self) -> None:
-        self._memory_client = memoryclient.MemoryClient()
+        self._memory_client = memoryclient_client.MemoryClient()
 
     def has(self, has_key_request: ports.HasKeyRequest) -> ports.HasKeyResponse:
         result = self._memory_client.exists(has_key_request.key)

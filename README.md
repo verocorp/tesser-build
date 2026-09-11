@@ -92,7 +92,8 @@ objects out of public behavior and one primitive, spec, or domain object
 into it),
 module/class structure (`TB040`–`TB045`), import form and the tier matrices
 (`TB050`–`TB069` — a package is the unit you import and its `__init__` is the
-export list, the alias is the package's last segment, no package exports a
+export list, the alias is the package's last segment under your own top and
+its first and last segments under any other, no package exports a
 class of its own name, a kernel is domain, and every module carries an import
 row keyed on where it sits, with no exempt modules), test placement and module
 totality (`TB070`–`TB074`),

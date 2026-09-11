@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import collections.abc as abc
+import collections.abc as collections_abc
 
 import tesser.srv as ts
-import livekit.agents as agents
+import livekit.agents as livekit_agents
 
 import protocol
 
 
-class ToolAgent(agents.Agent, ts.Host):
+class ToolAgent(livekit_agents.Agent, ts.Host):
 
     def __init__(
         self,
@@ -32,10 +32,10 @@ class ToolAgent(agents.Agent, ts.Host):
 
     async def _rebind(self, tool_turn: protocol.ToolTurn) -> None:
         await self.update_tools(
-            [agents.function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in tool_turn.tools]  # tesser:debt TB051
+            [livekit_agents.function_tool(self._shim(tool.name), raw_schema=tool.schema()) for tool in tool_turn.tools]  # tesser:debt TB051
         )
 
-    def _shim(self, name: str) -> abc.Callable[..., abc.Awaitable[str]]:  # tesser:debt TB022
+    def _shim(self, name: str) -> collections_abc.Callable[..., collections_abc.Awaitable[str]]:  # tesser:debt TB022
         async def call(raw_arguments: dict[str, object]) -> str:  # tesser:debt TB023
             async with self._lock:
                 route: protocol.Route | None = None
@@ -44,7 +44,7 @@ class ToolAgent(agents.Agent, ts.Host):
                         route = candidate
                         break
                 if route is None:
-                    raise agents.ToolError(f"unknown tool {name!r}")
+                    raise livekit_agents.ToolError(f"unknown tool {name!r}")
                 try:
                     turn = route.endpoint(protocol.ToolCall(name, raw_arguments))
                 except (protocol.BadToolCall, ValueError) as err:
@@ -53,7 +53,7 @@ class ToolAgent(agents.Agent, ts.Host):
                     except Exception:
                         await self._tool_halt()
                         raise
-                    raise agents.ToolError(str(err)) from err
+                    raise livekit_agents.ToolError(str(err)) from err
                 except Exception:
                     await self._tool_halt()
                     raise

@@ -3,35 +3,35 @@ from __future__ import annotations
 import pytest
 import tesser.testing as ts
 
-import linkpolicy.client as client
+import linkpolicy.client as linkpolicy_client
 import reports.adapters.gateways as gateways
 import reports.application.ports as ports
 
 
 @ts.fake
-class FakeLinkPolicyClient(client.LinkPolicyClient):
+class FakeLinkPolicyClient(linkpolicy_client.LinkPolicyClient):
     def __init__(
-        self, *verdicts: client.VerdictView, error: Exception | None = None
+        self, *verdicts: linkpolicy_client.VerdictView, error: Exception | None = None
     ) -> None:
         self.verdicts = verdicts
         self.error = error
-        self.requests: list[client.ListVerdictsRequest] = []
+        self.requests: list[linkpolicy_client.ListVerdictsRequest] = []
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+    def check(self, check_request: linkpolicy_client.CheckRequest) -> linkpolicy_client.CheckResponse:
         raise AssertionError("check is not part of the reports surface")
 
     def list_verdicts(
-        self, list_verdicts_request: client.ListVerdictsRequest
-    ) -> client.ListVerdictsResponse:
+        self, list_verdicts_request: linkpolicy_client.ListVerdictsRequest
+    ) -> linkpolicy_client.ListVerdictsResponse:
         self.requests.append(list_verdicts_request)
         if self.error is not None:
             raise self.error
-        return client.ListVerdictsResponse(verdicts=self.verdicts)
+        return linkpolicy_client.ListVerdictsResponse(verdicts=self.verdicts)
 
 
 def test_an_allowed_verdict_arrives_as_the_allowed_member() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        client.VerdictView("https://a.example/s", "allowed", "on the allowlist")
+        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist")
     )
 
     list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
@@ -45,7 +45,7 @@ def test_an_allowed_verdict_arrives_as_the_allowed_member() -> None:
 
 def test_a_denied_verdict_arrives_as_the_denied_member() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        client.VerdictView("https://a.example/s", "denied", "host blocked")
+        linkpolicy_client.VerdictView("https://a.example/s", "denied", "host blocked")
     )
 
     list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
@@ -57,8 +57,8 @@ def test_a_denied_verdict_arrives_as_the_denied_member() -> None:
 
 def test_every_verdict_the_policy_context_serves_crosses_the_boundary() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        client.VerdictView("https://a.example/s", "allowed", "on the allowlist"),
-        client.VerdictView("https://a.example/w", "denied", "host blocked"),
+        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist"),
+        linkpolicy_client.VerdictView("https://a.example/w", "denied", "host blocked"),
     )
 
     list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
@@ -79,7 +79,7 @@ def test_the_gateway_asks_the_policy_context_for_its_whole_verdict_list() -> Non
     )
 
     assert len(fake_link_policy_client.requests) == 1
-    assert isinstance(fake_link_policy_client.requests[0], client.ListVerdictsRequest)
+    assert isinstance(fake_link_policy_client.requests[0], linkpolicy_client.ListVerdictsRequest)
 
 
 def test_a_policy_context_with_no_verdicts_yields_no_records() -> None:
@@ -103,19 +103,19 @@ def test_a_failure_the_policy_context_never_declared_reaches_the_caller() -> Non
 
 def test_a_policy_context_that_cannot_answer_is_the_ports_unavailable() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        error=client.Unavailable("the verdict store is unavailable")
+        error=linkpolicy_client.Unavailable("the verdict store is unavailable")
     )
 
     with pytest.raises(ports.VerdictSourceUnavailable) as caught:
         gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
             ports.ListVerdictsRequest()
         )
-    assert isinstance(caught.value.__cause__, client.Unavailable)
+    assert isinstance(caught.value.__cause__, linkpolicy_client.Unavailable)
 
 
 def test_a_verdict_decision_outside_the_recorded_set_is_refused() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        client.VerdictView("https://a.example/s", "maybe", "unsure")
+        linkpolicy_client.VerdictView("https://a.example/s", "maybe", "unsure")
     )
 
     with pytest.raises(ports.VerdictSourceUnavailable):

@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 import app as app
-import ordering.client as client
+import ordering.client as ordering_client
 
 
 class TestWiredApp:
@@ -24,10 +24,10 @@ class TestWiredApp:
     def test_submitting_an_order_with_no_ingress_is_unavailable(self) -> None:
         durable_execution_app = app.load()
         try:
-            with pytest.raises(client.Unavailable):
+            with pytest.raises(ordering_client.Unavailable):
                 asyncio.run(
                     durable_execution_app.ordering.client.submit_order(
-                        client.SubmitOrderRequest(order_id="o1", sku="widget", quantity=2)
+                        ordering_client.SubmitOrderRequest(order_id="o1", sku="widget", quantity=2)
                     )
                 )
         finally:

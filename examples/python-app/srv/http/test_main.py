@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import http.client as client
+import http.client as http_client
 import json
 import os
 import pathlib
@@ -150,7 +150,7 @@ def test_the_server_answers_a_routed_request() -> None:
     thread.start()
     try:
         port = http_host._server.server_address[1]
-        conn = client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.request(
             "POST",
             "/campaigns",
@@ -176,7 +176,7 @@ def test_the_server_answers_an_unknown_route_with_a_problem_document() -> None:
     thread.start()
     try:
         port = http_host._server.server_address[1]
-        conn = client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.request("GET", "/nope")
         resp = conn.getresponse()
         payload = json.loads(resp.read())
@@ -196,7 +196,7 @@ def test_the_server_answers_a_routed_get_with_the_campaign_it_created() -> None:
     thread.start()
     try:
         port = http_host._server.server_address[1]
-        conn = client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.request(
             "POST",
             "/campaigns",
@@ -205,7 +205,7 @@ def test_the_server_answers_a_routed_get_with_the_campaign_it_created() -> None:
         )
         created = json.loads(conn.getresponse().read())
         conn.close()
-        conn = client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.request("GET", f"/campaigns/{created['campaign_id']}")
         resp = conn.getresponse()
         payload = json.loads(resp.read())
@@ -225,7 +225,7 @@ def test_the_server_refuses_a_streaming_body_it_cannot_buffer() -> None:
     thread.start()
     try:
         port = http_host._server.server_address[1]
-        conn = client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn = http_client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.putrequest("POST", "/campaigns", skip_accept_encoding=True)
         conn.putheader("Transfer-Encoding", "chunked")
         conn.endheaders()
