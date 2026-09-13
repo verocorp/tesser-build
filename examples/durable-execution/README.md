@@ -6,15 +6,15 @@ The chain, top to bottom, with where each link lives:
 |---|---|---|
 | an HTTP host takes `POST /submissions` | `srv/http/main.py` | `HttpHost`'s `APIRouter` → `ordering/adapters/handlers/http.py` `Handler.submit_order` |
 | the initial application service | `ordering/application/order_service.py` | `OrderService.submit_order` builds the `Order` aggregate |
-| it starts the orchestrator through a runner | `ordering/application/relays/order_orchestrator_runner.py` | `OrderOrchestratorRunner.start_order_orchestrator(OrderOrchestratorRequest) -> StartOrderOrchestratorResponse`; the request carries the `Order` aggregate itself |
-| the Restate runner sends the workflow | `ordering/adapters/runners/restate_order_orchestrator_runner.py` | `RestateOrderOrchestratorRunner.start_order_orchestrator` → `workflow_send(runtime.order_orchestrator_handler, key=order_id, arg=request)` |
-| Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_orchestrator_workflow.main()` handler `run`, registered as `OrderOrchestrator/run`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/runtimes/restate_order_runtime.py` | `run` builds `RestateOrderActionsRunner(restate_workflow_context, self)` over *this* invocation's context and constructs `OrderOrchestrator` over it |
-| the orchestrator runs the action through its runner | `ordering/application/relays/order_actions_runner.py` | `OrderOrchestrator.run` reads the `Order` off the message, then `OrderActionsRunner.run_price_product(PriceProductRequest) -> PriceProductResponse` |
+| it starts the orchestrator through a runner | `ordering/application/relays/order_orchestrator_runner.py` | `OrderOrchestratorRunner.start_confirm_order(ConfirmOrderRequest) -> StartConfirmOrderResponse`; the request carries the `Order` aggregate itself |
+| the Restate runner sends the workflow | `ordering/adapters/runners/restate_order_orchestrator_runner.py` | `RestateOrderOrchestratorRunner.start_confirm_order` → `workflow_send(runtime.confirm_order_handler, key=order_id, arg=request)` |
+| Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_orchestrator_workflow.main()` handler `confirm_order`, exposed as `confirm_order_handler`, registered as `OrderOrchestrator/confirm_order`, mounted at `/restate` by the host |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/runtimes/restate_order_runtime.py` | `confirm_order` builds `RestateOrderActionsRunner(restate_workflow_context, self)` over *this* invocation's context and constructs `OrderOrchestrator` over it |
+| the orchestrator runs the action through its runner | `ordering/application/relays/order_actions_runner.py` | `OrderOrchestrator.confirm_order` reads the `Order` off the message, then `OrderActionsRunner.run_price_product(PriceProductRequest) -> PriceProductResponse` |
 | the Restate runner calls the action durably | `ordering/adapters/runners/restate_order_actions_runner.py` | `RestateOrderActionsRunner.run_price_product` → `restate_workflow_context.service_call(runtime.price_product_handler, request)` |
 | Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_actions_service.handler()` handler `price_product`, registered as `OrderActions/price_product`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.price_product` → `ProductCatalogRepository.get_product_price` → `adapters/repositories/memory_product_catalog_repository.py` |
-| the price comes back up the same chain | | `PriceProductResponse.cents` → `Order.total(PriceSpec)` → `OrderOrchestratorResponse.total_cents` ends the workflow |
+| the price comes back up the same chain | | `PriceProductResponse.prices[0].cents` → `Order.total(PriceSpec)` → `ConfirmOrderResponse.confirmed_orders[0].total_cents` ends the workflow |
 
 `POST /submissions` answers `202` with the order id as soon as the workflow is
 accepted — `workflow_send` is fire-and-forget, so the total is read back from
@@ -25,11 +25,11 @@ called; that one, `start_`, belongs to the runner.
 
 `POST /orders` is the other use case over the same orchestrator: placing an
 order. `OrderService.place_order` builds the same `Order`, hands it to
-`OrderOrchestratorRunner.run_order_orchestrator`, and waits; the Restate
-runner's `workflow_call` answers with the `OrderOrchestratorResponse` the
+`OrderOrchestratorRunner.run_confirm_order`, and waits; the Restate
+runner's `workflow_call` answers with the `ConfirmOrderResponse` the
 workflow ended with, and the door answers `200 {"order_id", "total_cents"}`.
 "Placed" is the state the caller gets back: priced, now. Both use cases run
-`OrderOrchestrator/run` under the same key, so they are one business act done
+`OrderOrchestrator/confirm_order` under the same key, so they are one business act done
 to one order, and an order that was submitted cannot then be placed: the
 engine has already run it.
 
@@ -37,15 +37,15 @@ That is the grid this tree is filling in. The verb on a runner method says
 how the caller calls; the thing it names says what runs; either verb goes
 with either thing.
 
-| | a workflow (`OrderOrchestrator/run`) | an action (`OrderActions/price_product`) |
+| | a workflow (`OrderOrchestrator/confirm_order`) | an action (`OrderActions/price_product`) |
 |---|---|---|
-| `start_` — the engine accepts, the caller carries on | `start_order_orchestrator`, ingress `workflow_send`, behind `POST /submissions` | not yet |
-| `run_` — the caller waits for the result | `run_order_orchestrator`, ingress `workflow_call`, behind `POST /orders` | `run_price_product`, `ctx.service_call`, inside the workflow |
+| `start_` — the engine accepts, the caller carries on | `start_confirm_order`, ingress `workflow_send`, behind `POST /submissions` | not yet |
+| `run_` — the caller waits for the result | `run_confirm_order`, ingress `workflow_call`, behind `POST /orders` | `run_price_product`, `ctx.service_call`, inside the workflow |
 
 `POST /purchases` is the third use case and the first scenario on top of the
-grid: a **purchase** is an order paid for. `PurchaseService.purchase` builds the
-same `Order` and hands it to `PurchaseOrchestratorRunner.run_purchase_orchestrator`;
-the `PurchaseOrchestrator` workflow runs `OrderOrchestrator/run` as a **child
+grid: a **purchase** is an order paid for. `PurchaseService.pay_for_order` builds the
+same `Order` and hands it to `PurchaseOrchestratorRunner.run_pay_for_order`;
+the `PurchaseOrchestrator` workflow runs `OrderOrchestrator/confirm_order` as a **child
 workflow** under the order's own key, waits for its total, and then runs the
 `PurchaseActions/take_payment` action for that total. The door answers
 `200 {"order_id", "total_cents", "payment_reference"}`. The walk-through is
@@ -60,7 +60,7 @@ are plain application code. What makes an orchestrator's calls durable is
 which implementation of the runner it was handed.
 
 Restate *does* carry the domain, on the workflow leg only.
-`OrderOrchestratorRequest` is a **relay** message — a message whose far side
+`ConfirmOrderRequest` is a **relay** message — a message whose far side
 is this same context's own application code — so it holds the `Order`
 aggregate, and `OrderSnapshot` writes it to the wire and rebuilds it on the
 other side through the aggregate's own constructor.
@@ -77,13 +77,13 @@ message, because the two use cases differ only in whether the caller waits.
 # ordering/application/relays/order_orchestrator_runner.py
 class OrderOrchestratorRunner(ts.Relay, typing.Protocol):
 
-    async def start_order_orchestrator(
-        self, order_orchestrator_request: OrderOrchestratorRequest
-    ) -> StartOrderOrchestratorResponse: ...
+    async def start_confirm_order(
+        self, confirm_order_request: ConfirmOrderRequest
+    ) -> StartConfirmOrderResponse: ...
 
-    async def run_order_orchestrator(
-        self, order_orchestrator_request: OrderOrchestratorRequest
-    ) -> OrderOrchestratorResponse: ...
+    async def run_confirm_order(
+        self, confirm_order_request: ConfirmOrderRequest
+    ) -> ConfirmOrderResponse: ...
 
 
 # ordering/application/relays/order_actions_runner.py
@@ -128,18 +128,44 @@ class PurchaseOrchestrator(ts.Orchestrator):
         order_orchestrator_runner: relays.OrderOrchestratorRunner,
     ) -> None: ...
 
-    async def run(self, purchase_orchestrator_request):
-        order = purchase_orchestrator_request.order
-        order_orchestrator_response = await self._order_orchestrator_runner.run_order_orchestrator(
-            relays.OrderOrchestratorRequest(order=order)
+    async def pay_for_order(self, pay_for_order_request):
+        order = pay_for_order_request.order
+        confirm_order_response = await self._order_orchestrator_runner.run_confirm_order(
+            relays.ConfirmOrderRequest(order=order)
         )
-        purchase = domain.Purchase(MapToPurchaseSpec(order, order_orchestrator_response))
+        match confirm_order_response.outcome:
+            case relays.ConfirmOrderOutcome.CONFIRMED:
+                purchase = domain.Purchase(MapToPurchaseSpec(order, confirm_order_response))
+            case (
+                relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND
+                | relays.ConfirmOrderOutcome.ALREADY_STARTED
+            ):
+                return MapToPayForOrderResponseFromConfirmOrderResponse(
+                    order, confirm_order_response
+                )
+            case _ as never:
+                typing.assert_never(never)
         take_payment_response = await self._purchase_actions_runner.run_take_payment(
-            MapToTakePaymentRequest(purchase)
+            MapToTakePaymentRequest(purchase, pay_for_order_request.payment_method)
         )
-        payment = purchase.paid(MapToPaymentSpec(take_payment_response))
-        return MapToPurchaseOrchestratorResponse(purchase, payment)
+        match take_payment_response.outcome:
+            case relays.TakePaymentOutcome.TAKEN:
+                payment = purchase.paid(MapToPaymentSpec(take_payment_response))
+            case relays.TakePaymentOutcome.DECLINED:
+                return MapToPayForOrderResponseFromTakePaymentResponse(
+                    purchase, take_payment_response
+                )
+            case _ as never_taken:
+                typing.assert_never(never_taken)
+        return MapToPayForOrderResponseFromPayment(purchase, payment)
 ```
+
+The parent's method is the operation, `pay_for_order`, never `run`: `run` says
+nothing about what the act is, and it is already the caller's calling-mode
+word on the relay. The two `match`es are the two relays it depends on, and
+each names its own step in the parent's own words — a child that could not be
+confirmed, for any reason the child had, is `ORDER_NOT_CONFIRMED` here, and
+the child's reason rides along as data so the caller can still be told.
 
 A `Purchase` is keyed by the order it pays for and holds the total the child
 answered, and it carries three rules, each a `CONFLICT`: a pricing that names
@@ -148,7 +174,7 @@ that answered for a different key is refused before any payment); a payment
 settles the purchase only if it names this order
 (`payment_for_another_order`) and only if the amount charged equals the total
 (`payment_mismatch`). The receipt names its order because the processor's
-`ChargeResponse` does, and that id rides the relay as
+`ChargePaymentMethodResponse` does, and that id rides the relay as
 `TakePaymentResponse.order_id` into `PaymentSpec`: without it the domain
 could not tell one order's receipt from another's at the same amount. What
 the purchase does not check is the total itself: the parent holds an `Order`
@@ -156,12 +182,22 @@ and no catalog, so the child's total is the child's word, and
 `payment_mismatch` catches a processor that charged something other than
 what it was asked, never a wrong price.
 `PurchaseActions.take_payment` is the class of actions over the
-`PaymentProcessor` port. `adapters/gateways/memory_payment_processor.py` is
-the stand-in, and it decides nothing: `charge` answers the receipt it
+`PaymentProcessor` port, and the port's operation is
+`charge_payment_method`: a bare `charge` said what to do and never what to
+do it to, and the request carried an order id and cents and nothing to
+charge. A `PaymentMethod` value object now rides from the client's
+`PayForOrderRequest` through the parent relay into
+`ChargePaymentMethodRequest`, so the operation charges what its name says.
+`adapters/gateways/memory_payment_processor.py` is
+the stand-in, and it decides nothing the domain owns:
+`charge_payment_method` answers the receipt it
 already holds for the order, or takes the charge and holds the receipt it
 made, in one `setdefault` with no branch, and the receipt is built by an
-adapters mapper (`MapToChargeResponse`) so the method reads as store-then-map
-the way every gateway in the tree reads as call-then-map. A repeat for
+adapters mapper (`MapToReceipt`) so the method reads as store-then-map
+the way every gateway in the tree reads as call-then-map. It does decide one
+thing a real processor decides: a payment method of `"declined"` comes back
+as `ChargePaymentMethodOutcome.DECLINED`, which is the stand-in's way of
+being a vendor that refuses. A repeat for
 another amount gets the original receipt too, and it is `Purchase.paid` that
 refuses it as `payment_mismatch`, because whether a receipt settles a
 purchase is the domain's rule and not the processor's. An earlier version of
@@ -197,7 +233,7 @@ raised on the way out, which the SDK does not wrap as terminal, so the engine
 retried it forever while the caller's connection stayed open. And `OrderId`
 refuses `.` and `..`: percent-encoding leaves a dot alone and httpx
 normalizes dot segments on the way to the ingress, so an id of `..` would
-have turned `POST /PurchaseOrchestrator/../run` into `POST /run`.
+have turned `POST /PurchaseOrchestrator/../pay_for_order` into `POST /pay_for_order`.
 
 The child is run, not inlined, because it is already a workflow of its own:
 `OrderOrchestrator/<order_id>` is what `POST /orders` runs directly, it has
@@ -210,29 +246,38 @@ its own key, its own journal, and its own stored result. Measured on
   business act done to one order; they do not collide because they are two
   services.
 - The child's result is readable by its own key afterwards —
-  `GET /restate/workflow/OrderOrchestrator/p1/output` answers
-  `{"order_id": "p1", "total_cents": 2000}` — and so is the parent's, at
+  `GET /restate/workflow/OrderOrchestrator/p1/output` answers the child's
+  `ConfirmOrderResponse` — and so is the parent's, at
   `/restate/workflow/PurchaseOrchestrator/p1/output`.
-- A child that ends terminally ends the parent with the same status: a
-  purchase for an unknown sku is `404` at the door, and no `PurchaseActions`
-  row exists for it. The payment step never ran because the parent raised
-  before reaching it, which is ordering, not compensation.
+- A child that could not price its product ends **successfully** now,
+  answering `ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND` with the reason as
+  data. The parent reads that outcome, summarises it as
+  `PayForOrderOutcome.ORDER_NOT_CONFIRMED`, and ends successfully too; the
+  service raises `client.OrderNotConfirmed` and the door answers `422`. No
+  `PurchaseActions` row exists for it, because the parent returned before
+  reaching the payment step — ordering, not compensation.
 - `ctx.workflow_call` on a child whose key has already run does **not**
   attach to the stored result: it fails with a terminal `409 the workflow
-  method was already invoked`, the parent ends `409`, and the door says so.
-  So an order that was placed cannot then be purchased, and a purchase cannot
-  be repeated, for the same reason a placed order cannot be placed again.
+  method was already invoked`. The child runner recognises exactly that
+  refusal — the 409 whose message is the server's already-invoked wording —
+  and turns it into `ConfirmOrderOutcome.ALREADY_STARTED`; the parent reports
+  its own step as `ORDER_NOT_CONFIRMED`. Any other 409, a cancelled
+  invocation included, is a fault the runner re-raises, because the SDK
+  surfaces a cancellation in the same shape and only the message text tells
+  them apart. So an order that was placed cannot then be paid for, and a
+  payment cannot be repeated, for the same reason a placed order cannot be
+  placed again.
 
 `RestateOrderOrchestratorChildRunner` reads one thing off the message,
-`str(order_orchestrator_request.order.identity)`, for the child's key, and
+`str(confirm_order_request.order.identity)`, for the child's key, and
 passes it as it is: inside the engine the key is an argument to the SDK, not a
 path segment, so there is nothing to percent-encode. A child's terminal error
 reaches the parent as a `restate.TerminalError` carrying the child's status
 (`server_context.py` raises `TerminalError(res.message, res.code)` on a failed
-call future), and the child runner maps it exactly as the actions runner maps
-an action's: `422`/`404`/`409` to the kind, as
-`DomainError(kind, "order_rejected")` with the child's message, anything else
-re-raised terminal.
+call future). The child runner reads exactly one of them, the already-invoked
+`409`, and answers `ALREADY_STARTED` through a mapper; every other status is
+a fault and is re-raised. The actions runners read none at all — an action
+that ends terminally ends its workflow, and there is no member for it.
 
 `ts.Relay` in tesser-py is a bare marker protocol, like `ts.Port`. There is
 one relay kind and it says nothing about lifetime: a relay protocol names what
@@ -256,7 +301,7 @@ line applied to a boundary that faces inward.
 
 | class | kind declared | direction | lifetime |
 |---|---|---|---|
-| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Runtime` | Restate → us: registers `OrderActions/price_product`, `OrderOrchestrator/run`, `PurchaseActions/take_payment`, and `PurchaseOrchestrator/run` | process |
+| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Runtime` | Restate → us: registers `OrderActions/price_product`, `OrderOrchestrator/confirm_order`, `PurchaseActions/take_payment`, and `PurchaseOrchestrator/pay_for_order` | process |
 | `RestateOrderOrchestratorRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_send` to start, `workflow_call` to run) | process |
 | `RestatePurchaseOrchestratorRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_call`) | process |
 | `RestateOrderActionsRunner` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
@@ -276,9 +321,23 @@ and there is no string to keep in step. `"OrderActions"`,
 `"OrderOrchestrator"`, `"PurchaseActions"` and `"PurchaseOrchestrator"` appear
 exactly once each, in the `restate.Service(...)` and `restate.Workflow(...)`
 constructor calls in `RestateOrderRuntime.__init__`; the handler names are the
-Python function names (`price_product`, `take_payment`, `run`), except that
-the purchase workflow's main is declared `main(name="run")` so both workflows
-answer to `run` while the two Python functions keep different names.
+Python function names, and each one is the operation it answers —
+`price_product`, `confirm_order`, `take_payment`, `pay_for_order`. There is
+no `name=` override and no alias: the runtime exposes each as
+`<operation>_handler`, a name derived and not chosen, because the attribute
+is the SDK's decorated function and a bare `price_product` on a runtime would
+read as the application method it forwards to.
+
+Each `restate.Service(...)` and `restate.Workflow(...)` also declares a
+bounded `InvocationRetryPolicy` — `max_attempts=5`, `on_max_attempts="pause"`.
+The engine runtime is a host, and the SDK's policy for an exception that is
+not a `TerminalError` is retry from the journal, which is right for a
+transient fault and wrong forever for a permanent one. Five attempts then a
+pause is an adapter's number with no input from the use case; it is recorded
+here as a choice, not read as a design. **It raises the deployment's
+discovery floor**: retry-policy fields exist only in discovery protocol v4,
+so this endpoint needs `restate-server >= 1.5`, and `srv/http/test_main.py`
+asks for `application/vnd.restate.endpointmanifest.v4+json`.
 
 The runners hold the runtime to reach those handlers. The actions runner
 cannot own the handler it invokes: it is built per invocation, and
@@ -287,17 +346,21 @@ host mounts the runtime's `Service` and `Workflow` at startup, when no
 workflow context exists yet. So the runtime owns every handler, and each
 runner reaches its own through the runtime.
 
-**A runner and the runtime hand a message on whole and read nothing off it.**
-Stronger, and greppable: no field name of any message or domain object appears
-anywhere under `adapters/runtimes/` or `adapters/runners/` — not `sku`, not
-`cents`, not `quantity`, not `order_id`, not `total_cents`. Every encoding is
-a snapshot beside its message in `relays/`, and the one read left is
+**A runner and the runtime hand a message on whole and read almost nothing
+off it.** That property is weaker than it was. A runner is now the one place
+`ALREADY_STARTED` can be produced — only a relay crosses an engine, and only
+the runner can recognise the engine's refusal — so three runner modules build
+a relay response through a mapper and name its fields (`outcome`, `order_id`,
+`confirmed_orders`/`purchases`, `reasons`). No field of a *domain* object
+appears there, and no `sku`, `cents`, `quantity` or `total_cents` does. Every
+encoding is still a snapshot beside its message in `relays/`, and the one
+domain read left is
 `str(<request>.order.identity)` in the three workflow runners, for the
 workflow key Restate requires. The SDK splices that key into the request
 path unencoded (`restate/client.py`, `endpoint += f"/{key}"`), and the id
 comes from the public body, so the runner percent-encodes it
 (`urllib.parse.quote(key, safe="")`); an `order_id` of `../admin` reaches the
-ingress as `/OrderOrchestrator/..%2Fadmin/run/send`, not as a different route.
+ingress as `/OrderOrchestrator/..%2Fadmin/confirm_order/send`, not as a different route.
 
 An `OrderSnapshot` on the way in checks the shape of what it reads before
 the constructor sees it: `order_id` and `sku` must be strings and `quantity`
@@ -313,10 +376,10 @@ This tree is the worked example for `docs/design-app-service-types.md`:
 - `OrderService(ts.ApplicationService)` and `PurchaseService` — the public
   use cases, built once by the component. Every method does the once-only
   work (validate at the door, build the `Order`); `submit_order` starts the
-  order orchestrator through `OrderOrchestratorRunner.start_order_orchestrator`,
-  `place_order` runs it through `run_order_orchestrator`, and `purchase` runs
-  the purchase orchestrator through
-  `PurchaseOrchestratorRunner.run_purchase_orchestrator`. Two services because
+  order orchestrator through `OrderOrchestratorRunner.start_confirm_order`,
+  `place_order` runs it through `run_confirm_order`, and `pay_for_order`
+  runs the purchase orchestrator through
+  `PurchaseOrchestratorRunner.run_pay_for_order`. Two services because
   two runners: a service holds the methods that share its dependencies, so the
   purchase, which holds a different runner, is a second service. What the
   context offers the world is still one `client.OrderingClient` protocol, and
@@ -356,8 +419,8 @@ class Ordering(ts.Component):
         async def place_order(self, place_order_request):
             return await self._order_service.place_order(place_order_request)
 
-        async def purchase(self, purchase_request):
-            return await self._purchase_service.purchase(purchase_request)
+        async def pay_for_order(self, pay_for_order_request):
+            return await self._purchase_service.pay_for_order(pay_for_order_request)
 
     def __init__(self, config: Config) -> None:
         ...
@@ -425,50 +488,71 @@ home, and `tesser.adapters` re-exports it the same direction `Relay` already
 travels. That follows from where the encodings live: a snapshot belongs beside
 the message it serves, and the messages belong to the relay.
 
-**The analyzer now carries every row this shape needs.** `application/relays/`
-and `application/snapshots/` are application packages, `ts.Relay` is a kind,
-a relay message may carry a domain object, `ts.Serde` is an application kind
-and a snapshot's body is checked, `adapters/runners/` and `adapters/runtimes/`
-are adapter kind packages holding `ts.Runner` and `ts.Runtime`, and a component
-publishes its client and its runtimes. What is left is ten markers, not a
-registration list: four `TB072` and six `TB085` on
-`FakeRestateWorkflowContext`, a hand-written double of the SDK's
-`restate.WorkflowContext` — a foreign class that is no tesser kind, so the fake
-can name no base and the analyzer can derive no name for the local. Beside them
-sit twenty-six `TB023` markers on nested functions: the four handlers the SDK
-registers, the three route functions `main` declares, and the nineteen
-fake-ingress functions the two orchestrator runners' tests bind to a socket —
-those belong to the separately gated nested-def wave. The purchase roughly
-doubled the shape, because a second workflow is a second relay, a second
-class of actions, a second application client, and three more runners; the
-list grows by the shape, not by
-the scenario. Nothing is hidden: the
-tree is at zero findings because every finding is named, not because any is
-absent.
+**The analyzer carries the placement rows this shape needs, and not yet the
+outcome rows.** `application/relays/` and `application/snapshots/` are
+application packages, `ts.Relay` is a kind, a relay message may carry a domain
+object, `ts.Serde` is an application kind and a snapshot's body is checked,
+`adapters/runners/` and `adapters/runtimes/` are adapter kind packages holding
+`ts.Runner` and `ts.Runtime`, and a component publishes its client and its
+runtimes. What the outcome-on-response shape costs on top of that is 129
+`# tesser:debt` markers, every one written mechanically by `tessercheck-mark`,
+and that list is the analyzer's work list:
 
-The remaining rule cost of putting an encoding in the application is `json`:
-the application stdlib allowlist is `{__future__, typing}`, and `TB062` widens
-it by exactly `json` in `application/relays/` and `application/snapshots/` —
-the four relays modules and `snapshots/order_snapshot.py` — and nowhere else in
-the role.
+- **`TB082`, 76.** Sixty are in the four relay modules: a snapshot now reads
+  an outcome, checks the record count per member, and rebuilds a tuple, and
+  none of `len`, `tuple`, `list`, `all`, or the enum constructor is on the
+  snapshot's call allowlist. Eight are the runtime serde wrappers' `try`
+  around the snapshot. Six are the `match` on a response's outcome field in a
+  service or an orchestrator, which the analyzer reads as "not a call on a
+  domain object" because a class named `*Outcome` activates nothing. One is
+  the parent orchestrator matching a second time, once per relay it depends
+  on.
+- **`TB085`, 23.** Nineteen on the hand-written doubles of the SDK's
+  `restate.WorkflowContext` and of the ingress, foreign classes that are no
+  tesser kind; four on `<Outcome>(snapshot.get("outcome"))`, a call the
+  analyzer cannot read a class off.
+- **`TB073`, 9.** A test helper that answers a canned wire body, a runtime, or
+  an ingress URL rather than a spec or a DTO. Moving the same data to a
+  module-level constant trades them for nine `TB071`s, so there is no legal
+  placement in a test module for data that is not construction data.
+- **`TB023`, 7** — the nested handlers the SDK registers and the routes `main`
+  declares, the separately gated nested-def wave. **`TB072`, 6** — the two
+  hand-written doubles. **`TB052`, 5** — a plain `enum.Enum` outcome in a
+  relay module, which placement rejects today. **`TB062`, 4** — `import enum`
+  in a relay module, outside its stdlib allowlist. **`TB051`, 2** — the fake
+  ingress naming its own `serve` to put it on a thread. **`TB081`, 1** —
+  `OrderSnapshot.deserialize` answers a domain object.
+
+Two families went away with `application/ports/engine.py`: six `TB060`, where
+an adapter imported `ports` for its engine errors, and eleven `TB070`, where a
+test module imported `ports` to name one. Nothing is hidden: the tree is at
+zero findings because every finding is named, not because any is absent.
+
+The remaining rule cost of putting an encoding in the application is `json`
+and now `enum`: the application stdlib allowlist is `{__future__, typing}`,
+`TB062` widens it by exactly `json` in `application/relays/` and
+`application/snapshots/`, and the four `enum` imports are the four markers
+above — the outcome lives on the response, and the response lives in the
+relay.
 
 ## Messages are declared once, beside the protocol that speaks them
 
 There are no wire types. Both ends are us, so the send side and the receive
 side of one message are not independent boundaries.
 
-- `order_orchestrator_runner.py` holds `OrderOrchestratorRequest`,
-  `StartOrderOrchestratorResponse`, and `OrderOrchestratorResponse` — the
+- `order_orchestrator_runner.py` holds `ConfirmOrderRequest`,
+  `StartConfirmOrderResponse`, and `ConfirmOrderResponse` — the
   orchestrator's input, the start ack, and the orchestrator's result.
-  `run_order_orchestrator` answers with the result; after a start, the engine
+  `run_confirm_order` answers with the result; after a start, the engine
   stores it and the ingress hands it back on request.
 - `order_actions_runner.py` holds `PriceProductRequest` and
   `PriceProductResponse` — the action's two shapes.
   `application/client/order_actions.py` and `OrderActions` speak the same two.
-- `purchase_orchestrator_runner.py` holds `PurchaseOrchestratorRequest` (the
-  `Order` again — a purchase is asked for with an order) and
-  `PurchaseOrchestratorResponse`, whose snapshot checks `order_id`,
-  `total_cents`, and `payment_reference` on the way in as the order's does.
+- `purchase_orchestrator_runner.py` holds `PayForOrderRequest` (the `Order`
+  again, now with the `PaymentMethod` the caller named — a purchase is asked
+  for with an order and something to charge) and `PayForOrderResponse`, whose
+  snapshot checks the outcome, the order id, the purchases and the reasons on
+  the way in as the order's does.
 - `purchase_actions_runner.py` holds `TakePaymentRequest` and
   `TakePaymentResponse`; `application/client/purchase_actions.py` and
   `PurchaseActions` speak the same two.
@@ -478,11 +562,9 @@ side of one message are not independent boundaries.
   the encoding both relays share lives in a package both import, and it is
   written once.
 
-**Every wire form is an explicit snapshot beside its message.** Five in all:
-`OrderSnapshot`, `OrderOrchestratorRequestSnapshot` and
-`OrderOrchestratorResponseSnapshot` in `order_orchestrator_runner.py`;
-`PriceProductRequestSnapshot` and `PriceProductResponseSnapshot` in
-`order_actions_runner.py`. Each is a `ts.Serde` with exactly `serialize` and
+**Every wire form is an explicit snapshot beside its message.** Nine in all:
+`OrderSnapshot`, plus a request and a response snapshot in each of the four
+relay modules. Each is a `ts.Serde` with exactly `serialize` and
 `deserialize`, written out longhand rather than derived:
 
 ```python
@@ -515,23 +597,33 @@ constructor, the serialization norm's one inbound path, so every invariant
 re-runs on the way in and a journal holding an order of zero units is refused
 on replay rather than hydrated. Renaming `_sku` is an ordinary rename.
 
-`OrderOrchestratorRequestSnapshot` is the whole of what a workflow start puts
+`ConfirmOrderRequestSnapshot` is the whole of what a workflow start puts
 on the wire — the order it carries, and nothing wrapped around it — so the
-body `POST /OrderOrchestrator/o1/run/send` carries is:
+body `POST /OrderOrchestrator/o1/confirm_order/send` carries is:
 
 ```json
 {"order_id": "o1", "sku": "widget", "quantity": 2}
 ```
 
+**A response snapshot checks the record count against the outcome.** A field
+only some members can fill is a tuple of zero or one — `prices`,
+`confirmed_orders`, `payments`, `purchases` — so the response is truthful for
+every member, and the snapshot refuses a `PRICED` that carries no price and a
+`PRICE_NOT_FOUND` that carries one. That count check is the part of the shape
+the snapshot rule does not admit today; see the marker list above.
+
 The SDK cannot serialize a `ts.Request` on its own — `restate.serde.DefaultSerde`
 handles msgspec Structs, Pydantic models, and dataclasses; anything else falls
-through to `json.dumps(obj)` — so the runtime module carries four compatibility
+through to `json.dumps(obj)` — so the runtime module carries eight compatibility
 shims, one per message the SDK moves. A shim does two things and no more:
-answer the SDK's `None`/empty convention on the way out, refuse an empty body
-on the way in, and delegate to the relay's snapshot. A body that does not
+answer the SDK's `None`/empty convention on the way out, turn a body the
+snapshot cannot read into a `restate.TerminalError` with status 400 on the way
+in, and delegate to the relay's snapshot. That is the only place a handler
+raises a `TerminalError` itself, because a body that cannot be parsed fails
+every replay and the SDK cannot know it. A body that does not
 exist is not a message: handing `None` to a handler declared over a message
 raised an `AttributeError` there, which is not terminal, and Restate retries a
-non-terminal failure without bound.
+non-terminal failure until the retry policy pauses the invocation.
 
 ```python
 class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.PriceProductRequest]):
@@ -543,8 +635,11 @@ class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.Price
 
     def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
         if not buf:
-            return None
-        return relays.PriceProductRequestSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:
+            return relays.PriceProductRequestSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 ```
 
 None of them is generic and none of them knows a field. What crosses is decided
@@ -552,90 +647,148 @@ in one module — the relay's — and the engine adapter only carries it. A fiel
 added to a message still changes the bytes an in-flight journal already holds;
 payload versioning on a durable leg is a rule this tree does not yet make.
 
-## Errors across the engine
+## Two failure classes, and nothing else
 
-A `DomainError` in a handler becomes a `restate.TerminalError` with the kind's
-status — no retry. When the action handler raises it, the actions runner
-receives it as a `TerminalError` from `service_call` and maps the status back
-to its kind (`422` → `VALIDATION`, `404` → `NOT_FOUND`, `409` → `CONFLICT`),
-raising a `DomainError` with the action's message, so the orchestrator and the
-workflow handler see a domain error, not an SDK one, and the workflow ends
-terminally with the action's status. A `TerminalError` carrying any other
-status is not the domain's (the SDK's own 500) and is re-raised as it is,
-still terminal. One status the domain does own is also the SDK's: a cancelled
-invocation surfaces as `TerminalError("cancelled", 409)`, which lands on the
-conflict arm and reaches the caller as a `409` whose message is `cancelled`;
-telling an operator's cancellation from a business conflict by message is
-not a rule this tree makes (`TODOS.md`). Anything that is not a
-`TerminalError` propagates as-is and Restate retries the invocation.
+A **situation** is a business term the caller acts on; the client declares
+them and raises them across itself. A **fault** is anything no expert has a
+word for; it propagates untyped to the nearest host and is handled nowhere in
+domain or application code. `client.Rejected`, `client.Missing`,
+`client.Conflict` and `client.Unavailable` were neither — they were HTTP
+statuses wearing class names, saying the same nothing at five hops — and they
+are gone, with `application/ports/engine.py` and its four engine errors and
+with `ports.ChargeDeclined`.
 
-On the way out, the two calling modes answer a repeat differently, and the
-runner maps what each one measured on `restate-server` 1.7.2:
+What a caller can be told is now five situations named for what happened:
 
-- A repeat `workflow_send` on an existing key is accepted again — `202` with
-  `"status": "PreviouslyAccepted"` — and deduplicated by the engine. So a
-  second `POST /submissions` for the same order is a `202`, the same as the
-  first. The runner still maps an ingress `409` on the send path to
-  `DomainError(CONFLICT, "order_already_started")`, for a server that refuses
-  rather than deduplicates.
-- A repeat `workflow_call` on an existing key is `409` with a body of
-  `{"code": 409, "message": "the workflow method was already invoked"}`: the
-  runner raises `DomainError(CONFLICT, "order_rejected")` carrying that
-  message and `POST /orders` answers `409`. The runner does not claim the
-  order was placed: a workflow's own terminal conflict arrives in the same
-  shape, and only the message tells the two apart.
-- A workflow that ended terminally answers `workflow_call` with the
-  `TerminalError`'s own status and a body carrying `code` and `message`, so
-  an unknown sku is `404 {"code": 404, "message": "no price for sku 'nope'"}`.
-  The runner takes a body as the workflow's own only when its `code` equals
-  the HTTP status, which is how the server shapes a `TerminalError`; it then
-  maps `422`/`404`/`409` back to the domain's kind, as
-  `DomainError(kind, "order_rejected")` with the action's message, and
-  `POST /orders` answers with that status.
-- A success body is the response snapshot's to check, the way
-  `OrderSnapshot` checks an order on the way in: `order_id` a string,
-  `total_cents` an `int` that is not a `bool` and not negative, or the
-  snapshot refuses it. The runner turns that refusal, a body that is not
-  JSON, and a body nested past the decoder's depth into an `InfraError`,
-  because none of them is the caller's fault and a `422` would say it was.
-- The run path waits as long as the workflow takes. Its `httpx` client keeps
-  the five-second connect, write and pool timeouts and lifts the read
-  timeout (`_RUN_TIMEOUT`), because a caller who asked for the total has
-  asked to wait for it; under the default read timeout a workflow slower
-  than five seconds would answer `503` while it kept running, and the retry
-  would meet the `409` above. How long an order may take to price is a rule
-  this tree does not make; a real one puts the bound in the workflow or at
-  the ingress, where a timed-out caller can still attach to the result.
-- A refusal whose body has no `code` is the ingress's, not the workflow's —
-  an unregistered service or handler is `404 {"message": "service ... not
-  found"}` — and is an `InfraError`, reported as `503`. So is any status the
-  domain does not own (the SDK's own `500`), and every transport failure.
+```python
+ERRORS = (OrderRejected, ProductPriceNotFound, OrderNotConfirmed,
+          PaymentDeclined, OrderAlreadyStarted)
+```
 
-## Tests, and the one thing they fake
+`OrderRejected` is the domain refusing a malformed order at the service door,
+carrying the `DomainError`'s own code and message — it is a situation because
+the caller can fix it, and it is named for what it is rather than for the 422
+it happens to become. The other four are outcome members the service matched
+and turned into words.
 
-Every payload is pinned once, in `relays/test_order_orchestrator_runner.py`
-and `relays/test_order_actions_runner.py`, where the snapshots are defined.
-The runtime's test asserts the two registrations and that the action handler
-hands its request to the application client; the shims are asserted to write
-what their snapshots write. The orchestrator runner's test builds the real
-SDK client over a real socket listening on `127.0.0.1:0` and checks the
-request line the SDK forms from the registered handler
-(`POST /OrderOrchestrator/o1/run/send` to start, `POST /OrderOrchestrator/o1/run`
-to run), the route and the key. On the run path the fake ingress answers the
-response snapshot's bytes, or a refusal shaped as the server shapes it, so the
-test pins the mapping above: `409` with a `code` is a conflict, `404` with a
-`code` is the domain's not-found, `404` without one is infrastructure.
+**An expected alternative from a dependency is an outcome member on the
+response, never an exception.** A port or relay declares no errors at all.
+Every hop passes its dependency's fact on under its own subject:
 
-The actions runners' tests double the one thing the SDK gives no other way to
-reach: a `FakeRestateWorkflowContext` whose `service_call` records the handler
-it was handed, so the test asserts the runner journals a call to the runtime's
-own `price_product_handler` (or `take_payment_handler`), and that a
-`TerminalError` from the call comes back as a `DomainError`. The child
-runner's test gives the same fake `workflow_call` and `workflow_send`, and
-asserts the run journals a call to `order_orchestrator_handler` under the
-order's id as it is, the start journals a send, and the child's terminal
-statuses map to the kind. Those fakes double an SDK class rather than a port,
-which the testing norm does not admit; each carries its own debt marker.
+| act | outcomes |
+|---|---|
+| getting the product price | `GetProductPriceOutcome.FOUND / NOT_FOUND` |
+| pricing the product | `PriceProductOutcome.PRICED / PRICE_NOT_FOUND` |
+| confirming the order | `ConfirmOrderOutcome.CONFIRMED / PRODUCT_PRICE_NOT_FOUND / ALREADY_STARTED` |
+| starting to confirm the order | `StartConfirmOrderOutcome.STARTED` |
+| charging the payment method | `ChargePaymentMethodOutcome.CHARGED / DECLINED` |
+| taking payment | `TakePaymentOutcome.TAKEN / DECLINED` |
+| paying for the order | `PayForOrderOutcome.PAID / ORDER_NOT_CONFIRMED / PAYMENT_DECLINED / ALREADY_STARTED` |
+
+Read each member as a sentence after the act. The catalog's `NOT_FOUND`
+becomes `PRICE_NOT_FOUND` on the action's response and
+`PRODUCT_PRICE_NOT_FOUND` on the child's — one fact keeping one word, gaining
+a prefix as the carrier's subject changes — and then the parent summarises its
+*own* step as `ORDER_NOT_CONFIRMED`, because the parent observed only that its
+confirm step did not complete. A new reason inside `ConfirmOrderOutcome` does
+not touch `PayForOrderOutcome`.
+
+`ALREADY_STARTED` is the one kind of member the engine crossing adds. It
+exists only on a relay response, only on the `run_` path, and it is produced
+by the runner translating the engine's refusal — never by an orchestrator. The
+`start_` path has no second member, because a repeat `workflow_send` on an
+existing key is accepted again (`202 "PreviouslyAccepted"`) and deduplicated
+by the server, so the refusal is unobservable there (measured on
+`restate-server` 1.7.2).
+
+`StartConfirmOrderOutcome.STARTED` is a single-member enum for that reason. It
+is a member rather than nothing at all so that the day a second way to start
+exists, the response already has the field to carry it.
+
+**Everything else is a fault.** A handler has no `except` arm; a runner has no
+status-code `match`. Concretely:
+
+- A `TerminalError` from `service_call` propagates. An action that ends
+  terminally ends its workflow, and the actions runners read nothing off it.
+- On `workflow_call`, the child runner and the two ingress runners recognise
+  exactly one refusal: a `409` whose body says `the workflow method was
+  already invoked`. That, and only that, is `ALREADY_STARTED`. Any other
+  `409` — a cancelled invocation, which the SDK surfaces in the same shape
+  and which only the message text tells apart — and every other status is
+  re-raised.
+- A `restate.HttpError` or an `httpx.TransportError` from the ingress
+  propagates. A workflow the ingress cannot reach is not a business fact
+  about an order, and calling it `Unavailable` said only that this tree once
+  had a 503 to return.
+- A success body the response snapshot cannot read is the SDK's decode
+  raising, and it propagates too.
+
+The host is where a fault stops. `srv/http/main.py` keeps `protocol.BadRequest
+→ 400` and `except Exception → 500`, unchanged, and the ingress being down is
+now a `500` where it used to be a `503` — the honest answer, since nothing in
+the application claimed to know.
+
+The engine runtime is a host too, and it owns its own fault policy: the
+bounded `InvocationRetryPolicy` on each `Service` and `Workflow` described
+above. A permanent fault no longer replays forever; it is retried five times
+and the invocation is paused.
+
+**The handler's exhaustive match is the one place a situation becomes a
+status.** `adapters/handlers/http.py` maps each of the five and closes on
+`assert_never`, so adding a situation fails every host's match loudly:
+
+| situation | status |
+|---|---|
+| `OrderRejected` | 422 |
+| `ProductPriceNotFound` | 422 |
+| `OrderNotConfirmed` | 422 |
+| `PaymentDeclined` | 409 |
+| `OrderAlreadyStarted` | 409 |
+
+The word never implies the status. `ProductPriceNotFound` is 422 on
+`POST /purchases`, where the body named an unknown product, and would be 404
+on a `GET` for that product's price. The route decides, and a CLI host would
+map the same five situations to exit codes.
+
+**The synchronous run path is bounded.** `_RUN_TIMEOUT` was
+`httpx.Timeout(5.0, read=None)`, which handed the caller's connection to the
+engine's own policy with no end. It is now
+`httpx.Timeout(5.0, read=30.0)` in both ingress runners. Thirty seconds is an
+adapter's number with no input from the use case — recorded as a choice, not
+read as a design. A workflow slower than that raises a
+`httpx.ReadTimeout` at the door, which is a fault and a `500`; the real bound
+belongs at the ingress or in the workflow, where a timed-out caller can still
+attach to the result, and this tree still makes neither rule.
+
+## Tests, and the two things they fake
+
+Every payload is pinned once, in the four `relays/test_*_runner.py` modules,
+where the snapshots are defined — including the count check: a `PRICED`
+response that carries no price and a `PRICE_NOT_FOUND` that carries one are
+both refused. The runtime's test asserts the four registrations, that each
+declares the bounded retry policy, that each handler hands its request to the
+application client, and that every shim writes what its snapshot writes and
+turns an unreadable body into a terminal `400`.
+
+The ingress runners' tests build the real SDK client over a real socket
+listening on `127.0.0.1:0` and check the request line the SDK forms from the
+registered handler — `POST /OrderOrchestrator/o1/confirm_order/send` to start,
+`POST /OrderOrchestrator/o1/confirm_order` to run,
+`POST /PurchaseOrchestrator/o1/pay_for_order` for the purchase — the route and
+the key. On the run path the fake ingress answers the response snapshot's
+bytes, or a refusal shaped as the server shapes it, so the test pins the one
+mapping that is left: the already-invoked `409` is `ALREADY_STARTED`, and a
+`409` saying `cancelled`, a `404`, a `422` and a `500` all propagate.
+
+Two things are hand-faked. `FakeRestateWorkflowContext` doubles the SDK's
+`restate.WorkflowContext` and records the handler it was journalled with, so
+the actions and child runners' tests assert the runner reached the runtime's
+own `price_product_handler`, `take_payment_handler`, or
+`confirm_order_handler`. `FakeRestateIngress` is the socket-backed stand-in
+for the Restate ingress, which replaced nineteen nested `def ingress()`
+functions with one class and dropped nineteen `TB023` markers. Both double a
+foreign class rather than a port, which the testing norm does not admit, and
+each carries its own marker.
 
 ## Async everywhere the SDK is
 
@@ -655,7 +808,7 @@ the Restate endpoint mounted at `/restate`, the one Restate's server calls
 back into.
 
 **Restate's own recommendation is that the ingress IS the API** — you register
-the deployment and clients `POST :8080/OrderOrchestrator/o1/run` directly,
+the deployment and clients `POST :8080/OrderOrchestrator/o1/confirm_order` directly,
 with no service of yours in front. A front door of our own exists here for
 exactly one reason: to own the public contract. `POST /submissions`,
 `POST /orders` and `POST /purchases` are a URL, a body shape, and a status
@@ -685,35 +838,45 @@ curl localhost:18080/restate/workflow/OrderOrchestrator/o1/output
                                                     # {"order_id": "o1", "total_cents": 2000}
 curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":3}'
                                                     # 200 {"order_id": "o2", "total_cents": 3000}
-curl -X POST localhost:8000/purchases --json '{"order_id":"p1","sku":"gadget","quantity":2}'
+curl -X POST localhost:8000/purchases \
+  --json '{"order_id":"p1","sku":"gadget","quantity":2,"payment_method":"card-4242"}'
                           # 200 {"order_id": "p1", "total_cents": 2000, "payment_reference": "pay-p1"}
 curl localhost:18080/restate/workflow/OrderOrchestrator/p1/output
-                                                    # {"order_id": "p1", "total_cents": 2000}  the child, by its own key
+                                   # the child's ConfirmOrderResponse, by its own key
 curl -X POST localhost:8000/orders --json '{"order_id":"p1","sku":"gadget","quantity":2}'
-                                                    # 409 the child key is taken: p1 was purchased
-curl -X POST localhost:8000/purchases --json '{"order_id":"o2","sku":"gadget","quantity":3}'
-                                                    # 409 o2 was placed above, so the child call refuses
+                                                    # 409 the child key is taken: p1 was paid for
+curl -X POST localhost:8000/purchases \
+  --json '{"order_id":"o2","sku":"gadget","quantity":3,"payment_method":"card-4242"}'
+                                              # 422 o2 was placed above, so the child refuses
 ```
 
-The failure arms answer at the front door, mapped from the three exception
-kinds the handler and the application can raise, the same on both routes:
+The failure arms answer at the front door, from the five situations the
+client declares and the one category the host owns:
 
 ```
 curl -X POST localhost:8000/orders --json '{"order_id":"o3"}'
-   # 400 {"detail": "sku must be a string"}
+   # 400 {"detail": "sku must be a string"}                        protocol.BadRequest
 curl -X POST localhost:8000/orders --json '{"order_id":"o3","sku":"gadget","quantity":0}'
-   # 422 {"detail": "an order is for at least one unit"}          errors.status_for(VALIDATION)
-   #     with the ingress down, a well-formed order is 503 {"detail": "unavailable"}
+   # 422 {"detail": "an order is for at least one unit"}           client.OrderRejected
+   #     with the ingress down, a well-formed order is 500: the engine being
+   #     unreachable is a fault, and nothing in the application has a word for it
+curl -X POST localhost:8000/orders --json '{"order_id":"o4","sku":"nope","quantity":1}'
+   # 422 {"detail": "no price for sku 'nope'"}                     client.ProductPriceNotFound
 curl -X POST localhost:8000/orders --json '{"order_id":"o2","sku":"gadget","quantity":3}'
-   # 409 {"detail": "the workflow method was already invoked"}    o2 was placed above
+   # 409 {"detail": "the workflow method was already invoked"}     client.OrderAlreadyStarted
+curl -X POST localhost:8000/purchases \
+  --json '{"order_id":"p2","sku":"gadget","quantity":1,"payment_method":"declined"}'
+   # 409 {"detail": "the processor declined the charge for order 'p2'"}
+   #                                                               client.PaymentDeclined
 ```
 
-A domain error raised *inside* the workflow ends it terminally. On
-`POST /orders` the caller is waiting, so it comes back through the door with
-the domain's status — an unknown sku is `404 {"detail": "no price for sku
-'nope'"}`. After `POST /submissions` nobody is waiting, so it is read back off
-the ingress: `/restate/workflow/OrderOrchestrator/o4/output` answers
-`404 {"code":404,"message":"no price for sku 'nope'"}`.
+A product whose price the catalog does not hold no longer ends the workflow
+terminally. `OrderActions.price_product` answers `PRICE_NOT_FOUND`, the child
+answers `PRODUCT_PRICE_NOT_FOUND`, the workflow ends **successfully** with
+that outcome, and the service turns it into `client.ProductPriceNotFound`. So
+`/restate/workflow/OrderOrchestrator/o4/output` answers `200` with the
+response the child wrote, and the reason is in it — a business fact, stored
+and readable, rather than a `404` stashed in an error field.
 
 **SIGTERM belongs to the SDK.** `restate.app` installs its own `SIGTERM`
 handler on the first request, replacing hypercorn's: to Restate, SIGTERM
@@ -731,13 +894,15 @@ sends SIGINT.
   loop, which serves the public API and the `/restate` return leg of every
   in-flight invocation; a real processor makes the port async, which this
   tree has not done.
-- A purchase has no compensation. If `take_payment` ended terminally after
-  the child order ran, the order would stay placed and unpaid; the purchase
-  workflow would end with the payment's status and nothing would undo the
-  child. The same holds when the payment *succeeded* and the domain then
-  refused it (`payment_mismatch`, `payment_for_another_order`): the money is
-  taken, the purchase ends `409`, and nothing refunds. Compensating only the
-  steps that ran is the checkout scenario, not this one.
+- A purchase has no compensation. If the payment is declined after the child
+  order ran, the order stays confirmed and unpaid; the workflow ends
+  `PAYMENT_DECLINED` and nothing undoes the child. The same holds when the
+  payment *succeeded* and the domain then refused it (`payment_mismatch`,
+  `payment_for_another_order`): the money is taken, and there is no outcome
+  member for it — the domain's refusal is a fault, a `500` at the door and a
+  paused invocation in the engine. Compensating only the steps that ran is the
+  checkout scenario, and "checkout" as the parent act's name waits for it;
+  until then the parent stays `pay_for_order`.
 - The three doors share one key namespace. `POST /orders`,
   `POST /submissions`, and the purchase's child all run `OrderOrchestrator`
   under the caller-chosen order id, so an order placed or submitted first can
@@ -749,30 +914,39 @@ sends SIGINT.
   is refused rather than priced from the stored result; a parent that wanted
   the stored result would need the SDK's attach, which this tree does not
   use.
-- `RestateOrderRuntime` now hosts the purchase's service and workflow too;
-  it is ordering's one Restate runtime and the name has not followed. A
-  rename is a redeploy of nothing here (the handler names are unchanged) and
-  is left for its own change.
-- `start_order_orchestrator` fires and forgets; `POST /submissions` never waits on
+- `RestateOrderRuntime` hosts the purchase's service and workflow too; it is
+  ordering's one Restate runtime and the name has not followed. So have the
+  four relay module names — `order_orchestrator_runner.py` now declares
+  `confirm_order`, `purchase_orchestrator_runner.py` declares
+  `pay_for_order` — and the two relay protocol names, `OrderOrchestratorRunner`
+  and `PurchaseOrchestratorRunner`, which are named for the thing they reach
+  rather than for the operation. The naming rules cover operations, messages,
+  and outcomes; what a relay protocol or its module is called was not ruled,
+  and is left alone.
+- `start_confirm_order` fires and forgets; `POST /submissions` never waits on
   the workflow. A submitted order's total is read back through Restate's
   ingress, because the API has no read route of its own; `POST /orders` is the
   route for a caller who wants the total in the response.
-- `POST /orders` holds the caller's connection for as long as the workflow
-  takes, with no read timeout, no deadline of its own, and no cap on how many
-  may wait at once; a burst of slow or stuck workflows holds that many
-  connections open in this process. The bound belongs at the ingress or in
-  the workflow, where a caller who gave up can still attach to the result;
-  this tree makes neither rule.
-- A handler's registered name is part of the deployment. Renaming one (this
-  tree's `prepare_quote` became `price_product`) makes the service a different
-  one to Restate: re-register the deployment after upgrading, and an
-  invocation journaled against the old name has no handler to replay against
-  on the new one. A snapshot that gains a field is the same boundary: the
-  `order_id` this change added to `TakePaymentResponse` makes a payment
-  result journaled by the previous shape fail its shape check on replay, as a
-  terminal 422 after the money moved. This tree has no deployments, so it renames freely; a real
-  one keeps the old handler through a migration window or deploys the new
-  version at its own endpoint and drains the old.
+- `POST /orders` holds the caller's connection for up to the runner's
+  thirty-second read timeout, and has no deadline of its own and no cap on how
+  many may wait at once; a burst of slow workflows holds that many connections
+  open in this process, and a workflow that outruns the bound answers `500`
+  while it keeps running. The real bound belongs at the ingress or in the
+  workflow, where a caller who gave up can still attach to the result; this
+  tree makes neither rule.
+- A handler's registered name is part of the deployment, and this change
+  renamed two of them: `OrderOrchestrator/run` became
+  `OrderOrchestrator/confirm_order` and `PurchaseOrchestrator/run` became
+  `PurchaseOrchestrator/pay_for_order`. To Restate that is a different
+  service: re-register the deployment after upgrading, and an invocation
+  journaled against the old name has no handler to replay against on the new
+  one. Every relay message changed shape in the same breath — an outcome
+  field, a tuple of records, a reasons tuple, a `payment_method` — so an
+  in-flight journal written by the previous shape fails its count check on
+  replay. A change to an outcome *set* is the same boundary, for the same
+  reason. This tree has no deployments, so it renames freely; a real one
+  keeps the old handler through a migration window or deploys the new version
+  at its own endpoint and drains the old.
 - The component can wire exactly one engine: the host mounts this runtime's
   two Restate objects by name. A second engine (an in-process one for tests,
   or Temporal) would implement the same two runner protocols over its own
