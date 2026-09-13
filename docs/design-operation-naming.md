@@ -1,6 +1,6 @@
 # Operation naming, outcomes, and the words that cross a boundary
 
-<!-- tb-status: design — ruled 2026-09-13, not yet enacted in code, skill, or analyzer -->
+<!-- tb-status: design — ruled 2026-09-13 with the four open questions settled the same day; not yet enacted in code, skill, or analyzer -->
 
 This records the conventions settled in the ubiquitous-language review of
 `examples/durable-execution` on 2026-09-13. It is a design note: nothing here
@@ -243,22 +243,29 @@ Nothing here is enforced today. Which layer would carry each:
   the handler as the one translation to a status (13), situations and
   faults (14).
 
-## Open, and Chris's to rule
+## Rulings, 2026-09-13
 
-- Whether "confirm" is the seller's word for what the child workflow does.
-  Everything on the child leg derives from it. If it is not, the act still
-  needs a verb-only word, because the sentence test leaves no compound built
-  on "price" standing.
-- `ChargePaymentMethodRequest` carries an order id and cents and no payment
-  method. Either the message gains the payment method it charges, or the
-  thing being charged is the order and the port is `charge_order`. A
-  modelling gap the language found, not a naming choice.
-- `NOT_FOUND` at the port changes the `FOUND / MISSING` convention used by
-  at least three other examples' port enums (`CampaignLookup`, `Loaded`,
-  `Priced`). A repo-wide rename in the same change, or a recorded exception.
-- Whether the compensation scenario's reserved word, "checkout", and this
-  act's seller side are the same act. Not touched here.
-- `submit_order` and `place_order` are two client words for one act,
-  differing only in whether the caller waits. The calling-mode norm chose
-  them deliberately as the caller's words for what comes back; recorded, not
-  reopened.
+The four questions the review left open, and how Chris ruled on each.
+
+- **"Confirm" is the seller's word for the child act.** `confirm_order`,
+  `ConfirmOrderRequest`, `ConfirmOrderOutcome.CONFIRMED`, and the parent's
+  `ORDER_NOT_CONFIRMED` stand.
+- **The charge request gains a simple payment method object.** The language
+  found that `ChargePaymentMethodRequest` carried an order id and cents and
+  nothing to charge. The ruling is to add a simple `PaymentMethod` domain
+  object and thread it from the client's `PayForOrderRequest` through the
+  relay to the port, so the operation charges what its name says. Its shape
+  is decided when it is built; the ruling is that it exists.
+- **`FOUND / NOT_FOUND` everywhere, for now.** Every port enum that answers a
+  lookup uses `NOT_FOUND`, so `CampaignLookup`, `Loaded`, and `Priced` are
+  renamed in the same change as this tree, not recorded as exceptions.
+- **"Checkout" is deferred to the compensation scenario.** The word is
+  right for confirm plus take payment, and the decision whether the parent
+  act is renamed to it waits until that scenario is built, because it is the
+  scenario that will say whether compensation is this act extended or a new
+  one. Until then the parent stays `pay_for_order`.
+
+Recorded, not reopened: `submit_order` and `place_order` are two client
+words for one act, differing only in whether the caller waits. The
+calling-mode norm chose them deliberately as the caller's words for what
+comes back.
