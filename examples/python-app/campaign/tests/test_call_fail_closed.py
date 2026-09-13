@@ -48,14 +48,14 @@ class FakeCampaignRepositoryRecording(ports.CampaignRepository):
                 outcome=ports.CampaignLookup.FOUND, campaigns=(self._record,)
             )
         return ports.FindCampaignResponse(
-            outcome=ports.CampaignLookup.MISSING, campaigns=()
+            outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
         )
 
     def find_by_slug(
         self, find_campaign_by_slug_request: ports.FindCampaignBySlugRequest
     ) -> ports.FindCampaignResponse:
         return ports.FindCampaignResponse(
-            outcome=ports.CampaignLookup.MISSING, campaigns=()
+            outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
         )
 
     def slug_taken(
@@ -74,19 +74,19 @@ class FakeCampaignRepositoryRecording(ports.CampaignRepository):
         self, find_campaign_view_request: ports.FindCampaignViewRequest
     ) -> ports.FindCampaignViewResponse:
         row = self._record
-        links: list[ports.LinkViewRow] = []
+        links: list[ports.LinkRow] = []
         for link in row.links:
-            links.append(ports.LinkViewRow(
+            links.append(ports.LinkRow(
                 slug=link.slug, target_url=link.target_url, status=link.status
             ))
-        campaign_view_row = ports.CampaignViewRow(
+        campaign_row = ports.CampaignRow(
             campaign_id=row.id,
             budget_amount=row.budget.amount,
             budget_currency=row.budget.currency,
             links=tuple(links),
         )
         return ports.FindCampaignViewResponse(
-            outcome=ports.CampaignViewLookup.FOUND, campaigns=(campaign_view_row,)
+            outcome=ports.CampaignRowLookup.FOUND, campaigns=(campaign_row,)
         )
 
 
@@ -134,6 +134,6 @@ def test_allowed_verdict_creates_the_link() -> None:
     fake_campaign_repository_recording = FakeCampaignRepositoryRecording()
     campaign_service = application.CampaignService(fake_campaign_repository_recording, FakeTargetPolicyAllowAll(), FakeCampaignIdentity(), fake_campaign_repository_recording)
     add_link_request = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
-    campaign_view = campaign_service.add_link(add_link_request)
-    assert [link.slug for link in campaign_view.links] == ["promo"]
+    add_link_response = campaign_service.add_link(add_link_request)
+    assert [link.slug for link in add_link_response.campaign.links] == ["promo"]
     assert len(fake_campaign_repository_recording.saved) == 1

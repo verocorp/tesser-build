@@ -24,7 +24,7 @@ class HttpHandler(ts.Handler):
         if not isinstance(currency, str):
             raise protocol.BadRequest("expected a string field")
         try:
-            campaign_view = self._campaign_client.create_campaign(
+            create_campaign_response = self._campaign_client.create_campaign(
                 client.CreateCampaignRequest(budget_amount=amount, budget_currency=currency)
             )
         except client.ERRORS as error:
@@ -44,11 +44,11 @@ class HttpHandler(ts.Handler):
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(201, {
-            "campaign_id": campaign_view.campaign_id,
-            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
+            "campaign_id": create_campaign_response.campaign.campaign_id,
+            "budget": {"amount": create_campaign_response.campaign.budget_amount, "currency": create_campaign_response.campaign.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in campaign_view.links
+                for link in create_campaign_response.campaign.links
             ],
         })
 
@@ -64,7 +64,7 @@ class HttpHandler(ts.Handler):
         if not isinstance(target_url, str):
             raise protocol.BadRequest("expected a string field")
         try:
-            campaign_view = self._campaign_client.add_link(
+            add_link_response = self._campaign_client.add_link(
                 client.AddLinkRequest(campaign_id=campaign_id, slug=slug, target_url=target_url)
             )
         except client.ERRORS as error:
@@ -84,11 +84,11 @@ class HttpHandler(ts.Handler):
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
-            "campaign_id": campaign_view.campaign_id,
-            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
+            "campaign_id": add_link_response.campaign.campaign_id,
+            "budget": {"amount": add_link_response.campaign.budget_amount, "currency": add_link_response.campaign.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in campaign_view.links
+                for link in add_link_response.campaign.links
             ],
         })
 
@@ -101,7 +101,7 @@ class HttpHandler(ts.Handler):
         if not isinstance(slug, str):
             raise protocol.BadRequest("expected a string field")
         try:
-            campaign_view = self._campaign_client.deactivate_link(
+            deactivate_link_response = self._campaign_client.deactivate_link(
                 client.DeactivateLinkRequest(campaign_id=campaign_id, slug=slug)
             )
         except client.ERRORS as error:
@@ -121,17 +121,17 @@ class HttpHandler(ts.Handler):
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
-            "campaign_id": campaign_view.campaign_id,
-            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
+            "campaign_id": deactivate_link_response.campaign.campaign_id,
+            "budget": {"amount": deactivate_link_response.campaign.budget_amount, "currency": deactivate_link_response.campaign.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in campaign_view.links
+                for link in deactivate_link_response.campaign.links
             ],
         })
 
     def get_campaign(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
         try:
-            campaign_view = self._campaign_client.get_campaign(
+            get_campaign_response = self._campaign_client.get_campaign(
                 client.GetCampaignRequest(campaign_id=http_request.path_param("campaign_id"))
             )
         except client.ERRORS as error:
@@ -151,11 +151,11 @@ class HttpHandler(ts.Handler):
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
-            "campaign_id": campaign_view.campaign_id,
-            "budget": {"amount": campaign_view.budget_amount, "currency": campaign_view.budget_currency},
+            "campaign_id": get_campaign_response.campaign.campaign_id,
+            "budget": {"amount": get_campaign_response.campaign.budget_amount, "currency": get_campaign_response.campaign.budget_currency},
             "links": [
                 {"slug": link.slug, "target_url": link.target_url, "status": link.status}
-                for link in campaign_view.links
+                for link in get_campaign_response.campaign.links
             ],
         })
 

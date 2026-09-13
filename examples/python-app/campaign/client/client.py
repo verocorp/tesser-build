@@ -51,7 +51,7 @@ class ListLinksRequest(ts.Request):
         return None
 
 
-class LinkView(ts.Response):
+class Link(ts.Response):
 
     def __init__(self, slug: str, target_url: str, status: str) -> None:
         self.slug = slug
@@ -61,18 +61,18 @@ class LinkView(ts.Response):
 
 class ListLinksResponse(ts.Response):
 
-    def __init__(self, links: tuple[LinkView, ...]) -> None:
+    def __init__(self, links: tuple[Link, ...]) -> None:
         self.links = links
 
 
-class CampaignView(ts.Response):
+class Campaign(ts.Response):
 
     def __init__(
         self,
         campaign_id: str,
         budget_amount: str,
         budget_currency: str,
-        links: tuple[LinkView, ...],
+        links: tuple[Link, ...],
     ) -> None:
         self.campaign_id = campaign_id
         self.budget_amount = budget_amount
@@ -123,15 +123,45 @@ ERRORS: typing.Final[
 ] = (Rejected, Missing, Conflict, Unreadable, Unavailable)
 
 
+class CreateCampaignResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
+class AddLinkResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
+class DeactivateLinkResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
+class GetCampaignResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
 class CampaignClient(ts.Client, typing.Protocol):
 
-    def create_campaign(self, create_campaign_request: CreateCampaignRequest) -> CampaignView: ...
+    def create_campaign(
+        self, create_campaign_request: CreateCampaignRequest
+    ) -> CreateCampaignResponse: ...
 
-    def add_link(self, add_link_request: AddLinkRequest) -> CampaignView: ...
+    def add_link(self, add_link_request: AddLinkRequest) -> AddLinkResponse: ...
 
-    def deactivate_link(self, deactivate_link_request: DeactivateLinkRequest) -> CampaignView: ...
+    def deactivate_link(
+        self, deactivate_link_request: DeactivateLinkRequest
+    ) -> DeactivateLinkResponse: ...
 
-    def get_campaign(self, get_campaign_request: GetCampaignRequest) -> CampaignView: ...
+    def get_campaign(
+        self, get_campaign_request: GetCampaignRequest
+    ) -> GetCampaignResponse: ...
 
     def resolve(self, resolve_request: ResolveRequest) -> ResolveResponse: ...
 

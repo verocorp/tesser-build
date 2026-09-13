@@ -13,29 +13,29 @@ import tesser.errors as errors
 @ts.fake
 class FakeCampaignClient(campaign_client.CampaignClient):
     def __init__(
-        self, *links: campaign_client.LinkView, error: Exception | None = None
+        self, *links: campaign_client.Link, error: Exception | None = None
     ) -> None:
         self.links = links
         self.error = error
 
     def create_campaign(
         self, create_campaign_request: campaign_client.CreateCampaignRequest
-    ) -> campaign_client.CampaignView:
+    ) -> campaign_client.CreateCampaignResponse:
         raise AssertionError("create_campaign is not part of the reports surface")
 
     def add_link(
         self, add_link_request: campaign_client.AddLinkRequest
-    ) -> campaign_client.CampaignView:
+    ) -> campaign_client.AddLinkResponse:
         raise AssertionError("add_link is not part of the reports surface")
 
     def deactivate_link(
         self, deactivate_link_request: campaign_client.DeactivateLinkRequest
-    ) -> campaign_client.CampaignView:
+    ) -> campaign_client.DeactivateLinkResponse:
         raise AssertionError("deactivate_link is not part of the reports surface")
 
     def get_campaign(
         self, get_campaign_request: campaign_client.GetCampaignRequest
-    ) -> campaign_client.CampaignView:
+    ) -> campaign_client.GetCampaignResponse:
         raise AssertionError("get_campaign is not part of the reports surface")
 
     def resolve(
@@ -53,7 +53,7 @@ class FakeCampaignClient(campaign_client.CampaignClient):
 
 @ts.fake
 class FakeLinkPolicyClient(linkpolicy_client.LinkPolicyClient):
-    def __init__(self, *verdicts: linkpolicy_client.VerdictView) -> None:
+    def __init__(self, *verdicts: linkpolicy_client.Verdict) -> None:
         self.verdicts = verdicts
 
     def check(
@@ -74,10 +74,10 @@ def test_the_context_takes_no_settings_yet() -> None:
 
 def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
     fake_campaign_client = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
+        campaign_client.Link("spring-sale", "https://a.example/s", "active")
     )
     fake_link_policy_client = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", "denied", "host blocked")
+        linkpolicy_client.Verdict("https://a.example/s", "denied", "host blocked")
     )
 
     reports = component.Reports(
@@ -97,7 +97,7 @@ def test_the_wired_client_joins_a_link_to_the_verdict_recorded_for_it() -> None:
 
 def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
     fake_campaign_client = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
+        campaign_client.Link("spring-sale", "https://a.example/s", "active")
     )
     fake_link_policy_client = FakeLinkPolicyClient()
 
@@ -118,10 +118,10 @@ def test_the_wired_client_reports_a_link_no_policy_has_ruled_on() -> None:
 
 def test_a_config_wires_a_client_that_serves_a_report() -> None:
     fake_campaign_client = FakeCampaignClient(
-        campaign_client.LinkView("spring-sale", "https://a.example/s", "active")
+        campaign_client.Link("spring-sale", "https://a.example/s", "active")
     )
     fake_link_policy_client = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist")
+        linkpolicy_client.Verdict("https://a.example/s", "allowed", "on the allowlist")
     )
 
     reports = component.Reports(

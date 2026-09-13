@@ -11,7 +11,7 @@ import reports.application.ports as ports
 @ts.fake
 class FakeLinkPolicyClient(linkpolicy_client.LinkPolicyClient):
     def __init__(
-        self, *verdicts: linkpolicy_client.VerdictView, error: Exception | None = None
+        self, *verdicts: linkpolicy_client.Verdict, error: Exception | None = None
     ) -> None:
         self.verdicts = verdicts
         self.error = error
@@ -31,7 +31,7 @@ class FakeLinkPolicyClient(linkpolicy_client.LinkPolicyClient):
 
 def test_an_allowed_verdict_arrives_as_the_allowed_member() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist")
+        linkpolicy_client.Verdict("https://a.example/s", "allowed", "on the allowlist")
     )
 
     list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
@@ -45,7 +45,7 @@ def test_an_allowed_verdict_arrives_as_the_allowed_member() -> None:
 
 def test_a_denied_verdict_arrives_as_the_denied_member() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", "denied", "host blocked")
+        linkpolicy_client.Verdict("https://a.example/s", "denied", "host blocked")
     )
 
     list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
@@ -57,8 +57,8 @@ def test_a_denied_verdict_arrives_as_the_denied_member() -> None:
 
 def test_every_verdict_the_policy_context_serves_crosses_the_boundary() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", "allowed", "on the allowlist"),
-        linkpolicy_client.VerdictView("https://a.example/w", "denied", "host blocked"),
+        linkpolicy_client.Verdict("https://a.example/s", "allowed", "on the allowlist"),
+        linkpolicy_client.Verdict("https://a.example/w", "denied", "host blocked"),
     )
 
     list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
@@ -115,7 +115,7 @@ def test_a_policy_context_that_cannot_answer_is_the_ports_unavailable() -> None:
 
 def test_a_verdict_decision_outside_the_recorded_set_is_refused() -> None:
     fake_link_policy_client = FakeLinkPolicyClient(
-        linkpolicy_client.VerdictView("https://a.example/s", "maybe", "unsure")
+        linkpolicy_client.Verdict("https://a.example/s", "maybe", "unsure")
     )
 
     with pytest.raises(ports.VerdictSourceUnavailable):

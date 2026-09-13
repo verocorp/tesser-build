@@ -122,7 +122,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
     match find_campaign_response.outcome:
         case ports.CampaignLookup.FOUND:
             record = find_campaign_response.campaigns[0]
-        case ports.CampaignLookup.MISSING:
+        case ports.CampaignLookup.NOT_FOUND:
             raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -181,7 +181,7 @@ def test_store_holds_rows_not_live_objects() -> None:
     match find_campaign_response.outcome:
         case ports.CampaignLookup.FOUND:
             record = find_campaign_response.campaigns[0]
-        case ports.CampaignLookup.MISSING:
+        case ports.CampaignLookup.NOT_FOUND:
             raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -200,7 +200,7 @@ def test_store_holds_rows_not_live_objects() -> None:
     match find_campaign_response.outcome:
         case ports.CampaignLookup.FOUND:
             record = find_campaign_response.campaigns[0]
-        case ports.CampaignLookup.MISSING:
+        case ports.CampaignLookup.NOT_FOUND:
             raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -266,7 +266,7 @@ def test_load_reruns_invariants_on_stale_rows() -> None:
         match find_campaign_response.outcome:
             case ports.CampaignLookup.FOUND:
                 record = find_campaign_response.campaigns[0]
-            case ports.CampaignLookup.MISSING:
+            case ports.CampaignLookup.NOT_FOUND:
                 raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
             case _ as unreachable:
                 typing.assert_never(unreachable)

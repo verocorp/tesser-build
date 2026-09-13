@@ -6,12 +6,12 @@ import typing
 import tesser.application as ts
 
 
-class CampaignViewLookup(enum.Enum):
+class CampaignRowLookup(enum.Enum):
     FOUND = "found"
-    MISSING = "missing"
+    NOT_FOUND = "not_found"
 
 
-class LinkViewRow(ts.Response):
+class LinkRow(ts.Response):
 
     def __init__(self, slug: str, target_url: str, status: str) -> None:
         self.slug = slug
@@ -19,14 +19,14 @@ class LinkViewRow(ts.Response):
         self.status = status
 
 
-class CampaignViewRow(ts.Response):
+class CampaignRow(ts.Response):
 
     def __init__(
         self,
         campaign_id: str,
         budget_amount: str,
         budget_currency: str,
-        links: tuple[LinkViewRow, ...],
+        links: tuple[LinkRow, ...],
     ) -> None:
         self.campaign_id = campaign_id
         self.budget_amount = budget_amount
@@ -43,7 +43,7 @@ class FindCampaignViewRequest(ts.Request):
 class FindCampaignViewResponse(ts.Response):
 
     def __init__(
-        self, outcome: CampaignViewLookup, campaigns: tuple[CampaignViewRow, ...]
+        self, outcome: CampaignRowLookup, campaigns: tuple[CampaignRow, ...]
     ) -> None:
         self.outcome = outcome
         self.campaigns = campaigns

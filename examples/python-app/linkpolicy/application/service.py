@@ -24,7 +24,7 @@ class MapToCheckResponse(ts.Mapper, client.CheckResponse):
         super().__init__(decision=str(verdict.allowed), reason=str(verdict.reason))
 
 
-class MapToVerdictView(ts.Mapper, client.VerdictView):
+class MapToVerdict(ts.Mapper, client.Verdict):
 
     def __init__(self, verdict_record: ports.VerdictRecord) -> None:
         super().__init__(
@@ -37,7 +37,7 @@ class MapToListVerdictsResponse(ts.Mapper, client.ListVerdictsResponse):
     def __init__(self, list_verdicts_response: ports.ListVerdictsResponse) -> None:
         super().__init__(
             verdicts=tuple(
-                MapToVerdictView(record) for record in list_verdicts_response.verdicts
+                MapToVerdict(record) for record in list_verdicts_response.verdicts
             )
         )
 

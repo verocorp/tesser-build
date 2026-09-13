@@ -30,23 +30,23 @@ class InMemoryCampaignRepository(ts.Repository):
         row = self._rows.get(find_campaign_view_request.campaign_id)
         if row is None:
             return ports.FindCampaignViewResponse(
-                outcome=ports.CampaignViewLookup.MISSING, campaigns=()
+                outcome=ports.CampaignRowLookup.NOT_FOUND, campaigns=()
             )
-        links: list[ports.LinkViewRow] = []
+        links: list[ports.LinkRow] = []
         for link in row.links:
-            links.append(ports.LinkViewRow(
+            links.append(ports.LinkRow(
                 slug=link.slug,
                 target_url=link.target_url,
                 status=link.status,
             ))
-        campaign_view_row = ports.CampaignViewRow(
+        campaign_row = ports.CampaignRow(
             campaign_id=row.id,
             budget_amount=row.budget.amount,
             budget_currency=row.budget.currency,
             links=tuple(links),
         )
         return ports.FindCampaignViewResponse(
-            outcome=ports.CampaignViewLookup.FOUND, campaigns=(campaign_view_row,)
+            outcome=ports.CampaignRowLookup.FOUND, campaigns=(campaign_row,)
         )
 
     def find(
@@ -57,7 +57,7 @@ class InMemoryCampaignRepository(ts.Repository):
         row = self._rows.get(find_campaign_request.campaign_id)
         if row is None:
             return ports.FindCampaignResponse(
-                outcome=ports.CampaignLookup.MISSING, campaigns=()
+                outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
             )
         return ports.FindCampaignResponse(
             outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
@@ -74,7 +74,7 @@ class InMemoryCampaignRepository(ts.Repository):
                     outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
                 )
         return ports.FindCampaignResponse(
-            outcome=ports.CampaignLookup.MISSING, campaigns=()
+            outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
         )
 
     def slug_taken(

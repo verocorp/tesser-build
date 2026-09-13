@@ -24,7 +24,7 @@ class ListVerdictsRequest(ts.Request):
         return None
 
 
-class VerdictView(ts.Response):
+class Verdict(ts.Response):
 
     def __init__(self, target_url: str, decision: str, reason: str) -> None:
         self.target_url = target_url
@@ -34,7 +34,7 @@ class VerdictView(ts.Response):
 
 class ListVerdictsResponse(ts.Response):
 
-    def __init__(self, verdicts: tuple[VerdictView, ...]) -> None:
+    def __init__(self, verdicts: tuple[Verdict, ...]) -> None:
         self.verdicts = verdicts
 
 

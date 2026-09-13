@@ -28,7 +28,7 @@ def test_an_unknown_id_reads_as_missing_with_no_rows() -> None:
 
     find_campaign_response = in_memory_campaign_repository.find(ports.FindCampaignRequest(campaign_id="0123456789abcdef"))
 
-    assert find_campaign_response.outcome is ports.CampaignLookup.MISSING
+    assert find_campaign_response.outcome is ports.CampaignLookup.NOT_FOUND
     assert find_campaign_response.campaigns == ()
 
 
@@ -81,7 +81,7 @@ def test_a_slug_nobody_registered_reads_as_missing() -> None:
 
     find_campaign_response = in_memory_campaign_repository.find_by_slug(ports.FindCampaignBySlugRequest(slug="promo"))
 
-    assert find_campaign_response.outcome is ports.CampaignLookup.MISSING
+    assert find_campaign_response.outcome is ports.CampaignLookup.NOT_FOUND
     assert find_campaign_response.campaigns == ()
 
 

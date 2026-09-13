@@ -81,12 +81,14 @@ def test_a_component_serves_a_whole_campaign_round_trip() -> None:
         component.Config(component.Spec(storage="memory")), FakeTargetPolicyAllowing()
     )
 
-    campaign_view = campaign.client.create_campaign(
+    create_campaign_response = campaign.client.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
     campaign.client.add_link(
         client.AddLinkRequest(
-            campaign_id=campaign_view.campaign_id, slug="promo", target_url="https://ok.example/x"
+            campaign_id=create_campaign_response.campaign.campaign_id,
+            slug="promo",
+            target_url="https://ok.example/x",
         )
     )
 
@@ -100,14 +102,14 @@ def test_a_component_hands_the_policy_it_was_given_to_the_service() -> None:
     campaign = component.Campaign(
         component.Config(component.Spec(storage="memory")), FakeTargetPolicyBlocking()
     )
-    campaign_view = campaign.client.create_campaign(
+    create_campaign_response = campaign.client.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
     with pytest.raises(client.Conflict) as caught:
         campaign.client.add_link(
             client.AddLinkRequest(
-                campaign_id=campaign_view.campaign_id,
+                campaign_id=create_campaign_response.campaign.campaign_id,
                 slug="promo",
                 target_url="https://bad.example/x",
             )
@@ -123,13 +125,13 @@ def test_two_components_do_not_share_a_store() -> None:
     second = component.Campaign(
         component.Config(component.Spec(storage="memory")), FakeTargetPolicyAllowing()
     )
-    campaign_view = first.client.create_campaign(
+    create_campaign_response = first.client.create_campaign(
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
     with pytest.raises(client.Missing) as caught:
         second.client.get_campaign(
-            client.GetCampaignRequest(campaign_id=campaign_view.campaign_id)
+            client.GetCampaignRequest(campaign_id=create_campaign_response.campaign.campaign_id)
         )
 
     assert caught.value.code == "campaign_missing"

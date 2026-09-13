@@ -8,12 +8,16 @@ import tests.support as support
 def test_graph_built_once_state_persists_across_calls() -> None:
     python_app = app.PythonApp(support.app_config())
     try:
-        campaign_view = python_app.campaign.client.create_campaign(campaign_client.CreateCampaignRequest("100.00", "USD"))
+        create_campaign_response = python_app.campaign.client.create_campaign(campaign_client.CreateCampaignRequest("100.00", "USD"))
         python_app.campaign.client.add_link(
-            campaign_client.AddLinkRequest(campaign_view.campaign_id, "a", "https://ok.example/a")
+            campaign_client.AddLinkRequest(
+                create_campaign_response.campaign.campaign_id, "a", "https://ok.example/a"
+            )
         )
         python_app.campaign.client.add_link(
-            campaign_client.AddLinkRequest(campaign_view.campaign_id, "b", "https://ok.example/b")
+            campaign_client.AddLinkRequest(
+                create_campaign_response.campaign.campaign_id, "b", "https://ok.example/b"
+            )
         )
         listed = python_app.campaign.client.list_links(campaign_client.ListLinksRequest()).links
         assert {v.slug for v in listed} == {"a", "b"}

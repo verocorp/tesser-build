@@ -13,7 +13,7 @@ class FakeCampaignClientScripted(client.CampaignClient):
 
     def __init__(
         self,
-        *views: client.CampaignView,
+        *views: client.Campaign,
         resolved: str = "",
         error: Exception | None = None,
     ) -> None:
@@ -24,33 +24,33 @@ class FakeCampaignClientScripted(client.CampaignClient):
 
     def create_campaign(
         self, create_campaign_request: client.CreateCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.CreateCampaignResponse:
         self.requests.append(create_campaign_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.CreateCampaignResponse(campaign=self.pending.pop(0))
 
-    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.AddLinkResponse:
         self.requests.append(add_link_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.AddLinkResponse(campaign=self.pending.pop(0))
 
     def deactivate_link(
         self, deactivate_link_request: client.DeactivateLinkRequest
-    ) -> client.CampaignView:
+    ) -> client.DeactivateLinkResponse:
         self.requests.append(deactivate_link_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.DeactivateLinkResponse(campaign=self.pending.pop(0))
 
     def get_campaign(
         self, get_campaign_request: client.GetCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.GetCampaignResponse:
         self.requests.append(get_campaign_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.GetCampaignResponse(campaign=self.pending.pop(0))
 
     def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
         self.requests.append(resolve_request)
@@ -66,7 +66,7 @@ class FakeCampaignClientScripted(client.CampaignClient):
 
 def test_create_campaign_answers_201_with_the_campaign_payload() -> None:
     fake_campaign_client_scripted = FakeCampaignClientScripted(
-        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+        client.Campaign("0123456789abcdef", "100.00", "USD", ())
     )
     http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
@@ -86,7 +86,7 @@ def test_create_campaign_answers_201_with_the_campaign_payload() -> None:
 
 def test_create_campaign_answers_json() -> None:
     fake_campaign_client_scripted = FakeCampaignClientScripted(
-        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+        client.Campaign("0123456789abcdef", "100.00", "USD", ())
     )
     http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
@@ -101,7 +101,7 @@ def test_create_campaign_answers_json() -> None:
 
 def test_create_campaign_forwards_the_budget_fields_it_read() -> None:
     fake_campaign_client_scripted = FakeCampaignClientScripted(
-        client.CampaignView("0123456789abcdef", "250.00", "EUR", ())
+        client.Campaign("0123456789abcdef", "250.00", "EUR", ())
     )
     http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
@@ -150,13 +150,13 @@ def test_create_campaign_refuses_a_body_that_is_not_json() -> None:
 
 
 def test_add_link_answers_200_with_the_links_of_the_campaign() -> None:
-    campaign_view = client.CampaignView(
+    campaign = client.Campaign(
         "0123456789abcdef",
         "100.00",
         "USD",
-        (client.LinkView("promo", "https://ok.example/x", "active"),),
+        (client.Link("promo", "https://ok.example/x", "active"),),
     )
-    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(campaign_view))
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(campaign))
 
     http_response = http_handler.add_link(
         protocol.HttpRequest(
@@ -178,7 +178,7 @@ def test_add_link_answers_200_with_the_links_of_the_campaign() -> None:
 
 def test_add_link_forwards_the_three_fields_it_read() -> None:
     fake_campaign_client_scripted = FakeCampaignClientScripted(
-        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+        client.Campaign("0123456789abcdef", "100.00", "USD", ())
     )
     http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
@@ -214,13 +214,13 @@ def test_add_link_refuses_a_body_with_a_missing_field() -> None:
 
 
 def test_deactivate_link_answers_200_with_the_link_reported_inactive() -> None:
-    campaign_view = client.CampaignView(
+    campaign = client.Campaign(
         "0123456789abcdef",
         "100.00",
         "USD",
-        (client.LinkView("promo", "https://ok.example/x", "inactive"),),
+        (client.Link("promo", "https://ok.example/x", "inactive"),),
     )
-    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(campaign_view))
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(campaign))
 
     http_response = http_handler.deactivate_link(
         protocol.HttpRequest(
@@ -236,7 +236,7 @@ def test_deactivate_link_answers_200_with_the_link_reported_inactive() -> None:
 
 def test_deactivate_link_forwards_the_campaign_and_slug_it_read() -> None:
     fake_campaign_client_scripted = FakeCampaignClientScripted(
-        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+        client.Campaign("0123456789abcdef", "100.00", "USD", ())
     )
     http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
@@ -254,7 +254,7 @@ def test_deactivate_link_forwards_the_campaign_and_slug_it_read() -> None:
 
 def test_get_campaign_reads_the_id_off_the_path() -> None:
     fake_campaign_client_scripted = FakeCampaignClientScripted(
-        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+        client.Campaign("0123456789abcdef", "100.00", "USD", ())
     )
     http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 

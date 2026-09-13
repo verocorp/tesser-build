@@ -30,7 +30,7 @@ class MapToCampaignSpecFromSlugLookup(ts.Mapper, domain.CampaignSpec):
         match find_campaign_response.outcome:
             case ports.CampaignLookup.FOUND:
                 record = find_campaign_response.campaigns[0]
-            case ports.CampaignLookup.MISSING:
+            case ports.CampaignLookup.NOT_FOUND:
                 raise client.Missing(
                     code="link_missing",
                     message=f"no active link for slug {find_campaign_by_slug_request.slug!r}",
@@ -102,17 +102,17 @@ class MapToSaveCampaignRequest(ts.Mapper, ports.SaveCampaignRequest):
         )
 
 
-class MapToLinkView(ts.Mapper, client.LinkView):
+class MapToLink(ts.Mapper, client.Link):
 
-    def __init__(self, link_view_row: ports.LinkViewRow) -> None:
+    def __init__(self, link_row: ports.LinkRow) -> None:
         super().__init__(
-            slug=link_view_row.slug,
-            target_url=link_view_row.target_url,
-            status=link_view_row.status,
+            slug=link_row.slug,
+            target_url=link_row.target_url,
+            status=link_row.status,
         )
 
 
-class MapToCampaignView(ts.Mapper, client.CampaignView):
+class MapToCampaign(ts.Mapper, client.Campaign):
 
     def __init__(
         self,
@@ -120,9 +120,9 @@ class MapToCampaignView(ts.Mapper, client.CampaignView):
         find_campaign_view_response: ports.FindCampaignViewResponse,
     ) -> None:
         match find_campaign_view_response.outcome:
-            case ports.CampaignViewLookup.FOUND:
+            case ports.CampaignRowLookup.FOUND:
                 row = find_campaign_view_response.campaigns[0]
-            case ports.CampaignViewLookup.MISSING:
+            case ports.CampaignRowLookup.NOT_FOUND:
                 raise client.Missing(
                     code="campaign_missing",
                     message=f"no campaign with id {find_campaign_view_request.campaign_id!r}",
@@ -133,7 +133,7 @@ class MapToCampaignView(ts.Mapper, client.CampaignView):
             campaign_id=row.campaign_id,
             budget_amount=row.budget_amount,
             budget_currency=row.budget_currency,
-            links=tuple(MapToLinkView(link_view_row=link) for link in row.links),
+            links=tuple(MapToLink(link_row=link) for link in row.links),
         )
 
 
@@ -192,7 +192,7 @@ class MapToCampaignSpecFromRecord(ts.Mapper, domain.CampaignSpec):
         match find_campaign_response.outcome:
             case ports.CampaignLookup.FOUND:
                 record = find_campaign_response.campaigns[0]
-            case ports.CampaignLookup.MISSING:
+            case ports.CampaignLookup.NOT_FOUND:
                 raise client.Missing(
                     code="campaign_missing",
                     message=f"no campaign with id {find_campaign_request.campaign_id!r}",
@@ -235,7 +235,7 @@ class MapToResolveResponse(ts.Mapper, client.ResolveResponse):
         super().__init__(target_url=str(target_url))
 
 
-class MapToLinkViewFromRecord(ts.Mapper, client.LinkView):
+class MapToLinkFromRecord(ts.Mapper, client.Link):
 
     def __init__(self, link_record: ports.LinkRecord) -> None:
         super().__init__(
@@ -248,11 +248,35 @@ class MapToListLinksResponse(ts.Mapper, client.ListLinksResponse):
     def __init__(self, list_campaigns_response: ports.ListCampaignsResponse) -> None:
         super().__init__(
             links=tuple(
-                MapToLinkViewFromRecord(link_record=link_record)
+                MapToLinkFromRecord(link_record=link_record)
                 for campaign_record in list_campaigns_response.campaigns
                 for link_record in campaign_record.links
             )
         )
+
+
+class MapToCreateCampaignResponse(ts.Mapper, client.CreateCampaignResponse):
+
+    def __init__(self, campaign: client.Campaign) -> None:
+        super().__init__(campaign=campaign)
+
+
+class MapToAddLinkResponse(ts.Mapper, client.AddLinkResponse):
+
+    def __init__(self, campaign: client.Campaign) -> None:
+        super().__init__(campaign=campaign)
+
+
+class MapToDeactivateLinkResponse(ts.Mapper, client.DeactivateLinkResponse):
+
+    def __init__(self, campaign: client.Campaign) -> None:
+        super().__init__(campaign=campaign)
+
+
+class MapToGetCampaignResponse(ts.Mapper, client.GetCampaignResponse):
+
+    def __init__(self, campaign: client.Campaign) -> None:
+        super().__init__(campaign=campaign)
 
 
 class CampaignService(ts.ApplicationService):
@@ -271,7 +295,7 @@ class CampaignService(ts.ApplicationService):
 
     def create_campaign(
         self, create_campaign_request: client.CreateCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.CreateCampaignResponse:
         issue_campaign_identity_response = self._campaign_identity.issue(
             ports.IssueCampaignIdentityRequest()
         )
@@ -298,12 +322,14 @@ class CampaignService(ts.ApplicationService):
             raise client.Unavailable(
                 message="the campaign store is unavailable"
             ) from store_error
-        return MapToCampaignView(
-            find_campaign_view_request=find_campaign_view_request,
-            find_campaign_view_response=find_campaign_view_response,
+        return MapToCreateCampaignResponse(
+            MapToCampaign(
+                find_campaign_view_request=find_campaign_view_request,
+                find_campaign_view_response=find_campaign_view_response,
+            )
         )
 
-    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.AddLinkResponse:
         try:
             slug = domain.Slug(add_link_request.slug)
             target_url = domain.TargetURL(add_link_request.target_url)
@@ -365,14 +391,16 @@ class CampaignService(ts.ApplicationService):
             raise client.Unavailable(
                 message="the campaign store is unavailable"
             ) from store_error
-        return MapToCampaignView(
-            find_campaign_view_request=find_campaign_view_request,
-            find_campaign_view_response=find_campaign_view_response,
+        return MapToAddLinkResponse(
+            MapToCampaign(
+                find_campaign_view_request=find_campaign_view_request,
+                find_campaign_view_response=find_campaign_view_response,
+            )
         )
 
     def deactivate_link(
         self, deactivate_link_request: client.DeactivateLinkRequest
-    ) -> client.CampaignView:
+    ) -> client.DeactivateLinkResponse:
         try:
             campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
         except errors.DomainError as domain_error:
@@ -417,14 +445,16 @@ class CampaignService(ts.ApplicationService):
             raise client.Unavailable(
                 message="the campaign store is unavailable"
             ) from store_error
-        return MapToCampaignView(
-            find_campaign_view_request=find_campaign_view_request,
-            find_campaign_view_response=find_campaign_view_response,
+        return MapToDeactivateLinkResponse(
+            MapToCampaign(
+                find_campaign_view_request=find_campaign_view_request,
+                find_campaign_view_response=find_campaign_view_response,
+            )
         )
 
     def get_campaign(
         self, get_campaign_request: client.GetCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.GetCampaignResponse:
         try:
             campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
         except errors.DomainError as domain_error:
@@ -440,9 +470,11 @@ class CampaignService(ts.ApplicationService):
             raise client.Unavailable(
                 message="the campaign store is unavailable"
             ) from store_error
-        return MapToCampaignView(
-            find_campaign_view_request=find_campaign_view_request,
-            find_campaign_view_response=find_campaign_view_response,
+        return MapToGetCampaignResponse(
+            MapToCampaign(
+                find_campaign_view_request=find_campaign_view_request,
+                find_campaign_view_response=find_campaign_view_response,
+            )
         )
 
     def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:

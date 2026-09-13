@@ -2,11 +2,11 @@ from campaign.application.ports.campaign_identity import CampaignIdentity as Cam
 from campaign.application.ports.campaign_identity import IssueCampaignIdentityRequest as IssueCampaignIdentityRequest
 from campaign.application.ports.campaign_identity import IssueCampaignIdentityResponse as IssueCampaignIdentityResponse
 from campaign.application.ports.campaign_queries import CampaignQueries as CampaignQueries
-from campaign.application.ports.campaign_queries import CampaignViewLookup as CampaignViewLookup
-from campaign.application.ports.campaign_queries import CampaignViewRow as CampaignViewRow
+from campaign.application.ports.campaign_queries import CampaignRow as CampaignRow
+from campaign.application.ports.campaign_queries import CampaignRowLookup as CampaignRowLookup
 from campaign.application.ports.campaign_queries import FindCampaignViewRequest as FindCampaignViewRequest
 from campaign.application.ports.campaign_queries import FindCampaignViewResponse as FindCampaignViewResponse
-from campaign.application.ports.campaign_queries import LinkViewRow as LinkViewRow
+from campaign.application.ports.campaign_queries import LinkRow as LinkRow
 from campaign.application.ports.campaign_repository import CampaignLookup as CampaignLookup
 from campaign.application.ports.campaign_repository import CampaignRecord as CampaignRecord
 from campaign.application.ports.campaign_repository import CampaignRepository as CampaignRepository

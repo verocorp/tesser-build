@@ -6,4 +6,4 @@ from linkpolicy.client.client import ListVerdictsRequest as ListVerdictsRequest
 from linkpolicy.client.client import ListVerdictsResponse as ListVerdictsResponse
 from linkpolicy.client.client import Rejected as Rejected
 from linkpolicy.client.client import Unavailable as Unavailable
-from linkpolicy.client.client import VerdictView as VerdictView
+from linkpolicy.client.client import Verdict as Verdict
