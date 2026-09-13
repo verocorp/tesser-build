@@ -158,9 +158,26 @@ situations.
 14. **Two classes only.** A *situation* is a business term the caller acts
     on, raised across the client (`OrderNotConfirmed`, `PaymentDeclined`,
     `ProductPriceNotFound`). A *fault* is anything no expert has a word for;
-    it propagates untyped to the host's catch-all and is handled nowhere
-    below the host. `Unavailable` at every hop was neither: it was the 503
-    wearing a class name, saying the same nothing five times.
+    it propagates untyped to the nearest host and is handled nowhere in
+    domain or application code. `Unavailable` at every hop was neither: it
+    was the 503 wearing a class name, saying the same nothing five times.
+
+    There are two hosts, and each owns its own fault policy. The HTTP host's
+    is `except Exception` to 500, because it answers a human now. The
+    engine runtime is a host too: the engine invokes our handlers, and the
+    SDK's policy for an exception that is not a `TerminalError` is retry
+    from the journal. That is the right default for a transient fault and
+    the wrong one forever for a permanent one, so the runtime's policy is a
+    bounded `InvocationRetryPolicy` declared on its `Service` and
+    `Workflow` objects, with `on_max_attempts` deciding pause or kill.
+    Today the tree declares none, so the server's unbounded default applies
+    and a permanent fault replays forever (README, the 4,298-digit
+    quantity). The one place a handler raises `TerminalError` itself is the
+    serde wrapper on a body that cannot be parsed, because that fails every
+    replay and the SDK cannot know it. A synchronous runner that waits on
+    the engine with no read timeout inherits the engine's policy on a
+    connection to a human, so that wait is bounded or that door is
+    asynchronous.
 
 ## The worked path: `POST /purchases`
 
@@ -286,6 +303,19 @@ The four questions the review left open, and how Chris ruled on each.
   act is renamed to it waits until that scenario is built, because it is the
   scenario that will say whether compensation is this act extended or a new
   one. Until then the parent stays `pay_for_order`.
+
+- **Retry policy is set in the engine host and its runtime only, for now.**
+  A retry policy encodes two kinds of knowledge: business facts the
+  application owns (whether repeating an operation is safe, how long the
+  caller may wait) and operational numbers the adapter owns (intervals,
+  attempt count, pause or kill). The application could declare its half in
+  engine-neutral terms on the relay, the way `start_`/`run_` already
+  declare a crossing's waiting, and the runtime would translate. That is
+  deferred until a use case needs it. Until then the runtime declares a
+  bounded `InvocationRetryPolicy` per `Service` and `Workflow`, and the
+  attempt bound and the synchronous runner's wait bound are adapter
+  choices with no input from the use case, recorded as such rather than
+  read as designed.
 
 Recorded, not reopened: `submit_order` and `place_order` are two client
 words for one act, differing only in whether the caller waits. The
