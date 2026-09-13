@@ -61,7 +61,7 @@ class PostgresWidgetRepository(ts.Repository):
         except (asyncpg.PostgresError, OSError) as e:
             raise ports.StoreUnavailable("the widget store cannot answer") from e
         if row is None:
-            return ports.LoadWidgetResponse(outcome=ports.Loaded.MISSING, widgets=())
+            return ports.LoadWidgetResponse(outcome=ports.Loaded.NOT_FOUND, widgets=())
         return ports.LoadWidgetResponse(
             outcome=ports.Loaded.FOUND,
             widgets=(

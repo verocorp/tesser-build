@@ -13,10 +13,10 @@ class FakeItemRepository(ports.ItemRepository):
 
     def __init__(self, outcome: ports.ItemLookup) -> None:
         self.outcome = outcome
-        self.rows: dict[str, ports.ItemView] = {}
+        self.rows: dict[str, ports.Item] = {}
 
     def save(self, save_item_request: ports.SaveItemRequest) -> ports.SaveItemResponse:
-        self.rows[save_item_request.id] = ports.ItemView(
+        self.rows[save_item_request.id] = ports.Item(
             id=save_item_request.id, name=save_item_request.name
         )
         return ports.SaveItemResponse()
@@ -24,7 +24,7 @@ class FakeItemRepository(ports.ItemRepository):
     def find(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse:
         row = self.rows.get(find_item_request.id)
         if row is None:
-            return ports.FindItemResponse(outcome=ports.ItemLookup.MISSING, items=())
+            return ports.FindItemResponse(outcome=ports.ItemLookup.NOT_FOUND, items=())
         return ports.FindItemResponse(outcome=self.outcome, items=(row,))
 
     def all(self, list_items_request: ports.ListItemsRequest) -> ports.ListItemsResponse:

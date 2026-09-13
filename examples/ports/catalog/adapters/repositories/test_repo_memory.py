@@ -15,7 +15,7 @@ def test_a_saved_item_is_found_by_its_id() -> None:
             assert tuple(
                 (view.id, view.name) for view in find_item_response.items
             ) == (("a1", "Anvil"),)
-        case ports.ItemLookup.ARCHIVED | ports.ItemLookup.MISSING:
+        case ports.ItemLookup.ARCHIVED | ports.ItemLookup.NOT_FOUND:
             raise AssertionError("a saved item is served as found")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -25,7 +25,7 @@ def test_an_id_that_was_never_saved_is_missing_and_carries_nothing() -> None:
     memory_item_repository = repositories.MemoryItemRepository()
     find_item_response = memory_item_repository.find(ports.FindItemRequest(id="ghost"))
     assert (find_item_response.outcome, find_item_response.items) == (
-        ports.ItemLookup.MISSING,
+        ports.ItemLookup.NOT_FOUND,
         (),
     )
 
@@ -62,4 +62,4 @@ def test_two_repositories_do_not_share_their_rows() -> None:
     second = repositories.MemoryItemRepository()
     first.save(ports.SaveItemRequest(id="a1", name="Anvil"))
     find_item_response = second.find(ports.FindItemRequest(id="a1"))
-    assert find_item_response.outcome is ports.ItemLookup.MISSING
+    assert find_item_response.outcome is ports.ItemLookup.NOT_FOUND

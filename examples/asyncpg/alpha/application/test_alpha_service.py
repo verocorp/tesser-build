@@ -43,7 +43,7 @@ class FakeWidgetRepository(ports.WidgetRepository):
 
     async def load_widget(self, load_widget_request: ports.LoadWidgetRequest) -> ports.LoadWidgetResponse:
         if load_widget_request.name not in self._part_by_name:
-            return ports.LoadWidgetResponse(outcome=ports.Loaded.MISSING, widgets=())
+            return ports.LoadWidgetResponse(outcome=ports.Loaded.NOT_FOUND, widgets=())
         return ports.LoadWidgetResponse(
             outcome=ports.Loaded.FOUND,
             widgets=(
@@ -273,7 +273,7 @@ class TestAlphaServiceMappers:
         with pytest.raises(client.Missing) as caught:
             application.MapToLoadedWidgetSpec(
                 ports.LoadWidgetRequest(name="x"),
-                ports.LoadWidgetResponse(outcome=ports.Loaded.MISSING, widgets=()),
+                ports.LoadWidgetResponse(outcome=ports.Loaded.NOT_FOUND, widgets=()),
             )
         assert caught.value.code == "unknown_widget"
         assert caught.value.message == "no widget 'x'"

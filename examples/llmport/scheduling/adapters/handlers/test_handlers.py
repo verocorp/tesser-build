@@ -12,51 +12,51 @@ import scheduling.client as client
 class FakeSchedulingClientScripted(client.SchedulingClient):
 
     def __init__(
-        self, *states: client.BookingStateResponse, error: Exception | None = None
+        self, *bookings: client.Booking, error: Exception | None = None
     ) -> None:
-        self.pending = list(states)
+        self.pending = list(bookings)
         self.error = error
         self.requests: list[object] = []
 
     def begin(
         self, begin_booking_request: client.BeginBookingRequest
-    ) -> client.BookingStateResponse:
+    ) -> client.BeginResponse:
         self.requests.append(begin_booking_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.BeginResponse(self.pending.pop(0))
 
     def provide_name(
         self, provide_name_request: client.ProvideNameRequest
-    ) -> client.BookingStateResponse:
+    ) -> client.ProvideNameResponse:
         self.requests.append(provide_name_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.ProvideNameResponse(self.pending.pop(0))
 
     def choose_slot(
         self, choose_slot_request: client.ChooseSlotRequest
-    ) -> client.BookingStateResponse:
+    ) -> client.ChooseSlotResponse:
         self.requests.append(choose_slot_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.ChooseSlotResponse(self.pending.pop(0))
 
     def confirm(
         self, confirm_booking_request: client.ConfirmBookingRequest
-    ) -> client.BookingStateResponse:
+    ) -> client.ConfirmResponse:
         self.requests.append(confirm_booking_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.ConfirmResponse(self.pending.pop(0))
 
     def status(
         self, status_request: client.StatusRequest
-    ) -> client.BookingStateResponse:
+    ) -> client.StatusResponse:
         self.requests.append(status_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.StatusResponse(self.pending.pop(0))
 
 
 def test_the_handler_carries_the_instructions_the_model_opens_with() -> None:
@@ -68,7 +68,7 @@ def test_the_handler_carries_the_instructions_the_model_opens_with() -> None:
 
 def test_beginning_asks_the_client_for_its_own_booking() -> None:
     fake_scheduling_client_scripted = FakeSchedulingClientScripted(
-        client.BookingStateResponse(
+        client.Booking(
             step="collect_name", offered_slots=(), reply="ask the caller for their name"
         )
     )
@@ -84,7 +84,7 @@ def test_beginning_asks_the_client_for_its_own_booking() -> None:
 
 def test_asking_for_status_reads_the_same_booking() -> None:
     fake_scheduling_client_scripted = FakeSchedulingClientScripted(
-        client.BookingStateResponse(
+        client.Booking(
             step="choose_slot", offered_slots=("mon-9am",), reply="continue the booking"
         )
     )
@@ -100,7 +100,7 @@ def test_asking_for_status_reads_the_same_booking() -> None:
 
 def test_the_name_the_model_supplied_reaches_the_client() -> None:
     fake_scheduling_client_scripted = FakeSchedulingClientScripted(
-        client.BookingStateResponse(
+        client.Booking(
             step="choose_slot",
             offered_slots=("mon-9am",),
             reply="offer the caller the available slots",
@@ -120,7 +120,7 @@ def test_the_name_the_model_supplied_reaches_the_client() -> None:
 
 def test_the_slot_the_model_supplied_reaches_the_client() -> None:
     fake_scheduling_client_scripted = FakeSchedulingClientScripted(
-        client.BookingStateResponse(
+        client.Booking(
             step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm"
         )
     )
@@ -137,9 +137,7 @@ def test_the_slot_the_model_supplied_reaches_the_client() -> None:
 
 def test_confirming_carries_no_argument_beyond_the_booking() -> None:
     fake_scheduling_client_scripted = FakeSchedulingClientScripted(
-        client.BookingStateResponse(
-            step="booked", offered_slots=(), reply="booked mon-9am for Ada"
-        )
+        client.Booking(step="booked", offered_slots=(), reply="booked mon-9am for Ada")
     )
     llm_tool_handler = handlers.LlmToolHandler(fake_scheduling_client_scripted, "b1")
 
@@ -168,9 +166,7 @@ def test_a_non_string_argument_never_reaches_the_client() -> None:
 def test_a_booked_booking_offers_the_model_no_further_tool() -> None:
     llm_tool_handler = handlers.LlmToolHandler(
         FakeSchedulingClientScripted(
-            client.BookingStateResponse(
-                step="booked", offered_slots=(), reply="booked mon-9am for Ada"
-            )
+            client.Booking(step="booked", offered_slots=(), reply="booked mon-9am for Ada")
         ),
         "b1",
     )
@@ -183,7 +179,7 @@ def test_a_booked_booking_offers_the_model_no_further_tool() -> None:
 def test_collecting_a_name_offers_exactly_a_required_name_argument() -> None:
     llm_tool_handler = handlers.LlmToolHandler(
         FakeSchedulingClientScripted(
-            client.BookingStateResponse(
+            client.Booking(
                 step="collect_name", offered_slots=(), reply="ask the caller for their name"
             )
         ),
@@ -205,7 +201,7 @@ def test_collecting_a_name_offers_exactly_a_required_name_argument() -> None:
 def test_choosing_a_slot_offers_exactly_the_slots_the_state_carries() -> None:
     llm_tool_handler = handlers.LlmToolHandler(
         FakeSchedulingClientScripted(
-            client.BookingStateResponse(
+            client.Booking(
                 step="choose_slot",
                 offered_slots=("mon-9am", "tue-2pm"),
                 reply="offer the caller the available slots",
@@ -228,7 +224,7 @@ def test_choosing_a_slot_offers_exactly_the_slots_the_state_carries() -> None:
 def test_confirming_offers_a_tool_that_takes_no_argument() -> None:
     llm_tool_handler = handlers.LlmToolHandler(
         FakeSchedulingClientScripted(
-            client.BookingStateResponse(
+            client.Booking(
                 step="confirm", offered_slots=("mon-9am",), reply="ask the caller to confirm"
             )
         ),
@@ -251,7 +247,7 @@ def test_confirming_offers_a_tool_that_takes_no_argument() -> None:
 def test_a_state_the_handler_declares_no_tools_for_is_not_answered_silently() -> None:
     llm_tool_handler = handlers.LlmToolHandler(
         FakeSchedulingClientScripted(
-            client.BookingStateResponse(step="cancelled", offered_slots=(), reply="done")
+            client.Booking(step="cancelled", offered_slots=(), reply="done")
         ),
         "b1",
     )
@@ -263,7 +259,7 @@ def test_a_state_the_handler_declares_no_tools_for_is_not_answered_silently() ->
 def test_the_handler_answers_the_surface_the_host_wires() -> None:
     llm_tool_handler = handlers.LlmToolHandler(
         FakeSchedulingClientScripted(
-            client.BookingStateResponse(
+            client.Booking(
                 step="collect_name", offered_slots=(), reply="ask the caller for their name"
             )
         ),

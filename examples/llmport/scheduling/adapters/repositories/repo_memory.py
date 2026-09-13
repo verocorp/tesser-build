@@ -7,7 +7,7 @@ import scheduling.application.ports as ports
 
 class MemoryBookingRepository(ts.Repository):
     def __init__(self) -> None:
-        self.stored: dict[str, ports.BookingView] = {}
+        self.stored: dict[str, ports.Booking] = {}
 
     def find(
         self, find_booking_request: ports.FindBookingRequest
@@ -24,7 +24,7 @@ class MemoryBookingRepository(ts.Repository):
     def save(
         self, save_booking_request: ports.SaveBookingRequest
     ) -> ports.SaveBookingResponse:
-        self.stored[save_booking_request.booking_id] = ports.BookingView(
+        self.stored[save_booking_request.booking_id] = ports.Booking(
             step=save_booking_request.step,
             name=save_booking_request.name,
             chosen=save_booking_request.chosen,

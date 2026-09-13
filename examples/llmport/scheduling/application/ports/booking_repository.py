@@ -11,7 +11,7 @@ class BookingPresence(enum.Enum):
     ABSENT = "absent"
 
 
-class BookingView(ts.Response):
+class Booking(ts.Response):
 
     def __init__(self, step: str, name: str, chosen: str, offered: tuple[str, ...]) -> None:
         self.step = step
@@ -28,7 +28,7 @@ class FindBookingRequest(ts.Request):
 
 class FindBookingResponse(ts.Response):
 
-    def __init__(self, presence: BookingPresence, bookings: tuple[BookingView, ...]) -> None:
+    def __init__(self, presence: BookingPresence, bookings: tuple[Booking, ...]) -> None:
         self.presence = presence
         self.bookings = bookings
 

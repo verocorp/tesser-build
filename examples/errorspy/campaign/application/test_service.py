@@ -34,7 +34,7 @@ class FakeCampaignRepository(ports.CampaignRepository):
         row = self.rows.get(find_campaign_request.campaign_id)
         if row is None:
             return ports.FindCampaignResponse(
-                outcome=ports.CampaignLookup.MISSING, campaigns=()
+                outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
             )
         return ports.FindCampaignResponse(
             outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
@@ -43,7 +43,7 @@ class FakeCampaignRepository(ports.CampaignRepository):
 
 def test_creating_a_campaign_answers_the_view_of_what_was_built() -> None:
     campaign_service = application.CampaignService(FakeCampaignRepository())
-    campaign_view = campaign_service.create_campaign(
+    create_campaign_response = campaign_service.create_campaign(
         client.CreateCampaignRequest(
             campaign_id="c1",
             window_start="2026-01-01",
@@ -51,12 +51,15 @@ def test_creating_a_campaign_answers_the_view_of_what_was_built() -> None:
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    assert (campaign_view.campaign_id, campaign_view.links) == ("c1", ("spring-sale",))
+    assert (
+        create_campaign_response.campaign.campaign_id,
+        create_campaign_response.campaign.links,
+    ) == ("c1", ("spring-sale",))
 
 
 def test_creating_a_campaign_with_no_links_answers_a_view_that_lists_nothing() -> None:
     campaign_service = application.CampaignService(FakeCampaignRepository())
-    campaign_view = campaign_service.create_campaign(
+    create_campaign_response = campaign_service.create_campaign(
         client.CreateCampaignRequest(
             campaign_id="c1",
             window_start="2026-01-01",
@@ -64,7 +67,7 @@ def test_creating_a_campaign_with_no_links_answers_a_view_that_lists_nothing() -
             links=(),
         )
     )
-    assert campaign_view.links == ()
+    assert create_campaign_response.campaign.links == ()
 
 
 def test_creating_a_campaign_stores_its_window_and_links() -> None:
@@ -154,13 +157,13 @@ def test_getting_a_created_campaign_answers_its_links() -> None:
             ),
         )
     )
-    campaign_view = campaign_service.get_campaign(
+    get_campaign_response = campaign_service.get_campaign(
         client.GetCampaignRequest(campaign_id="c1")
     )
-    assert (campaign_view.campaign_id, campaign_view.links) == (
-        "c1",
-        ("alpha-one", "beta-two"),
-    )
+    assert (
+        get_campaign_response.campaign.campaign_id,
+        get_campaign_response.campaign.links,
+    ) == ("c1", ("alpha-one", "beta-two"))
 
 
 def test_adding_a_link_answers_a_view_of_every_link_and_stores_it() -> None:
@@ -174,10 +177,10 @@ def test_adding_a_link_answers_a_view_of_every_link_and_stores_it() -> None:
             links=(client.LinkBody(slug="alpha-one", target_url="https://a.com"),),
         )
     )
-    campaign_view = campaign_service.add_link(
+    add_link_response = campaign_service.add_link(
         client.AddLinkRequest(campaign_id="c1", slug="beta-two", target_url="https://b.com")
     )
-    assert campaign_view.links == ("alpha-one", "beta-two")
+    assert add_link_response.campaign.links == ("alpha-one", "beta-two")
     assert tuple(
         link.slug for link in fake_campaign_repository.rows["c1"].links
     ) == ("alpha-one", "beta-two")
@@ -271,11 +274,11 @@ def test_deactivating_a_link_answers_the_campaign_and_stores_it() -> None:
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    campaign_view = campaign_service.deactivate_link(
+    deactivate_link_response = campaign_service.deactivate_link(
         client.DeactivateLinkRequest(campaign_id="c1", slug="spring-sale")
     )
-    assert campaign_view.campaign_id == "c1"
-    assert campaign_view.links == ("spring-sale",)
+    assert deactivate_link_response.campaign.campaign_id == "c1"
+    assert deactivate_link_response.campaign.links == ("spring-sale",)
     assert fake_campaign_repository.saves == ["c1", "c1"]
 
 
@@ -447,7 +450,7 @@ def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
 
 def test_a_missing_outcome_is_a_not_found_naming_the_campaign() -> None:
     find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.MISSING, campaigns=()
+        outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
     )
     with pytest.raises(client.Missing) as ei:
         application.MapToCampaignSpec(

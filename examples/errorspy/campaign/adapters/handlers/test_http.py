@@ -13,50 +13,56 @@ class FakeCampaignClient(client.CampaignClient):
 
     def __init__(
         self,
-        view: client.CampaignView | None = None,
+        campaign: client.Campaign | None = None,
         error: Exception | None = None,
     ) -> None:
-        self.view = view
+        self.campaign = campaign
         self.error = error
         self.requests: list[object] = []
 
     def create_campaign(
         self, create_campaign_request: client.CreateCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.CreateCampaignResponse:
         self.requests.append(create_campaign_request)
         if self.error is not None:
             raise self.error
-        if self.view is None:
-            return client.CampaignView(campaign_id="c1", links=())
-        return self.view
+        if self.campaign is None:
+            return client.CreateCampaignResponse(
+                campaign=client.Campaign(campaign_id="c1", links=())
+            )
+        return client.CreateCampaignResponse(campaign=self.campaign)
 
     def get_campaign(
         self, get_campaign_request: client.GetCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.GetCampaignResponse:
         self.requests.append(get_campaign_request)
         if self.error is not None:
             raise self.error
-        if self.view is None:
-            return client.CampaignView(campaign_id="c1", links=())
-        return self.view
+        if self.campaign is None:
+            return client.GetCampaignResponse(
+                campaign=client.Campaign(campaign_id="c1", links=())
+            )
+        return client.GetCampaignResponse(campaign=self.campaign)
 
-    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.AddLinkResponse:
         self.requests.append(add_link_request)
         if self.error is not None:
             raise self.error
-        if self.view is None:
-            return client.CampaignView(campaign_id="c1", links=())
-        return self.view
+        if self.campaign is None:
+            return client.AddLinkResponse(campaign=client.Campaign(campaign_id="c1", links=()))
+        return client.AddLinkResponse(campaign=self.campaign)
 
     def deactivate_link(
         self, deactivate_link_request: client.DeactivateLinkRequest
-    ) -> client.CampaignView:
+    ) -> client.DeactivateLinkResponse:
         self.requests.append(deactivate_link_request)
         if self.error is not None:
             raise self.error
-        if self.view is None:
-            return client.CampaignView(campaign_id="c1", links=())
-        return self.view
+        if self.campaign is None:
+            return client.DeactivateLinkResponse(
+                campaign=client.Campaign(campaign_id="c1", links=())
+            )
+        return client.DeactivateLinkResponse(campaign=self.campaign)
 
 
 def test_creating_a_campaign_answers_201_with_the_id() -> None:
@@ -260,7 +266,7 @@ def test_an_unexpected_failure_is_500_and_leaks_nothing() -> None:
 
 def test_getting_a_campaign_answers_200_with_its_links() -> None:
     fake_campaign_client = FakeCampaignClient(
-        view=client.CampaignView(campaign_id="c1", links=("alpha-one", "beta-two"))
+        campaign=client.Campaign(campaign_id="c1", links=("alpha-one", "beta-two"))
     )
     response = handlers.Handler(fake_campaign_client).get_campaign("c1")
     assert response.status == 200

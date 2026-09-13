@@ -18,7 +18,7 @@ class Added(enum.Enum):
 
 class Loaded(enum.Enum):
     FOUND = "found"
-    MISSING = "missing"
+    NOT_FOUND = "not_found"
 
 
 class StoreUnavailable(ts.Error):

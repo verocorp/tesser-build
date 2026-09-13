@@ -28,7 +28,7 @@ class MapToLoadedWidgetSpec(ts.Mapper, domain.WidgetSpec):
         match load_widget_response.outcome:
             case ports.Loaded.FOUND:
                 record = load_widget_response.widgets[0]
-            case ports.Loaded.MISSING:
+            case ports.Loaded.NOT_FOUND:
                 raise client.Missing(
                     code="unknown_widget",
                     message=f"no widget {load_widget_request.name!r}",

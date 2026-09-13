@@ -58,14 +58,19 @@ The division of labor the checkers enforce:
 
 - **The service speaks only Requests and Responses** — one `ts.Request` in,
   one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
-  `confirm`, `status`), each body inline.
+  `confirm`, `status`), each body inline. Each use case has a response of its
+  own — `BeginResponse`, `ProvideNameResponse`, `ChooseSlotResponse`,
+  `ConfirmResponse`, `StatusResponse` — and each holds one `client.Booking`,
+  the record named for the thing the act hands back. One response shared by
+  five operations said which shape came back and never which act produced
+  it.
   The booking id arrives as a `BookingID` before any port sees it. The
-  booking is loaded from the repository port's `BookingView`, driven through
+  booking is loaded from the repository port's `Booking`, driven through
   one guarded transition, and decomposed back to a `SaveBookingRequest`; a
   rejected transition persists nothing.
 - **Ports speak records, never domain objects** — `SlotDirectory` and
   `BookingRepository` live in `application/ports/`, one port per module, and
-  their DTOs carry strings and `BookingView` only. `BookingRepository` used
+  their DTOs carry strings and `ports.Booking` only. `BookingRepository` used
   to expose a check-then-get pair (`has` / `get`); it is now a single `find`
   returning a `BookingPresence` outcome plus payload, closing the
   time-of-check-to-time-of-use gap between the two calls.

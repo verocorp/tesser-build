@@ -14,10 +14,10 @@ class FakeItemRepository(ports.ItemRepository):
 
     def __init__(self, outcome: ports.ItemLookup) -> None:
         self.outcome = outcome
-        self.rows: dict[str, ports.ItemView] = {}
+        self.rows: dict[str, ports.Item] = {}
 
     def save(self, save_item_request: ports.SaveItemRequest) -> ports.SaveItemResponse:
-        self.rows[save_item_request.id] = ports.ItemView(
+        self.rows[save_item_request.id] = ports.Item(
             id=save_item_request.id, name=save_item_request.name
         )
         return ports.SaveItemResponse()
@@ -25,7 +25,7 @@ class FakeItemRepository(ports.ItemRepository):
     def find(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse:
         row = self.rows.get(find_item_request.id)
         if row is None:
-            return ports.FindItemResponse(outcome=ports.ItemLookup.MISSING, items=())
+            return ports.FindItemResponse(outcome=ports.ItemLookup.NOT_FOUND, items=())
         return ports.FindItemResponse(outcome=self.outcome, items=(row,))
 
     def all(self, list_items_request: ports.ListItemsRequest) -> ports.ListItemsResponse:
@@ -145,7 +145,7 @@ def test_getting_an_empty_id_is_refused_rather_than_answering_nothing() -> None:
 def test_a_found_lookup_carries_a_view_per_row() -> None:
     find_item_response = ports.FindItemResponse(
         outcome=ports.ItemLookup.FOUND,
-        items=(ports.ItemView(id="a1", name="Anvil"),),
+        items=(ports.Item(id="a1", name="Anvil"),),
     )
     get_item_response = application.MapToGetItemResponse(
         find_item_response=find_item_response
@@ -158,7 +158,7 @@ def test_a_found_lookup_carries_a_view_per_row() -> None:
 def test_an_archived_lookup_carries_nothing_even_though_it_carries_a_row() -> None:
     find_item_response = ports.FindItemResponse(
         outcome=ports.ItemLookup.ARCHIVED,
-        items=(ports.ItemView(id="a1", name="Anvil"),),
+        items=(ports.Item(id="a1", name="Anvil"),),
     )
     get_item_response = application.MapToGetItemResponse(
         find_item_response=find_item_response
@@ -167,7 +167,7 @@ def test_an_archived_lookup_carries_nothing_even_though_it_carries_a_row() -> No
 
 
 def test_a_missing_lookup_carries_nothing() -> None:
-    find_item_response = ports.FindItemResponse(outcome=ports.ItemLookup.MISSING, items=())
+    find_item_response = ports.FindItemResponse(outcome=ports.ItemLookup.NOT_FOUND, items=())
     get_item_response = application.MapToGetItemResponse(
         find_item_response=find_item_response
     )
@@ -198,14 +198,15 @@ def test_a_reserved_name_carries_no_item_and_the_reason_the_policy_gave() -> Non
     assert add_item_response.reason == "name is reserved"
 
 
-def test_a_repository_row_becomes_the_clients_item_view() -> None:
-    item_view = application.MapToItemView(
-        item_view=ports.ItemView(id="a1", name="Anvil")
+def test_a_repository_row_becomes_the_clients_item() -> None:
+    item = application.MapToItem(
+        item=ports.Item(id="a1", name="Anvil")
     )
-    assert (item_view.id, item_view.name) == ("a1", "Anvil")
+    assert (item.id, item.name) == ("a1", "Anvil")
 
 
-def test_an_added_item_becomes_the_clients_item_view() -> None:
-    item = domain.Item(domain.ItemSpec(id="b2", name="Bellows"))
-    item_view = application.MapToAddedItemView(item=item)
-    assert (item_view.id, item_view.name) == ("b2", "Bellows")
+def test_an_added_item_becomes_the_clients_item() -> None:
+    item = application.MapToAddedItem(
+        item=domain.Item(domain.ItemSpec(id="b2", name="Bellows"))
+    )
+    assert (item.id, item.name) == ("b2", "Bellows")

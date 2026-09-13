@@ -1,8 +1,8 @@
 from catalog.application.ports.item_repository import FindItemRequest as FindItemRequest
 from catalog.application.ports.item_repository import FindItemResponse as FindItemResponse
+from catalog.application.ports.item_repository import Item as Item
 from catalog.application.ports.item_repository import ItemLookup as ItemLookup
 from catalog.application.ports.item_repository import ItemRepository as ItemRepository
-from catalog.application.ports.item_repository import ItemView as ItemView
 from catalog.application.ports.item_repository import ListItemsRequest as ListItemsRequest
 from catalog.application.ports.item_repository import ListItemsResponse as ListItemsResponse
 from catalog.application.ports.item_repository import SaveItemRequest as SaveItemRequest

@@ -1,7 +1,12 @@
 from scheduling.client.client import BeginBookingRequest as BeginBookingRequest
-from scheduling.client.client import BookingStateResponse as BookingStateResponse
+from scheduling.client.client import BeginResponse as BeginResponse
+from scheduling.client.client import Booking as Booking
 from scheduling.client.client import ChooseSlotRequest as ChooseSlotRequest
+from scheduling.client.client import ChooseSlotResponse as ChooseSlotResponse
 from scheduling.client.client import ConfirmBookingRequest as ConfirmBookingRequest
+from scheduling.client.client import ConfirmResponse as ConfirmResponse
 from scheduling.client.client import ProvideNameRequest as ProvideNameRequest
+from scheduling.client.client import ProvideNameResponse as ProvideNameResponse
 from scheduling.client.client import SchedulingClient as SchedulingClient
 from scheduling.client.client import StatusRequest as StatusRequest
+from scheduling.client.client import StatusResponse as StatusResponse

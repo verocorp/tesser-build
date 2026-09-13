@@ -5,7 +5,7 @@ import typing
 import tesser.context as ts
 
 
-class ItemView(ts.Response):
+class Item(ts.Response):
 
     def __init__(self, id: str, name: str) -> None:
         self.id = id
@@ -21,7 +21,7 @@ class AddItemRequest(ts.Request):
 
 class AddItemResponse(ts.Response):
 
-    def __init__(self, items: tuple[ItemView, ...], reason: str) -> None:
+    def __init__(self, items: tuple[Item, ...], reason: str) -> None:
         self.items = items
         self.reason = reason
 
@@ -34,7 +34,7 @@ class GetItemRequest(ts.Request):
 
 class GetItemResponse(ts.Response):
 
-    def __init__(self, items: tuple[ItemView, ...]) -> None:
+    def __init__(self, items: tuple[Item, ...]) -> None:
         self.items = items
 
 
@@ -46,7 +46,7 @@ class ListItemsRequest(ts.Request):
 
 class ListItemsResponse(ts.Response):
 
-    def __init__(self, items: tuple[ItemView, ...]) -> None:
+    def __init__(self, items: tuple[Item, ...]) -> None:
         self.items = items
 
 

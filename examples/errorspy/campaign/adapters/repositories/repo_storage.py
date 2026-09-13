@@ -34,7 +34,7 @@ class StorageCampaignRepository(ts.Repository):
             row = self._backend.load(find_campaign_request.campaign_id)
         except storage.StorageMiss:
             return ports.FindCampaignResponse(
-                outcome=ports.CampaignLookup.MISSING, campaigns=()
+                outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
             )
         except storage.StorageUnavailable as e:
             raise ports.StorageUnavailable(

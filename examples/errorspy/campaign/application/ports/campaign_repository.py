@@ -8,7 +8,7 @@ import tesser.application as ts
 
 class CampaignLookup(enum.Enum):
     FOUND = "found"
-    MISSING = "missing"
+    NOT_FOUND = "not_found"
 
 
 class WindowRecord(ts.Response):

@@ -9,13 +9,13 @@ import catalog.client as client
 import catalog.domain as domain
 
 
-class MapToItemView(ts.Mapper, client.ItemView):
+class MapToItem(ts.Mapper, client.Item):
 
-    def __init__(self, item_view: ports.ItemView) -> None:
-        super().__init__(id=item_view.id, name=item_view.name)
+    def __init__(self, item: ports.Item) -> None:
+        super().__init__(id=item.id, name=item.name)
 
 
-class MapToAddedItemView(ts.Mapper, client.ItemView):
+class MapToAddedItem(ts.Mapper, client.Item):
 
     def __init__(self, item: domain.Item) -> None:
         super().__init__(id=item.id(), name=item.name())
@@ -24,15 +24,15 @@ class MapToAddedItemView(ts.Mapper, client.ItemView):
 class MapToGetItemResponse(ts.Mapper, client.GetItemResponse):
 
     def __init__(self, find_item_response: ports.FindItemResponse) -> None:
-        items: tuple[client.ItemView, ...]
+        items: tuple[client.Item, ...]
         match find_item_response.outcome:
             case ports.ItemLookup.FOUND:
                 items = tuple(
-                    MapToItemView(item_view=item_view) for item_view in find_item_response.items
+                    MapToItem(item=item) for item in find_item_response.items
                 )
             case ports.ItemLookup.ARCHIVED:
                 items = ()
-            case ports.ItemLookup.MISSING:
+            case ports.ItemLookup.NOT_FOUND:
                 items = ()
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -42,10 +42,10 @@ class MapToGetItemResponse(ts.Mapper, client.GetItemResponse):
 class MapToAddItemResponse(ts.Mapper, client.AddItemResponse):
 
     def __init__(self, item: domain.Item, check_name_response: ports.CheckNameResponse) -> None:
-        items: tuple[client.ItemView, ...]
+        items: tuple[client.Item, ...]
         match check_name_response.verdict:
             case ports.NameVerdict.ALLOWED:
-                items = (MapToAddedItemView(item=item),)
+                items = (MapToAddedItem(item=item),)
             case ports.NameVerdict.RESERVED:
                 items = ()
             case _ as unreachable:
@@ -64,7 +64,7 @@ class MapToListItemsResponse(ts.Mapper, client.ListItemsResponse):
     def __init__(self, list_items_response: ports.ListItemsResponse) -> None:
         super().__init__(
             items=tuple(
-                MapToItemView(item_view=item_view) for item_view in list_items_response.items
+                MapToItem(item=item) for item in list_items_response.items
             )
         )
 

@@ -39,7 +39,7 @@ class FakeSlotDirectory(ports.SlotDirectory):
 class FakeBookingRepository(ports.BookingRepository):
 
     def __init__(self) -> None:
-        self.stored: dict[str, ports.BookingView] = {}
+        self.stored: dict[str, ports.Booking] = {}
 
     def find(
         self, find_booking_request: ports.FindBookingRequest
@@ -56,7 +56,7 @@ class FakeBookingRepository(ports.BookingRepository):
     def save(
         self, save_booking_request: ports.SaveBookingRequest
     ) -> ports.SaveBookingResponse:
-        self.stored[save_booking_request.booking_id] = ports.BookingView(
+        self.stored[save_booking_request.booking_id] = ports.Booking(
             step=save_booking_request.step,
             name=save_booking_request.name,
             chosen=save_booking_request.chosen,
@@ -86,32 +86,30 @@ def test_the_full_booking_flow_through_the_client_surface() -> None:
         fake_slot_directory, fake_booking_repository
     )
 
-    booking_state_response = booking_service.begin(
-        client.BeginBookingRequest(booking_id="b1")
-    )
-    assert isinstance(booking_state_response, client.BookingStateResponse)
-    assert booking_state_response.step == "collect_name"
-    assert booking_state_response.reply == "ask the caller for their name"
+    begin_response = booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    assert isinstance(begin_response, client.BeginResponse)
+    assert begin_response.booking.step == "collect_name"
+    assert begin_response.booking.reply == "ask the caller for their name"
     assert fake_booking_repository.stored["b1"].name == ""
     assert fake_booking_repository.stored["b1"].chosen == ""
     assert fake_booking_repository.stored["b1"].offered == ()
 
-    booking_state_response = booking_service.provide_name(
+    provide_name_response = booking_service.provide_name(
         client.ProvideNameRequest(booking_id="b1", name="Ada Lovelace")
     )
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("mon-9am", "tue-2pm")
+    assert provide_name_response.booking.step == "choose_slot"
+    assert provide_name_response.booking.offered_slots == ("mon-9am", "tue-2pm")
 
-    booking_state_response = booking_service.choose_slot(
+    choose_slot_response = booking_service.choose_slot(
         client.ChooseSlotRequest(booking_id="b1", slot="mon-9am")
     )
-    assert booking_state_response.step == "confirm"
+    assert choose_slot_response.booking.step == "confirm"
 
-    booking_state_response = booking_service.confirm(
+    confirm_response = booking_service.confirm(
         client.ConfirmBookingRequest(booking_id="b1")
     )
-    assert booking_state_response.step == "booked"
-    assert booking_state_response.reply == "booked mon-9am for Ada Lovelace"
+    assert confirm_response.booking.step == "booked"
+    assert confirm_response.booking.reply == "booked mon-9am for Ada Lovelace"
     assert fake_slot_directory.reserved == [("mon-9am", "Ada Lovelace")]
     assert fake_booking_repository.stored["b1"].step == "booked"
     assert fake_booking_repository.stored["b1"].name == "Ada Lovelace"
@@ -147,15 +145,15 @@ def test_a_slot_taken_between_choice_and_confirm_comes_back_as_a_fresh_offer() -
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
 
     fake_slot_directory.slots.remove("mon-9am")
-    booking_state_response = booking_service.confirm(
+    confirm_response = booking_service.confirm(
         client.ConfirmBookingRequest(booking_id="b1")
     )
 
-    assert booking_state_response.reply == (
+    assert confirm_response.booking.reply == (
         "mon-9am was just taken; offer the caller the updated slots"
     )
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("tue-2pm",)
+    assert confirm_response.booking.step == "choose_slot"
+    assert confirm_response.booking.offered_slots == ("tue-2pm",)
     assert fake_booking_repository.stored["b1"].step == "choose_slot"
     assert fake_booking_repository.stored["b1"].offered == ("tue-2pm",)
 
@@ -188,11 +186,11 @@ def test_the_fresh_offer_is_choosable_and_bookable() -> None:
     booking_service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
 
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="tue-2pm"))
-    booking_state_response = booking_service.confirm(
+    confirm_response = booking_service.confirm(
         client.ConfirmBookingRequest(booking_id="b1")
     )
 
-    assert booking_state_response.step == "booked"
+    assert confirm_response.booking.step == "booked"
     assert fake_slot_directory.reserved == [("tue-2pm", "Ada")]
 
 
@@ -205,10 +203,10 @@ def test_status_reads_without_mutating() -> None:
     booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
 
-    booking_state_response = booking_service.status(client.StatusRequest(booking_id="b1"))
+    status_response = booking_service.status(client.StatusRequest(booking_id="b1"))
 
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("mon-9am",)
+    assert status_response.booking.step == "choose_slot"
+    assert status_response.booking.offered_slots == ("mon-9am",)
     assert fake_booking_repository.stored["b1"].step == "choose_slot"
 
 
@@ -233,13 +231,11 @@ def test_begin_resumes_an_in_flight_booking() -> None:
     booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
 
-    booking_state_response = booking_service.begin(
-        client.BeginBookingRequest(booking_id="b1")
-    )
+    begin_response = booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
 
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("mon-9am",)
-    assert booking_state_response.reply == "continue the booking"
+    assert begin_response.booking.step == "choose_slot"
+    assert begin_response.booking.offered_slots == ("mon-9am",)
+    assert begin_response.booking.reply == "continue the booking"
     assert fake_booking_repository.stored["b1"].name == "Ada"
 
 
@@ -254,11 +250,9 @@ def test_begin_resumes_a_booked_booking_without_touching_it() -> None:
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
     booking_service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
 
-    booking_state_response = booking_service.begin(
-        client.BeginBookingRequest(booking_id="b1")
-    )
+    begin_response = booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
 
-    assert booking_state_response.step == "booked"
+    assert begin_response.booking.step == "booked"
     assert fake_booking_repository.stored["b1"].step == "booked"
     assert fake_slot_directory.reserved == [("mon-9am", "Ada")]
 
@@ -286,7 +280,7 @@ def test_the_mapper_exposes_every_field_of_the_one_row_the_repository_found() ->
     find_booking_response = ports.FindBookingResponse(
         presence=ports.BookingPresence.PRESENT,
         bookings=(
-            ports.BookingView(
+            ports.Booking(
                 step="confirm",
                 name="Ada Lovelace",
                 chosen="mon-9am",
@@ -329,7 +323,7 @@ def test_the_begun_mapper_resumes_the_booking_already_stored() -> None:
     find_booking_response = ports.FindBookingResponse(
         presence=ports.BookingPresence.PRESENT,
         bookings=(
-            ports.BookingView(
+            ports.Booking(
                 step="choose_slot", name="Ada", chosen="", offered=("mon-9am",)
             ),
         ),
@@ -347,7 +341,7 @@ def test_a_stored_booking_maps_to_a_resumption_that_resumes() -> None:
     find_booking_response = ports.FindBookingResponse(
         presence=ports.BookingPresence.PRESENT,
         bookings=(
-            ports.BookingView(
+            ports.Booking(
                 step="choose_slot", name="Ada", chosen="", offered=("mon-9am",)
             ),
         ),

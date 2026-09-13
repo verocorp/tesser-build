@@ -31,7 +31,7 @@ def test_a_saved_campaign_is_found_by_its_id() -> None:
             assert tuple((link.slug, link.target_url) for link in record.links) == (
                 ("spring-sale", "https://x.com"),
             )
-        case ports.CampaignLookup.MISSING:
+        case ports.CampaignLookup.NOT_FOUND:
             raise AssertionError("a saved campaign is served as found")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -45,7 +45,7 @@ def test_an_id_that_was_never_saved_is_missing_and_carries_nothing() -> None:
         ports.FindCampaignRequest(campaign_id="ghost")
     )
     assert (find_campaign_response.outcome, find_campaign_response.campaigns) == (
-        ports.CampaignLookup.MISSING,
+        ports.CampaignLookup.NOT_FOUND,
         (),
     )
 
@@ -132,7 +132,7 @@ def test_two_repositories_over_separate_storage_do_not_share_their_rows() -> Non
         )
     )
     find_campaign_response = second.find(ports.FindCampaignRequest(campaign_id="c1"))
-    assert find_campaign_response.outcome is ports.CampaignLookup.MISSING
+    assert find_campaign_response.outcome is ports.CampaignLookup.NOT_FOUND
 
 
 def test_an_outage_is_translated_into_the_port_error_and_names_the_campaign() -> None:

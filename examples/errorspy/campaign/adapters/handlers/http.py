@@ -136,7 +136,7 @@ class Handler(ts.Handler):
 
     def get_campaign(self, campaign_id: str) -> protocol.Response:
         try:
-            campaign_view = self._campaign_client.get_campaign(
+            get_campaign_response = self._campaign_client.get_campaign(
                 client.GetCampaignRequest(campaign_id=campaign_id)
             )
         except protocol.BadRequest as bad_request:
@@ -209,7 +209,10 @@ class Handler(ts.Handler):
             )
         return protocol.Response(
             200,
-            {"id": campaign_view.campaign_id, "links": list(campaign_view.links)},
+            {
+                "id": get_campaign_response.campaign.campaign_id,
+                "links": list(get_campaign_response.campaign.links),
+            },
         )
 
     def add_link(self, campaign_id: str, raw: str) -> protocol.Response:
