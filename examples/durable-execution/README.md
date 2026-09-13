@@ -498,13 +498,14 @@ runtimes. What the outcome-on-response shape costs on top of that is 129
 `# tesser:debt` markers, every one written mechanically by `tessercheck-mark`,
 and that list is the analyzer's work list:
 
-- **`TB082`, 76.** Sixty are in the four relay modules: a snapshot now reads
+- **`TB082`, 76.** Fifty-nine are in the four relay modules: a snapshot now reads
   an outcome, checks the record count per member, and rebuilds a tuple, and
   none of `len`, `tuple`, `list`, `all`, or the enum constructor is on the
   snapshot's call allowlist. Eight are the runtime serde wrappers' `try`
   around the snapshot. Six are the `match` on a response's outcome field in a
   service or an orchestrator, which the analyzer reads as "not a call on a
-  domain object" because a class named `*Outcome` activates nothing. One is
+  domain object" because a class named `*Outcome` activates nothing. Three
+  are in `OrderSnapshot`, which raises and catches to refuse a body. One is
   the parent orchestrator matching a second time, once per relay it depends
   on.
 - **`TB085`, 23.** Nineteen on the hand-written doubles of the SDK's
