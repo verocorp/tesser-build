@@ -71,7 +71,17 @@ no verb, a response is named for what it is) is assumed throughout.
    `Start<Operation>Response` with `Start<Operation>Outcome` for the
    accept-and-return crossing. No message is named for a class
    (`OrderOrchestratorRequest`), a calling mode (`RunResponse`), or a
-   pattern.
+   pattern. The thing an operation hands back is a field on the response,
+   and the record that pictures it is named for the thing and nothing
+   else: `client.Campaign`, `client.Link`, `ports.Price`, `ports.Booking`.
+   The domain's `Campaign` and the client's `Campaign` are one concept in
+   two packages, told apart by the module alias at every use. There is no
+   suffix: `View` was never ruled and `Record` was never ruled; both go.
+   Where the outcome may leave the thing absent, the field is a tuple of
+   zero or one. A response shared by several operations is the defect
+   this rule removes: `CampaignView` answered four operations and
+   `BookingStateResponse` answered five, and each becomes
+   `<Operation>Response` holding a `Campaign` or a `Booking`.
 
 7. **An expected alternative from a dependency is an outcome member on the
    response, matched with `assert_never`.** It is never an exception. A port
@@ -303,6 +313,21 @@ The four questions the review left open, and how Chris ruled on each.
   act is renamed to it waits until that scenario is built, because it is the
   scenario that will say whether compensation is this act extended or a new
   one. Until then the parent stays `pay_for_order`.
+
+- **A record inside a response is named for the thing, with no suffix.**
+  Asked how rule 6 handles a response several operations share, the
+  inventory found eight `*View` classes across five trees (`CampaignView`
+  in errorspy and python-app, `LinkView`, `VerdictView`, `LinkVerdictView`,
+  `ItemView` twice in ports, `BookingView` in llmport) and four shared
+  responses (`CampaignView` by four operations in two trees,
+  `BookingStateResponse` by five, `FindCampaignResponse` by `find` and
+  `find_by_slug`). Chris: "there is no View, there is no word, it's just
+  the thing: Campaign, Link, etc." So the record is `Campaign`, `Link`,
+  `Item`, `Booking`, `Verdict`, `Price`, in whichever package pictures it,
+  and every operation derives its own response around it. `PriceRecord`
+  goes the same way. `find` / `find_by_slug` sharing one response is an
+  operation-naming question under rule 1, either one operation with two
+  keys or two operations with two responses, and is left to enactment.
 
 - **Retry policy is set in the engine host and its runtime only, for now.**
   A retry policy encodes two kinds of knowledge: business facts the
