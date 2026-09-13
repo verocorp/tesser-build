@@ -572,7 +572,6 @@ def _found_campaign_view(
     return ports.FindCampaignViewResponse(
         outcome=ports.CampaignRowLookup.FOUND,
         campaigns=(ports.CampaignRow(
-
             campaign_id=campaign_id,
             budget_amount=budget_amount,
             budget_currency=budget_currency,
