@@ -333,8 +333,11 @@ operation, so 6 is unenforced. Which layer would carry the rest:
   `ts.Outcome`, since a class named `*Outcome` activates nothing; and
   remove the `port_error` placement row rather than add a check. Where the
   match sits: a port outcome in the action's mapper (`MapToPriceSpec` is
-  the precedent), a relay outcome in the orchestrator or the service, one
-  match per method.
+  the precedent), a relay outcome in the orchestrator or the service. A
+  service method has one match. An orchestrator has one match per relay
+  it depends on, because a parent that runs a child and then takes payment
+  branches on both, and the second cannot move into a mapper when its
+  happy arm is a domain call (Chris, 2026-09-13, from the enactment).
 - **The skill** carries the semantic halves: the verb test and the object
   test (1), the client's word being the caller's (3), the sentence test on
   every member (8), a parent naming its own step (9), outcome versus state

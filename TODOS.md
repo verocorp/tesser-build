@@ -2,6 +2,28 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the operation-naming enactment (2026-09-13, Chris)
+
+The conventions are `docs/design-operation-naming.md`; the enactment is
+branch `naming-enactment` (off `naming-conventions`). Two things the
+enactment surfaced that Chris deferred rather than ruled.
+
+- **Two domain refusals lost their status.** `payment_mismatch` and
+  `priced_another_order` were 409s through `EngineConflict`. With
+  `ports/engine.py` gone and `PayForOrderOutcome` closed at four members,
+  neither names an invariant the aggregate broke, so both are faults now: a
+  500 at the door and a paused invocation in the engine. Arguably right,
+  they are bugs rather than caller errors, but it is a behaviour change the
+  ruling did not discuss. Decide whether an aggregate's own invariant
+  breaking mid-workflow is a fault, a situation, or an outcome member.
+- **The shape of a deeper reason on a response.** Rule 9 says the reason
+  below a parent's summarised step travels as data. The enactment used
+  `reasons: tuple[str, ...]` on four relay responses, empty when there is
+  none, carrying the child's member name for `ORDER_NOT_CONFIRMED` and the
+  engine's own message text for `ALREADY_STARTED`. It is flexible and it is
+  a string, not a record, and it is the one field on every response in the
+  tree. Deferred until a consumer needs to read it as more than text.
+
 ## Left open by the relay ruling (2026-09-11, Chris)
 
 The word "job" is gone: `ts.Job`, `ts.JobContext`, `adapters/jobs/`, and the
