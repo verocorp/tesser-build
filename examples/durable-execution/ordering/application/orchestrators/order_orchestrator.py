@@ -56,7 +56,7 @@ class OrderOrchestrator(ts.Orchestrator):
         price_product_response = await self._order_actions_runner.run_price_product(
             MapToPriceProductRequest(order)
         )
-        match price_product_response.outcome:
+        match price_product_response.outcome:  # tesser:debt TB082
             case relays.PriceProductOutcome.PRICED:
                 price = order.total(MapToPriceSpec(price_product_response))
                 return MapToConfirmOrderResponseFromPrice(order, price)

@@ -28,7 +28,7 @@ class OrderSnapshot(ts.Serde):
             and isinstance(snapshot.get("quantity"), int)
             and not isinstance(snapshot.get("quantity"), bool)
         ):
-            raise ValueError("an order snapshot is order_id, sku, and quantity")
+            raise ValueError("an order snapshot is order_id, sku, and quantity")  # tesser:debt TB082
         try:  # tesser:debt TB082
             return domain.Order(
                 domain.OrderSpec(
@@ -38,4 +38,4 @@ class OrderSnapshot(ts.Serde):
                 )
             )
         except errors.DomainError as domain_error:
-            raise ValueError(domain_error.message) from domain_error
+            raise ValueError(domain_error.message) from domain_error  # tesser:debt TB082

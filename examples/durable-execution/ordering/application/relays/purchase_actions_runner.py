@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum
+import enum  # tesser:debt TB062
 import json
 import typing
 
@@ -38,7 +38,7 @@ class TakePaymentRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("payment_method"), str)
             and snapshot["payment_method"]
         ):
-            raise ValueError(
+            raise ValueError(  # tesser:debt TB082
                 "a take payment request is an order_id, an amount in cents, and a payment method"
             )
         return TakePaymentRequest(
@@ -48,7 +48,7 @@ class TakePaymentRequestSnapshot(ts.Serde):
         )
 
 
-class TakePaymentOutcome(enum.Enum):
+class TakePaymentOutcome(enum.Enum):  # tesser:debt TB052
     TAKEN = "taken"
     DECLINED = "declined"
 
@@ -82,11 +82,11 @@ class TakePaymentResponseSnapshot(ts.Serde):
             {
                 "outcome": take_payment_response.outcome.value,
                 "order_id": take_payment_response.order_id,
-                "payments": [
+                "payments": [  # tesser:debt TB082
                     {"reference": payment.reference, "cents": payment.cents}
                     for payment in take_payment_response.payments
                 ],
-                "reasons": list(take_payment_response.reasons),
+                "reasons": list(take_payment_response.reasons),  # tesser:debt TB082
             }
         ).encode()
 
@@ -98,8 +98,8 @@ class TakePaymentResponseSnapshot(ts.Serde):
             and snapshot["order_id"]
             and isinstance(snapshot.get("payments"), list)
             and isinstance(snapshot.get("reasons"), list)
-            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])
-            and all(
+            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])  # tesser:debt TB082
+            and all(  # tesser:debt TB082
                 isinstance(payment, dict)
                 and isinstance(payment.get("reference"), str)
                 and payment["reference"]
@@ -109,33 +109,33 @@ class TakePaymentResponseSnapshot(ts.Serde):
                 for payment in snapshot["payments"]
             )
         ):
-            raise ValueError(
+            raise ValueError(  # tesser:debt TB082
                 "a take payment response is an outcome, an order_id, "
                 "the payments it took, and its reasons"
             )
-        try:
-            take_payment_outcome = TakePaymentOutcome(snapshot.get("outcome"))
+        try:  # tesser:debt TB082
+            take_payment_outcome = TakePaymentOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
         except ValueError as value_error:
-            raise ValueError("a take payment response names a taking outcome") from value_error
-        match take_payment_outcome:
+            raise ValueError("a take payment response names a taking outcome") from value_error  # tesser:debt TB082
+        match take_payment_outcome:  # tesser:debt TB082
             case TakePaymentOutcome.TAKEN:
                 expected = 1
             case TakePaymentOutcome.DECLINED:
                 expected = 0
             case _ as never:
-                typing.assert_never(never)
-        if len(snapshot["payments"]) != expected:
-            raise ValueError(
+                typing.assert_never(never)  # tesser:debt TB082
+        if len(snapshot["payments"]) != expected:  # tesser:debt TB082
+            raise ValueError(  # tesser:debt TB082
                 f"a {take_payment_outcome.value} payment carries {expected} payment(s)"
             )
         return TakePaymentResponse(
             outcome=take_payment_outcome,
             order_id=snapshot["order_id"],
-            payments=tuple(
+            payments=tuple(  # tesser:debt TB082
                 Payment(reference=payment["reference"], cents=payment["cents"])
                 for payment in snapshot["payments"]
             ),
-            reasons=tuple(snapshot["reasons"]),
+            reasons=tuple(snapshot["reasons"]),  # tesser:debt TB082
         )
 
 

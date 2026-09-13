@@ -59,7 +59,7 @@ class FakeRestateIngress:  # tesser:debt TB072
         self._listener.listen(1)
         self.port = self._listener.getsockname()[1]
         self.seen: list[bytes] = []
-        self._thread = threading.Thread(target=self.serve, daemon=True)
+        self._thread = threading.Thread(target=self.serve, daemon=True)  # tesser:debt TB051
 
     @property
     def base_url(self) -> str:
@@ -110,14 +110,14 @@ def pay_for_order_request(
 
 
 @ts.helper
-def restate_order_runtime() -> runtimes.RestateOrderRuntime:
+def restate_order_runtime() -> runtimes.RestateOrderRuntime:  # tesser:debt TB073
     return runtimes.RestateOrderRuntime(
         FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
     )
 
 
 @ts.helper
-def paid() -> bytes:
+def paid() -> bytes:  # tesser:debt TB073
     return relays.PayForOrderResponseSnapshot().serialize(
         relays.PayForOrderResponse(
             outcome=relays.PayForOrderOutcome.PAID,

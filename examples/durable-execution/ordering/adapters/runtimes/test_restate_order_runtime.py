@@ -139,7 +139,7 @@ def take_payment_request(
 
 
 @ts.helper
-def restate_order_runtime() -> runtimes.RestateOrderRuntime:
+def restate_order_runtime() -> runtimes.RestateOrderRuntime:  # tesser:debt TB073
     return runtimes.RestateOrderRuntime(
         FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
     )

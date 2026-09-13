@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum
+import enum  # tesser:debt TB062
 import json
 import typing
 
@@ -37,14 +37,14 @@ class PayForOrderRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("payment_method"), str)
             and snapshot["payment_method"]
         ):
-            raise ValueError("a pay for order request is an order and a payment method")
+            raise ValueError("a pay for order request is an order and a payment method")  # tesser:debt TB082
         return PayForOrderRequest(
             order=snapshots.OrderSnapshot().deserialize(json.dumps(snapshot["order"]).encode()),
             payment_method=domain.PaymentMethod(snapshot["payment_method"]),
         )
 
 
-class PayForOrderOutcome(enum.Enum):
+class PayForOrderOutcome(enum.Enum):  # tesser:debt TB052
     PAID = "paid"
     ORDER_NOT_CONFIRMED = "order_not_confirmed"
     PAYMENT_DECLINED = "payment_declined"
@@ -80,14 +80,14 @@ class PayForOrderResponseSnapshot(ts.Serde):
             {
                 "outcome": pay_for_order_response.outcome.value,
                 "order_id": pay_for_order_response.order_id,
-                "purchases": [
+                "purchases": [  # tesser:debt TB082
                     {
                         "total_cents": purchase.total_cents,
                         "payment_reference": purchase.payment_reference,
                     }
                     for purchase in pay_for_order_response.purchases
                 ],
-                "reasons": list(pay_for_order_response.reasons),
+                "reasons": list(pay_for_order_response.reasons),  # tesser:debt TB082
             }
         ).encode()
 
@@ -99,8 +99,8 @@ class PayForOrderResponseSnapshot(ts.Serde):
             and snapshot["order_id"]
             and isinstance(snapshot.get("purchases"), list)
             and isinstance(snapshot.get("reasons"), list)
-            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])
-            and all(
+            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])  # tesser:debt TB082
+            and all(  # tesser:debt TB082
                 isinstance(purchase, dict)
                 and isinstance(purchase.get("total_cents"), int)
                 and not isinstance(purchase.get("total_cents"), bool)
@@ -110,15 +110,15 @@ class PayForOrderResponseSnapshot(ts.Serde):
                 for purchase in snapshot["purchases"]
             )
         ):
-            raise ValueError(
+            raise ValueError(  # tesser:debt TB082
                 "a pay for order response is an outcome, an order_id, "
                 "the purchases it paid for, and its reasons"
             )
-        try:
-            pay_for_order_outcome = PayForOrderOutcome(snapshot.get("outcome"))
+        try:  # tesser:debt TB082
+            pay_for_order_outcome = PayForOrderOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
         except ValueError as value_error:
-            raise ValueError("a pay for order response names a paying outcome") from value_error
-        match pay_for_order_outcome:
+            raise ValueError("a pay for order response names a paying outcome") from value_error  # tesser:debt TB082
+        match pay_for_order_outcome:  # tesser:debt TB082
             case PayForOrderOutcome.PAID:
                 expected = 1
             case (
@@ -128,22 +128,22 @@ class PayForOrderResponseSnapshot(ts.Serde):
             ):
                 expected = 0
             case _ as never:
-                typing.assert_never(never)
-        if len(snapshot["purchases"]) != expected:
-            raise ValueError(
+                typing.assert_never(never)  # tesser:debt TB082
+        if len(snapshot["purchases"]) != expected:  # tesser:debt TB082
+            raise ValueError(  # tesser:debt TB082
                 f"a {pay_for_order_outcome.value} order carries {expected} purchase(s)"
             )
         return PayForOrderResponse(
             outcome=pay_for_order_outcome,
             order_id=snapshot["order_id"],
-            purchases=tuple(
+            purchases=tuple(  # tesser:debt TB082
                 Purchase(
                     total_cents=purchase["total_cents"],
                     payment_reference=purchase["payment_reference"],
                 )
                 for purchase in snapshot["purchases"]
             ),
-            reasons=tuple(snapshot["reasons"]),
+            reasons=tuple(snapshot["reasons"]),  # tesser:debt TB082
         )
 
 

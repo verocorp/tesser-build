@@ -67,12 +67,12 @@ class FakeRefusingOrderingClient(client.OrderingClient):
 
 
 @ts.helper
-def order_body() -> bytes:
+def order_body() -> bytes:  # tesser:debt TB073
     return b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
 
 
 @ts.helper
-def purchase_body() -> bytes:
+def purchase_body() -> bytes:  # tesser:debt TB073
     return b'{"order_id": "o1", "sku": "widget", "quantity": 2, "payment_method": "card-4242"}'
 
 

@@ -59,7 +59,7 @@ class FakeRestateIngress:  # tesser:debt TB072
         self._listener.listen(1)
         self.port = self._listener.getsockname()[1]
         self.seen: list[bytes] = []
-        self._thread = threading.Thread(target=self.serve, daemon=True)
+        self._thread = threading.Thread(target=self.serve, daemon=True)  # tesser:debt TB051
 
     @property
     def base_url(self) -> str:
@@ -106,19 +106,19 @@ def confirm_order_request(
 
 
 @ts.helper
-def restate_order_runtime() -> runtimes.RestateOrderRuntime:
+def restate_order_runtime() -> runtimes.RestateOrderRuntime:  # tesser:debt TB073
     return runtimes.RestateOrderRuntime(
         FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
     )
 
 
 @ts.helper
-def accepted() -> bytes:
+def accepted() -> bytes:  # tesser:debt TB073
     return b'{"invocationId": "inv_1", "status": "Accepted"}'
 
 
 @ts.helper
-def confirmed() -> bytes:
+def confirmed() -> bytes:  # tesser:debt TB073
     return relays.ConfirmOrderResponseSnapshot().serialize(
         relays.ConfirmOrderResponse(
             outcome=relays.ConfirmOrderOutcome.CONFIRMED,
@@ -130,7 +130,7 @@ def confirmed() -> bytes:
 
 
 @ts.helper
-def unreachable_ingress() -> str:
+def unreachable_ingress() -> str:  # tesser:debt TB073
     with socket.socket() as closed:
         closed.bind(("127.0.0.1", 0))
         return f"http://127.0.0.1:{closed.getsockname()[1]}"

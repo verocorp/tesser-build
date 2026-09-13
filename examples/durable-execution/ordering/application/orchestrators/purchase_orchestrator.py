@@ -101,7 +101,7 @@ class PurchaseOrchestrator(ts.Orchestrator):
         confirm_order_response = await self._order_orchestrator_runner.run_confirm_order(
             relays.ConfirmOrderRequest(order=order)
         )
-        match confirm_order_response.outcome:
+        match confirm_order_response.outcome:  # tesser:debt TB082
             case relays.ConfirmOrderOutcome.CONFIRMED:
                 purchase = domain.Purchase(MapToPurchaseSpec(order, confirm_order_response))
             case (
@@ -117,7 +117,7 @@ class PurchaseOrchestrator(ts.Orchestrator):
         take_payment_response = await self._purchase_actions_runner.run_take_payment(
             MapToTakePaymentRequest(purchase, payment_method)
         )
-        match take_payment_response.outcome:
+        match take_payment_response.outcome:  # tesser:debt TB082
             case relays.TakePaymentOutcome.TAKEN:
                 payment = purchase.paid(MapToPaymentSpec(take_payment_response))
             case relays.TakePaymentOutcome.DECLINED:

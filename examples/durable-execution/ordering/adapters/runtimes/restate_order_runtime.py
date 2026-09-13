@@ -27,7 +27,7 @@ class RestateConfirmOrderRequestSerde(ts.Serde, restate_serde.Serde[relays.Confi
     def deserialize(self, buf: bytes) -> relays.ConfirmOrderRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.ConfirmOrderRequestSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error
@@ -43,7 +43,7 @@ class RestateConfirmOrderResponseSerde(ts.Serde, restate_serde.Serde[relays.Conf
     def deserialize(self, buf: bytes) -> relays.ConfirmOrderResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.ConfirmOrderResponseSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error
@@ -59,7 +59,7 @@ class RestatePriceProductRequestSerde(ts.Serde, restate_serde.Serde[relays.Price
     def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.PriceProductRequestSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error
@@ -75,7 +75,7 @@ class RestatePriceProductResponseSerde(ts.Serde, restate_serde.Serde[relays.Pric
     def deserialize(self, buf: bytes) -> relays.PriceProductResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.PriceProductResponseSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error
@@ -91,7 +91,7 @@ class RestatePayForOrderRequestSerde(ts.Serde, restate_serde.Serde[relays.PayFor
     def deserialize(self, buf: bytes) -> relays.PayForOrderRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.PayForOrderRequestSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error
@@ -107,7 +107,7 @@ class RestatePayForOrderResponseSerde(ts.Serde, restate_serde.Serde[relays.PayFo
     def deserialize(self, buf: bytes) -> relays.PayForOrderResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.PayForOrderResponseSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error
@@ -123,7 +123,7 @@ class RestateTakePaymentRequestSerde(ts.Serde, restate_serde.Serde[relays.TakePa
     def deserialize(self, buf: bytes) -> relays.TakePaymentRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.TakePaymentRequestSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error
@@ -139,7 +139,7 @@ class RestateTakePaymentResponseSerde(ts.Serde, restate_serde.Serde[relays.TakeP
     def deserialize(self, buf: bytes) -> relays.TakePaymentResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        try:
+        try:  # tesser:debt TB082
             return relays.TakePaymentResponseSnapshot().deserialize(buf)
         except ValueError as value_error:
             raise restate.TerminalError(str(value_error), status_code=400) from value_error

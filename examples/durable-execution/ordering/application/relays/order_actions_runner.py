@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum
+import enum  # tesser:debt TB062
 import json
 import typing
 
@@ -25,11 +25,11 @@ class PriceProductRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("sku"), str)
             and snapshot["sku"]
         ):
-            raise ValueError("a price product request is a sku")
+            raise ValueError("a price product request is a sku")  # tesser:debt TB082
         return PriceProductRequest(sku=snapshot["sku"])
 
 
-class PriceProductOutcome(enum.Enum):
+class PriceProductOutcome(enum.Enum):  # tesser:debt TB052
     PRICED = "priced"
     PRICE_NOT_FOUND = "price_not_found"
 
@@ -59,8 +59,8 @@ class PriceProductResponseSnapshot(ts.Serde):
         return json.dumps(
             {
                 "outcome": price_product_response.outcome.value,
-                "prices": [{"cents": price.cents} for price in price_product_response.prices],
-                "reasons": list(price_product_response.reasons),
+                "prices": [{"cents": price.cents} for price in price_product_response.prices],  # tesser:debt TB082
+                "reasons": list(price_product_response.reasons),  # tesser:debt TB082
             }
         ).encode()
 
@@ -70,10 +70,10 @@ class PriceProductResponseSnapshot(ts.Serde):
             isinstance(snapshot, dict)
             and isinstance(snapshot.get("prices"), list)
             and isinstance(snapshot.get("reasons"), list)
-            and all(
+            and all(  # tesser:debt TB082
                 isinstance(reason, str) and reason for reason in snapshot["reasons"]
             )
-            and all(
+            and all(  # tesser:debt TB082
                 isinstance(price, dict)
                 and isinstance(price.get("cents"), int)
                 and not isinstance(price.get("cents"), bool)
@@ -81,28 +81,28 @@ class PriceProductResponseSnapshot(ts.Serde):
                 for price in snapshot["prices"]
             )
         ):
-            raise ValueError(
+            raise ValueError(  # tesser:debt TB082
                 "a price product response is an outcome, its prices, and its reasons"
             )
-        try:
-            price_product_outcome = PriceProductOutcome(snapshot.get("outcome"))
+        try:  # tesser:debt TB082
+            price_product_outcome = PriceProductOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
         except ValueError as value_error:
-            raise ValueError("a price product response names a priced outcome") from value_error
-        match price_product_outcome:
+            raise ValueError("a price product response names a priced outcome") from value_error  # tesser:debt TB082
+        match price_product_outcome:  # tesser:debt TB082
             case PriceProductOutcome.PRICED:
                 expected = 1
             case PriceProductOutcome.PRICE_NOT_FOUND:
                 expected = 0
             case _ as never:
-                typing.assert_never(never)
-        if len(snapshot["prices"]) != expected:
-            raise ValueError(
+                typing.assert_never(never)  # tesser:debt TB082
+        if len(snapshot["prices"]) != expected:  # tesser:debt TB082
+            raise ValueError(  # tesser:debt TB082
                 f"a {price_product_outcome.value} product carries {expected} price(s)"
             )
         return PriceProductResponse(
             outcome=price_product_outcome,
-            prices=tuple(Price(cents=price["cents"]) for price in snapshot["prices"]),
-            reasons=tuple(snapshot["reasons"]),
+            prices=tuple(Price(cents=price["cents"]) for price in snapshot["prices"]),  # tesser:debt TB082
+            reasons=tuple(snapshot["reasons"]),  # tesser:debt TB082
         )
 
 

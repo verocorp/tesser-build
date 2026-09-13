@@ -64,7 +64,7 @@ class OrderService(ts.ApplicationService):
                 relays.ConfirmOrderRequest(order=order)
             )
         )
-        match start_confirm_order_response.outcome:
+        match start_confirm_order_response.outcome:  # tesser:debt TB082
             case relays.StartConfirmOrderOutcome.STARTED:
                 return MapToSubmitOrderResponse(start_confirm_order_response)
             case _ as never:
@@ -82,7 +82,7 @@ class OrderService(ts.ApplicationService):
         confirm_order_response = await self._order_orchestrator_runner.run_confirm_order(
             relays.ConfirmOrderRequest(order=order)
         )
-        match confirm_order_response.outcome:
+        match confirm_order_response.outcome:  # tesser:debt TB082
             case relays.ConfirmOrderOutcome.CONFIRMED:
                 return MapToPlaceOrderResponse(confirm_order_response)
             case relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND:
