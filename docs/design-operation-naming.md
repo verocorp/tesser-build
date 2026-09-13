@@ -62,7 +62,12 @@ no verb, a response is named for what it is) is assumed throughout.
    a handler is invoked by the engine: the runners pass the decorated
    function to `workflow_call`, `workflow_send`, or `ctx.service_call`, and
    the SDK reads the service name, the handler name, and the serdes off it.
-   Tests call the handlers directly, which the SDK's wrapper allows.
+   Tests call the handlers directly, which the SDK's wrapper allows. An
+   operation name is unique within its owner, not within the runtime: the
+   engine registers `A/confirm_order` and `B/confirm_order` as two
+   handlers, so where two owners on one runtime share an operation the
+   attribute is qualified by the owner, `order_confirm_order_handler`.
+   Otherwise `<operation>_handler` stands.
 
 ## Messages and outcomes
 
@@ -85,25 +90,51 @@ no verb, a response is named for what it is) is assumed throughout.
 
 7. **An expected alternative from a dependency is an outcome member on the
    response, matched with `assert_never`.** It is never an exception. A port
-   or relay declares no errors.
+   or relay declares no errors. Every hop passes its dependency's outcome
+   through on its own response, the action included: the catalog's
+   `NOT_FOUND` rides `PriceProductOutcome.PRICE_NOT_FOUND` on the action's
+   relay response before it reaches the orchestrator. A member is a final
+   business fact, never a translated transient failure: a lost processor
+   response is a fault that the engine retries with the same idempotency
+   key, not `DECLINED`, because money may have moved. A change to an
+   outcome set is a redeploy boundary, the same as a snapshot gaining a
+   field: an in-flight journal replays the members it was written with.
 
 8. **An outcome member reads as a sentence after the act.** "Confirming the
    order: confirmed, the product price was not found, already started." A
    member is one way the act can end that the caller acts on differently. A
    test that follows from that, proposed here and not yet ruled on: two
-   members the caller handles identically are one member, and their
-   difference is data on the response. The kinds seen so far, a catalog and
+   members that mean the same thing to the dependency are one member, and
+   their difference is data on the response. One caller branching the same
+   way on two members is not the test: `ItemLookup.ARCHIVED / MISSING` are
+   two catalog facts even where one reader answers both with an empty
+   tuple. A field only some members can fill is a tuple of zero or one,
+   `GetProductPriceResponse.prices`, and the snapshot checks the count per
+   member, so a response carries an outcome beside fields that are truthful
+   for every member. The kinds seen so far, a catalog and
    not a closed set: the act done, sometimes in more than one way
    (`Taken.TAKEN / HELD`); the step or reason it stopped; the answer to a
    question (`SlugAvailability.TAKEN / FREE`); and what the engine crossing
    added (`ALREADY_STARTED`). The last kind exists only on relay responses,
    because only a relay crosses an engine, and it is produced by the runner
-   translating the engine's refusal, never by the orchestrator.
+   translating the engine's refusal, never by the orchestrator. It exists
+   only on the `run_` path, and only where the runner can recognise the
+   engine's specific refusal, the 409 whose body says the workflow was
+   already invoked. Any other 409, a cancellation included, is a fault: the
+   runner raises, and a member for cancellation waits for the compensation
+   scenario to give it a meaning. The `start_` outcome is `STARTED` alone,
+   because a repeat send is a 202 dedup on the server and the refusal is
+   unobservable there (measured on restate-server 1.7.2, 2026-09-08).
 
 9. **An outcome names what the act itself observed one hop down.** A parent
    workflow names which of its own steps did not complete,
    `ORDER_NOT_CONFIRMED`, `PAYMENT_DECLINED`, never a reason from further
-   down. The deeper reason travels as data on the response, so the caller
+   down. This rule governs summarising, and rule 11 governs forwarding: a
+   hop that passes the same fact on keeps its word, a parent reporting on
+   its own step names the step. The worked chain does both, `NOT_FOUND` to
+   `PRICE_NOT_FOUND` to `PRODUCT_PRICE_NOT_FOUND` forwarded through the
+   action and the child, then `ORDER_NOT_CONFIRMED` summarised by the
+   parent. The deeper reason travels as data on the response, so the caller
    can still be told, and the parent's enum stays closed over its own act:
    a new reason in `ConfirmOrderOutcome` does not touch
    `PayForOrderOutcome`. A hypothesis for the compensation scenario, not a
@@ -132,7 +163,10 @@ situations.
 11. **One fact keeps one word from the port inward.** What changes by hop is
     the carrier's subject, so a member gains a prefix and never a new word:
     `GetProductPriceOutcome.NOT_FOUND` at the port becomes
-    `ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND` one level up. "Not found"
+    `PriceProductOutcome.PRICE_NOT_FOUND` on the action's response and
+    `ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND` on the child's. This is
+    forwarding the same fact; a parent summarising its own step is rule 9,
+    and the two never apply to the same hop. "Not found"
     over "missing": a lookup can only report what it searched for, not what
     ought to exist, and "missing" is already a transport category in this
     tree (`client.Missing` is 404 wearing a class name).
@@ -215,8 +249,11 @@ The outcomes, one per act, every member as a sentence:
 - Confirming the order: confirmed, the product price was not found, or
   already started.
   `ConfirmOrderOutcome.CONFIRMED / PRODUCT_PRICE_NOT_FOUND / ALREADY_STARTED`
-- Starting to confirm the order: started, or already started.
-  `StartConfirmOrderOutcome.STARTED / ALREADY_STARTED`
+- Starting to confirm the order: started. A repeat send is deduplicated by
+  the server, so there is no second member to observe.
+  `StartConfirmOrderOutcome.STARTED`
+- Pricing the product: priced, or the price was not found.
+  `PriceProductOutcome.PRICED / PRICE_NOT_FOUND`
 - Getting the product price: found, or not found.
   `GetProductPriceOutcome.FOUND / NOT_FOUND`
 - Charging the payment method: charged, or declined.
@@ -283,8 +320,21 @@ operation, so 6 is unenforced. Which layer would carry the rest:
   prefix plus an operation that exists on the far side, and a runtime
   handler is the bare operation exposed as `<operation>_handler` (4, 5);
   request, response, and outcome derive from the operation (6); a port or
-  relay declares no errors (7); nothing inward of an adapter is named for an
-  engine or a status (12, by placement).
+  relay declares no errors (7); an SDK import or an error declaration
+  inward of an adapter (12, by placement). Placement cannot judge
+  vocabulary: whether a word is transport's or the domain's is review, and
+  a lexical ban on "status" would flag scheduling's `StatusRequest`, which
+  is about a booking. Proving the relay-to-handler chain needs the
+  registration binding, including a decorator's `name=` override, which
+  base-class classification does not see. Beyond naming checks, the
+  outcome-on-response shape needs three analyzer changes: admit a plain
+  enum in a relay module, where placement rejects it today; recognise a
+  `match` on a response's outcome field the way `TB084` recognises one on a
+  `ts.Outcome`, since a class named `*Outcome` activates nothing; and
+  remove the `port_error` placement row rather than add a check. Where the
+  match sits: a port outcome in the action's mapper (`MapToPriceSpec` is
+  the precedent), a relay outcome in the orchestrator or the service, one
+  match per method.
 - **The skill** carries the semantic halves: the verb test and the object
   test (1), the client's word being the caller's (3), the sentence test on
   every member (8), a parent naming its own step (9), outcome versus state
@@ -328,6 +378,16 @@ The four questions the review left open, and how Chris ruled on each.
   goes the same way. `find` / `find_by_slug` sharing one response is an
   operation-naming question under rule 1, either one operation with two
   keys or two operations with two responses, and is left to enactment.
+
+- **A cancellation 409 is a fault, for now.** The SDK surfaces a cancelled
+  invocation as `TerminalError("cancelled", 409)`, in the same shape as the
+  already-invoked refusal, told apart only by the server's message text.
+  Nothing in the tree cancels today, and what a cancelled purchase means
+  for money already moved is the compensation scenario's question. So the
+  runner recognises only the already-invoked refusal as `ALREADY_STARTED`
+  and raises on any other 409; a member for cancellation is added when
+  that scenario gives it a meaning, a redeploy boundary on one relay
+  response.
 
 - **Retry policy is set in the engine host and its runtime only, for now.**
   A retry policy encodes two kinds of knowledge: business facts the
