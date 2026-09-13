@@ -1,29 +1,35 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
 import ordering.application.relays as relays
-import ordering.application.ports as ports
 import ordering.domain as domain
-import tesser.errors as errors
 
 
 class MapToPurchaseSpec(ts.Mapper, domain.PurchaseSpec):
 
     def __init__(
-        self, order: domain.Order, order_orchestrator_response: relays.OrderOrchestratorResponse
+        self, order: domain.Order, confirm_order_response: relays.ConfirmOrderResponse
     ) -> None:
         super().__init__(
             order_id=str(order.identity),
-            priced_order_id=order_orchestrator_response.order_id,
-            total_cents=order_orchestrator_response.total_cents,
+            priced_order_id=confirm_order_response.order_id,
+            total_cents=confirm_order_response.confirmed_orders[0].total_cents,
         )
 
 
 class MapToTakePaymentRequest(ts.Mapper, relays.TakePaymentRequest):
 
-    def __init__(self, purchase: domain.Purchase) -> None:
-        super().__init__(order_id=str(purchase.identity), cents=int(purchase.total))
+    def __init__(
+        self, purchase: domain.Purchase, payment_method: domain.PaymentMethod
+    ) -> None:
+        super().__init__(
+            order_id=str(purchase.identity),
+            cents=int(purchase.total),
+            payment_method=str(payment_method),
+        )
 
 
 class MapToPaymentSpec(ts.Mapper, domain.PaymentSpec):
@@ -31,18 +37,50 @@ class MapToPaymentSpec(ts.Mapper, domain.PaymentSpec):
     def __init__(self, take_payment_response: relays.TakePaymentResponse) -> None:
         super().__init__(
             order_id=take_payment_response.order_id,
-            reference=take_payment_response.reference,
-            cents=take_payment_response.cents,
+            reference=take_payment_response.payments[0].reference,
+            cents=take_payment_response.payments[0].cents,
         )
 
 
-class MapToPurchaseOrchestratorResponse(ts.Mapper, relays.PurchaseOrchestratorResponse):
+class MapToPayForOrderResponseFromPayment(ts.Mapper, relays.PayForOrderResponse):
 
     def __init__(self, purchase: domain.Purchase, payment: domain.Payment) -> None:
         super().__init__(
+            outcome=relays.PayForOrderOutcome.PAID,
             order_id=str(purchase.identity),
-            total_cents=int(purchase.total),
-            payment_reference=str(payment.reference),
+            purchases=(
+                relays.Purchase(
+                    total_cents=int(purchase.total),
+                    payment_reference=str(payment.reference),
+                ),
+            ),
+            reasons=(),
+        )
+
+
+class MapToPayForOrderResponseFromConfirmOrderResponse(ts.Mapper, relays.PayForOrderResponse):
+
+    def __init__(
+        self, order: domain.Order, confirm_order_response: relays.ConfirmOrderResponse
+    ) -> None:
+        super().__init__(
+            outcome=relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED,
+            order_id=str(order.identity),
+            purchases=(),
+            reasons=confirm_order_response.reasons,
+        )
+
+
+class MapToPayForOrderResponseFromTakePaymentResponse(ts.Mapper, relays.PayForOrderResponse):
+
+    def __init__(
+        self, purchase: domain.Purchase, take_payment_response: relays.TakePaymentResponse
+    ) -> None:
+        super().__init__(
+            outcome=relays.PayForOrderOutcome.PAYMENT_DECLINED,
+            order_id=str(purchase.identity),
+            purchases=(),
+            reasons=take_payment_response.reasons,
         )
 
 
@@ -56,22 +94,36 @@ class PurchaseOrchestrator(ts.Orchestrator):
         self._purchase_actions_runner = purchase_actions_runner
         self._order_orchestrator_runner = order_orchestrator_runner
 
-    async def run(
-        self, purchase_orchestrator_request: relays.PurchaseOrchestratorRequest
-    ) -> relays.PurchaseOrchestratorResponse:
-        order = purchase_orchestrator_request.order
-        order_orchestrator_response = await self._order_orchestrator_runner.run_order_orchestrator(
-            relays.OrderOrchestratorRequest(order=order)
+    async def pay_for_order(
+        self, pay_for_order_request: relays.PayForOrderRequest
+    ) -> relays.PayForOrderResponse:
+        order = pay_for_order_request.order
+        confirm_order_response = await self._order_orchestrator_runner.run_confirm_order(
+            relays.ConfirmOrderRequest(order=order)
         )
-        try:
-            purchase = domain.Purchase(MapToPurchaseSpec(order, order_orchestrator_response))
-        except errors.DomainError as domain_error:
-            raise ports.EngineRejected(domain_error.message) from domain_error
+        match confirm_order_response.outcome:
+            case relays.ConfirmOrderOutcome.CONFIRMED:
+                purchase = domain.Purchase(MapToPurchaseSpec(order, confirm_order_response))
+            case (
+                relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND
+                | relays.ConfirmOrderOutcome.ALREADY_STARTED
+            ):
+                return MapToPayForOrderResponseFromConfirmOrderResponse(
+                    order, confirm_order_response
+                )
+            case _ as never:
+                typing.assert_never(never)
+        payment_method = pay_for_order_request.payment_method
         take_payment_response = await self._purchase_actions_runner.run_take_payment(
-            MapToTakePaymentRequest(purchase)
+            MapToTakePaymentRequest(purchase, payment_method)
         )
-        try:
-            payment = purchase.paid(MapToPaymentSpec(take_payment_response))
-        except errors.DomainError as domain_error:
-            raise ports.EngineRejected(domain_error.message) from domain_error
-        return MapToPurchaseOrchestratorResponse(purchase, payment)
+        match take_payment_response.outcome:
+            case relays.TakePaymentOutcome.TAKEN:
+                payment = purchase.paid(MapToPaymentSpec(take_payment_response))
+            case relays.TakePaymentOutcome.DECLINED:
+                return MapToPayForOrderResponseFromTakePaymentResponse(
+                    purchase, take_payment_response
+                )
+            case _ as never_taken:
+                typing.assert_never(never_taken)
+        return MapToPayForOrderResponseFromPayment(purchase, payment)

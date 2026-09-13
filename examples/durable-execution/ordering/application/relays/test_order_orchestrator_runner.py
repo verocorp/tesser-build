@@ -4,56 +4,79 @@ import pytest
 
 import ordering.application.relays as relays
 import ordering.domain as domain
-import ordering.application.ports as ports  # tesser:debt TB070
 
 
-class TestOrderOrchestratorRequestSnapshot:
+class TestConfirmOrderRequestSnapshot:
 
     def test_a_request_is_the_order_it_carries_and_nothing_more(self) -> None:
         order = domain.Order(domain.OrderSpec(order_id="o1", sku="widget", quantity=2))
-        raw = relays.OrderOrchestratorRequestSnapshot().serialize(
-            relays.OrderOrchestratorRequest(order=order)
+        raw = relays.ConfirmOrderRequestSnapshot().serialize(
+            relays.ConfirmOrderRequest(order=order)
         )
         assert raw == b'{"order_id": "o1", "sku": "widget", "quantity": 2}'
 
     def test_a_request_comes_back_around_its_order(self) -> None:
-        order_orchestrator_request_snapshot = relays.OrderOrchestratorRequestSnapshot()
+        confirm_order_request_snapshot = relays.ConfirmOrderRequestSnapshot()
         order = domain.Order(domain.OrderSpec(order_id="o7", sku="gadget", quantity=3))
-        order_orchestrator_request = order_orchestrator_request_snapshot.deserialize(
-            order_orchestrator_request_snapshot.serialize(
-                relays.OrderOrchestratorRequest(order=order)
-            )
+        confirm_order_request = confirm_order_request_snapshot.deserialize(
+            confirm_order_request_snapshot.serialize(relays.ConfirmOrderRequest(order=order))
         )
-        assert order_orchestrator_request.order.identity == domain.OrderId("o7")
-        assert order_orchestrator_request.order.sku == domain.Sku("gadget")
-        assert order_orchestrator_request.order.quantity == domain.Quantity(3)
+        assert confirm_order_request.order.identity == domain.OrderId("o7")
+        assert confirm_order_request.order.sku == domain.Sku("gadget")
+        assert confirm_order_request.order.quantity == domain.Quantity(3)
 
 
-class TestOrderOrchestratorResponseSnapshot:
+class TestConfirmOrderResponseSnapshot:
 
-    def test_a_response_is_the_order_id_and_the_total(self) -> None:
-        order_orchestrator_response = relays.OrderOrchestratorResponse(order_id="o1", total_cents=500)
-        assert relays.OrderOrchestratorResponseSnapshot().serialize(
-            order_orchestrator_response
-        ) == b'{"order_id": "o1", "total_cents": 500}'
+    def test_a_confirmed_response_is_its_outcome_the_order_id_and_the_total(self) -> None:
+        confirm_order_response = relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id="o1",
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=500),),
+            reasons=(),
+        )
+        assert relays.ConfirmOrderResponseSnapshot().serialize(confirm_order_response) == (
+            b'{"outcome": "confirmed", "order_id": "o1", '
+            b'"confirmed_orders": [{"total_cents": 500}], "reasons": []}'
+        )
+
+    def test_an_unconfirmed_response_carries_no_order_and_its_reason(self) -> None:
+        confirm_order_response = relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND,
+            order_id="o1",
+            confirmed_orders=(),
+            reasons=("no price for sku 'nope'",),
+        )
+        assert relays.ConfirmOrderResponseSnapshot().serialize(confirm_order_response) == (
+            b'{"outcome": "product_price_not_found", "order_id": "o1", '
+            b'"confirmed_orders": [], "reasons": ["no price for sku \'nope\'"]}'
+        )
 
     def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (
-            b'{"order_id": "o1"}',
-            b'{"order_id": "", "total_cents": 500}',
-            b'{"order_id": "o1", "total_cents": -1}',
-            b'{"order_id": "o1", "total_cents": true}',
-            b'{"order_id": "o1", "total_cents": NaN}',
-            b'{"order_id": "o1", "total_cents": "500"}',
-            b'{"order_id": {}, "total_cents": 500}',
+            b'{"outcome": "confirmed", "order_id": "o1"}',
+            b'{"outcome": "confirmed", "order_id": "", "confirmed_orders": [], "reasons": []}',
+            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [{"total_cents": -1}], "reasons": []}',
+            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [{"total_cents": true}], "reasons": []}',
+            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [{"total_cents": NaN}], "reasons": []}',
+            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [{"total_cents": "500"}], "reasons": []}',
+            b'{"outcome": "confirmed", "order_id": {}, "confirmed_orders": [], "reasons": []}',
+            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [], "reasons": []}',
+            b'{"outcome": "already_started", "order_id": "o1", "confirmed_orders": [{"total_cents": 500}], "reasons": []}',
+            b'{"outcome": "unconfirmed", "order_id": "o1", "confirmed_orders": [], "reasons": []}',
             b'["o1", 500]',
         ):
-            with pytest.raises(ports.EngineRejected):
-                relays.OrderOrchestratorResponseSnapshot().deserialize(raw)
+            with pytest.raises(ValueError):
+                relays.ConfirmOrderResponseSnapshot().deserialize(raw)
 
     def test_a_response_comes_back_equal(self) -> None:
-        order_orchestrator_response_snapshot = relays.OrderOrchestratorResponseSnapshot()
-        order_orchestrator_response = relays.OrderOrchestratorResponse(order_id="o7", total_cents=750)
-        assert order_orchestrator_response_snapshot.deserialize(
-            order_orchestrator_response_snapshot.serialize(order_orchestrator_response)
-        ) == order_orchestrator_response
+        confirm_order_response_snapshot = relays.ConfirmOrderResponseSnapshot()
+        confirm_order_response = relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id="o7",
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=750),),
+            reasons=(),
+        )
+        assert confirm_order_response_snapshot.deserialize(
+            confirm_order_response_snapshot.serialize(confirm_order_response)
+        ) == confirm_order_response

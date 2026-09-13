@@ -10,10 +10,28 @@ import restate
 import restate.client as restate_client
 
 import ordering.adapters.runtimes as runtimes
-import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
 
-_RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
+_READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
+_RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOUT_SECONDS)
+_ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
+
+
+class MapToStartConfirmOrderResponse(ts.Mapper, relays.StartConfirmOrderResponse):
+
+    def __init__(self, key: str) -> None:
+        super().__init__(outcome=relays.StartConfirmOrderOutcome.STARTED, order_id=key)
+
+
+class MapToAlreadyStartedConfirmOrderResponse(ts.Mapper, relays.ConfirmOrderResponse):
+
+    def __init__(self, key: str, refusal: str) -> None:
+        super().__init__(
+            outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
+            order_id=key,
+            confirmed_orders=(),
+            reasons=(refusal,),
+        )
 
 
 class RestateOrderOrchestratorRunner(ts.Runner):
@@ -22,69 +40,42 @@ class RestateOrderOrchestratorRunner(ts.Runner):
         self._ingress = ingress
         self._restate_order_runtime = restate_order_runtime
 
-    async def start_order_orchestrator(
-        self, order_orchestrator_request: relays.OrderOrchestratorRequest
-    ) -> relays.StartOrderOrchestratorResponse:
-        key = str(order_orchestrator_request.order.identity)
-        try:
-            async with httpx.AsyncClient(base_url=self._ingress) as async_client:
-                await restate_client.Client(async_client).workflow_send(
-                    self._restate_order_runtime.order_orchestrator_handler,
-                    key=urllib_parse.quote(key, safe=""),
-                    arg=order_orchestrator_request,
-                )
-        except restate.HttpError as http_error:
-            if http_error.status_code == 409:
-                raise ports.EngineConflict(http_error.message) from http_error
-            raise ports.EngineUnavailable(
-                f"restate ingress refused the workflow: {http_error}"
-            ) from http_error
-        except httpx.TransportError as transport_error:
-            raise ports.EngineUnavailable(
-                f"restate ingress refused the workflow: {transport_error}"
-            ) from transport_error
-        return relays.StartOrderOrchestratorResponse(key)
+    async def start_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.StartConfirmOrderResponse:
+        key = str(confirm_order_request.order.identity)
+        async with httpx.AsyncClient(base_url=self._ingress) as async_client:
+            await restate_client.Client(async_client).workflow_send(
+                self._restate_order_runtime.confirm_order_handler,
+                key=urllib_parse.quote(key, safe=""),
+                arg=confirm_order_request,
+            )
+        return MapToStartConfirmOrderResponse(key)
 
-    async def run_order_orchestrator(
-        self, order_orchestrator_request: relays.OrderOrchestratorRequest
-    ) -> relays.OrderOrchestratorResponse:
-        key = str(order_orchestrator_request.order.identity)
+    async def run_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse:
+        key = str(confirm_order_request.order.identity)
         try:
-            async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
+            async with httpx.AsyncClient(
+                base_url=self._ingress, timeout=_RUN_TIMEOUT
+            ) as async_client:
                 return await restate_client.Client(async_client).workflow_call(
-                    self._restate_order_runtime.order_orchestrator_handler,
+                    self._restate_order_runtime.confirm_order_handler,
                     key=urllib_parse.quote(key, safe=""),
-                    arg=order_orchestrator_request,
+                    arg=confirm_order_request,
                 )
         except restate.HttpError as http_error:
+            if http_error.status_code != 409:
+                raise
             try:
-                outcome = json.loads(http_error.body or "")
+                refusal = json.loads(http_error.body or "")
             except (ValueError, RecursionError):
-                outcome = None
+                refusal = None
             if not (
-                isinstance(outcome, dict)
-                and isinstance(outcome.get("message"), str)
-                and outcome.get("code") == http_error.status_code
+                isinstance(refusal, dict)
+                and refusal.get("code") == 409
+                and refusal.get("message") == _ALREADY_INVOKED
             ):
-                raise ports.EngineUnavailable(
-                    f"restate ingress refused the workflow: {http_error}"
-                ) from http_error
-            match http_error.status_code:
-                case 409:
-                    raise ports.EngineConflict(outcome["message"]) from http_error
-                case 422:
-                    raise ports.EngineRejected(outcome["message"]) from http_error
-                case 404:
-                    raise ports.EngineMissing(outcome["message"]) from http_error
-                case _:
-                    raise ports.EngineUnavailable(
-                        f"the workflow ended with a status that is not the domain's: {http_error}"
-                    ) from http_error
-        except httpx.TransportError as transport_error:
-            raise ports.EngineUnavailable(
-                f"restate ingress refused the workflow: {transport_error}"
-            ) from transport_error
-        except (ports.EngineRejected, ValueError, RecursionError) as decode_error:
-            raise ports.EngineUnavailable(
-                f"restate ingress answered with a body that is not the workflow's result: {decode_error}"
-            ) from decode_error
+                raise
+            return MapToAlreadyStartedConfirmOrderResponse(key, _ALREADY_INVOKED)

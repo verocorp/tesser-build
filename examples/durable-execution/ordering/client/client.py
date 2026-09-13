@@ -34,15 +34,16 @@ class PlaceOrderResponse(ts.Response):
         self.total_cents = total_cents
 
 
-class PurchaseRequest(ts.Request):
+class PayForOrderRequest(ts.Request):
 
-    def __init__(self, order_id: str, sku: str, quantity: int) -> None:
+    def __init__(self, order_id: str, sku: str, quantity: int, payment_method: str) -> None:
         self.order_id = order_id
         self.sku = sku
         self.quantity = quantity
+        self.payment_method = payment_method
 
 
-class PurchaseResponse(ts.Response):
+class PayForOrderResponse(ts.Response):
 
     def __init__(self, order_id: str, total_cents: int, payment_reference: str) -> None:
         self.order_id = order_id
@@ -50,7 +51,7 @@ class PurchaseResponse(ts.Response):
         self.payment_reference = payment_reference
 
 
-class Rejected(ts.Error):
+class OrderRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -58,23 +59,28 @@ class Rejected(ts.Error):
         self.message = message
 
 
-class Missing(ts.Error):
+class ProductPriceNotFound(ts.Error):
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, message: str) -> None:
         super().__init__(message)
-        self.code = code
         self.message = message
 
 
-class Conflict(ts.Error):
+class OrderNotConfirmed(ts.Error):
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, message: str) -> None:
         super().__init__(message)
-        self.code = code
         self.message = message
 
 
-class Unavailable(ts.Error):
+class PaymentDeclined(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class OrderAlreadyStarted(ts.Error):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -82,8 +88,14 @@ class Unavailable(ts.Error):
 
 
 ERRORS: typing.Final[
-    tuple[type[Rejected], type[Missing], type[Conflict], type[Unavailable]]
-] = (Rejected, Missing, Conflict, Unavailable)
+    tuple[
+        type[OrderRejected],
+        type[ProductPriceNotFound],
+        type[OrderNotConfirmed],
+        type[PaymentDeclined],
+        type[OrderAlreadyStarted],
+    ]
+] = (OrderRejected, ProductPriceNotFound, OrderNotConfirmed, PaymentDeclined, OrderAlreadyStarted)
 
 
 class OrderingClient(ts.Client, typing.Protocol):
@@ -92,4 +104,6 @@ class OrderingClient(ts.Client, typing.Protocol):
 
     async def place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...
 
-    async def purchase(self, purchase_request: PurchaseRequest) -> PurchaseResponse: ...
+    async def pay_for_order(
+        self, pay_for_order_request: PayForOrderRequest
+    ) -> PayForOrderResponse: ...

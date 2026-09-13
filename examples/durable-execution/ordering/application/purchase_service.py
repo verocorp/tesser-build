@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
-import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.client as client
 import ordering.domain as domain
@@ -11,23 +12,21 @@ import tesser.errors as errors
 
 class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
 
-    def __init__(self, purchase_request: client.PurchaseRequest) -> None:
+    def __init__(self, pay_for_order_request: client.PayForOrderRequest) -> None:
         super().__init__(
-            order_id=purchase_request.order_id,
-            sku=purchase_request.sku,
-            quantity=purchase_request.quantity,
+            order_id=pay_for_order_request.order_id,
+            sku=pay_for_order_request.sku,
+            quantity=pay_for_order_request.quantity,
         )
 
 
-class MapToPurchaseResponse(ts.Mapper, client.PurchaseResponse):
+class MapToPayForOrderResponse(ts.Mapper, client.PayForOrderResponse):
 
-    def __init__(
-        self, purchase_orchestrator_response: relays.PurchaseOrchestratorResponse
-    ) -> None:
+    def __init__(self, pay_for_order_response: relays.PayForOrderResponse) -> None:
         super().__init__(
-            order_id=purchase_orchestrator_response.order_id,
-            total_cents=purchase_orchestrator_response.total_cents,
-            payment_reference=purchase_orchestrator_response.payment_reference,
+            order_id=pay_for_order_response.order_id,
+            total_cents=pay_for_order_response.purchases[0].total_cents,
+            payment_reference=pay_for_order_response.purchases[0].payment_reference,
         )
 
 
@@ -38,33 +37,27 @@ class PurchaseService(ts.ApplicationService):
     ) -> None:
         self._purchase_orchestrator_runner = purchase_orchestrator_runner
 
-    async def purchase(self, purchase_request: client.PurchaseRequest) -> client.PurchaseResponse:
+    async def pay_for_order(
+        self, pay_for_order_request: client.PayForOrderRequest
+    ) -> client.PayForOrderResponse:
         try:
-            order = domain.Order(MapToOrderSpec(purchase_request))
+            order = domain.Order(MapToOrderSpec(pay_for_order_request))
+            payment_method = domain.PaymentMethod(pay_for_order_request.payment_method)
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.OrderRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        try:
-            purchase_orchestrator_response = (
-                await self._purchase_orchestrator_runner.run_purchase_orchestrator(
-                    relays.PurchaseOrchestratorRequest(order=order)
-                )
-            )
-        except ports.EngineRejected as engine_error:
-            raise client.Rejected(
-                code="purchase_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineMissing as engine_error:
-            raise client.Missing(
-                code="purchase_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineConflict as engine_error:
-            raise client.Conflict(
-                code="purchase_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineUnavailable as engine_error:
-            raise client.Unavailable(
-                message="the ordering engine is unavailable"
-            ) from engine_error
-        return MapToPurchaseResponse(purchase_orchestrator_response)
+        pay_for_order_response = await self._purchase_orchestrator_runner.run_pay_for_order(
+            relays.PayForOrderRequest(order=order, payment_method=payment_method)
+        )
+        match pay_for_order_response.outcome:
+            case relays.PayForOrderOutcome.PAID:
+                return MapToPayForOrderResponse(pay_for_order_response)
+            case relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED:
+                raise client.OrderNotConfirmed(pay_for_order_response.reasons[0])
+            case relays.PayForOrderOutcome.PAYMENT_DECLINED:
+                raise client.PaymentDeclined(pay_for_order_response.reasons[0])
+            case relays.PayForOrderOutcome.ALREADY_STARTED:
+                raise client.OrderAlreadyStarted(pay_for_order_response.reasons[0])
+            case _ as never:
+                typing.assert_never(never)

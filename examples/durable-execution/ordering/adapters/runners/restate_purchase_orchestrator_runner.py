@@ -10,10 +10,22 @@ import restate
 import restate.client as restate_client
 
 import ordering.adapters.runtimes as runtimes
-import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
 
-_RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
+_READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
+_RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOUT_SECONDS)
+_ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
+
+
+class MapToAlreadyStartedPayForOrderResponse(ts.Mapper, relays.PayForOrderResponse):
+
+    def __init__(self, key: str, refusal: str) -> None:
+        super().__init__(
+            outcome=relays.PayForOrderOutcome.ALREADY_STARTED,
+            order_id=key,
+            purchases=(),
+            reasons=(refusal,),
+        )
 
 
 class RestatePurchaseOrchestratorRunner(ts.Runner):
@@ -22,46 +34,30 @@ class RestatePurchaseOrchestratorRunner(ts.Runner):
         self._ingress = ingress
         self._restate_order_runtime = restate_order_runtime
 
-    async def run_purchase_orchestrator(
-        self, purchase_orchestrator_request: relays.PurchaseOrchestratorRequest
-    ) -> relays.PurchaseOrchestratorResponse:
-        key = str(purchase_orchestrator_request.order.identity)
+    async def run_pay_for_order(
+        self, pay_for_order_request: relays.PayForOrderRequest
+    ) -> relays.PayForOrderResponse:
+        key = str(pay_for_order_request.order.identity)
         try:
-            async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
+            async with httpx.AsyncClient(
+                base_url=self._ingress, timeout=_RUN_TIMEOUT
+            ) as async_client:
                 return await restate_client.Client(async_client).workflow_call(
-                    self._restate_order_runtime.purchase_orchestrator_handler,
+                    self._restate_order_runtime.pay_for_order_handler,
                     key=urllib_parse.quote(key, safe=""),
-                    arg=purchase_orchestrator_request,
+                    arg=pay_for_order_request,
                 )
         except restate.HttpError as http_error:
+            if http_error.status_code != 409:
+                raise
             try:
-                outcome = json.loads(http_error.body or "")
+                refusal = json.loads(http_error.body or "")
             except (ValueError, RecursionError):
-                outcome = None
+                refusal = None
             if not (
-                isinstance(outcome, dict)
-                and isinstance(outcome.get("message"), str)
-                and outcome.get("code") == http_error.status_code
+                isinstance(refusal, dict)
+                and refusal.get("code") == 409
+                and refusal.get("message") == _ALREADY_INVOKED
             ):
-                raise ports.EngineUnavailable(
-                    f"restate ingress refused the workflow: {http_error}"
-                ) from http_error
-            match http_error.status_code:
-                case 409:
-                    raise ports.EngineConflict(outcome["message"]) from http_error
-                case 422:
-                    raise ports.EngineRejected(outcome["message"]) from http_error
-                case 404:
-                    raise ports.EngineMissing(outcome["message"]) from http_error
-                case _:
-                    raise ports.EngineUnavailable(
-                        f"the workflow ended with a status that is not the domain's: {http_error}"
-                    ) from http_error
-        except httpx.TransportError as transport_error:
-            raise ports.EngineUnavailable(
-                f"restate ingress unreachable: {transport_error}"
-            ) from transport_error
-        except (ports.EngineRejected, ValueError, RecursionError) as decode_error:
-            raise ports.EngineUnavailable(
-                f"restate ingress answered with a body that is not the workflow's result: {decode_error}"
-            ) from decode_error
+                raise
+            return MapToAlreadyStartedPayForOrderResponse(key, _ALREADY_INVOKED)

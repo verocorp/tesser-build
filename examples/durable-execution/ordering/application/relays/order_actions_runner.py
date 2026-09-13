@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import enum
 import json
 import typing
 
 import tesser.application as ts
-
-import ordering.application.ports as ports
 
 
 class PriceProductRequest(ts.Request):
@@ -26,31 +25,85 @@ class PriceProductRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("sku"), str)
             and snapshot["sku"]
         ):
-            raise ports.EngineRejected("a price product request is a sku")  # tesser:debt TB082
+            raise ValueError("a price product request is a sku")
         return PriceProductRequest(sku=snapshot["sku"])
 
 
-class PriceProductResponse(ts.Response):
+class PriceProductOutcome(enum.Enum):
+    PRICED = "priced"
+    PRICE_NOT_FOUND = "price_not_found"
+
+
+class Price(ts.Response):
 
     def __init__(self, cents: int) -> None:
         self.cents = cents
 
 
+class PriceProductResponse(ts.Response):
+
+    def __init__(
+        self,
+        outcome: PriceProductOutcome,
+        prices: tuple[Price, ...],
+        reasons: tuple[str, ...],
+    ) -> None:
+        self.outcome = outcome
+        self.prices = prices
+        self.reasons = reasons
+
+
 class PriceProductResponseSnapshot(ts.Serde):
 
     def serialize(self, price_product_response: PriceProductResponse) -> bytes:
-        return json.dumps({"cents": price_product_response.cents}).encode()
+        return json.dumps(
+            {
+                "outcome": price_product_response.outcome.value,
+                "prices": [{"cents": price.cents} for price in price_product_response.prices],
+                "reasons": list(price_product_response.reasons),
+            }
+        ).encode()
 
     def deserialize(self, buf: bytes) -> PriceProductResponse:
         snapshot = json.loads(buf)
         if not (
             isinstance(snapshot, dict)
-            and isinstance(snapshot.get("cents"), int)
-            and not isinstance(snapshot.get("cents"), bool)
-            and snapshot["cents"] >= 0
+            and isinstance(snapshot.get("prices"), list)
+            and isinstance(snapshot.get("reasons"), list)
+            and all(
+                isinstance(reason, str) and reason for reason in snapshot["reasons"]
+            )
+            and all(
+                isinstance(price, dict)
+                and isinstance(price.get("cents"), int)
+                and not isinstance(price.get("cents"), bool)
+                and price["cents"] >= 0
+                for price in snapshot["prices"]
+            )
         ):
-            raise ports.EngineRejected("a price product response is a price in cents")  # tesser:debt TB082
-        return PriceProductResponse(cents=snapshot["cents"])
+            raise ValueError(
+                "a price product response is an outcome, its prices, and its reasons"
+            )
+        try:
+            price_product_outcome = PriceProductOutcome(snapshot.get("outcome"))
+        except ValueError as value_error:
+            raise ValueError("a price product response names a priced outcome") from value_error
+        match price_product_outcome:
+            case PriceProductOutcome.PRICED:
+                expected = 1
+            case PriceProductOutcome.PRICE_NOT_FOUND:
+                expected = 0
+            case _ as never:
+                typing.assert_never(never)
+        if len(snapshot["prices"]) != expected:
+            raise ValueError(
+                f"a {price_product_outcome.value} product carries {expected} price(s)"
+            )
+        return PriceProductResponse(
+            outcome=price_product_outcome,
+            prices=tuple(Price(cents=price["cents"]) for price in snapshot["prices"]),
+            reasons=tuple(snapshot["reasons"]),
+        )
 
 
 class OrderActionsRunner(ts.Relay, typing.Protocol):

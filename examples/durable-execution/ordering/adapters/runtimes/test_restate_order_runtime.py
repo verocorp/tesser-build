@@ -9,7 +9,6 @@ import restate
 
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
-import ordering.application.ports as ports  # tesser:debt TB070
 import ordering.application.relays as relays
 import ordering.domain as domain
 
@@ -20,7 +19,11 @@ class FakeOrderingApplicationClient(client.OrderingApplicationClient):
     def price_product(
         self, price_product_request: relays.PriceProductRequest
     ) -> relays.PriceProductResponse:
-        return relays.PriceProductResponse(cents=250)
+        return relays.PriceProductResponse(
+            outcome=relays.PriceProductOutcome.PRICED,
+            prices=(relays.Price(cents=250),),
+            reasons=(),
+        )
 
 
 @ts.fake
@@ -30,253 +33,332 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         return relays.TakePaymentResponse(
+            outcome=relays.TakePaymentOutcome.TAKEN,
             order_id=take_payment_request.order_id,
-            reference=f"pay-{take_payment_request.order_id}",
-            cents=take_payment_request.cents,
+            payments=(
+                relays.Payment(
+                    reference=f"pay-{take_payment_request.order_id}",
+                    cents=take_payment_request.cents,
+                ),
+            ),
+            reasons=(),
         )
 
 
 @ts.fake
-class FakeRefusingOrderingApplicationClient(client.OrderingApplicationClient):
+class FakeUnpricedOrderingApplicationClient(client.OrderingApplicationClient):
 
     def price_product(
         self, price_product_request: relays.PriceProductRequest
     ) -> relays.PriceProductResponse:
-        raise ports.EngineMissing(f"no price for sku {price_product_request.sku!r}")
+        return relays.PriceProductResponse(
+            outcome=relays.PriceProductOutcome.PRICE_NOT_FOUND,
+            prices=(),
+            reasons=(f"no price for sku {price_product_request.sku!r}",),
+        )
 
 
 @ts.fake
-class FakeRefusingPurchaseApplicationClient(client.PurchaseApplicationClient):
+class FakeDecliningPurchaseApplicationClient(client.PurchaseApplicationClient):
 
     def take_payment(
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
-        raise ports.ChargeDeclined(
-            f"the processor declined the charge for order {take_payment_request.order_id!r}"
+        return relays.TakePaymentResponse(
+            outcome=relays.TakePaymentOutcome.DECLINED,
+            order_id=take_payment_request.order_id,
+            payments=(),
+            reasons=("the processor declined the charge",),
         )
 
 
 @ts.fake
 class FakeRestateWorkflowContext:  # tesser:debt TB072
 
-    def __init__(self, refusal: str = "") -> None:
-        self._refusal = refusal
+    def __init__(self, declining: bool = False, unpriced: bool = False) -> None:
+        self._declining = declining
+        self._unpriced = unpriced
         self.child_keys: list[str] = []
 
     async def service_call(self, tpe: object, arg: object) -> object:
-        if self._refusal:
-            raise restate.TerminalError(self._refusal, status_code=404)
         if isinstance(arg, relays.TakePaymentRequest):
-            return relays.TakePaymentResponse(order_id=arg.order_id, reference=f"pay-{arg.order_id}", cents=arg.cents)
-        return relays.PriceProductResponse(cents=250)
+            if self._declining:
+                return FakeDecliningPurchaseApplicationClient().take_payment(arg)
+            return FakePurchaseApplicationClient().take_payment(arg)
+        assert isinstance(arg, relays.PriceProductRequest)
+        if self._unpriced:
+            return FakeUnpricedOrderingApplicationClient().price_product(arg)
+        return FakeOrderingApplicationClient().price_product(arg)
 
     async def workflow_call(self, tpe: object, key: str, arg: object) -> object:
         self.child_keys.append(key)
-        if self._refusal:
-            raise restate.TerminalError(self._refusal, status_code=404)
-        return relays.OrderOrchestratorResponse(order_id=key, total_cents=500)
+        if self._unpriced:
+            return relays.ConfirmOrderResponse(
+                outcome=relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND,
+                order_id=key,
+                confirmed_orders=(),
+                reasons=("no price for sku 'nope'",),
+            )
+        return relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id=key,
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=500),),
+            reasons=(),
+        )
 
 
 @ts.helper
-def order_orchestrator_request(
+def confirm_order_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 2
-) -> relays.OrderOrchestratorRequest:
-    return relays.OrderOrchestratorRequest(
+) -> relays.ConfirmOrderRequest:
+    return relays.ConfirmOrderRequest(
         order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
     )
 
 
 @ts.helper
-def purchase_orchestrator_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 2
-) -> relays.PurchaseOrchestratorRequest:
-    return relays.PurchaseOrchestratorRequest(
-        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+def pay_for_order_request(
+    order_id: str = "o1",
+    sku: str = "widget",
+    quantity: int = 2,
+    payment_method: str = "card-4242",
+) -> relays.PayForOrderRequest:
+    return relays.PayForOrderRequest(
+        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)),
+        payment_method=domain.PaymentMethod(payment_method),
+    )
+
+
+@ts.helper
+def take_payment_request(
+    order_id: str = "o1", cents: int = 750, payment_method: str = "card-4242"
+) -> relays.TakePaymentRequest:
+    return relays.TakePaymentRequest(
+        order_id=order_id, cents=cents, payment_method=payment_method
+    )
+
+
+@ts.helper
+def restate_order_runtime() -> runtimes.RestateOrderRuntime:
+    return runtimes.RestateOrderRuntime(
+        FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
     )
 
 
 class TestRestateOrderRuntime:
 
     def test_it_registers_two_actions_services_and_two_orchestrator_workflows(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient())
         assert (
-            restate_order_runtime.order_actions_service.name,
-            sorted(restate_order_runtime.order_actions_service.handlers),
+            restate_order_runtime().order_actions_service.name,
+            sorted(restate_order_runtime().order_actions_service.handlers),
         ) == ("OrderActions", ["price_product"])
         assert (
-            restate_order_runtime.order_orchestrator_workflow.name,
-            sorted(restate_order_runtime.order_orchestrator_workflow.handlers),
-        ) == ("OrderOrchestrator", ["run"])
+            restate_order_runtime().order_orchestrator_workflow.name,
+            sorted(restate_order_runtime().order_orchestrator_workflow.handlers),
+        ) == ("OrderOrchestrator", ["confirm_order"])
         assert (
-            restate_order_runtime.purchase_actions_service.name,
-            sorted(restate_order_runtime.purchase_actions_service.handlers),
+            restate_order_runtime().purchase_actions_service.name,
+            sorted(restate_order_runtime().purchase_actions_service.handlers),
         ) == ("PurchaseActions", ["take_payment"])
         assert (
-            restate_order_runtime.purchase_orchestrator_workflow.name,
-            sorted(restate_order_runtime.purchase_orchestrator_workflow.handlers),
-        ) == ("PurchaseOrchestrator", ["run"])
+            restate_order_runtime().purchase_orchestrator_workflow.name,
+            sorted(restate_order_runtime().purchase_orchestrator_workflow.handlers),
+        ) == ("PurchaseOrchestrator", ["pay_for_order"])
+
+    def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
+        for registered in (
+            restate_order_runtime().order_actions_service,
+            restate_order_runtime().order_orchestrator_workflow,
+            restate_order_runtime().purchase_actions_service,
+            restate_order_runtime().purchase_orchestrator_workflow,
+        ):
+            policy = registered.invocation_retry_policy
+            assert policy is not None
+            assert policy.max_attempts == 5
+            assert policy.on_max_attempts == "pause"
 
     def test_the_take_payment_handler_hands_the_request_to_the_purchase_client(self) -> None:
         take_payment_response = asyncio.run(
-            runtimes.RestateOrderRuntime(
-                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-            ).take_payment_handler(
-                typing.cast(restate.Context, None),
-                relays.TakePaymentRequest(order_id="o1", cents=750),
+            restate_order_runtime().take_payment_handler(
+                typing.cast(restate.Context, None), take_payment_request()
             )
         )
-        assert take_payment_response.reference == "pay-o1"
-        assert take_payment_response.cents == 750
+        assert take_payment_response.outcome is relays.TakePaymentOutcome.TAKEN
+        assert take_payment_response.payments[0].reference == "pay-o1"
+        assert take_payment_response.payments[0].cents == 750
 
-    def test_a_domain_error_from_the_purchase_actions_ends_the_invocation_terminally(self) -> None:
-        with pytest.raises(restate.TerminalError) as excinfo:
-            asyncio.run(
-                runtimes.RestateOrderRuntime(
-                    FakeOrderingApplicationClient(), FakeRefusingPurchaseApplicationClient()
-                ).take_payment_handler(
-                    typing.cast(restate.Context, None),
-                    relays.TakePaymentRequest(order_id="o1", cents=750),
-                )
-            )
-        assert excinfo.value.status_code == 409
-
-    def test_the_purchase_handler_runs_the_order_as_a_child_over_this_invocation(self) -> None:
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        purchase_orchestrator_response = asyncio.run(
+    def test_a_declined_charge_ends_the_action_as_an_outcome_not_an_error(self) -> None:
+        take_payment_response = asyncio.run(
             runtimes.RestateOrderRuntime(
-                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-            ).purchase_orchestrator_handler(
+                FakeOrderingApplicationClient(), FakeDecliningPurchaseApplicationClient()
+            ).take_payment_handler(typing.cast(restate.Context, None), take_payment_request())
+        )
+        assert take_payment_response.outcome is relays.TakePaymentOutcome.DECLINED
+        assert take_payment_response.payments == ()
+
+    def test_the_pay_for_order_handler_confirms_the_order_as_a_child_of_this_invocation(
+        self,
+    ) -> None:
+        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
+        pay_for_order_response = asyncio.run(
+            restate_order_runtime().pay_for_order_handler(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
-                purchase_orchestrator_request(order_id="o9"),
+                pay_for_order_request(order_id="o9"),
             )
         )
         assert fake_restate_workflow_context.child_keys == ["o9"]
-        assert purchase_orchestrator_response.order_id == "o9"
-        assert purchase_orchestrator_response.total_cents == 500
-        assert purchase_orchestrator_response.payment_reference == "pay-o9"
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAID
+        assert pay_for_order_response.order_id == "o9"
+        assert pay_for_order_response.purchases[0].total_cents == 500
+        assert pay_for_order_response.purchases[0].payment_reference == "pay-o9"
 
-    def test_a_refused_child_order_ends_the_purchase_terminally_with_its_status(self) -> None:
-        with pytest.raises(restate.TerminalError) as excinfo:
-            asyncio.run(
-                runtimes.RestateOrderRuntime(
-                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-                ).purchase_orchestrator_handler(
-                    typing.cast(
-                        restate.WorkflowContext, FakeRestateWorkflowContext(refusal="no such sku")
-                    ),
-                    purchase_orchestrator_request(),
-                )
+    def test_an_unconfirmed_child_order_ends_the_purchase_as_that_outcome(self) -> None:
+        pay_for_order_response = asyncio.run(
+            restate_order_runtime().pay_for_order_handler(
+                typing.cast(
+                    restate.WorkflowContext, FakeRestateWorkflowContext(unpriced=True)
+                ),
+                pay_for_order_request(),
             )
-        assert excinfo.value.status_code == 404
+        )
+        assert (
+            pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
+        )
+        assert pay_for_order_response.reasons == ("no price for sku 'nope'",)
+
+    def test_a_declined_payment_ends_the_purchase_as_that_outcome(self) -> None:
+        pay_for_order_response = asyncio.run(
+            restate_order_runtime().pay_for_order_handler(
+                typing.cast(
+                    restate.WorkflowContext, FakeRestateWorkflowContext(declining=True)
+                ),
+                pay_for_order_request(),
+            )
+        )
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAYMENT_DECLINED
+        assert pay_for_order_response.reasons == ("the processor declined the charge",)
 
     def test_the_price_product_handler_hands_the_request_to_the_application_client(self) -> None:
         price_product_response = asyncio.run(
-            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()).price_product_handler(
+            restate_order_runtime().price_product_handler(
                 typing.cast(restate.Context, None), relays.PriceProductRequest(sku="gadget")
             )
         )
-        assert price_product_response.cents == 250
+        assert price_product_response.prices[0].cents == 250
 
-    def test_a_domain_error_from_the_actions_ends_the_invocation_terminally(self) -> None:
-        with pytest.raises(restate.TerminalError) as excinfo:
-            asyncio.run(
-                runtimes.RestateOrderRuntime(
-                    FakeRefusingOrderingApplicationClient(), FakePurchaseApplicationClient()
-                ).price_product_handler(
-                    typing.cast(restate.Context, None), relays.PriceProductRequest(sku="nothing")
-                )
-            )
-        assert excinfo.value.status_code == 404
-
-    def test_the_orchestrator_handler_runs_the_orchestrator_over_this_invocation(self) -> None:
-        order_orchestrator_response = asyncio.run(
-            runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient()).order_orchestrator_handler(
-                typing.cast(restate.WorkflowContext, FakeRestateWorkflowContext()),
-                order_orchestrator_request(quantity=3),
+    def test_an_unknown_sku_ends_the_action_as_an_outcome_not_an_error(self) -> None:
+        price_product_response = asyncio.run(
+            runtimes.RestateOrderRuntime(
+                FakeUnpricedOrderingApplicationClient(), FakePurchaseApplicationClient()
+            ).price_product_handler(
+                typing.cast(restate.Context, None), relays.PriceProductRequest(sku="nothing")
             )
         )
-        assert order_orchestrator_response.order_id == "o1"
-        assert order_orchestrator_response.total_cents == 750
+        assert price_product_response.outcome is relays.PriceProductOutcome.PRICE_NOT_FOUND
+        assert price_product_response.reasons == ("no price for sku 'nothing'",)
 
-    def test_a_refused_action_ends_the_workflow_terminally_with_its_status(self) -> None:
-        with pytest.raises(restate.TerminalError) as excinfo:
-            asyncio.run(
-                runtimes.RestateOrderRuntime(
-                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-                ).order_orchestrator_handler(
-                    typing.cast(
-                        restate.WorkflowContext, FakeRestateWorkflowContext(refusal="no such sku")
-                    ),
-                    order_orchestrator_request(),
-                )
+    def test_the_confirm_order_handler_runs_the_orchestrator_over_this_invocation(self) -> None:
+        confirm_order_response = asyncio.run(
+            restate_order_runtime().confirm_order_handler(
+                typing.cast(restate.WorkflowContext, FakeRestateWorkflowContext()),
+                confirm_order_request(quantity=3),
             )
-        assert excinfo.value.status_code == 404
+        )
+        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
+        assert confirm_order_response.order_id == "o1"
+        assert confirm_order_response.confirmed_orders[0].total_cents == 750
+
+    def test_an_unpriced_action_ends_the_workflow_as_that_outcome(self) -> None:
+        confirm_order_response = asyncio.run(
+            restate_order_runtime().confirm_order_handler(
+                typing.cast(
+                    restate.WorkflowContext, FakeRestateWorkflowContext(unpriced=True)
+                ),
+                confirm_order_request(sku="nothing"),
+            )
+        )
+        assert (
+            confirm_order_response.outcome
+            is relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND
+        )
+        assert confirm_order_response.reasons == ("no price for sku 'nothing'",)
 
 
 class TestRestateSerdes:
 
-    def test_each_shim_writes_what_its_relay_snapshot_writes(self) -> None:
+    def test_each_shim_writes_what_its_relay_snapshot_writes_and_reads_it_back(self) -> None:
         price_product_request = relays.PriceProductRequest(sku="widget")
-        price_product_response = relays.PriceProductResponse(cents=250)
-        order_orchestrator_response = relays.OrderOrchestratorResponse(order_id="o1", total_cents=500)
-        assert runtimes.RestateOrderOrchestratorRequestSerde().serialize(
-            order_orchestrator_request()
-        ) == relays.OrderOrchestratorRequestSnapshot().serialize(order_orchestrator_request())
-        assert runtimes.RestateOrderOrchestratorResponseSerde().serialize(
-            order_orchestrator_response
-        ) == relays.OrderOrchestratorResponseSnapshot().serialize(order_orchestrator_response)
-        assert runtimes.RestatePriceProductRequestSerde().serialize(
-            price_product_request
-        ) == relays.PriceProductRequestSnapshot().serialize(price_product_request)
-        assert runtimes.RestatePriceProductResponseSerde().serialize(
-            price_product_response
-        ) == relays.PriceProductResponseSnapshot().serialize(price_product_response)
-
-    def test_each_shim_reads_back_what_it_wrote(self) -> None:
-        price_product_request = relays.PriceProductRequest(sku="widget")
-        price_product_response = relays.PriceProductResponse(cents=250)
-        order_orchestrator_response = relays.OrderOrchestratorResponse(order_id="o1", total_cents=500)
+        price_product_response = relays.PriceProductResponse(
+            outcome=relays.PriceProductOutcome.PRICED,
+            prices=(relays.Price(cents=250),),
+            reasons=(),
+        )
+        confirm_order_response = relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id="o1",
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=500),),
+            reasons=(),
+        )
         restate_price_product_request_serde = runtimes.RestatePriceProductRequestSerde()
         restate_price_product_response_serde = runtimes.RestatePriceProductResponseSerde()
-        restate_order_orchestrator_response_serde = runtimes.RestateOrderOrchestratorResponseSerde()
+        restate_confirm_order_response_serde = runtimes.RestateConfirmOrderResponseSerde()
+        assert runtimes.RestateConfirmOrderRequestSerde().serialize(
+            confirm_order_request()
+        ) == relays.ConfirmOrderRequestSnapshot().serialize(confirm_order_request())
+        assert restate_confirm_order_response_serde.serialize(
+            confirm_order_response
+        ) == relays.ConfirmOrderResponseSnapshot().serialize(confirm_order_response)
+        assert restate_price_product_request_serde.serialize(
+            price_product_request
+        ) == relays.PriceProductRequestSnapshot().serialize(price_product_request)
+        assert restate_price_product_response_serde.serialize(
+            price_product_response
+        ) == relays.PriceProductResponseSnapshot().serialize(price_product_response)
         assert restate_price_product_request_serde.deserialize(
             restate_price_product_request_serde.serialize(price_product_request)
         ) == price_product_request
         assert restate_price_product_response_serde.deserialize(
             restate_price_product_response_serde.serialize(price_product_response)
         ) == price_product_response
-        assert restate_order_orchestrator_response_serde.deserialize(
-            restate_order_orchestrator_response_serde.serialize(order_orchestrator_response)
-        ) == order_orchestrator_response
+        assert restate_confirm_order_response_serde.deserialize(
+            restate_confirm_order_response_serde.serialize(confirm_order_response)
+        ) == confirm_order_response
 
     def test_each_purchase_shim_writes_what_its_relay_snapshot_writes_and_reads_it_back(self) -> None:
-        take_payment_request = relays.TakePaymentRequest(order_id="o1", cents=500)
-        take_payment_response = relays.TakePaymentResponse(order_id="o1", reference="pay-o1", cents=500)
-        purchase_orchestrator_response = relays.PurchaseOrchestratorResponse(
-            order_id="o1", total_cents=500, payment_reference="pay-o1"
+        take_payment_response = relays.TakePaymentResponse(
+            outcome=relays.TakePaymentOutcome.TAKEN,
+            order_id="o1",
+            payments=(relays.Payment(reference="pay-o1", cents=500),),
+            reasons=(),
         )
-        restate_purchase_orchestrator_request_serde = runtimes.RestatePurchaseOrchestratorRequestSerde()
-        restate_purchase_orchestrator_response_serde = runtimes.RestatePurchaseOrchestratorResponseSerde()
+        pay_for_order_response = relays.PayForOrderResponse(
+            outcome=relays.PayForOrderOutcome.PAID,
+            order_id="o1",
+            purchases=(relays.Purchase(total_cents=500, payment_reference="pay-o1"),),
+            reasons=(),
+        )
+        restate_pay_for_order_request_serde = runtimes.RestatePayForOrderRequestSerde()
+        restate_pay_for_order_response_serde = runtimes.RestatePayForOrderResponseSerde()
         restate_take_payment_request_serde = runtimes.RestateTakePaymentRequestSerde()
         restate_take_payment_response_serde = runtimes.RestateTakePaymentResponseSerde()
-        assert restate_purchase_orchestrator_request_serde.serialize(
-            purchase_orchestrator_request()
-        ) == relays.PurchaseOrchestratorRequestSnapshot().serialize(purchase_orchestrator_request())
-        assert restate_purchase_orchestrator_response_serde.serialize(
-            purchase_orchestrator_response
-        ) == relays.PurchaseOrchestratorResponseSnapshot().serialize(purchase_orchestrator_response)
+        assert restate_pay_for_order_request_serde.serialize(
+            pay_for_order_request()
+        ) == relays.PayForOrderRequestSnapshot().serialize(pay_for_order_request())
+        assert restate_pay_for_order_response_serde.serialize(
+            pay_for_order_response
+        ) == relays.PayForOrderResponseSnapshot().serialize(pay_for_order_response)
         assert restate_take_payment_request_serde.serialize(
-            take_payment_request
-        ) == relays.TakePaymentRequestSnapshot().serialize(take_payment_request)
+            take_payment_request()
+        ) == relays.TakePaymentRequestSnapshot().serialize(take_payment_request())
         assert restate_take_payment_response_serde.serialize(
             take_payment_response
         ) == relays.TakePaymentResponseSnapshot().serialize(take_payment_response)
-        assert restate_purchase_orchestrator_response_serde.deserialize(
-            restate_purchase_orchestrator_response_serde.serialize(purchase_orchestrator_response)
-        ) == purchase_orchestrator_response
-        back = restate_purchase_orchestrator_request_serde.deserialize(
-            restate_purchase_orchestrator_request_serde.serialize(
-                purchase_orchestrator_request(order_id="o7", sku="gadget", quantity=3)
+        assert restate_pay_for_order_response_serde.deserialize(
+            restate_pay_for_order_response_serde.serialize(pay_for_order_response)
+        ) == pay_for_order_response
+        back = restate_pay_for_order_request_serde.deserialize(
+            restate_pay_for_order_request_serde.serialize(
+                pay_for_order_request(order_id="o7", sku="gadget", quantity=3)
             )
         )
         assert back is not None
@@ -284,23 +366,41 @@ class TestRestateSerdes:
         assert back.order.sku == domain.Sku("gadget")
         assert back.order.quantity == domain.Quantity(3)
         assert restate_take_payment_request_serde.deserialize(
-            restate_take_payment_request_serde.serialize(take_payment_request)
-        ) == take_payment_request
+            restate_take_payment_request_serde.serialize(take_payment_request())
+        ) == take_payment_request()
         assert restate_take_payment_response_serde.deserialize(
             restate_take_payment_response_serde.serialize(take_payment_response)
         ) == take_payment_response
 
-    def test_no_message_writes_an_empty_body_and_an_empty_body_is_refused_on_every_shim(self) -> None:
+    def test_no_message_writes_an_empty_body_and_an_empty_body_is_terminal_on_every_shim(
+        self,
+    ) -> None:
         for serde in (
-            runtimes.RestateOrderOrchestratorRequestSerde(),
-            runtimes.RestateOrderOrchestratorResponseSerde(),
+            runtimes.RestateConfirmOrderRequestSerde(),
+            runtimes.RestateConfirmOrderResponseSerde(),
             runtimes.RestatePriceProductRequestSerde(),
             runtimes.RestatePriceProductResponseSerde(),
-            runtimes.RestatePurchaseOrchestratorRequestSerde(),
-            runtimes.RestatePurchaseOrchestratorResponseSerde(),
+            runtimes.RestatePayForOrderRequestSerde(),
+            runtimes.RestatePayForOrderResponseSerde(),
             runtimes.RestateTakePaymentRequestSerde(),
             runtimes.RestateTakePaymentResponseSerde(),
         ):
             assert serde.serialize(None) == b""
-            with pytest.raises(ports.EngineRejected):
+            with pytest.raises(restate.TerminalError) as excinfo:
                 serde.deserialize(b"")
+            assert excinfo.value.status_code == 400
+
+    def test_a_body_the_snapshot_cannot_read_is_terminal_on_every_shim(self) -> None:
+        for serde in (
+            runtimes.RestateConfirmOrderRequestSerde(),
+            runtimes.RestateConfirmOrderResponseSerde(),
+            runtimes.RestatePriceProductRequestSerde(),
+            runtimes.RestatePriceProductResponseSerde(),
+            runtimes.RestatePayForOrderRequestSerde(),
+            runtimes.RestatePayForOrderResponseSerde(),
+            runtimes.RestateTakePaymentRequestSerde(),
+            runtimes.RestateTakePaymentResponseSerde(),
+        ):
+            with pytest.raises(restate.TerminalError) as excinfo:
+                serde.deserialize(b"<html>not a message</html>")
+            assert excinfo.value.status_code == 400

@@ -25,14 +25,16 @@ class Handler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.OrderRejected():
                     return protocol.HttpResponse.problem(422, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.message)
-                case client.Conflict():
+                case client.ProductPriceNotFound():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.OrderNotConfirmed():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.PaymentDeclined():
                     return protocol.HttpResponse.problem(409, error.message)
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable")
+                case client.OrderAlreadyStarted():
+                    return protocol.HttpResponse.problem(409, error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse(
@@ -50,14 +52,16 @@ class Handler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.OrderRejected():
                     return protocol.HttpResponse.problem(422, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.message)
-                case client.Conflict():
+                case client.ProductPriceNotFound():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.OrderNotConfirmed():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.PaymentDeclined():
                     return protocol.HttpResponse.problem(409, error.message)
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable")
+                case client.OrderAlreadyStarted():
+                    return protocol.HttpResponse.problem(409, error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse(
@@ -70,34 +74,37 @@ class Handler(ts.Handler):
             ).encode(),
         )
 
-    async def purchase(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+    async def pay_for_order(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
         try:
-            purchase_response = await self._ordering_client.purchase(
-                client.PurchaseRequest(
+            pay_for_order_response = await self._ordering_client.pay_for_order(
+                client.PayForOrderRequest(
                     order_id=http_request.text("order_id"),
                     sku=http_request.text("sku"),
                     quantity=http_request.integer("quantity"),
+                    payment_method=http_request.text("payment_method"),
                 )
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.OrderRejected():
                     return protocol.HttpResponse.problem(422, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.message)
-                case client.Conflict():
+                case client.ProductPriceNotFound():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.OrderNotConfirmed():
+                    return protocol.HttpResponse.problem(422, error.message)
+                case client.PaymentDeclined():
                     return protocol.HttpResponse.problem(409, error.message)
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable")
+                case client.OrderAlreadyStarted():
+                    return protocol.HttpResponse.problem(409, error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse(
             status_code=200,
             body=json.dumps(
                 {
-                    "order_id": purchase_response.order_id,
-                    "total_cents": purchase_response.total_cents,
-                    "payment_reference": purchase_response.payment_reference,
+                    "order_id": pay_for_order_response.order_id,
+                    "total_cents": pay_for_order_response.total_cents,
+                    "payment_reference": pay_for_order_response.payment_reference,
                 }
             ).encode(),
         )

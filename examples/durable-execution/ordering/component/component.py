@@ -44,8 +44,10 @@ class Ordering(ts.Component):
         ) -> client.PlaceOrderResponse:
             return await self._order_service.place_order(place_order_request)
 
-        async def purchase(self, purchase_request: client.PurchaseRequest) -> client.PurchaseResponse:
-            return await self._purchase_service.purchase(purchase_request)
+        async def pay_for_order(
+            self, pay_for_order_request: client.PayForOrderRequest
+        ) -> client.PayForOrderResponse:
+            return await self._purchase_service.pay_for_order(pay_for_order_request)
 
     def __init__(self, config: Config) -> None:
         self._memory_product_catalog_repository = repositories.MemoryProductCatalogRepository()

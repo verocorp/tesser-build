@@ -24,7 +24,7 @@ class TestHttpHost:
         try:
             discover = urllib_request.Request(
                 f"http://127.0.0.1:{port}/restate/discover",
-                headers={"Accept": "application/vnd.restate.endpointmanifest.v2+json"},
+                headers={"Accept": "application/vnd.restate.endpointmanifest.v4+json"},
             )
             manifest: dict[str, object] = {}
             for _ in range(100):
@@ -106,7 +106,7 @@ class TestHttpHost:
             except subprocess.TimeoutExpired:
                 host.kill()
                 host.wait()
-        assert answers == [400, 422, 503]
+        assert answers == [400, 422, 500]
 
     def test_the_orders_route_answers_by_the_failure_it_meets(self) -> None:
         with socket.socket() as probe:
@@ -150,7 +150,7 @@ class TestHttpHost:
             except subprocess.TimeoutExpired:
                 host.kill()
                 host.wait()
-        assert answers == [400, 422, 503]
+        assert answers == [400, 422, 500]
 
     def test_the_purchases_route_answers_by_the_failure_it_meets(self) -> None:
         with socket.socket() as probe:
@@ -169,8 +169,8 @@ class TestHttpHost:
         try:
             for body in (
                 b'{"order_id": "o1"}',
-                b'{"order_id": "o1", "sku": "gadget", "quantity": 0}',
-                b'{"order_id": "o1", "sku": "gadget", "quantity": 2}',
+                b'{"order_id": "o1", "sku": "gadget", "quantity": 0, "payment_method": "card-4242"}',
+                b'{"order_id": "o1", "sku": "gadget", "quantity": 2, "payment_method": "card-4242"}',
             ):
                 order = urllib_request.Request(
                     f"http://127.0.0.1:{port}/purchases",
@@ -194,4 +194,4 @@ class TestHttpHost:
             except subprocess.TimeoutExpired:
                 host.kill()
                 host.wait()
-        assert answers == [400, 422, 503]
+        assert answers == [400, 422, 500]
