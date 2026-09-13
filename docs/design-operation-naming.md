@@ -31,7 +31,10 @@ no verb, a response is named for what it is) is assumed throughout.
    says nothing about what the act is, an orchestrator may carry several
    operations that a pattern word could never name, and `run` is the caller's
    calling-mode word. `OrderOrchestrator.confirm_order`, not
-   `OrderOrchestrator.run`.
+   `OrderOrchestrator.run`. This is a 2026-09-13 ruling that extends the
+   2026-09-06 norm: that norm took the verb off handlers and responses but
+   its own scratch note still wrote `OrderOrchestrator.run`, so the ban on
+   the orchestrator's method is new here, not something the norm stated.
 
 3. **Across a relay, one operation, one name.** The relay method, the runner
    that implements it, the runtime handler, and the orchestrator or action
@@ -55,8 +58,11 @@ no verb, a response is named for what it is) is assumed throughout.
    is the SDK's decorated function, engine-specific, and a bare
    `price_product` on a runtime would read as the application method it
    forwards to. Two workflows in one runtime are two differently named
-   functions; nothing is aliased to a name it did not carry. A handler is
-   invoked only by the engine. Our code references it for its name.
+   functions; nothing is aliased to a name it did not carry. In production
+   a handler is invoked by the engine: the runners pass the decorated
+   function to `workflow_call`, `workflow_send`, or `ctx.service_call`, and
+   the SDK reads the service name, the handler name, and the serdes off it.
+   Tests call the handlers directly, which the SDK's wrapper allows.
 
 ## Messages and outcomes
 
@@ -73,7 +79,8 @@ no verb, a response is named for what it is) is assumed throughout.
 
 8. **An outcome member reads as a sentence after the act.** "Confirming the
    order: confirmed, the product price was not found, already started." A
-   member is one way the act can end that the caller acts on differently. Two
+   member is one way the act can end that the caller acts on differently. A
+   test that follows from that, proposed here and not yet ruled on: two
    members the caller handles identically are one member, and their
    difference is data on the response. The kinds seen so far, a catalog and
    not a closed set: the act done, sometimes in more than one way
@@ -89,8 +96,10 @@ no verb, a response is named for what it is) is assumed throughout.
    down. The deeper reason travels as data on the response, so the caller
    can still be told, and the parent's enum stays closed over its own act:
    a new reason in `ConfirmOrderOutcome` does not touch
-   `PayForOrderOutcome`. A parent that compensates keys on which step
-   stopped, never why, so this is also the shape compensation needs.
+   `PayForOrderOutcome`. A hypothesis for the compensation scenario, not a
+   ruling: a parent that undoes the steps that ran would key on which step
+   stopped, which is the shape this naming gives it. The purchase today has
+   no compensation, so that scenario is where it gets tested.
 
 10. **Outcome and state are different things.** An outcome is an act-noun
     with result members, matched once and never stored. A state is an
@@ -138,8 +147,10 @@ situations.
     second mapping, never a change to the situation. The word never implies
     the status: `ProductPriceNotFound` is 422 on `POST /purchases`, where
     the body named an unknown product, and would be 404 on a `GET` for that
-    product's price. The route decides. Everything else reaching the host is
-    a fault and takes the host's catch-all to 500. Today each route repeats
+    product's price. The route decides. A malformed request is the host's
+    own category, `protocol.BadRequest` to 400, decided before the client is
+    reached. Everything else reaching the host is a fault and takes the
+    host's catch-all to 500. Today each route repeats
     the match; that duplication is accepted and out of scope here.
 
 ## Errors
@@ -197,8 +208,9 @@ and `run`, aliased to `purchase_orchestrator_handler` and
 `OrderOrchestratorRequest`; the client's bare `purchase`; the port's bare
 `charge`; `Priced.FOUND / MISSING`; and the error chain
 `EngineRejected` / `EngineMissing` / `EngineConflict` / `EngineUnavailable`
-reconstructed from status codes in three runners, raised as `TerminalError`
-in four handlers, and caught in eight `except` arms across two services.
+reconstructed from status codes in five runners (two from ingress HTTP
+statuses, three from `TerminalError` statuses), raised as `TerminalError`
+in four handlers, and caught in twelve `except` arms across two services.
 
 ## Names that were tried and why they failed
 
@@ -212,7 +224,7 @@ Kept so the next reader does not re-derive them.
   member says nothing twice or contradicts itself.
 - `OrderPricing` / `OrderPayment` as orchestrator classes with a fixed
   `run`: the act is a noun, but moving it to the class keeps `run` on the
-  receiving end, which the calling-mode norm forbids.
+  receiving end, which rule 2 rejects for the reasons given there.
 - `settle_order` for the parent: no one in this domain settles an order; a
   word invented to give the seller's side its own term is rule 1's drift.
 - `SKU_UNPRICED`: names a state of a key, and the reader must work out why
@@ -226,7 +238,17 @@ Kept so the next reader does not re-derive them.
 
 ## What carries each rule
 
-Nothing here is enforced today. Which layer would carry each:
+Some of this is enforced today, and the line matters for scoping the
+enactment. Already enforced: `TB084` requires a domain outcome's members to
+be `enum.auto()`, forbids holding one on a field, and requires every match
+on one to close on `assert_never` (the domain half of 8 and 10). `TB052`'s
+placement keeps error declarations out of relay modules and puts
+application errors in `application/ports/`, so the relay half of 7 holds by
+placement, but ports themselves are allowed a `port_error` today, so the
+port half of 7 is a reversal, not a gap. `TB081` checks that an operation
+takes one `ts.Request` and returns one `ts.Response`, and `TB085` derives a
+local's name from its class, but neither derives a message's name from the
+operation, so 6 is unenforced. Which layer would carry the rest:
 
 - **tessercheck** can carry the mechanical halves: an operation name has at
   least two segments (1); an orchestrator method is not `run` (2); the relay
