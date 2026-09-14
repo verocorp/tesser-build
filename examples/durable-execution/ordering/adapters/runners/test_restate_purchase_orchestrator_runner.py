@@ -174,6 +174,7 @@ class TestRestatePurchaseOrchestratorRunner:
     def test_every_other_refusal_is_a_fault(self) -> None:
         for answer, status_line, status_code in (
             (b'{"code":409,"message":"cancelled"}', b"HTTP/1.1 409 Conflict", 409),
+            (b"conflict, but not as json", b"HTTP/1.1 409 Conflict", 409),
             (b'{"code":404,"message":"no price for sku \'nope\'"}', b"HTTP/1.1 404 Not Found", 404),
             (
                 b'{"code":422,"message":"an order is for at least one unit"}',

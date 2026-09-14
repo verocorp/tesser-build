@@ -307,6 +307,21 @@ class TestRestateOrderOrchestratorRunnerRunning:
                 fake_restate_ingress.close()
             assert excinfo.value.status_code == 400
 
+    def test_a_conflict_body_that_is_not_json_is_a_fault(self) -> None:
+        fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
+            b"conflict, but not as json", b"HTTP/1.1 409 Conflict"
+        )
+        fake_restate_ingress.start()
+        try:
+            with pytest.raises(restate.HttpError):
+                asyncio.run(
+                    runners.RestateOrderOrchestratorRunner(
+                        fake_restate_ingress.base_url, restate_order_runtime()
+                    ).run_confirm_order(confirm_order_request())
+                )
+        finally:
+            fake_restate_ingress.close()
+
     def test_a_conflict_body_nested_past_the_decoder_is_a_fault(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
             b"[" * 10000 + b"]" * 10000, b"HTTP/1.1 409 Conflict"
