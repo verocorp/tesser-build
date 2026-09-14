@@ -5,6 +5,38 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.6.0] - 2026-09-14
+
+A context's errors are now named for what happened. The status categories
+that stood in for situations are gone from every example tree, and the
+analyzer refuses them.
+
+### Added
+- **TB085: a context error is not named for a status category.** A
+  `ts.Error` in a client module named `Missing`, `Conflict`, `Unavailable`,
+  `Unreadable`, or a bare `Rejected` is a finding. The check reads the whole
+  name, so `OrderRejected` stands. It fired on 23 declarations across five
+  trees before this change.
+
+### Changed
+- **A port declares no error.** The placement row that admitted a
+  `port_error` in `application/ports/` is gone, and `tesser.application` no
+  longer re-exports `Error`, so a port's `ts.Error` is a TB052 finding. It
+  fired on 9 port modules.
+- **errorspy, python-app, asyncpg, and minimal speak situations.**
+  `Unavailable`, `Unreadable`, every port `*Unavailable`, and the service
+  and gateway translations between them are gone; a store or peer that
+  fails is a fault the host answers with 500. `Missing` became
+  `CampaignNotFound`, `LinkNotFound`, or `WidgetNotFound`; `Conflict` became
+  `SlugTaken`, `TargetBlocked`, or `WidgetExists`; a bare `Rejected` became
+  `CampaignRejected`, `TargetRejected`, `WidgetRejected`, or `KeyRejected`.
+  errorspy's two aggregate steps that refuse for more than one reason raise
+  `LinkNotAdded` and `LinkNotDeactivated`, each carrying the domain's code.
+- **tessercheck-py's `Rejected` is `RulebookNotRendered`.** It tells whoever
+  edits `checks.py` which rule the rulebook cannot read, carrying the
+  domain's code. Only the `rules` handler catches it; the check, mark, and
+  rename handlers caught an error their calls never raise, and no longer do.
+
 ## [0.1.5.0] - 2026-09-14
 
 Two different things in a context now never share a name, whatever kind

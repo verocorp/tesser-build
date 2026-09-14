@@ -332,10 +332,10 @@ Some of this is enforced today, and the line matters for scoping the
 enactment. Already enforced: `TB084` requires a domain outcome's members to
 be `enum.auto()`, forbids holding one on a field, and requires every match
 on one to close on `assert_never` (the domain half of 8 and 10). `TB052`'s
-placement keeps error declarations out of relay modules and puts
-application errors in `application/ports/`, so the relay half of 7 holds by
-placement, but ports themselves are allowed a `port_error` today, so the
-port half of 7 is a reversal, not a gap. `TB081` checks that an operation
+placement keeps error declarations out of relay modules and, since
+2026-09-14, out of ports modules too: the placement row that admitted a
+`port_error` is gone, so a `ts.Error` in a ports module declares no block,
+and both halves of 7 hold by placement. `TB081` checks that an operation
 takes one `ts.Request` and returns one `ts.Response`, and `TB085` derives a
 local's name from its class. Since 2026-09-14 `TB085` also carries the
 single-declaration halves of 1, 2, and 6: on every client, port,
@@ -356,7 +356,11 @@ while every context client method is on exactly one service. An
 enum-typed field on an operation's own response is its outcome: there is at
 most one, it is named `outcome`, and a data enum rides inside a record
 rather than on the response (Chris, 2026-09-14; whether every response must
-carry exactly one is an open follow-up). Which layer would carry the rest:
+carry exactly one is an open follow-up). Since the error-names change
+(2026-09-14) `TB085` also refuses a context error named for a status
+category, `Missing`, `Conflict`, `Unavailable`, `Unreadable`, or a bare
+`Rejected` (12); the check reads the whole name, so `OrderRejected` stands.
+Which layer would carry the rest:
 
 - **tessercheck** can carry the mechanical halves: an operation name has at
   least two segments (1); an orchestrator method is not `run` (2); the relay
@@ -376,7 +380,8 @@ carry exactly one is an open follow-up). Which layer would carry the rest:
   enum in a relay module, where placement rejects it today; recognise a
   `match` on a response's outcome field the way `TB084` recognises one on a
   `ts.Outcome`, since a class named `*Outcome` activates nothing; and
-  remove the `port_error` placement row rather than add a check. Where the
+  remove the `port_error` placement row rather than add a check (done
+  2026-09-14). Where the
   match sits: a port outcome in the action's mapper (`MapToPriceSpec` is
   the precedent), a relay outcome in the orchestrator or the service. A
   service method has one match. An orchestrator has one match per relay
@@ -501,3 +506,22 @@ comes back.
   `keep_widget`, since it keeps a widget rather than quoting one. Chris kept
   both words, and a service now runs the orchestrator:
   `AlphaService.create_widget` goes through `RegisterWidgetRelay`.
+- **A context error is named for what happened, never for a status
+  category (row 7).** The five remaining trees followed durable-execution.
+  `Unavailable`, `Unreadable`, and every port error are faults and are gone,
+  with the service and gateway translations that carried them; the host's
+  catch-all answers them. `Missing` became `CampaignNotFound`,
+  `LinkNotFound`, and `WidgetNotFound`. `Conflict` became `SlugTaken` (the
+  repository's `TAKEN` and the domain's `duplicate_slug` are one fact to the
+  caller), `TargetBlocked`, and `WidgetExists`. A bare `Rejected` became
+  `CampaignRejected`, `TargetRejected`, `WidgetRejected`, or `KeyRejected`.
+  tessercheck-py's `Rejected` became `RulebookNotRendered`, carrying the
+  domain's code: it tells whoever edits `checks.py` which rule the rulebook
+  cannot read, and that maintainer acts on it, so it is a situation.
+- **A step that can refuse for more than one reason is one situation that
+  carries the domain's code.** errorspy's `add_link` refuses with
+  `duplicate_slug` or `too_many_links` and its `deactivate_link` with
+  `link_missing` or `already_deactivated`; they became `LinkNotAdded` and
+  `LinkNotDeactivated`, named for the step that did not happen, because a
+  service cannot branch on a code string. A situation per reason waits on
+  the transitions returning an outcome.
