@@ -5,6 +5,7 @@ import typing
 import tesser.application as ts
 
 import alpha.application.ports as ports
+import alpha.application.relays as relays
 import alpha.client as client
 import alpha.domain as domain
 import tesser.errors as errors
@@ -46,11 +47,29 @@ class MapToAddPartResponse(ts.Mapper, client.AddPartResponse):
         super().__init__(name=str(widget.identity), standing=str(widget.standing))
 
 
+class MapToRegisterWidgetRequest(ts.Mapper, relays.RegisterWidgetRequest):
+
+    def __init__(self, create_widget_request: client.CreateWidgetRequest) -> None:
+        super().__init__(name=create_widget_request.name)
+
+
+class MapToCreateWidgetResponse(ts.Mapper, client.CreateWidgetResponse):
+
+    def __init__(self, register_widget_response: relays.RegisterWidgetResponse) -> None:
+        super().__init__(name=register_widget_response.name)
+
+
 class AlphaService(ts.ApplicationService):
 
-    def __init__(self, widget_repository: ports.WidgetRepository, beta_check: ports.BetaCheck) -> None:
+    def __init__(
+        self,
+        widget_repository: ports.WidgetRepository,
+        beta_check: ports.BetaCheck,
+        register_widget_relay: relays.RegisterWidgetRelay,
+    ) -> None:
         self._widget_repository = widget_repository
         self._beta_check = beta_check
+        self._register_widget_relay = register_widget_relay
 
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         try:
@@ -68,3 +87,9 @@ class AlphaService(ts.ApplicationService):
                 typing.assert_never(never)
         self._widget_repository.save_widget(MapToSaveWidgetRequest(widget))
         return MapToAddPartResponse(widget)
+
+    def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
+        register_widget_response = self._register_widget_relay.run_register_widget(
+            MapToRegisterWidgetRequest(create_widget_request)
+        )
+        return MapToCreateWidgetResponse(register_widget_response)

@@ -154,21 +154,21 @@ yet reach, and the names they found that were deferred rather than renamed:
   class mirrors its application client and services mirror the context
   client (TB081). The pairing reads names, not the registration binding, so
   the TB023 carve-out was not needed first.
-- [ ] **minimal's `RegisterWidgetRelay` has no caller.** Nothing holds it, so
-  `relays/__init__.py` cannot re-export it (TB042: a role `__init__`
-  re-exports only what a module outside the role reads). A service operation
-  that runs the orchestrator would give it one, at the cost of a new client
-  operation in minimal; the alternative is to rule that a relay's runner
-  counts as its reader.
-- [ ] **Confirm the uniqueness scope.** The check covers actions and
-  orchestrator operations in a context. A service's client word that
-  coincides with a workflow's (`PurchaseService.pay_for_order` and
-  `PurchaseOrchestrator.pay_for_order`) is left alone, on the reading that
-  the service is the same act seen through the client (rule 3). Taken as the
-  default, not ruled.
-- [ ] **Confirm minimal's words.** `keep_widget` (the action saves a kept
-  widget) and `register_widget` (the orchestrator's act) were taken as
-  defaults when Chris said `WidgetFlow` was poorly named.
+- [x] **minimal's `RegisterWidgetRelay` has a caller (2026-09-14, Chris: "do
+  the service that runs the orch").** `AlphaService.create_widget` runs
+  `WidgetOrchestrator.register_widget` through `InlineRegisterWidgetRelay`,
+  and `relays/__init__.py` re-exports the relay.
+- [ ] **Widen the uniqueness check to services?** Chris, 2026-09-14: "we
+  should expand to services no? and relays?" Services: a service operation
+  is a different act from the workflow it starts (different request and
+  response classes), so the rule reaches it; widened, it fires once today,
+  `PurchaseService.pay_for_order` against `PurchaseOrchestrator.pay_for_order`,
+  and one side needs a new word, and rule 3's "a fact about this domain, not
+  a rule" sentence goes. Relays: a relay method is its far side's operation
+  by rule 3, so it cannot join the same check; the separate check that fits
+  is that no two relays in a context carry one operation (fires 0).
+- [x] **minimal's words stand (2026-09-14, Chris: "your recs are fine").**
+  `keep_widget`, `register_widget`, and the client's `create_widget`.
 - [ ] **The TB023 carve-out for a runtime's nested handlers is still open.**
   The four `# tesser:debt TB023` markers on durable-execution's registration
   callbacks stand; the chain checks read those handlers without it.
