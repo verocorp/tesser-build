@@ -75,16 +75,16 @@ class TestClient:
                 client.PlaceOrderRequest(order_id="p1", sku="widget", quantity=2)
             )
         )
-        pay_for_order_response = asyncio.run(
-            ordering_client.pay_for_order(
-                client.PayForOrderRequest(
+        make_order_payment_response = asyncio.run(
+            ordering_client.make_order_payment(
+                client.MakeOrderPaymentRequest(
                     order_id="u1", sku="widget", quantity=2, payment_method="card-4242"
                 )
             )
         )
         assert submit_order_response.order_id == "s1"
         assert place_order_response.total_cents == 500
-        assert pay_for_order_response.payment_reference == "pay-o1"
+        assert make_order_payment_response.payment_reference == "pay-o1"
         assert fake_confirm_order_relay.started == ["s1"]
         assert fake_confirm_order_relay.ran == ["p1"]
         assert fake_pay_for_order_relay.ran == ["u1"]

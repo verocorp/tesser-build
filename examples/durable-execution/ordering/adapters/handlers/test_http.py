@@ -17,7 +17,7 @@ class FakeOrderingClient(client.OrderingClient):
     def __init__(self) -> None:
         self.submitted: list[client.SubmitOrderRequest] = []
         self.placed: list[client.PlaceOrderRequest] = []
-        self.paid: list[client.PayForOrderRequest] = []
+        self.paid: list[client.MakeOrderPaymentRequest] = []
 
     async def submit_order(
         self, submit_order_request: client.SubmitOrderRequest
@@ -33,14 +33,14 @@ class FakeOrderingClient(client.OrderingClient):
             order_id=place_order_request.order_id, total_cents=250 * place_order_request.quantity
         )
 
-    async def pay_for_order(
-        self, pay_for_order_request: client.PayForOrderRequest
-    ) -> client.PayForOrderResponse:
-        self.paid.append(pay_for_order_request)
-        return client.PayForOrderResponse(
-            order_id=pay_for_order_request.order_id,
-            total_cents=250 * pay_for_order_request.quantity,
-            payment_reference=f"pay-{pay_for_order_request.order_id}",
+    async def make_order_payment(
+        self, make_order_payment_request: client.MakeOrderPaymentRequest
+    ) -> client.MakeOrderPaymentResponse:
+        self.paid.append(make_order_payment_request)
+        return client.MakeOrderPaymentResponse(
+            order_id=make_order_payment_request.order_id,
+            total_cents=250 * make_order_payment_request.quantity,
+            payment_reference=f"pay-{make_order_payment_request.order_id}",
         )
 
 
@@ -60,9 +60,9 @@ class FakeRefusingOrderingClient(client.OrderingClient):
     ) -> client.PlaceOrderResponse:
         raise self.error
 
-    async def pay_for_order(
-        self, pay_for_order_request: client.PayForOrderRequest
-    ) -> client.PayForOrderResponse:
+    async def make_order_payment(
+        self, make_order_payment_request: client.MakeOrderPaymentRequest
+    ) -> client.MakeOrderPaymentResponse:
         raise self.error
 
 
@@ -81,7 +81,7 @@ class TestHandler:
     def test_paying_for_an_order_answers_with_its_id_total_and_payment_reference(self) -> None:
         handler = handlers.Handler(FakeOrderingClient())
         http_response = asyncio.run(
-            handler.pay_for_order(protocol.HttpRequest(body=purchase_body()))
+            handler.make_order_payment(protocol.HttpRequest(body=purchase_body()))
         )
         assert http_response.status_code == 200
         assert json.loads(http_response.body) == {
@@ -93,7 +93,7 @@ class TestHandler:
     def test_paying_carries_the_body_fields_to_the_client(self) -> None:
         fake_ordering_client = FakeOrderingClient()
         asyncio.run(
-            handlers.Handler(fake_ordering_client).pay_for_order(
+            handlers.Handler(fake_ordering_client).make_order_payment(
                 protocol.HttpRequest(body=purchase_body())
             )
         )
@@ -107,7 +107,7 @@ class TestHandler:
     def test_a_missing_payment_method_is_a_bad_request_when_paying(self) -> None:
         handler = handlers.Handler(FakeOrderingClient())
         with pytest.raises(protocol.BadRequest):
-            asyncio.run(handler.pay_for_order(protocol.HttpRequest(body=order_body())))
+            asyncio.run(handler.make_order_payment(protocol.HttpRequest(body=order_body())))
 
     def test_a_placed_order_answers_with_its_id_and_total(self) -> None:
         handler = handlers.Handler(FakeOrderingClient())
@@ -179,7 +179,7 @@ class TestHandler:
             FakeRefusingOrderingClient(client.OrderNotConfirmed("no price for sku 'nope'"))
         )
         http_response = asyncio.run(
-            handler.pay_for_order(protocol.HttpRequest(body=purchase_body()))
+            handler.make_order_payment(protocol.HttpRequest(body=purchase_body()))
         )
         assert http_response.status_code == 422
         assert json.loads(http_response.body) == {"detail": "no price for sku 'nope'"}
@@ -189,7 +189,7 @@ class TestHandler:
             FakeRefusingOrderingClient(client.PaymentDeclined("the processor declined the charge"))
         )
         http_response = asyncio.run(
-            handler.pay_for_order(protocol.HttpRequest(body=purchase_body()))
+            handler.make_order_payment(protocol.HttpRequest(body=purchase_body()))
         )
         assert http_response.status_code == 409
         assert json.loads(http_response.body) == {"detail": "the processor declined the charge"}

@@ -41,8 +41,8 @@ class TestOrderingContext:
         try:
             with pytest.raises(Exception) as excinfo:
                 asyncio.run(
-                    ordering.client.pay_for_order(
-                        client.PayForOrderRequest(
+                    ordering.client.make_order_payment(
+                        client.MakeOrderPaymentRequest(
                             order_id="o1", sku="widget", quantity=2, payment_method="card-4242"
                         )
                     )
