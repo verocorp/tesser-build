@@ -158,15 +158,15 @@ yet reach, and the names they found that were deferred rather than renamed:
   the service that runs the orch").** `AlphaService.create_widget` runs
   `WidgetOrchestrator.register_widget` through `InlineRegisterWidgetRelay`,
   and `relays/__init__.py` re-exports the relay.
-- [ ] **Widen the uniqueness check to services?** Chris, 2026-09-14: "we
-  should expand to services no? and relays?" Services: a service operation
-  is a different act from the workflow it starts (different request and
-  response classes), so the rule reaches it; widened, it fires once today,
-  `PurchaseService.pay_for_order` against `PurchaseOrchestrator.pay_for_order`,
-  and one side needs a new word, and rule 3's "a fact about this domain, not
-  a rule" sentence goes. Relays: a relay method is its far side's operation
-  by rule 3, so it cannot join the same check; the separate check that fits
-  is that no two relays in a context carry one operation (fires 0).
+- [x] **One uniqueness check across four kinds (2026-09-14, Chris).** No two
+  services, actions classes, orchestrators, or relays in a context share a
+  public method name; a relay's calling-mode prefix keeps it apart from its
+  far side. The one collision it found was renamed on the client side:
+  `pay_for_order` became `make_order_payment`, for now.
+- [ ] **"Submit" tentatively means a call that does not wait.** Chris,
+  2026-09-14. `submit_order` starts the confirm workflow and `place_order`
+  waits for it; nothing checks that a `submit_` operation calls a `start_`
+  relay method, and the word is not settled.
 - [x] **minimal's words stand (2026-09-14, Chris: "your recs are fine").**
   `keep_widget`, `register_widget`, and the client's `create_widget`.
 - [ ] **The TB023 carve-out for a runtime's nested handlers is still open.**

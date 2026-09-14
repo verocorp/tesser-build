@@ -41,14 +41,17 @@ no verb, a response is named for what it is) is assumed throughout.
    method it invokes are one operation seen from four places, so they carry
    one name. Across the client the rule does not hold: the client is a
    published language, decoupled from what runs behind it, and chooses the
-   caller's word. That the customer's `pay_for_order` and the workflow's
-   `pay_for_order` coincide is a fact about this domain, not a rule. The
+   caller's word, and it never borrows the workflow's: no two services,
+   actions classes, orchestrators, or relays in a context share a method
+   name, so the customer's `make_order_payment` and the workflow's
+   `pay_for_order` are two acts with two names. The
    relay itself is named for the one operation it carries, `ConfirmOrderRelay`,
    so a relay carries exactly one operation, and a runner is its engine's
    word, the side its call starts from, and the relay's class name:
    `RestateIngressConfirmOrderRelay` from outside any invocation,
-   `RestateInvocationConfirmOrderRelay` from inside one. Two different
-   operations behind relays never share a name.
+   `RestateInvocationConfirmOrderRelay` from inside one. A relay's methods
+   carry their calling mode, so `run_confirm_order` never collides with the
+   `confirm_order` it carries, and two relays carrying one operation do.
 
 4. **The calling-mode verb lives on the relay protocol and its runners.**
    `start_<operation>` accepts and returns; `run_<operation>` waits. The
@@ -252,7 +255,7 @@ Read top to bottom, each hop as the sentence it forms.
 
 | Hop | Operation | Sentence |
 |---|---|---|
-| Client, service | `pay_for_order(PayForOrderRequest) -> PayForOrderResponse` | the customer pays for the order |
+| Client, service | `make_order_payment(MakeOrderPaymentRequest) -> MakeOrderPaymentResponse` | the customer makes the order payment |
 | Parent relay, runner | `run_pay_for_order`, `PayForOrderRequest` carrying the `Order` | the workflow pays for the order, and the caller waits |
 | Parent handler | `pay_for_order`, exposed as `pay_for_order_handler`, registered `PurchaseOrchestrator/pay_for_order` | |
 | Parent orchestrator | `PurchaseOrchestrator.pay_for_order(PayForOrderRequest) -> PayForOrderResponse` | paying for the order |
@@ -282,8 +285,8 @@ The outcomes, one per act, every member as a sentence:
 - Charging the payment method: charged, or declined.
   `ChargePaymentMethodOutcome.CHARGED / DECLINED`
 
-The client raises situations rather than an outcome, so `pay_for_order` on
-the client has none. `Purchase` stays as the aggregate, an order paid for,
+The client raises situations rather than an outcome, so `make_order_payment`
+on the client has none. `Purchase` stays as the aggregate, an order paid for,
 the result of the act and not the act; `PurchaseService`,
 `PurchaseOrchestrator`, and `PurchaseActions` stay named for that thing.
 
@@ -345,8 +348,8 @@ wave (2026-09-14) it also carries 3, 4, and 5: a relay is `<Operation>Relay`
 and carries one operation; a runner ends in its relay's class name, offers
 exactly its relay's methods, and each reaches `<operation>_handler`; a
 runtime exposes every handler as `<operation>_handler`, registers it under
-the operation, and the handler invokes that operation; and no two actions or
-orchestrator operations in a context share a name. `TB081` carries the two
+the operation, and the handler invokes that operation; and no two services,
+actions classes, orchestrators, or relays in a context share a method name. `TB081` carries the two
 mirrors: an actions class offers exactly the calls of the application client
 in the module of its name, and every service method is on the context client
 while every context client method is on exactly one service. An
@@ -479,9 +482,13 @@ comes back.
   second implementation of one relay broke it. `RestateOrderOrchestratorChildRunner`
   was rejected too: "child" names the workflow being called, not the runner.
 - **Two different things never share a name.** This retires rule 5's
-  owner-qualified handler attribute. Taken as the default and not yet ruled:
-  the check covers actions and orchestrator operations, not a service whose
-  client word coincides with a workflow's, like `pay_for_order`.
+  owner-qualified handler attribute, and it is one check across four kinds:
+  no two services, actions classes, orchestrators, or relays in a context
+  share a public method name. A service's operation is a different act from
+  the workflow it starts, so the client's `pay_for_order` became
+  `make_order_payment`, for now. "Submit" tentatively means a call that does
+  not wait (`submit_order` starts the workflow, `place_order` waits for it),
+  which is why the waiting payment call is not `submit_order_payment`.
 - **The two mirrors.** An actions class and the application client in the
   module of its name offer the same calls, one protocol per actions class, so
   no composing class is needed there. The context client may sit in front of
@@ -491,5 +498,6 @@ comes back.
 - **minimal's orchestrator gets a relay.** `WidgetFlow` became
   `WidgetOrchestrator.register_widget`, carried by `RegisterWidgetRelay` and
   answering `RegisterWidgetResponse`, and the action it runs became
-  `keep_widget`, since it keeps a widget rather than quoting one. Taken as the
-  defaults, not ruled: the words `keep_widget` and `register_widget`.
+  `keep_widget`, since it keeps a widget rather than quoting one. Chris kept
+  both words, and a service now runs the orchestrator:
+  `AlphaService.create_widget` goes through `RegisterWidgetRelay`.

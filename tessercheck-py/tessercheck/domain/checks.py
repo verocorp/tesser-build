@@ -192,7 +192,7 @@ APPLICATION_ROLE: typing.Final[str] = "application"
 
 CONTEXT_CLIENT_ROLE: typing.Final[str] = "client"
 
-UNIQUE_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = ("actions", "orchestrator")
+UNIQUE_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = ("service", "actions", "orchestrator", "relay")
 
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
     {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime"}
@@ -11569,9 +11569,10 @@ class Module(ts.Entity):
                                 self._path,
                                 member.lineno,
                                 "TB085",
-                                f"{where}.{member.name} shares its name with {owner}; two "
-                                "different operations never share a name, because a handler, a "
-                                "runner, and a relay method each name exactly one of them",
+                                f"{where}.{member.name} shares its name with {owner}; no two "
+                                "services, actions classes, orchestrators, or relays in a context "
+                                "share a method name, because two different things never share a "
+                                "name",
                             ))
                         )
         return tuple(found)

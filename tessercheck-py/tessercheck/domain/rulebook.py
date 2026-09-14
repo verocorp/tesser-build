@@ -214,7 +214,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.runtime_handler_violations": "runtime class",
     "Module.actions_mirror_violations": "actions class or application client",
     "Module.service_mirror_violations": "service or context client method",
-    "Module.operation_unique_violations": "public actions or orchestrator method",
+    "Module.operation_unique_violations": "public service, actions, orchestrator, or relay method",
     "ClassDecl.valueobject_violations": "value object `__init__`",
     "ClassDecl.component_violations": "component class",
     "ClassDecl.mapper_violations": "mapper class",

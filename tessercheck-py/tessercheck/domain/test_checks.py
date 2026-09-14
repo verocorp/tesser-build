@@ -19093,7 +19093,7 @@ def test_every_service_method_is_on_the_context_client_and_on_one_service() -> N
     assert not any("ExtraService.ask_question is on no context client" in f for f in findings), findings
 
 
-def test_two_operations_behind_a_relay_never_share_a_name() -> None:
+def test_no_two_services_actions_orchestrators_or_relays_share_a_method_name() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -19185,19 +19185,63 @@ def test_two_operations_behind_a_relay_never_share_a_name() -> None:
                 "from shop.application.ports.settlements import SettlePriceResponse as SettlePriceResponse\n",
                 True,
             ),
+            (
+                "shop/application/relays/settle_price_relay.py",
+                "shop.application.relays.settle_price_relay",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SettlePriceRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SettlePriceResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SettlePriceRelay(ts.Relay, typing.Protocol):\n"
+                "    def run_settle_price(self, settle_price_request: SettlePriceRequest) -> SettlePriceResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/relays/settle_again.py",
+                "shop.application.relays.settle_again",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SettlePriceRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SettlePriceResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SettlePriceRelay(ts.Relay, typing.Protocol):\n"
+                "    def run_settle_price(self, settle_price_request: SettlePriceRequest) -> SettlePriceResponse: ...\n",
+                False,
+            ),
         ))).violations()
+    )
+    clause = (
+        "no two services, actions classes, orchestrators, or relays in a context share a method "
+        "name, because two different things never share a name"
     )
     assert any(
         "shop.application.pricing.Pricing.settle_price shares its name with "
-        "shop.application.orchestrators.settlement.Settlement; two different operations never "
-        "share a name, because a handler, a runner, and a relay method each name exactly one of "
-        "them" in f
+        "shop.application.orchestrators.settlement.Settlement; no two services, actions classes, "
+        "orchestrators, or relays in a context share a method name, because two different things "
+        "never share a name" in f
         for f in findings
     ), findings
     assert any(
         "shop.application.orchestrators.settlement.Settlement.settle_price shares its name with "
-        "shop.application.pricing.Pricing; two different operations never share a name" in f
+        f"shop.application.pricing.Pricing; {clause}" in f
         for f in findings
     ), findings
-    assert not any("SettleService.settle_price shares" in f for f in findings), findings
-    assert not any("shares its name with shop.application.settle" in f for f in findings), findings
+    assert any(
+        "shop.application.settle.SettleService.settle_price shares its name with "
+        f"shop.application.pricing.Pricing; {clause}" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.settle_price_relay.SettlePriceRelay.run_settle_price shares its "
+        f"name with shop.application.relays.settle_again.SettlePriceRelay; {clause}" in f
+        for f in findings
+    ), findings
+    assert not any("Pricing.settle_price shares its name with shop.application.relays" in f for f in findings), findings
+    assert not any("QuotePriceRelay.run_quote_price shares" in f for f in findings), findings

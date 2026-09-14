@@ -5,6 +5,29 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.5.0] - 2026-09-14
+
+Two different things in a context now never share a name, whatever kind
+they are: the customer's payment call and the workflow it starts have
+different words, and minimal's widget orchestrator is reached by a service.
+
+### Changed
+- **One uniqueness check across four kinds, under TB085.** No two services,
+  actions classes, orchestrators, or relays in a context share a public
+  method name. It replaces the actions-and-orchestrators check. A relay's
+  `start_` / `run_` prefix keeps it apart from the operation it carries, and
+  two relays carrying one operation now collide.
+- **durable-execution's client call is `make_order_payment`** (was
+  `pay_for_order`, the same word as the workflow it runs), with
+  `MakeOrderPaymentRequest` and `MakeOrderPaymentResponse`. The workflow side
+  keeps `pay_for_order`.
+
+### Added
+- **minimal's orchestrator has a caller.** `AlphaClient.create_widget` is
+  served by `AlphaService.create_widget`, which runs
+  `WidgetOrchestrator.register_widget` through `RegisterWidgetRelay`; the
+  relay is now re-exported.
+
 ## [0.1.4.0] - 2026-09-14
 
 One operation now carries one name the whole way across a relay: the relay
