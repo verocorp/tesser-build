@@ -5,13 +5,13 @@ import typing
 import tesser.context as ts
 
 
-class CheckRequest(ts.Request):
+class CheckKeyRequest(ts.Request):
 
     def __init__(self, key: str) -> None:
         self.key = key
 
 
-class CheckResponse(ts.Response):
+class CheckKeyResponse(ts.Response):
 
     def __init__(self, held: str) -> None:
         self.held = held
@@ -27,4 +27,4 @@ class Rejected(ts.Error):
 
 class BetaClient(ts.Client, typing.Protocol):
 
-    def check(self, check_request: CheckRequest) -> CheckResponse: ...
+    def check_key(self, check_key_request: CheckKeyRequest) -> CheckKeyResponse: ...

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.adapters as ts
 import restate
 import restate.serde as restate_serde
@@ -7,42 +9,44 @@ import restate.serde as restate_serde
 import ordering.adapters.runners as runners
 import ordering.application.client as client
 import ordering.application.orchestrators as orchestrators
-import ordering.application.ports as ports  # tesser:debt TB060
 import ordering.application.relays as relays
 
+_EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
+_RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
+    max_attempts=5, on_max_attempts="pause"
+)
 
-class RestateOrderOrchestratorRequestSerde(
-    ts.Serde, restate_serde.Serde[relays.OrderOrchestratorRequest]
-):
 
-    def serialize(
-        self, order_orchestrator_request: relays.OrderOrchestratorRequest | None
-    ) -> bytes:
-        if order_orchestrator_request is None:
+class RestateConfirmOrderRequestSerde(ts.Serde, restate_serde.Serde[relays.ConfirmOrderRequest]):
+
+    def serialize(self, confirm_order_request: relays.ConfirmOrderRequest | None) -> bytes:
+        if confirm_order_request is None:
             return b""
-        return relays.OrderOrchestratorRequestSnapshot().serialize(order_orchestrator_request)
+        return relays.ConfirmOrderRequestSnapshot().serialize(confirm_order_request)
 
-    def deserialize(self, buf: bytes) -> relays.OrderOrchestratorRequest | None:
+    def deserialize(self, buf: bytes) -> relays.ConfirmOrderRequest | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.OrderOrchestratorRequestSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.ConfirmOrderRequestSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
-class RestateOrderOrchestratorResponseSerde(
-    ts.Serde, restate_serde.Serde[relays.OrderOrchestratorResponse]
-):
+class RestateConfirmOrderResponseSerde(ts.Serde, restate_serde.Serde[relays.ConfirmOrderResponse]):
 
-    def serialize(
-        self, order_orchestrator_response: relays.OrderOrchestratorResponse | None
-    ) -> bytes:
-        if order_orchestrator_response is None:
+    def serialize(self, confirm_order_response: relays.ConfirmOrderResponse | None) -> bytes:
+        if confirm_order_response is None:
             return b""
-        return relays.OrderOrchestratorResponseSnapshot().serialize(order_orchestrator_response)
+        return relays.ConfirmOrderResponseSnapshot().serialize(confirm_order_response)
 
-    def deserialize(self, buf: bytes) -> relays.OrderOrchestratorResponse | None:
+    def deserialize(self, buf: bytes) -> relays.ConfirmOrderResponse | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.OrderOrchestratorResponseSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.ConfirmOrderResponseSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
 class RestatePriceProductRequestSerde(ts.Serde, restate_serde.Serde[relays.PriceProductRequest]):
@@ -54,13 +58,14 @@ class RestatePriceProductRequestSerde(ts.Serde, restate_serde.Serde[relays.Price
 
     def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.PriceProductRequestSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.PriceProductRequestSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
-class RestatePriceProductResponseSerde(
-    ts.Serde, restate_serde.Serde[relays.PriceProductResponse]
-):
+class RestatePriceProductResponseSerde(ts.Serde, restate_serde.Serde[relays.PriceProductResponse]):
 
     def serialize(self, price_product_response: relays.PriceProductResponse | None) -> bytes:
         if price_product_response is None:
@@ -69,44 +74,43 @@ class RestatePriceProductResponseSerde(
 
     def deserialize(self, buf: bytes) -> relays.PriceProductResponse | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.PriceProductResponseSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.PriceProductResponseSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
-class RestatePurchaseOrchestratorRequestSerde(
-    ts.Serde, restate_serde.Serde[relays.PurchaseOrchestratorRequest]
-):
+class RestatePayForOrderRequestSerde(ts.Serde, restate_serde.Serde[relays.PayForOrderRequest]):
 
-    def serialize(
-        self, purchase_orchestrator_request: relays.PurchaseOrchestratorRequest | None
-    ) -> bytes:
-        if purchase_orchestrator_request is None:
+    def serialize(self, pay_for_order_request: relays.PayForOrderRequest | None) -> bytes:
+        if pay_for_order_request is None:
             return b""
-        return relays.PurchaseOrchestratorRequestSnapshot().serialize(purchase_orchestrator_request)
+        return relays.PayForOrderRequestSnapshot().serialize(pay_for_order_request)
 
-    def deserialize(self, buf: bytes) -> relays.PurchaseOrchestratorRequest | None:
+    def deserialize(self, buf: bytes) -> relays.PayForOrderRequest | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.PurchaseOrchestratorRequestSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.PayForOrderRequestSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
-class RestatePurchaseOrchestratorResponseSerde(
-    ts.Serde, restate_serde.Serde[relays.PurchaseOrchestratorResponse]
-):
+class RestatePayForOrderResponseSerde(ts.Serde, restate_serde.Serde[relays.PayForOrderResponse]):
 
-    def serialize(
-        self, purchase_orchestrator_response: relays.PurchaseOrchestratorResponse | None
-    ) -> bytes:
-        if purchase_orchestrator_response is None:
+    def serialize(self, pay_for_order_response: relays.PayForOrderResponse | None) -> bytes:
+        if pay_for_order_response is None:
             return b""
-        return relays.PurchaseOrchestratorResponseSnapshot().serialize(
-            purchase_orchestrator_response
-        )
+        return relays.PayForOrderResponseSnapshot().serialize(pay_for_order_response)
 
-    def deserialize(self, buf: bytes) -> relays.PurchaseOrchestratorResponse | None:
+    def deserialize(self, buf: bytes) -> relays.PayForOrderResponse | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.PurchaseOrchestratorResponseSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.PayForOrderResponseSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
 class RestateTakePaymentRequestSerde(ts.Serde, restate_serde.Serde[relays.TakePaymentRequest]):
@@ -118,8 +122,11 @@ class RestateTakePaymentRequestSerde(ts.Serde, restate_serde.Serde[relays.TakePa
 
     def deserialize(self, buf: bytes) -> relays.TakePaymentRequest | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.TakePaymentRequestSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.TakePaymentRequestSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
 class RestateTakePaymentResponseSerde(ts.Serde, restate_serde.Serde[relays.TakePaymentResponse]):
@@ -131,8 +138,11 @@ class RestateTakePaymentResponseSerde(ts.Serde, restate_serde.Serde[relays.TakeP
 
     def deserialize(self, buf: bytes) -> relays.TakePaymentResponse | None:
         if not buf:
-            raise ports.EngineRejected("a message crosses the engine with a body")
-        return relays.TakePaymentResponseSnapshot().deserialize(buf)
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        try:  # tesser:debt TB082
+            return relays.TakePaymentResponseSnapshot().deserialize(buf)
+        except ValueError as value_error:
+            raise restate.TerminalError(str(value_error), status_code=400) from value_error
 
 
 class RestateOrderRuntime(ts.Runtime):
@@ -142,10 +152,18 @@ class RestateOrderRuntime(ts.Runtime):
         ordering_application_client: client.OrderingApplicationClient,
         purchase_application_client: client.PurchaseApplicationClient,
     ) -> None:
-        self.order_actions_service = restate.Service("OrderActions")
-        self.order_orchestrator_workflow = restate.Workflow("OrderOrchestrator")
-        self.purchase_actions_service = restate.Service("PurchaseActions")
-        self.purchase_orchestrator_workflow = restate.Workflow("PurchaseOrchestrator")
+        self.order_actions_service = restate.Service(
+            "OrderActions", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.order_orchestrator_workflow = restate.Workflow(
+            "OrderOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.purchase_actions_service = restate.Service(
+            "PurchaseActions", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.purchase_orchestrator_workflow = restate.Workflow(
+            "PurchaseOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
 
         @self.order_actions_service.handler(
             input_serde=RestatePriceProductRequestSerde(),
@@ -154,45 +172,19 @@ class RestateOrderRuntime(ts.Runtime):
         async def price_product(  # tesser:debt TB023
             restate_context: restate.Context, price_product_request: relays.PriceProductRequest
         ) -> relays.PriceProductResponse:
-            try:
-                return ordering_application_client.price_product(price_product_request)
-            except ports.EngineRejected as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=422
-                ) from engine_error
-            except ports.EngineMissing as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=404
-                ) from engine_error
-            except ports.EngineConflict as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=409
-                ) from engine_error
+            return ordering_application_client.price_product(price_product_request)
 
         @self.order_orchestrator_workflow.main(
-            input_serde=RestateOrderOrchestratorRequestSerde(),
-            output_serde=RestateOrderOrchestratorResponseSerde(),
+            input_serde=RestateConfirmOrderRequestSerde(),
+            output_serde=RestateConfirmOrderResponseSerde(),
         )
-        async def run(  # tesser:debt TB023
+        async def confirm_order(  # tesser:debt TB023
             restate_workflow_context: restate.WorkflowContext,
-            order_orchestrator_request: relays.OrderOrchestratorRequest,
-        ) -> relays.OrderOrchestratorResponse:
-            try:
-                return await orchestrators.OrderOrchestrator(
-                    runners.RestateOrderActionsRunner(restate_workflow_context, self)
-                ).run(order_orchestrator_request)
-            except ports.EngineRejected as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=422
-                ) from engine_error
-            except ports.EngineMissing as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=404
-                ) from engine_error
-            except ports.EngineConflict as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=409
-                ) from engine_error
+            confirm_order_request: relays.ConfirmOrderRequest,
+        ) -> relays.ConfirmOrderResponse:
+            return await orchestrators.OrderOrchestrator(
+                runners.RestateOrderActionsRunner(restate_workflow_context, self)
+            ).confirm_order(confirm_order_request)
 
         @self.purchase_actions_service.handler(
             input_serde=RestateTakePaymentRequestSerde(),
@@ -201,53 +193,22 @@ class RestateOrderRuntime(ts.Runtime):
         async def take_payment(  # tesser:debt TB023
             restate_context: restate.Context, take_payment_request: relays.TakePaymentRequest
         ) -> relays.TakePaymentResponse:
-            try:
-                return purchase_application_client.take_payment(take_payment_request)
-            except ports.ChargeDeclined as declined:
-                raise restate.TerminalError(
-                    declined.message, status_code=409
-                ) from declined
-            except ports.EngineRejected as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=422
-                ) from engine_error
-            except ports.EngineMissing as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=404
-                ) from engine_error
-            except ports.EngineConflict as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=409
-                ) from engine_error
+            return purchase_application_client.take_payment(take_payment_request)
 
         @self.purchase_orchestrator_workflow.main(
-            name="run",
-            input_serde=RestatePurchaseOrchestratorRequestSerde(),
-            output_serde=RestatePurchaseOrchestratorResponseSerde(),
+            input_serde=RestatePayForOrderRequestSerde(),
+            output_serde=RestatePayForOrderResponseSerde(),
         )
-        async def run_purchase(  # tesser:debt TB023
+        async def pay_for_order(  # tesser:debt TB023
             restate_workflow_context: restate.WorkflowContext,
-            purchase_orchestrator_request: relays.PurchaseOrchestratorRequest,
-        ) -> relays.PurchaseOrchestratorResponse:
-            try:
-                return await orchestrators.PurchaseOrchestrator(
-                    runners.RestatePurchaseActionsRunner(restate_workflow_context, self),
-                    runners.RestateOrderOrchestratorChildRunner(restate_workflow_context, self),
-                ).run(purchase_orchestrator_request)
-            except ports.EngineRejected as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=422
-                ) from engine_error
-            except ports.EngineMissing as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=404
-                ) from engine_error
-            except ports.EngineConflict as engine_error:
-                raise restate.TerminalError(
-                    str(engine_error), status_code=409
-                ) from engine_error
+            pay_for_order_request: relays.PayForOrderRequest,
+        ) -> relays.PayForOrderResponse:
+            return await orchestrators.PurchaseOrchestrator(
+                runners.RestatePurchaseActionsRunner(restate_workflow_context, self),
+                runners.RestateOrderOrchestratorChildRunner(restate_workflow_context, self),
+            ).pay_for_order(pay_for_order_request)
 
         self.price_product_handler = price_product
-        self.order_orchestrator_handler = run
+        self.confirm_order_handler = confirm_order
         self.take_payment_handler = take_payment
-        self.purchase_orchestrator_handler = run_purchase
+        self.pay_for_order_handler = pay_for_order

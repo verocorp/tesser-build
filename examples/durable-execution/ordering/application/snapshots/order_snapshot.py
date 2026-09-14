@@ -4,7 +4,6 @@ import json
 
 import tesser.application as ts
 
-import ordering.application.ports as ports
 import ordering.domain as domain
 import tesser.errors as errors
 
@@ -29,7 +28,7 @@ class OrderSnapshot(ts.Serde):
             and isinstance(snapshot.get("quantity"), int)
             and not isinstance(snapshot.get("quantity"), bool)
         ):
-            raise ports.EngineRejected("an order snapshot is order_id, sku, and quantity")  # tesser:debt TB082
+            raise ValueError("an order snapshot is order_id, sku, and quantity")  # tesser:debt TB082
         try:  # tesser:debt TB082
             return domain.Order(
                 domain.OrderSpec(
@@ -39,4 +38,4 @@ class OrderSnapshot(ts.Serde):
                 )
             )
         except errors.DomainError as domain_error:
-            raise ports.EngineRejected(domain_error.message) from domain_error  # tesser:debt TB082
+            raise ValueError(domain_error.message) from domain_error  # tesser:debt TB082

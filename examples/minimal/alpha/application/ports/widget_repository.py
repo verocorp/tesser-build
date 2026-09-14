@@ -5,14 +5,14 @@ import typing
 import tesser.application as ts
 
 
-class SaveRequest(ts.Request):
+class SaveWidgetRequest(ts.Request):
 
     def __init__(self, name: str, standing: str) -> None:
         self.name = name
         self.standing = standing
 
 
-class SaveResponse(ts.Response):
+class SaveWidgetResponse(ts.Response):
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -20,4 +20,4 @@ class SaveResponse(ts.Response):
 
 class WidgetRepository(ts.Port, typing.Protocol):
 
-    def save(self, save_request: SaveRequest) -> SaveResponse: ...
+    def save_widget(self, save_widget_request: SaveWidgetRequest) -> SaveWidgetResponse: ...

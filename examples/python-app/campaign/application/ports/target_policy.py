@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class PolicyVerdict(enum.Enum):
+class CheckTargetOutcome(enum.Enum):
     ALLOWED = "allowed"
     BLOCKED = "blocked"
 
@@ -19,8 +19,8 @@ class CheckTargetRequest(ts.Request):
 
 class CheckTargetResponse(ts.Response):
 
-    def __init__(self, verdict: PolicyVerdict, reason: str) -> None:
-        self.verdict = verdict
+    def __init__(self, outcome: CheckTargetOutcome, reason: str) -> None:
+        self.outcome = outcome
         self.reason = reason
 
 
@@ -30,4 +30,4 @@ class PolicyUnavailable(ts.Error):
 
 class TargetPolicy(ts.Port, typing.Protocol):
 
-    def check(self, check_target_request: CheckTargetRequest) -> CheckTargetResponse: ...
+    def check_target(self, check_target_request: CheckTargetRequest) -> CheckTargetResponse: ...

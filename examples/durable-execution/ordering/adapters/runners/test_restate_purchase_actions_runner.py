@@ -11,7 +11,6 @@ import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
-import ordering.application.ports as ports  # tesser:debt TB070
 
 
 @ts.fake
@@ -20,7 +19,11 @@ class FakeOrderingApplicationClient(client.OrderingApplicationClient):
     def price_product(
         self, price_product_request: relays.PriceProductRequest
     ) -> relays.PriceProductResponse:
-        return relays.PriceProductResponse(cents=250)
+        return relays.PriceProductResponse(
+            outcome=relays.PriceProductOutcome.PRICED,
+            prices=(relays.Price(cents=250),),
+            reasons=(),
+        )
 
 
 @ts.fake
@@ -30,9 +33,15 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         return relays.TakePaymentResponse(
+            outcome=relays.TakePaymentOutcome.TAKEN,
             order_id=take_payment_request.order_id,
-            reference=f"pay-{take_payment_request.order_id}",
-            cents=take_payment_request.cents,
+            payments=(
+                relays.Payment(
+                    reference=f"pay-{take_payment_request.order_id}",
+                    cents=take_payment_request.cents,
+                ),
+            ),
+            reasons=(),
         )
 
 
@@ -48,7 +57,21 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         self.called.append((tpe, arg))
         if self._refusal:
             raise restate.TerminalError(self._refusal, status_code=self._status_code)
-        return relays.TakePaymentResponse(order_id="o1", reference="pay-o1", cents=750)
+        return relays.TakePaymentResponse(
+            outcome=relays.TakePaymentOutcome.TAKEN,
+            order_id="o1",
+            payments=(relays.Payment(reference="pay-o1", cents=750),),
+            reasons=(),
+        )
+
+
+@ts.helper
+def take_payment_request(
+    order_id: str = "o1", cents: int = 750, payment_method: str = "card-4242"
+) -> relays.TakePaymentRequest:
+    return relays.TakePaymentRequest(
+        order_id=order_id, cents=cents, payment_method=payment_method
+    )
 
 
 class TestRestatePurchaseActionsRunner:
@@ -58,29 +81,27 @@ class TestRestatePurchaseActionsRunner:
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        take_payment_request = relays.TakePaymentRequest(order_id="o1", cents=750)
+        take_payment_request = relays.TakePaymentRequest(
+            order_id="o1", cents=750, payment_method="card-4242"
+        )
         take_payment_response = asyncio.run(
             runners.RestatePurchaseActionsRunner(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
             ).run_take_payment(take_payment_request)
         )
-        assert take_payment_response.reference == "pay-o1"
-        assert take_payment_response.cents == 750
+        assert take_payment_response.payments[0].reference == "pay-o1"
+        assert take_payment_response.payments[0].cents == 750
         assert fake_restate_workflow_context.called == [
             (restate_order_runtime.take_payment_handler, take_payment_request)
         ]
 
-    def test_each_terminal_status_comes_back_as_the_engine_error_it_names(self) -> None:
+    def test_a_terminal_error_from_the_call_is_a_fault_the_runner_never_reads(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
-        for status_code, engine_error in (
-            (409, ports.EngineConflict),
-            (422, ports.EngineRejected),
-            (404, ports.EngineMissing),
-        ):
-            with pytest.raises(engine_error) as excinfo:
+        for status_code in (404, 409, 422, 500):
+            with pytest.raises(restate.TerminalError) as excinfo:
                 asyncio.run(
                     runners.RestatePurchaseActionsRunner(
                         typing.cast(
@@ -88,21 +109,6 @@ class TestRestatePurchaseActionsRunner:
                             FakeRestateWorkflowContext(refusal="refused", status_code=status_code),
                         ),
                         restate_order_runtime,
-                    ).run_take_payment(relays.TakePaymentRequest(order_id="o1", cents=750))
+                    ).run_take_payment(take_payment_request())
                 )
-            assert str(excinfo.value) == "refused"
-
-    def test_a_terminal_error_of_no_domain_status_stays_terminal(self) -> None:
-        with pytest.raises(restate.TerminalError) as excinfo:
-            asyncio.run(
-                runners.RestatePurchaseActionsRunner(
-                    typing.cast(
-                        restate.WorkflowContext,
-                        FakeRestateWorkflowContext(refusal="cancelled", status_code=500),
-                    ),
-                    runtimes.RestateOrderRuntime(
-                        FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-                    ),
-                ).run_take_payment(relays.TakePaymentRequest(order_id="o1", cents=750))
-            )
-        assert excinfo.value.status_code == 500
+            assert excinfo.value.status_code == status_code

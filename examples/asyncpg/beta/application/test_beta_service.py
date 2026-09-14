@@ -56,15 +56,17 @@ class TestBetaServiceOverACommittedTransaction:
         fake_committed_key_store = FakeCommittedKeyStore()
         fake_committed_key_store.keys.add("k")
         beta_service = application.BetaService(fake_committed_key_store)
-        checked = await beta_service.check(client.CheckRequest(key="k"))
-        missing = await beta_service.check(client.CheckRequest(key="x"))
+        checked = await beta_service.check_key(client.CheckKeyRequest(key="k"))
+        missing = await beta_service.check_key(client.CheckKeyRequest(key="x"))
         assert checked.held == "yes"
         assert missing.held == "no"
 
     async def test_hold_puts_the_key_in_one_transaction_and_answers_it(self) -> None:
         fake_committed_key_store = FakeCommittedKeyStore()
-        hold_response = await application.BetaService(fake_committed_key_store).hold(client.HoldRequest(key="k"))
-        assert hold_response.key == "k"
+        hold_key_response = await application.BetaService(fake_committed_key_store).hold_key(
+            client.HoldKeyRequest(key="k")
+        )
+        assert hold_key_response.key == "k"
         assert fake_committed_key_store.keys == {"k"}
         assert fake_committed_key_store.transactions == 1
 
@@ -74,14 +76,14 @@ class TestBetaServiceOverAFailedTransaction:
     async def test_check_crosses_as_the_contexts_unavailable(self) -> None:
         beta_service = application.BetaService(FakeUnavailableKeyStore())
         with pytest.raises(client.Unavailable) as caught:
-            await beta_service.check(client.CheckRequest(key="k"))
+            await beta_service.check_key(client.CheckKeyRequest(key="k"))
         assert caught.value.message == "the key store is unavailable"
         assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 
     async def test_hold_crosses_as_the_contexts_unavailable(self) -> None:
         beta_service = application.BetaService(FakeUnavailableKeyStore())
         with pytest.raises(client.Unavailable) as caught:
-            await beta_service.hold(client.HoldRequest(key="k"))
+            await beta_service.hold_key(client.HoldKeyRequest(key="k"))
         assert caught.value.message == "the key store is unavailable"
         assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
 

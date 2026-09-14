@@ -1,4 +1,4 @@
-from campaign.application.ports.campaign_repository import CampaignLookup as CampaignLookup
+from campaign.application.ports.campaign_repository import FindCampaignOutcome as FindCampaignOutcome
 from campaign.application.ports.campaign_repository import CampaignRecord as CampaignRecord
 from campaign.application.ports.campaign_repository import (
     CampaignRepository as CampaignRepository,

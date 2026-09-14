@@ -1,26 +1,53 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
 import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.domain as domain
-import tesser.errors as errors
 
 
-class MapToChargeRequest(ts.Mapper, ports.ChargeRequest):
+class MapToChargePaymentMethodRequest(ts.Mapper, ports.ChargePaymentMethodRequest):
 
-    def __init__(self, order_id: domain.OrderId, price: domain.Price) -> None:
-        super().__init__(order_id=str(order_id), cents=int(price))
+    def __init__(
+        self,
+        order_id: domain.OrderId,
+        price: domain.Price,
+        payment_method: domain.PaymentMethod,
+    ) -> None:
+        super().__init__(
+            order_id=str(order_id), cents=int(price), payment_method=str(payment_method)
+        )
 
 
 class MapToTakePaymentResponse(ts.Mapper, relays.TakePaymentResponse):
 
-    def __init__(self, charge_response: ports.ChargeResponse) -> None:
+    def __init__(
+        self, charge_payment_method_response: ports.ChargePaymentMethodResponse
+    ) -> None:
+        match charge_payment_method_response.outcome:
+            case ports.ChargePaymentMethodOutcome.CHARGED:
+                outcome = relays.TakePaymentOutcome.TAKEN
+                payments: tuple[relays.Payment, ...] = (
+                    relays.Payment(
+                        reference=charge_payment_method_response.receipts[0].reference,
+                        cents=charge_payment_method_response.receipts[0].cents,
+                    ),
+                )
+                reasons: tuple[str, ...] = ()
+            case ports.ChargePaymentMethodOutcome.DECLINED:
+                outcome = relays.TakePaymentOutcome.DECLINED
+                payments = ()
+                reasons = charge_payment_method_response.reasons
+            case _ as never:
+                typing.assert_never(never)
         super().__init__(
-            order_id=charge_response.order_id,
-            reference=charge_response.reference,
-            cents=charge_response.cents,
+            outcome=outcome,
+            order_id=charge_payment_method_response.order_id,
+            payments=payments,
+            reasons=reasons,
         )
 
 
@@ -32,10 +59,10 @@ class PurchaseActions(ts.Actions):
     def take_payment(
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
-        try:
-            order_id = domain.OrderId(take_payment_request.order_id)
-            price = domain.Price(domain.PriceSpec(cents=take_payment_request.cents))
-        except errors.DomainError as domain_error:
-            raise ports.EngineRejected(domain_error.message) from domain_error
-        charge_response = self._payment_processor.charge(MapToChargeRequest(order_id, price))
-        return MapToTakePaymentResponse(charge_response)
+        order_id = domain.OrderId(take_payment_request.order_id)
+        price = domain.Price(domain.PriceSpec(cents=take_payment_request.cents))
+        payment_method = domain.PaymentMethod(take_payment_request.payment_method)
+        charge_payment_method_response = self._payment_processor.charge_payment_method(
+            MapToChargePaymentMethodRequest(order_id, price, payment_method)
+        )
+        return MapToTakePaymentResponse(charge_payment_method_response)

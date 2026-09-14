@@ -11,15 +11,15 @@ import alpha.application.relays as relays
 @ts.fake
 class FakeAlphaApplicationClient(client.AlphaApplicationClient):
 
-    def quote(self, quote_request: relays.QuoteRequest) -> relays.QuoteResponse:
-        return relays.QuoteResponse(name=quote_request.name)
+    def quote_widget(self, quote_widget_request: relays.QuoteWidgetRequest) -> relays.QuoteWidgetResponse:
+        return relays.QuoteWidgetResponse(name=quote_widget_request.name)
 
 
 class TestInlineWidgetActionsRunner:
 
     def test_running_a_quote_reaches_the_runtimes_handler(self) -> None:
         inline_widget_runtime = runtimes.InlineWidgetRuntime(FakeAlphaApplicationClient())
-        quote_response = runners.InlineWidgetActionsRunner(inline_widget_runtime).run_quote(
-            relays.QuoteRequest(name="a")
+        quote_widget_response = runners.InlineWidgetActionsRunner(inline_widget_runtime).run_quote_widget(
+            relays.QuoteWidgetRequest(name="a")
         )
-        assert quote_response.name == "a"
+        assert quote_widget_response.name == "a"

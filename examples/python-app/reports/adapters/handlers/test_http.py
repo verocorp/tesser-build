@@ -11,7 +11,7 @@ import protocol as protocol
 @ts.fake
 class FakeReportsClient(client.ReportsClient):
     def __init__(
-        self, *views: client.LinkVerdictView, error: Exception | None = None
+        self, *views: client.LinkVerdict, error: Exception | None = None
     ) -> None:
         self.views = views
         self.error = error
@@ -28,7 +28,7 @@ class FakeReportsClient(client.ReportsClient):
 
 def test_a_report_comes_back_as_a_json_object_of_link_rows() -> None:
     fake_reports_client = FakeReportsClient(
-        client.LinkVerdictView("spring-sale", "https://a.example/s", "denied", "host blocked")
+        client.LinkVerdict("spring-sale", "https://a.example/s", "denied", "host blocked")
     )
 
     http_response = handlers.HttpHandler(fake_reports_client).links_by_verdict(
@@ -50,8 +50,8 @@ def test_a_report_comes_back_as_a_json_object_of_link_rows() -> None:
 
 def test_every_row_the_client_serves_reaches_the_body_in_order() -> None:
     fake_reports_client = FakeReportsClient(
-        client.LinkVerdictView("denied-one", "https://a.example/d", "denied", "host blocked"),
-        client.LinkVerdictView("allowed-one", "https://a.example/a", "allowed", "on the allowlist"),
+        client.LinkVerdict("denied-one", "https://a.example/d", "denied", "host blocked"),
+        client.LinkVerdict("allowed-one", "https://a.example/a", "allowed", "on the allowlist"),
     )
 
     http_response = handlers.HttpHandler(fake_reports_client).links_by_verdict(

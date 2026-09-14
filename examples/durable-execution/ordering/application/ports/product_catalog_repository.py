@@ -12,12 +12,12 @@ class GetProductPriceRequest(ts.Request):
         self.sku = sku
 
 
-class Priced(enum.Enum):
+class GetProductPriceOutcome(enum.Enum):
     FOUND = "found"
-    MISSING = "missing"
+    NOT_FOUND = "not_found"
 
 
-class PriceRecord(ts.Response):
+class Price(ts.Response):
 
     def __init__(self, cents: int) -> None:
         self.cents = cents
@@ -25,7 +25,7 @@ class PriceRecord(ts.Response):
 
 class GetProductPriceResponse(ts.Response):
 
-    def __init__(self, outcome: Priced, prices: tuple[PriceRecord, ...]) -> None:
+    def __init__(self, outcome: GetProductPriceOutcome, prices: tuple[Price, ...]) -> None:
         self.outcome = outcome
         self.prices = prices
 

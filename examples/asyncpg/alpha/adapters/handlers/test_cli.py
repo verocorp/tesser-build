@@ -12,14 +12,20 @@ import protocol
 @ts.fake
 class FakeClient(client.AlphaClient):
 
-    async def add(self, add_request: client.AddRequest) -> client.AddResponse:
-        return client.AddResponse(name=add_request.name, part=add_request.part, standing="kept")
+    async def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
+        return client.AddPartResponse(
+            name=add_part_request.name, part=add_part_request.part, standing="kept"
+        )
 
-    async def take(self, take_request: client.TakeRequest) -> client.TakeResponse:
-        return client.TakeResponse(name=take_request.name, part=take_request.part, standing="kept")
+    async def take_part(self, take_part_request: client.TakePartRequest) -> client.TakePartResponse:
+        return client.TakePartResponse(
+            name=take_part_request.name, part=take_part_request.part, standing="kept"
+        )
 
-    async def find(self, find_request: client.FindRequest) -> client.FindResponse:
-        return client.FindResponse(found="no")
+    async def find_widget(
+        self, find_widget_request: client.FindWidgetRequest
+    ) -> client.FindWidgetResponse:
+        return client.FindWidgetResponse(found="no")
 
 
 @ts.fake
@@ -28,13 +34,15 @@ class FakeRefusingClient(client.AlphaClient):
     def __init__(self, error: Exception) -> None:
         self.error = error
 
-    async def add(self, add_request: client.AddRequest) -> client.AddResponse:
+    async def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         raise self.error
 
-    async def take(self, take_request: client.TakeRequest) -> client.TakeResponse:
+    async def take_part(self, take_part_request: client.TakePartRequest) -> client.TakePartResponse:
         raise self.error
 
-    async def find(self, find_request: client.FindRequest) -> client.FindResponse:
+    async def find_widget(
+        self, find_widget_request: client.FindWidgetRequest
+    ) -> client.FindWidgetResponse:
         raise self.error
 
 

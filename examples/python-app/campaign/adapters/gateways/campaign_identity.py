@@ -9,7 +9,7 @@ import campaign.application.ports as ports
 
 class SecretsCampaignIdentity(ts.Gateway):
 
-    def issue(
+    def issue_campaign_identity(
         self, issue_campaign_identity_request: ports.IssueCampaignIdentityRequest
     ) -> ports.IssueCampaignIdentityResponse:
         campaign_id = secrets.token_hex(8)

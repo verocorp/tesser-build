@@ -15,9 +15,11 @@ class SampledPolicyClient(linkpolicy_client.LinkPolicyClient):
         self._reason = reason
         self.checked: list[str] = []
 
-    def check(self, check_request: linkpolicy_client.CheckRequest) -> linkpolicy_client.CheckResponse:
-        self.checked.append(check_request.target_url)
-        return linkpolicy_client.CheckResponse(decision=self._decision, reason=self._reason)
+    def check_target(
+        self, check_target_request: linkpolicy_client.CheckTargetRequest
+    ) -> linkpolicy_client.CheckTargetResponse:
+        self.checked.append(check_target_request.target_url)
+        return linkpolicy_client.CheckTargetResponse(decision=self._decision, reason=self._reason)
 
     def list_verdicts(
         self, list_verdicts_request: linkpolicy_client.ListVerdictsRequest
@@ -30,11 +32,11 @@ def test_a_sampled_allow_maps_to_the_allowed_verdict() -> None:
         SampledPolicyClient("allowed", "clean")
     )
 
-    check_target_response = link_policy_target_policy.check(
+    check_target_response = link_policy_target_policy.check_target(
         ports.CheckTargetRequest(target_url="https://ok.example")
     )
 
-    assert check_target_response.verdict is ports.PolicyVerdict.ALLOWED
+    assert check_target_response.outcome is ports.CheckTargetOutcome.ALLOWED
     assert check_target_response.reason == "clean"
 
 
@@ -43,9 +45,9 @@ def test_a_sampled_block_maps_to_the_blocked_verdict() -> None:
         SampledPolicyClient("denied", "listed")
     )
 
-    check_target_response = link_policy_target_policy.check(
+    check_target_response = link_policy_target_policy.check_target(
         ports.CheckTargetRequest(target_url="https://bad.example")
     )
 
-    assert check_target_response.verdict is ports.PolicyVerdict.BLOCKED
+    assert check_target_response.outcome is ports.CheckTargetOutcome.BLOCKED
     assert check_target_response.reason == "listed"

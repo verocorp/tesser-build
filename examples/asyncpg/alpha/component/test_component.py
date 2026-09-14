@@ -12,8 +12,8 @@ import pgdatabase.database as pgdatabase_database
 @ts.fake
 class FakeBetaCheck(ports.BetaCheck):
 
-    async def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
-        return ports.CheckResponse(verdict=ports.Verdict.OK)
+    async def check_name(self, check_name_request: ports.CheckNameRequest) -> ports.CheckNameResponse:
+        return ports.CheckNameResponse(outcome=ports.CheckNameOutcome.OK)
 
 
 class TestConfig:

@@ -103,7 +103,7 @@ class TestPostgresWidgetStore:
         async with postgres_widget_store.transaction() as widget_repository:
             loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="x"))
         await database.close()
-        assert loaded.outcome is ports.Loaded.MISSING
+        assert loaded.outcome is ports.Loaded.NOT_FOUND
         assert loaded.widgets == ()
 
     async def test_a_transaction_that_raises_is_rolled_back(self) -> None:

@@ -10,13 +10,13 @@ import beta.client as beta_client
 @ts.fake
 class FakeBetaClient(beta_client.BetaClient):
 
-    def check(self, check_request: beta_client.CheckRequest) -> beta_client.CheckResponse:
-        return beta_client.CheckResponse(held="no")
+    def check_key(self, check_key_request: beta_client.CheckKeyRequest) -> beta_client.CheckKeyResponse:
+        return beta_client.CheckKeyResponse(held="no")
 
 
 class TestBetaCheckGateway:
 
     def test_an_unheld_key_is_refused(self) -> None:
         beta_check_gateway = gateways.BetaCheckGateway(FakeBetaClient())
-        check_response = beta_check_gateway.check(ports.CheckRequest(name="a"))
-        assert check_response.verdict is ports.Verdict.REFUSED
+        check_name_response = beta_check_gateway.check_name(ports.CheckNameRequest(name="a"))
+        assert check_name_response.outcome is ports.CheckNameOutcome.REFUSED

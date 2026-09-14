@@ -11,7 +11,7 @@ class CampaignLinkGateway(ts.Gateway):
     def __init__(self, campaign_client: campaign_client.CampaignClient) -> None:
         self._campaign_client = campaign_client
 
-    def links(self, list_links_request: ports.ListLinksRequest) -> ports.ListLinksResponse:
+    def list_links(self, list_links_request: ports.ListLinksRequest) -> ports.ListLinksResponse:
         try:
             list_links_response = self._campaign_client.list_links(campaign_client.ListLinksRequest())
         except campaign_client.Unavailable as campaign_error:

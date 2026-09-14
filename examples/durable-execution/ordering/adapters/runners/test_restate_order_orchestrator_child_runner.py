@@ -12,7 +12,6 @@ import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
 import ordering.domain as domain
-import ordering.application.ports as ports  # tesser:debt TB070
 
 
 @ts.fake
@@ -21,7 +20,11 @@ class FakeOrderingApplicationClient(client.OrderingApplicationClient):
     def price_product(
         self, price_product_request: relays.PriceProductRequest
     ) -> relays.PriceProductResponse:
-        return relays.PriceProductResponse(cents=250)
+        return relays.PriceProductResponse(
+            outcome=relays.PriceProductOutcome.PRICED,
+            prices=(relays.Price(cents=250),),
+            reasons=(),
+        )
 
 
 @ts.fake
@@ -31,9 +34,15 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         self, take_payment_request: relays.TakePaymentRequest
     ) -> relays.TakePaymentResponse:
         return relays.TakePaymentResponse(
+            outcome=relays.TakePaymentOutcome.TAKEN,
             order_id=take_payment_request.order_id,
-            reference=f"pay-{take_payment_request.order_id}",
-            cents=take_payment_request.cents,
+            payments=(
+                relays.Payment(
+                    reference=f"pay-{take_payment_request.order_id}",
+                    cents=take_payment_request.cents,
+                ),
+            ),
+            reasons=(),
         )
 
 
@@ -50,17 +59,22 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         self.called.append((tpe, key, arg))
         if self._refusal:
             raise restate.TerminalError(self._refusal, status_code=self._status_code)
-        return relays.OrderOrchestratorResponse(order_id=key, total_cents=500)
+        return relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id=key,
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=500),),
+            reasons=(),
+        )
 
     def workflow_send(self, tpe: object, key: str, arg: object) -> None:
         self.sent.append((tpe, key, arg))
 
 
 @ts.helper
-def order_orchestrator_request(
+def confirm_order_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 2
-) -> relays.OrderOrchestratorRequest:
-    return relays.OrderOrchestratorRequest(
+) -> relays.ConfirmOrderRequest:
+    return relays.ConfirmOrderRequest(
         order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
     )
 
@@ -72,17 +86,17 @@ class TestRestateOrderOrchestratorChildRunner:
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        order_orchestrator_response = asyncio.run(
+        confirm_order_response = asyncio.run(
             runners.RestateOrderOrchestratorChildRunner(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
-            ).run_order_orchestrator(order_orchestrator_request(order_id="o5"))
+            ).run_confirm_order(confirm_order_request(order_id="o5"))
         )
-        assert order_orchestrator_response == relays.OrderOrchestratorResponse(
-            order_id="o5", total_cents=500
-        )
+        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
+        assert confirm_order_response.order_id == "o5"
+        assert confirm_order_response.confirmed_orders[0].total_cents == 500
         assert [(t, k) for t, k, _ in fake_restate_workflow_context.called] == [
-            (restate_order_runtime.order_orchestrator_handler, "o5")
+            (restate_order_runtime.confirm_order_handler, "o5")
         ]
         assert fake_restate_workflow_context.sent == []
 
@@ -94,7 +108,7 @@ class TestRestateOrderOrchestratorChildRunner:
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
                 ),
-            ).run_order_orchestrator(order_orchestrator_request(order_id="../admin?x=1#f"))
+            ).run_confirm_order(confirm_order_request(order_id="../admin?x=1#f"))
         )
         assert [k for _, k, _ in fake_restate_workflow_context.called] == ["../admin?x=1#f"]
 
@@ -103,50 +117,60 @@ class TestRestateOrderOrchestratorChildRunner:
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        start_order_orchestrator_response = asyncio.run(
+        start_confirm_order_response = asyncio.run(
             runners.RestateOrderOrchestratorChildRunner(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
-            ).start_order_orchestrator(order_orchestrator_request(order_id="o6"))
+            ).start_confirm_order(confirm_order_request(order_id="o6"))
         )
-        assert start_order_orchestrator_response.order_id == "o6"
+        assert (
+            start_confirm_order_response.outcome is relays.StartConfirmOrderOutcome.STARTED
+        )
+        assert start_confirm_order_response.order_id == "o6"
         assert [(t, k) for t, k, _ in fake_restate_workflow_context.sent] == [
-            (restate_order_runtime.order_orchestrator_handler, "o6")
+            (restate_order_runtime.confirm_order_handler, "o6")
         ]
         assert fake_restate_workflow_context.called == []
 
-    def test_each_terminal_status_of_the_child_comes_back_as_its_engine_error(self) -> None:
+    def test_the_already_invoked_conflict_is_the_outcome_the_engine_crossing_adds(self) -> None:
+        confirm_order_response = asyncio.run(
+            runners.RestateOrderOrchestratorChildRunner(
+                typing.cast(
+                    restate.WorkflowContext,
+                    FakeRestateWorkflowContext(
+                        refusal="the workflow method was already invoked", status_code=409
+                    ),
+                ),
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_confirm_order(confirm_order_request(order_id="o5"))
+        )
+        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.ALREADY_STARTED
+        assert confirm_order_response.order_id == "o5"
+        assert confirm_order_response.confirmed_orders == ()
+        assert confirm_order_response.reasons == ()
+
+    def test_any_other_terminal_error_is_a_fault_the_cancellation_409_included(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
-        for status_code, engine_error in (
-            (404, ports.EngineMissing),
-            (422, ports.EngineRejected),
-            (409, ports.EngineConflict),
+        for refusal, status_code in (
+            ("cancelled", 409),
+            ("no such sku", 404),
+            ("an order is for at least one unit", 422),
+            ("Unable to parse an input argument", 500),
         ):
-            with pytest.raises(engine_error) as excinfo:
+            with pytest.raises(restate.TerminalError) as excinfo:
                 asyncio.run(
                     runners.RestateOrderOrchestratorChildRunner(
                         typing.cast(
                             restate.WorkflowContext,
-                            FakeRestateWorkflowContext(refusal="no such sku", status_code=status_code),
+                            FakeRestateWorkflowContext(
+                                refusal=refusal, status_code=status_code
+                            ),
                         ),
                         restate_order_runtime,
-                    ).run_order_orchestrator(order_orchestrator_request(sku="nothing"))
+                    ).run_confirm_order(confirm_order_request())
                 )
-            assert str(excinfo.value) == "no such sku"
-
-    def test_a_terminal_error_of_no_domain_status_stays_terminal(self) -> None:
-        with pytest.raises(restate.TerminalError) as excinfo:
-            asyncio.run(
-                runners.RestateOrderOrchestratorChildRunner(
-                    typing.cast(
-                        restate.WorkflowContext,
-                        FakeRestateWorkflowContext(refusal="cancelled", status_code=500),
-                    ),
-                    runtimes.RestateOrderRuntime(
-                        FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-                    ),
-                ).run_order_orchestrator(order_orchestrator_request())
-            )
-        assert excinfo.value.status_code == 500
+            assert excinfo.value.status_code == status_code

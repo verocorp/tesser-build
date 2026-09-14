@@ -17,20 +17,24 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
         self.started: list[str] = []
         self.ran: list[str] = []
 
-    async def start_order_orchestrator(
-        self, order_orchestrator_request: relays.OrderOrchestratorRequest
-    ) -> relays.StartOrderOrchestratorResponse:
-        self.started.append(str(order_orchestrator_request.order.identity))
-        return relays.StartOrderOrchestratorResponse(
-            order_id=str(order_orchestrator_request.order.identity)
+    async def start_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.StartConfirmOrderResponse:
+        self.started.append(str(confirm_order_request.order.identity))
+        return relays.StartConfirmOrderResponse(
+            outcome=relays.StartConfirmOrderOutcome.STARTED,
+            order_id=str(confirm_order_request.order.identity),
         )
 
-    async def run_order_orchestrator(
-        self, order_orchestrator_request: relays.OrderOrchestratorRequest
-    ) -> relays.OrderOrchestratorResponse:
-        self.ran.append(str(order_orchestrator_request.order.identity))
-        return relays.OrderOrchestratorResponse(
-            order_id=str(order_orchestrator_request.order.identity), total_cents=500
+    async def run_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse:
+        self.ran.append(str(confirm_order_request.order.identity))
+        return relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id=str(confirm_order_request.order.identity),
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=500),),
+            reasons=(),
         )
 
 
@@ -40,14 +44,15 @@ class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
     def __init__(self) -> None:
         self.ran: list[str] = []
 
-    async def run_purchase_orchestrator(
-        self, purchase_orchestrator_request: relays.PurchaseOrchestratorRequest
-    ) -> relays.PurchaseOrchestratorResponse:
-        self.ran.append(str(purchase_orchestrator_request.order.identity))
-        return relays.PurchaseOrchestratorResponse(
-            order_id=str(purchase_orchestrator_request.order.identity),
-            total_cents=500,
-            payment_reference="pay-o1",
+    async def run_pay_for_order(
+        self, pay_for_order_request: relays.PayForOrderRequest
+    ) -> relays.PayForOrderResponse:
+        self.ran.append(str(pay_for_order_request.order.identity))
+        return relays.PayForOrderResponse(
+            outcome=relays.PayForOrderOutcome.PAID,
+            order_id=str(pay_for_order_request.order.identity),
+            purchases=(relays.Purchase(total_cents=500, payment_reference="pay-o1"),),
+            reasons=(),
         )
 
 
@@ -70,12 +75,16 @@ class TestClient:
                 client.PlaceOrderRequest(order_id="p1", sku="widget", quantity=2)
             )
         )
-        purchase_response = asyncio.run(
-            ordering_client.purchase(client.PurchaseRequest(order_id="u1", sku="widget", quantity=2))
+        pay_for_order_response = asyncio.run(
+            ordering_client.pay_for_order(
+                client.PayForOrderRequest(
+                    order_id="u1", sku="widget", quantity=2, payment_method="card-4242"
+                )
+            )
         )
         assert submit_order_response.order_id == "s1"
         assert place_order_response.total_cents == 500
-        assert purchase_response.payment_reference == "pay-o1"
+        assert pay_for_order_response.payment_reference == "pay-o1"
         assert fake_order_orchestrator_runner.started == ["s1"]
         assert fake_order_orchestrator_runner.ran == ["p1"]
         assert fake_purchase_orchestrator_runner.ran == ["u1"]
@@ -104,9 +113,9 @@ class TestOrdering:
             ordering.close()
         assert declared == {
             "OrderActions": ["price_product"],
-            "OrderOrchestrator": ["run"],
+            "OrderOrchestrator": ["confirm_order"],
             "PurchaseActions": ["take_payment"],
-            "PurchaseOrchestrator": ["run"],
+            "PurchaseOrchestrator": ["pay_for_order"],
         }
 
 

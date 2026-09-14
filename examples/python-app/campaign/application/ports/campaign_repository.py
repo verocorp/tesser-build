@@ -6,9 +6,14 @@ import typing
 import tesser.application as ts
 
 
-class CampaignLookup(enum.Enum):
+class LoadCampaignOutcome(enum.Enum):
     FOUND = "found"
-    MISSING = "missing"
+    NOT_FOUND = "not_found"
+
+
+class LoadCampaignBySlugOutcome(enum.Enum):
+    FOUND = "found"
+    NOT_FOUND = "not_found"
 
 
 class SlugAvailability(enum.Enum):
@@ -53,21 +58,30 @@ class SaveCampaignResponse(ts.Response):
         return None
 
 
-class FindCampaignRequest(ts.Request):
+class LoadCampaignRequest(ts.Request):
 
     def __init__(self, campaign_id: str) -> None:
         self.campaign_id = campaign_id
 
 
-class FindCampaignBySlugRequest(ts.Request):
+class LoadCampaignBySlugRequest(ts.Request):
 
     def __init__(self, slug: str) -> None:
         self.slug = slug
 
 
-class FindCampaignResponse(ts.Response):
+class LoadCampaignResponse(ts.Response):
 
-    def __init__(self, outcome: CampaignLookup, campaigns: tuple[CampaignRecord, ...]) -> None:
+    def __init__(self, outcome: LoadCampaignOutcome, campaigns: tuple[CampaignRecord, ...]) -> None:
+        self.outcome = outcome
+        self.campaigns = campaigns
+
+
+class LoadCampaignBySlugResponse(ts.Response):
+
+    def __init__(
+        self, outcome: LoadCampaignBySlugOutcome, campaigns: tuple[CampaignRecord, ...]
+    ) -> None:
         self.outcome = outcome
         self.campaigns = campaigns
 
@@ -102,12 +116,14 @@ class StoreUnavailable(ts.Error):
 
 class CampaignRepository(ts.Port, typing.Protocol):
 
-    def save(self, save_campaign_request: SaveCampaignRequest) -> SaveCampaignResponse: ...
+    def save_campaign(self, save_campaign_request: SaveCampaignRequest) -> SaveCampaignResponse: ...
 
-    def find(self, find_campaign_request: FindCampaignRequest) -> FindCampaignResponse: ...
+    def load_campaign(self, load_campaign_request: LoadCampaignRequest) -> LoadCampaignResponse: ...
 
-    def find_by_slug(self, find_campaign_by_slug_request: FindCampaignBySlugRequest) -> FindCampaignResponse: ...
+    def load_campaign_by_slug(
+        self, load_campaign_by_slug_request: LoadCampaignBySlugRequest
+    ) -> LoadCampaignBySlugResponse: ...
 
     def slug_taken(self, slug_taken_request: SlugTakenRequest) -> SlugTakenResponse: ...
 
-    def all(self, list_campaigns_request: ListCampaignsRequest) -> ListCampaignsResponse: ...
+    def list_campaigns(self, list_campaigns_request: ListCampaignsRequest) -> ListCampaignsResponse: ...

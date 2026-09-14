@@ -5,14 +5,14 @@ import typing
 import tesser.context as ts
 
 
-class AddRequest(ts.Request):
+class AddPartRequest(ts.Request):
 
     def __init__(self, name: str, part: str) -> None:
         self.name = name
         self.part = part
 
 
-class AddResponse(ts.Response):
+class AddPartResponse(ts.Response):
 
     def __init__(self, name: str, standing: str) -> None:
         self.name = name
@@ -32,4 +32,4 @@ ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
 
 class AlphaClient(ts.Client, typing.Protocol):
 
-    def add(self, add_request: AddRequest) -> AddResponse: ...
+    def add_part(self, add_part_request: AddPartRequest) -> AddPartResponse: ...

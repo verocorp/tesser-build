@@ -1,31 +1,48 @@
 from __future__ import annotations
 
+import enum
 import typing
 
 import tesser.application as ts
 
 
-class ChargeRequest(ts.Request):
+class ChargePaymentMethodRequest(ts.Request):
 
-    def __init__(self, order_id: str, cents: int) -> None:
+    def __init__(self, order_id: str, cents: int, payment_method: str) -> None:
         self.order_id = order_id
         self.cents = cents
+        self.payment_method = payment_method
 
 
-class ChargeResponse(ts.Response):
+class ChargePaymentMethodOutcome(enum.Enum):
+    CHARGED = "charged"
+    DECLINED = "declined"
 
-    def __init__(self, order_id: str, reference: str, cents: int) -> None:
-        self.order_id = order_id
+
+class Receipt(ts.Response):
+
+    def __init__(self, reference: str, cents: int) -> None:
         self.reference = reference
         self.cents = cents
 
 
-class ChargeDeclined(ts.Error):
+class ChargePaymentMethodResponse(ts.Response):
 
-    def __init__(self, message: str) -> None:
-        self.message = message
+    def __init__(
+        self,
+        outcome: ChargePaymentMethodOutcome,
+        order_id: str,
+        receipts: tuple[Receipt, ...],
+        reasons: tuple[str, ...],
+    ) -> None:
+        self.outcome = outcome
+        self.order_id = order_id
+        self.receipts = receipts
+        self.reasons = reasons
 
 
 class PaymentProcessor(ts.Port, typing.Protocol):
 
-    def charge(self, charge_request: ChargeRequest) -> ChargeResponse: ...
+    def charge_payment_method(
+        self, charge_payment_method_request: ChargePaymentMethodRequest
+    ) -> ChargePaymentMethodResponse: ...

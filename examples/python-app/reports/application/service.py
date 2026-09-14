@@ -39,7 +39,7 @@ class MapToLinkVerdictsSpec(ts.Mapper, domain.LinkVerdictsSpec):
         )
 
 
-class MapToLinkVerdictView(ts.Mapper, client.LinkVerdictView):
+class MapToLinkVerdict(ts.Mapper, client.LinkVerdict):
 
     def __init__(self, link_verdict: domain.LinkVerdict) -> None:
         super().__init__(
@@ -53,7 +53,7 @@ class MapToLinkVerdictView(ts.Mapper, client.LinkVerdictView):
 class MapToLinksByVerdictResponse(ts.Mapper, client.LinksByVerdictResponse):
 
     def __init__(self, link_verdicts: domain.LinkVerdicts) -> None:
-        super().__init__(links=tuple(MapToLinkVerdictView(row) for row in link_verdicts.rows))
+        super().__init__(links=tuple(MapToLinkVerdict(row) for row in link_verdicts.rows))
 
 
 class ReportsService(ts.ApplicationService):
@@ -66,11 +66,11 @@ class ReportsService(ts.ApplicationService):
         self, links_by_verdict_request: client.LinksByVerdictRequest
     ) -> client.LinksByVerdictResponse:
         try:
-            list_links_response = self._link_source.links(ports.ListLinksRequest())
+            list_links_response = self._link_source.list_links(ports.ListLinksRequest())
         except ports.LinkSourceUnavailable as link_error:
             raise client.Unavailable(message="the link source is unavailable") from link_error
         try:
-            list_verdicts_response = self._verdict_source.verdicts(ports.ListVerdictsRequest())
+            list_verdicts_response = self._verdict_source.list_verdicts(ports.ListVerdictsRequest())
         except ports.VerdictSourceUnavailable as verdict_error:
             raise client.Unavailable(
                 message="the verdict source is unavailable"

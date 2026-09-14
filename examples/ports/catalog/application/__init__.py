@@ -1,5 +1,5 @@
 from catalog.application.catalog_service import CatalogService as CatalogService
-from catalog.application.catalog_service import MapToAddedItemView as MapToAddedItemView
+from catalog.application.catalog_service import MapToAddedItem as MapToAddedItem
 from catalog.application.catalog_service import MapToAddItemResponse as MapToAddItemResponse
 from catalog.application.catalog_service import MapToGetItemResponse as MapToGetItemResponse
-from catalog.application.catalog_service import MapToItemView as MapToItemView
+from catalog.application.catalog_service import MapToItem as MapToItem

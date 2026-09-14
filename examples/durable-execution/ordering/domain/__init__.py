@@ -6,6 +6,7 @@ from ordering.domain.order import Order as Order
 from ordering.domain.order import OrderSpec as OrderSpec
 from ordering.domain.order import Sku as Sku
 from ordering.domain.purchase import Payment as Payment
+from ordering.domain.purchase import PaymentMethod as PaymentMethod
 from ordering.domain.purchase import PaymentSpec as PaymentSpec
 from ordering.domain.purchase import Purchase as Purchase
 from ordering.domain.purchase import PurchaseSpec as PurchaseSpec

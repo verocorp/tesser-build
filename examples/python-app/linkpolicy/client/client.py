@@ -5,13 +5,13 @@ import typing
 import tesser.context as ts
 
 
-class CheckRequest(ts.Request):
+class CheckTargetRequest(ts.Request):
 
     def __init__(self, target_url: str) -> None:
         self.target_url = target_url
 
 
-class CheckResponse(ts.Response):
+class CheckTargetResponse(ts.Response):
 
     def __init__(self, decision: str, reason: str) -> None:
         self.decision = decision
@@ -24,7 +24,7 @@ class ListVerdictsRequest(ts.Request):
         return None
 
 
-class VerdictView(ts.Response):
+class Verdict(ts.Response):
 
     def __init__(self, target_url: str, decision: str, reason: str) -> None:
         self.target_url = target_url
@@ -34,7 +34,7 @@ class VerdictView(ts.Response):
 
 class ListVerdictsResponse(ts.Response):
 
-    def __init__(self, verdicts: tuple[VerdictView, ...]) -> None:
+    def __init__(self, verdicts: tuple[Verdict, ...]) -> None:
         self.verdicts = verdicts
 
 
@@ -58,6 +58,6 @@ ERRORS: typing.Final[tuple[type[Rejected], type[Unavailable]]] = (Rejected, Unav
 
 class LinkPolicyClient(ts.Client, typing.Protocol):
 
-    def check(self, check_request: CheckRequest) -> CheckResponse: ...
+    def check_target(self, check_target_request: CheckTargetRequest) -> CheckTargetResponse: ...
 
     def list_verdicts(self, list_verdicts_request: ListVerdictsRequest) -> ListVerdictsResponse: ...

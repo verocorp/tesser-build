@@ -19,4 +19,6 @@ class IssueCampaignIdentityResponse(ts.Response):
 
 class CampaignIdentity(ts.Port, typing.Protocol):
 
-    def issue(self, issue_campaign_identity_request: IssueCampaignIdentityRequest) -> IssueCampaignIdentityResponse: ...
+    def issue_campaign_identity(
+        self, issue_campaign_identity_request: IssueCampaignIdentityRequest
+    ) -> IssueCampaignIdentityResponse: ...

@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class NameVerdict(enum.Enum):
+class CheckNameOutcome(enum.Enum):
     ALLOWED = "allowed"
     RESERVED = "reserved"
 
@@ -19,11 +19,11 @@ class CheckNameRequest(ts.Request):
 
 class CheckNameResponse(ts.Response):
 
-    def __init__(self, verdict: NameVerdict, reason: str) -> None:
-        self.verdict = verdict
+    def __init__(self, outcome: CheckNameOutcome, reason: str) -> None:
+        self.outcome = outcome
         self.reason = reason
 
 
 class NamePolicy(ts.Port, typing.Protocol):
 
-    def check(self, check_name_request: CheckNameRequest) -> CheckNameResponse: ...
+    def check_name(self, check_name_request: CheckNameRequest) -> CheckNameResponse: ...

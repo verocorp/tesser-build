@@ -12,9 +12,11 @@ import tesser.errors as errors
 
 class MapToWidgetSpec(ts.Mapper, domain.WidgetSpec):
 
-    def __init__(self, add_request: client.AddRequest) -> None:
+    def __init__(self, add_part_request: client.AddPartRequest) -> None:
         super().__init__(
-            name=add_request.name, part=domain.PartSpec(id=add_request.name), standing="kept"
+            name=add_part_request.name,
+            part=domain.PartSpec(id=add_part_request.name),
+            standing="kept",
         )
 
 
@@ -28,7 +30,7 @@ class MapToLoadedWidgetSpec(ts.Mapper, domain.WidgetSpec):
         match load_widget_response.outcome:
             case ports.Loaded.FOUND:
                 record = load_widget_response.widgets[0]
-            case ports.Loaded.MISSING:
+            case ports.Loaded.NOT_FOUND:
                 raise client.Missing(
                     code="unknown_widget",
                     message=f"no widget {load_widget_request.name!r}",
@@ -44,17 +46,17 @@ class MapToLoadedWidgetSpec(ts.Mapper, domain.WidgetSpec):
 
 class MapToPartSpec(ts.Mapper, domain.PartSpec):
 
-    def __init__(self, add_request: client.AddRequest) -> None:
-        super().__init__(id=add_request.part)
+    def __init__(self, add_part_request: client.AddPartRequest) -> None:
+        super().__init__(id=add_part_request.part)
 
 
 class MapToTakenPartSpec(ts.Mapper, domain.PartSpec):
 
-    def __init__(self, take_request: client.TakeRequest) -> None:
-        super().__init__(id=take_request.part)
+    def __init__(self, take_part_request: client.TakePartRequest) -> None:
+        super().__init__(id=take_part_request.part)
 
 
-class MapToCheckRequest(ts.Mapper, ports.CheckRequest):
+class MapToCheckNameRequest(ts.Mapper, ports.CheckNameRequest):
 
     def __init__(self, widget: domain.Widget) -> None:
         super().__init__(name=str(widget.identity))
@@ -62,8 +64,8 @@ class MapToCheckRequest(ts.Mapper, ports.CheckRequest):
 
 class MapToClearanceSpec(ts.Mapper, domain.ClearanceSpec):
 
-    def __init__(self, check_response: ports.CheckResponse) -> None:
-        super().__init__(verdict=check_response.verdict.value)
+    def __init__(self, check_name_response: ports.CheckNameResponse) -> None:
+        super().__init__(verdict=check_name_response.outcome.value)
 
 
 class MapToAddWidgetRequest(ts.Mapper, ports.AddWidgetRequest):
@@ -98,7 +100,7 @@ class MapToFindWidgetRequest(ts.Mapper, ports.FindWidgetRequest):
         super().__init__(name=str(name))
 
 
-class MapToAddResponse(ts.Mapper, client.AddResponse):
+class MapToAddPartResponse(ts.Mapper, client.AddPartResponse):
 
     def __init__(
         self, add_widget_response: ports.AddWidgetResponse, widget: domain.Widget
@@ -120,7 +122,7 @@ class MapToAddResponse(ts.Mapper, client.AddResponse):
         )
 
 
-class MapToTakeResponse(ts.Mapper, client.TakeResponse):
+class MapToTakePartResponse(ts.Mapper, client.TakePartResponse):
 
     def __init__(self, widget: domain.Widget) -> None:
         super().__init__(
@@ -136,10 +138,10 @@ class AlphaService(ts.ApplicationService):
         self._widget_store = widget_store
         self._beta_check = beta_check
 
-    async def add(self, add_request: client.AddRequest) -> client.AddResponse:
+    async def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         try:
-            widget = domain.Widget(MapToWidgetSpec(add_request))
-            taken = widget.take(MapToPartSpec(add_request))
+            widget = domain.Widget(MapToWidgetSpec(add_part_request))
+            taken = widget.take(MapToPartSpec(add_part_request))
         except errors.DomainError as domain_error:
             raise client.Rejected(
                 code=domain_error.code, message=domain_error.message
@@ -149,12 +151,14 @@ class AlphaService(ts.ApplicationService):
                 pass
             case domain.Taken.HELD:
                 try:
-                    check_response = await self._beta_check.check(MapToCheckRequest(widget))
+                    check_name_response = await self._beta_check.check_name(
+                        MapToCheckNameRequest(widget)
+                    )
                 except ports.BetaUnavailable as beta_error:
                     raise client.Unavailable(
                         message="the beta check is unavailable"
                     ) from beta_error
-                widget.clear(MapToClearanceSpec(check_response))
+                widget.clear(MapToClearanceSpec(check_name_response))
             case _ as never:
                 typing.assert_never(never)
         try:
@@ -164,11 +168,13 @@ class AlphaService(ts.ApplicationService):
                 )
         except ports.StoreUnavailable as store_error:
             raise client.Unavailable(message="the widget store is unavailable") from store_error
-        return MapToAddResponse(add_widget_response, widget)
+        return MapToAddPartResponse(add_widget_response, widget)
 
-    async def take(self, take_request: client.TakeRequest) -> client.TakeResponse:
+    async def take_part(
+        self, take_part_request: client.TakePartRequest
+    ) -> client.TakePartResponse:
         try:
-            name = domain.Name(take_request.name)
+            name = domain.Name(take_part_request.name)
         except errors.DomainError as domain_error:
             raise client.Rejected(
                 code=domain_error.code, message=domain_error.message
@@ -180,7 +186,7 @@ class AlphaService(ts.ApplicationService):
                 widget = domain.Widget(
                     MapToLoadedWidgetSpec(load_widget_request, load_widget_response)
                 )
-                taken = widget.take(MapToTakenPartSpec(take_request))
+                taken = widget.take(MapToTakenPartSpec(take_part_request))
                 match taken:
                     case domain.Taken.TAKEN:
                         await widget_repository.save_widget(MapToSaveWidgetRequest(widget))
@@ -190,11 +196,13 @@ class AlphaService(ts.ApplicationService):
                         typing.assert_never(never)
         except ports.StoreUnavailable as store_error:
             raise client.Unavailable(message="the widget store is unavailable") from store_error
-        return MapToTakeResponse(widget)
+        return MapToTakePartResponse(widget)
 
-    async def find(self, find_request: client.FindRequest) -> client.FindResponse:
+    async def find_widget(
+        self, find_widget_request: client.FindWidgetRequest
+    ) -> client.FindWidgetResponse:
         try:
-            name = domain.Name(find_request.name)
+            name = domain.Name(find_widget_request.name)
         except errors.DomainError as domain_error:
             raise client.Rejected(
                 code=domain_error.code, message=domain_error.message
@@ -206,4 +214,4 @@ class AlphaService(ts.ApplicationService):
                 )
         except ports.StoreUnavailable as store_error:
             raise client.Unavailable(message="the widget store is unavailable") from store_error
-        return client.FindResponse(found=find_widget_response.found.value)
+        return client.FindWidgetResponse(found=find_widget_response.found.value)

@@ -18,45 +18,45 @@ import tesser.errors as errors
 
 @ts.fake
 class FakeTargetPolicyAllowAll(ports.TargetPolicy):
-    def check(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
-        return ports.CheckTargetResponse(verdict=ports.PolicyVerdict.ALLOWED, reason="ok")
+    def check_target(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
+        return ports.CheckTargetResponse(outcome=ports.CheckTargetOutcome.ALLOWED, reason="ok")
 
 
 def test_deactivate_link_flips_the_link_inactive() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    campaign_view = campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    assert [link.status for link in campaign_view.links] == ["inactive"]
+    deactivate_link_response = campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
+    assert [link.status for link in deactivate_link_response.campaign.links] == ["inactive"]
 
 
 def test_deactivate_link_survives_a_reload() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    campaign_view = campaign_service.get_campaign(client.GetCampaignRequest(campaign_id=id))
-    assert [link.status for link in campaign_view.links] == ["inactive"]
+    get_campaign_response = campaign_service.get_campaign(client.GetCampaignRequest(campaign_id=id))
+    assert [link.status for link in get_campaign_response.campaign.links] == ["inactive"]
 
 
 def test_resolve_refuses_a_deactivated_link() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    assert campaign_service.resolve(client.ResolveRequest(slug="promo")).target_url == "https://ok.example/x"
+    assert campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo")).target_url == "https://ok.example/x"
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
     with pytest.raises(client.Missing) as e:
-        campaign_service.resolve(client.ResolveRequest(slug="promo"))
+        campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo"))
     assert e.value.code == "link_missing"
 
 
 def test_deactivate_link_rejects_an_unknown_slug() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     with pytest.raises(client.Missing) as e:
         campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="nosuch"))
@@ -66,7 +66,7 @@ def test_deactivate_link_rejects_an_unknown_slug() -> None:
 def test_deactivate_link_rejects_an_unknown_campaign() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     with pytest.raises(client.Missing) as e:
         campaign_service.deactivate_link(
@@ -78,7 +78,7 @@ def test_deactivate_link_rejects_an_unknown_campaign() -> None:
 def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     http_handler = handlers.HttpHandler(campaign_service)
     http_response = http_handler.deactivate_link(
@@ -93,7 +93,7 @@ def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:
 def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     http_handler = handlers.HttpHandler(campaign_service)
     try:
@@ -114,12 +114,12 @@ def test_deactivate_link_endpoint_maps_a_missing_link_to_404() -> None:
 def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     http_handler = handlers.HttpHandler(campaign_service)
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
     try:
-        http_response = http_handler.resolve(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+        http_response = http_handler.resolve_slug(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     except protocol.BadRequest as e:
         http_response = protocol.HttpResponse.problem(400, "malformed_request", str(e))
     except protocol.PayloadTooLarge as e:
@@ -218,11 +218,11 @@ def test_create_campaign_endpoint_rejects_a_non_object_budget() -> None:
 def test_add_link_keeps_an_earlier_deactivated_link_inactive() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
-    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign_id
+    id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    campaign_view = campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="sale", target_url="https://ok.example/y"))
-    assert [(link.slug, link.status) for link in campaign_view.links] == [
+    add_link_response = campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="sale", target_url="https://ok.example/y"))
+    assert [(link.slug, link.status) for link in add_link_response.campaign.links] == [
         ("promo", "inactive"),
         ("sale", "active"),
     ]
