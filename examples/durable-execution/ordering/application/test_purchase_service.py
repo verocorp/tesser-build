@@ -76,13 +76,13 @@ class FakeStartedPayForOrderRelay(relays.PayForOrderRelay):
 
 
 @ts.helper
-def pay_for_order_request(
+def make_order_payment_request(
     order_id: str = "o1",
     sku: str = "widget",
     quantity: int = 2,
     payment_method: str = "card-4242",
-) -> client.PayForOrderRequest:
-    return client.PayForOrderRequest(
+) -> client.MakeOrderPaymentRequest:
+    return client.MakeOrderPaymentRequest(
         order_id=order_id, sku=sku, quantity=quantity, payment_method=payment_method
     )
 
@@ -90,20 +90,20 @@ def pay_for_order_request(
 class TestPurchaseService:
 
     def test_paying_answers_the_order_id_the_total_and_the_payment_reference(self) -> None:
-        pay_for_order_response = asyncio.run(
-            application.PurchaseService(FakePayForOrderRelay()).pay_for_order(
-                pay_for_order_request(quantity=3)
+        make_order_payment_response = asyncio.run(
+            application.PurchaseService(FakePayForOrderRelay()).make_order_payment(
+                make_order_payment_request(quantity=3)
             )
         )
-        assert pay_for_order_response.order_id == "o1"
-        assert pay_for_order_response.total_cents == 750
-        assert pay_for_order_response.payment_reference == "pay-o1"
+        assert make_order_payment_response.order_id == "o1"
+        assert make_order_payment_response.total_cents == 750
+        assert make_order_payment_response.payment_reference == "pay-o1"
 
     def test_paying_runs_the_orchestrator_for_the_order_it_built_and_waits(self) -> None:
         fake_pay_for_order_relay = FakePayForOrderRelay()
         asyncio.run(
-            application.PurchaseService(fake_pay_for_order_relay).pay_for_order(
-                pay_for_order_request(order_id="o2", sku="gadget", quantity=3)
+            application.PurchaseService(fake_pay_for_order_relay).make_order_payment(
+                make_order_payment_request(order_id="o2", sku="gadget", quantity=3)
             )
         )
         assert [
@@ -114,8 +114,8 @@ class TestPurchaseService:
     def test_paying_carries_the_payment_method_the_caller_named(self) -> None:
         fake_pay_for_order_relay = FakePayForOrderRelay()
         asyncio.run(
-            application.PurchaseService(fake_pay_for_order_relay).pay_for_order(
-                pay_for_order_request(payment_method="card-1234")
+            application.PurchaseService(fake_pay_for_order_relay).make_order_payment(
+                make_order_payment_request(payment_method="card-1234")
             )
         )
         assert [str(r.payment_method) for r in fake_pay_for_order_relay.ran] == [
@@ -126,8 +126,8 @@ class TestPurchaseService:
         fake_pay_for_order_relay = FakePayForOrderRelay()
         with pytest.raises(client.OrderRejected) as excinfo:
             asyncio.run(
-                application.PurchaseService(fake_pay_for_order_relay).pay_for_order(
-                    pay_for_order_request(payment_method="")
+                application.PurchaseService(fake_pay_for_order_relay).make_order_payment(
+                    make_order_payment_request(payment_method="")
                 )
             )
         assert excinfo.value.message == "a payment method is never empty"
@@ -138,7 +138,7 @@ class TestPurchaseService:
             asyncio.run(
                 application.PurchaseService(
                     FakeUnconfirmedPayForOrderRelay()
-                ).pay_for_order(pay_for_order_request(sku="nothing"))
+                ).make_order_payment(make_order_payment_request(sku="nothing"))
             )
         assert excinfo.value.message == "no price for sku nothing"
 
@@ -147,7 +147,7 @@ class TestPurchaseService:
             asyncio.run(
                 application.PurchaseService(
                     FakeDecliningPayForOrderRelay()
-                ).pay_for_order(pay_for_order_request())
+                ).make_order_payment(make_order_payment_request())
             )
         assert excinfo.value.message == "the processor declined the charge"
 
@@ -156,6 +156,6 @@ class TestPurchaseService:
             asyncio.run(
                 application.PurchaseService(
                     FakeStartedPayForOrderRelay()
-                ).pay_for_order(pay_for_order_request())
+                ).make_order_payment(make_order_payment_request())
             )
         assert excinfo.value.message == "the order was already started"

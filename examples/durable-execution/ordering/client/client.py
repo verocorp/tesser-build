@@ -34,7 +34,7 @@ class PlaceOrderResponse(ts.Response):
         self.total_cents = total_cents
 
 
-class PayForOrderRequest(ts.Request):
+class MakeOrderPaymentRequest(ts.Request):
 
     def __init__(self, order_id: str, sku: str, quantity: int, payment_method: str) -> None:
         self.order_id = order_id
@@ -43,7 +43,7 @@ class PayForOrderRequest(ts.Request):
         self.payment_method = payment_method
 
 
-class PayForOrderResponse(ts.Response):
+class MakeOrderPaymentResponse(ts.Response):
 
     def __init__(self, order_id: str, total_cents: int, payment_reference: str) -> None:
         self.order_id = order_id
@@ -104,6 +104,6 @@ class OrderingClient(ts.Client, typing.Protocol):
 
     async def place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...
 
-    async def pay_for_order(
-        self, pay_for_order_request: PayForOrderRequest
-    ) -> PayForOrderResponse: ...
+    async def make_order_payment(
+        self, make_order_payment_request: MakeOrderPaymentRequest
+    ) -> MakeOrderPaymentResponse: ...
