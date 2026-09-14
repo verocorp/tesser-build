@@ -124,6 +124,66 @@ Three more the enactment left standing, verified against the source on
   the specs-app job also fetches Chromium), so add a printed hint for the
   browser step; pip cannot do it.
 
+## Left standing by the v0.1.1.0 adversarial passes (2026-09-14, PR #191)
+
+Two adversarial reviewers (Codex and a Claude subagent) ran on the naming
+enactment before Chris stopped the ship run. Nothing below was acted on;
+each is a candidate for a later wave, most serious first.
+
+- [ ] **A response carrying more than one record passes the snapshot and
+  only the first is read.** `purchase_orchestrator.py` and
+  `purchase_actions.py` read `payments[0]`; a payload with two receipts
+  deserializes, and the amount check sees one of them, so a duplicated
+  charge from a faulty adapter hides behind a `PAID`. The zero-or-one
+  tuple has no rule enforcing "zero or one" anywhere. This is the
+  collections item above, arriving as a concrete hole: settle the
+  collection shape, then either the snapshot or the consumer enforces the
+  count. (Codex P1.)
+- [ ] **A declined payment with an empty `reasons` is a 500, not a
+  situation.** `purchase_service.py` raises `PaymentDeclined(reasons[0])`
+  and `order_service.py` does the same for `PRODUCT_PRICE_NOT_FOUND`;
+  nothing requires a `DECLINED` or `NOT_FOUND` response to carry a reason
+  string, so an adapter that declines with a bare code produces an
+  `IndexError`. Same root as the `reasons` shape entry above: decide
+  whether a reason is required per member, or make the empty case a
+  defined message. (Claude, confidence 9.)
+- [ ] **The 30-second read timeout leaves an accepted purchase with no
+  recovery path.** After the timeout the host answers 500 while the
+  workflow finishes; a retry with the same order answers `ALREADY_STARTED`
+  with no purchase, so a caller cannot tell a completed charge from an
+  unfinished one and retrying under another id risks a second charge.
+  Restate has `/attach` for exactly this; nothing in the tree exposes it.
+  Decide whether accepted-but-pending is an outcome the client speaks.
+  (Codex P2, Claude finding 5.)
+- [ ] **The retry policy's unset intervals retry within about a second.**
+  `InvocationRetryPolicy(max_attempts=5, on_max_attempts="pause")` leaves
+  `initial_interval`, `exponentiation_factor`, and `max_interval` at the
+  server defaults, and applies to the two action Services as well as the
+  Workflows, so a two-second processor outage exhausts `take_payment`,
+  pauses the invocation, hangs the parent's `service_call`, and leaves the
+  order key claimed. The bounded policy is right; these numbers make a
+  transient outage indistinguishable from a permanent fault. Set the
+  intervals, or set them per Service and Workflow. (Claude, confidence 7;
+  the performance specialist raised the same interaction from the caller's
+  side.)
+- [ ] **A concurrent confirm is 422 down one path and 409 down the other.**
+  The child's `ALREADY_STARTED` becomes the parent's `ORDER_NOT_CONFIRMED`,
+  which the handler answers 422 (invalid, do not retry), while the same
+  condition on the parent leg is `ALREADY_STARTED` and 409 (retry). Rule 9
+  settles the name; the status consequence was never ruled. (Claude,
+  confidence 8.)
+- [ ] **The README still documents the struck count check.**
+  `examples/durable-execution/README.md` (around line 789) says a `PRICED`
+  response carrying no price is refused; that check was struck on
+  2026-09-13 and the snapshots no longer do it. One sentence to delete.
+  (Claude, confidence 10.)
+- [ ] **Advisory: the eight serde guard blocks in
+  `restate_order_runtime.py` are one helper.** Empty body → terminal 400,
+  `ValueError` → terminal 400, repeated verbatim on every `deserialize`;
+  a module-level helper removes about 32 lines and eight TB082 markers.
+  Left because it changes the shape the work list counts. (Simplification
+  specialist.)
+
 ## Left open by the relay ruling (2026-09-11, Chris)
 
 The word "job" is gone: `ts.Job`, `ts.JobContext`, `adapters/jobs/`, and the
