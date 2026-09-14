@@ -7279,7 +7279,7 @@ def test_an_orchestrator_method_is_named_for_its_operation_and_never_run() -> No
                 "        self._quote_price_relay = quote_price_relay\n"
                 "    async def run(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
                 "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
-                "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "    async def run_check_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
                 "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
                 "    async def price(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
                 "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
@@ -7296,7 +7296,7 @@ def test_an_orchestrator_method_is_named_for_its_operation_and_never_run() -> No
         for f in findings
     ), findings
     assert any(
-        "shop.application.orchestrators.named.Named.run_quote_price begins with run_; "
+        "shop.application.orchestrators.named.Named.run_check_quote begins with run_; "
         "start_ and run_ belong to a relay and its runners" in f
         for f in findings
     ), findings
@@ -18774,23 +18774,41 @@ def test_a_relay_is_named_for_the_one_operation_it_carries() -> None:
                 "        self.text = text\n"
                 "class PlaceOrderRelay(ts.Relay, typing.Protocol):\n"
                 "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n"
+                "class CancelOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class CancelOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class HoldOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class HoldOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ShipOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ShipOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
                 "class OrdersRelay(ts.Relay, typing.Protocol):\n"
-                "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n"
-                "class PlaceAndShipOrderRelay(ts.Relay, typing.Protocol):\n"
-                "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n"
-                "    async def run_ship_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n",
+                "    async def run_cancel_order(self, cancel_order_request: CancelOrderRequest) -> CancelOrderResponse: ...\n"
+                "class HoldAndShipOrderRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_hold_order(self, hold_order_request: HoldOrderRequest) -> HoldOrderResponse: ...\n"
+                "    async def run_ship_order(self, ship_order_request: ShipOrderRequest) -> ShipOrderResponse: ...\n",
                 False,
             ),
         ))).violations()
     )
     assert any(
-        "shop.application.relays.orders.OrdersRelay carries place_order and is not PlaceOrderRelay; "
+        "shop.application.relays.orders.OrdersRelay carries cancel_order and is not CancelOrderRelay; "
         "a relay is named for the operation it carries, because a name for what sits behind it is "
         "a pattern word" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.relays.orders.PlaceAndShipOrderRelay carries 2 operations; a relay "
+        "shop.application.relays.orders.HoldAndShipOrderRelay carries 2 operations; a relay "
         "carries one operation, because its name is the operation it carries" in f
         for f in findings
     ), findings
