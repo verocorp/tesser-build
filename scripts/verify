@@ -247,6 +247,20 @@ run_specs_app() {
   pytest -q || return 1
 }
 
+# The voice example: one context (calls) whose root-tier test places a call
+# for a person through the client and reads the person's name back by the
+# call id. The tree starts from that test and its client; the app, the
+# component, and the hosts behind them are not built yet.
+run_voice() {
+  cd "$ROOT/examples/voice" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../../tesser-py mypy --strict calls tests conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+}
+
 run_layout() {
   cd "$ROOT/layout" || return 1
   step "tessercheck (zero findings over the whole tree)"
@@ -286,6 +300,7 @@ run_tree() {
     errorspy)       run_errorspy ;;
     tesser-py)      run_tesser_py ;;
     specs-app)      run_specs_app ;;
+    voice)          run_voice ;;
     layout)         run_layout ;;
     tessercheck-py) run_tessercheck_py ;;
     *) echo "unknown tree: $tree (known: ${TREES[*]})"; return 1 ;;

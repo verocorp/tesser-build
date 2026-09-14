@@ -165,6 +165,24 @@ jobs:
       - name: examples/durable-execution — tessercheck + mypy --strict + pytest
         run: scripts/verify durable-execution
 
+  voice-example:
+    # Gates the voice example at the same bar: tessercheck zero findings +
+    # mypy --strict + pytest. One context, calls, whose root-tier test places
+    # a call for a person through the client and reads the person's name back
+    # by the call id; the app, component, and hosts behind it are not built
+    # yet.
+    name: voice example (tessercheck + mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r examples/voice/requirements-dev.txt
+      - name: examples/voice — tessercheck + mypy --strict + pytest
+        run: scripts/verify voice
+
   asyncpg-example:
     # Gates the minimal tree with a real database behind it: asyncpg
     # repositories in both contexts, each behind a store that owns the
