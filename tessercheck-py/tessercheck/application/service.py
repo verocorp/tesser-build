@@ -290,13 +290,13 @@ class TessercheckService(ts.ApplicationService):
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         tree_root = domain.TreeRoot(check_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
-        read_sources_response = self._source_reader.sources(read_sources_request)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
         return MapToCheckResponse(read_sources_response)
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
         tree_root = domain.TreeRoot(check_file_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
-        read_sources_response = self._source_reader.sources(read_sources_request)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
         path = domain.Path(check_file_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
         return MapToCheckFileResponse(codebase, path)
@@ -304,7 +304,7 @@ class TessercheckService(ts.ApplicationService):
     def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
         tree_root = domain.TreeRoot(hook_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
-        read_sources_response = self._source_reader.sources(read_sources_request)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
         path = domain.Path(hook_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
         return MapToHookResponse(codebase, hook_request)
@@ -312,31 +312,31 @@ class TessercheckService(ts.ApplicationService):
     def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
         tree_root = domain.TreeRoot(mark_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
-        read_sources_response = self._source_reader.sources(read_sources_request)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         marking = domain.Marking(MapToMarkingSpec(read_sources_response, codebase))
         rewritten_modules = marking.rewritten()
         write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
-        write_sources_response = self._source_writer.write(write_sources_request)
-        read_sources_response = self._source_reader.sources(read_sources_request)
+        write_sources_response = self._source_writer.write_sources(write_sources_request)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
         return MapToMarkResponse(write_sources_response, read_sources_response)
 
     def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
         tree_root = domain.TreeRoot(rename_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
-        read_sources_response = self._source_reader.sources(read_sources_request)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         renaming = domain.Renaming(MapToRenamingSpec(read_sources_response, codebase))
         rewritten_modules = renaming.rewritten()
         write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
-        write_sources_response = self._source_writer.write(write_sources_request)
-        read_sources_response = self._source_reader.sources(read_sources_request)
+        write_sources_response = self._source_writer.write_sources(write_sources_request)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
         return MapToRenameResponse(write_sources_response, read_sources_response)
 
     def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
         tree_root = domain.TreeRoot(rulebook_request.tree)
         read_rulebook_request = MapToReadRulebookRequest(tree_root)
-        read_rulebook_response = self._rulebook_sources.read(read_rulebook_request)
+        read_rulebook_response = self._rulebook_sources.read_rulebook(read_rulebook_request)
         try:
             rulebook = domain.Rulebook(MapToRulebookSpec(read_rulebook_response))
         except errors.DomainError as domain_error:

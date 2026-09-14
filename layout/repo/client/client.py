@@ -32,6 +32,6 @@ class TreesResponse(ts.Response):
 
 class RepoClient(ts.Client, typing.Protocol):
 
-    def check(self, check_request: CheckRequest) -> CheckResponse: ...
+    def check(self, check_request: CheckRequest) -> CheckResponse: ...  # tesser:debt TB085
 
-    def trees(self, trees_request: TreesRequest) -> TreesResponse: ...
+    def trees(self, trees_request: TreesRequest) -> TreesResponse: ...  # tesser:debt TB085

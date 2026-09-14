@@ -138,6 +138,22 @@ RELAY_MESSAGE_BLOCKS: typing.Final[dict[str, str]] = {
 
 RELAY_DTO_BLOCKS: typing.Final[frozenset[str]] = frozenset(RELAY_MESSAGE_BLOCKS.values())
 
+CALLING_MODES: typing.Final[tuple[str, ...]] = ("start_", "run_")
+
+RUN_MODE: typing.Final[str] = "run_"
+
+RUN_METHOD: typing.Final[str] = "run"
+
+OPERATION_SEGMENTS: typing.Final[int] = 2
+
+OUTCOME_FIELD: typing.Final[str] = "outcome"
+
+REQUEST_SUFFIX: typing.Final[str] = "Request"
+
+RESPONSE_SUFFIX: typing.Final[str] = "Response"
+
+OUTCOME_SUFFIX: typing.Final[str] = "Outcome"
+
 RELAY_CALLERS: typing.Final[frozenset[str]] = frozenset({"service", "actions", "orchestrator"})
 
 PACKAGE_HOMES: typing.Final[frozenset[str]] = frozenset(
@@ -943,6 +959,17 @@ class DerivedName(ts.ValueObject):
         object.__setattr__(
             self, "_value", CAMEL_TAIL.sub(r"\1_\2", CAMEL_RUN.sub(r"\1_\2", value)).lower()
         )
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class MessageName(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        object.__setattr__(self, "_value", "".join(part.capitalize() for part in value.split("_")))
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
@@ -5839,6 +5866,151 @@ class ClassDecl(ts.Entity):
                         f"{where} names a shape it does not declare; a port method speaks "
                         "requests and responses declared in its own ports module, never a "
                         "bare ts.Request or ts.Response, which two ports would share",
+                    ))
+                )
+        return tuple(found)
+
+    def operation_name_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        own = self._registry.kinds().block_of(Symbol(SymbolSpec(str(self._module), str(self._name))))
+        relayed = own is not None and str(own) == RELAY_BLOCK
+        attr_rows = self._registry.attrs()
+        for signature in self._signatures:
+            if str(signature.name()).startswith("_"):
+                continue
+            where = str(signature.where())
+            path = str(signature.path())
+            line = int(signature.lineno())
+            mode = next(
+                (prefix for prefix in CALLING_MODES if str(signature.name()).startswith(prefix)),
+                None,
+            )
+            if relayed and mode is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} names no calling mode; a relay method is start_ or run_ "
+                        "followed by the operation it carries, because the verb says how "
+                        "its caller waits",
+                    ))
+                )
+                continue
+            if not relayed and mode is not None:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} begins with {mode}; start_ and run_ belong to a relay and "
+                        "its runners, because only a relay's caller chooses how it waits",
+                    ))
+                )
+                continue
+            operation = str(signature.name())[len(mode):] if mode is not None else str(signature.name())
+            if len(operation.split("_")) < OPERATION_SEGMENTS:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} names the operation {operation}; an operation is a verb "
+                        "and the business thing it acts on, so its name has at least two "
+                        "segments",
+                    ))
+                )
+                continue
+            asked = str(MessageName(operation))
+            answered = str(MessageName(operation if mode in (None, RUN_MODE) else str(signature.name())))
+            params = signature.params()
+            taken = params[0].symbol() if len(params) == 1 else None
+            if taken is not None and str(taken.name()) != asked + REQUEST_SUFFIX:
+                actual = str(taken.name())
+                derived = asked + REQUEST_SUFFIX
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} takes a {actual}, not a {derived}; a request is named for "
+                        "the operation it carries, because a message named for anything "
+                        "else is a message two operations can share",
+                    ))
+                )
+            returned = signature.returns()
+            given = returned.symbol() if returned is not None else None
+            if given is None:
+                continue
+            if str(given.name()) != answered + RESPONSE_SUFFIX:
+                actual = str(given.name())
+                derived = answered + RESPONSE_SUFFIX
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} answers a {actual}, not a {derived}; a response is named "
+                        "for the operation it carries, because a message named for anything "
+                        "else is a message two operations can share",
+                    ))
+                )
+            held = attr_rows.held(Text(f"{given.module()}|{given.name()}|{OUTCOME_FIELD}"))
+            if held is not None and str(held.name()) != answered + OUTCOME_SUFFIX:
+                actual = str(held.name())
+                derived = answered + OUTCOME_SUFFIX
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} answers an outcome of {actual}, not {derived}; an outcome "
+                        "is named for the operation that ends in it, because each member "
+                        "reads as a sentence after that act",
+                    ))
+                )
+        return tuple(found)
+
+    def orchestrator_name_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for signature in self._signatures:
+            if str(signature.name()).startswith("_"):
+                continue
+            where = str(signature.where())
+            path = str(signature.path())
+            line = int(signature.lineno())
+            operation = str(signature.name())
+            mode = next((prefix for prefix in CALLING_MODES if operation.startswith(prefix)), None)
+            if operation == RUN_METHOD:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} is run; an orchestrator method is named for the operation "
+                        "it carries, because run says only that it is invoked, and an "
+                        "orchestrator may carry more than one operation",
+                    ))
+                )
+            elif mode is not None:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} begins with {mode}; start_ and run_ belong to a relay and "
+                        "its runners, because only a relay's caller chooses how it waits",
+                    ))
+                )
+            elif len(operation.split("_")) < OPERATION_SEGMENTS:
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} names the operation {operation}; an operation is a verb "
+                        "and the business thing it acts on, so its name has at least two "
+                        "segments",
                     ))
                 )
         return tuple(found)
@@ -12356,6 +12528,8 @@ class Codebase(ts.AggregateRoot):
                         if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
                             continue
                         found.extend(CLIENT_METHOD.violations(signature))
+                    if str(module.place()) not in TEST_TIER:
+                        found.extend(decl.operation_name_violations())
                 elif block in ("repository", "gateway", "handler"):
                     found.extend(ADAPTER_RECORDS.violations(decl))
                 elif block == "port":
@@ -12365,6 +12539,7 @@ class Codebase(ts.AggregateRoot):
                         "ports-file",
                     ):
                         found.extend(decl.port_violations(PORT_METHOD))
+                        found.extend(decl.operation_name_violations())
                 elif block == "store":
                     if str(module.place()) in (
                         "ports",
@@ -12400,6 +12575,7 @@ class Codebase(ts.AggregateRoot):
                         found.extend(body.port_call_violations())
                 elif block == "orchestrator":
                     found.extend(decl.orchestrator_violations(ORCHESTRATOR_DEPENDENCIES))
+                    found.extend(decl.orchestrator_name_violations())
                     for body in decl.bodies():
                         found.extend(body.delegation_violations())
                         if str(body.name()) == "__init__":
@@ -12414,6 +12590,9 @@ class Codebase(ts.AggregateRoot):
                         if str(signature.name()).startswith("_") and str(signature.name()) != PUBLIC_CALL:
                             continue
                         found.extend(APP_CLIENT_METHOD.violations(signature))
+                    found.extend(decl.operation_name_violations())
+                elif block == RELAY_BLOCK and str(module.place()) in ("relays", "relays-file"):
+                    found.extend(decl.operation_name_violations())
         for module in scoped:
             found.extend(module.pairing_violations(registry))
         if whole:

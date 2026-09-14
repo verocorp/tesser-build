@@ -108,14 +108,14 @@ ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
 
 class TessercheckClient(ts.Client, typing.Protocol):
 
-    def check(self, check_request: CheckRequest) -> CheckResponse: ...
+    def check(self, check_request: CheckRequest) -> CheckResponse: ...  # tesser:debt TB085
 
     def check_file(self, check_file_request: CheckFileRequest) -> CheckFileResponse: ...
 
-    def hook(self, hook_request: HookRequest) -> HookResponse: ...
+    def hook(self, hook_request: HookRequest) -> HookResponse: ...  # tesser:debt TB085
 
-    def mark(self, mark_request: MarkRequest) -> MarkResponse: ...
+    def mark(self, mark_request: MarkRequest) -> MarkResponse: ...  # tesser:debt TB085
 
-    def rename(self, rename_request: RenameRequest) -> RenameResponse: ...
+    def rename(self, rename_request: RenameRequest) -> RenameResponse: ...  # tesser:debt TB085
 
-    def rulebook(self, rulebook_request: RulebookRequest) -> RulebookResponse: ...
+    def rulebook(self, rulebook_request: RulebookRequest) -> RulebookResponse: ...  # tesser:debt TB085

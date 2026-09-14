@@ -13,7 +13,7 @@ def test_every_tesser_allowlist_entry_is_earned_by_the_shipped_distribution() ->
     for key, kind in sorted(manifest.items()):
         if kind != "app" or not (repo / key / ".tesser-root").is_file():
             continue
-        read_sources_response = filesystem_source_reader.sources(ports.ReadSourcesRequest(tree=str(repo / key)))
+        read_sources_response = filesystem_source_reader.read_sources(ports.ReadSourcesRequest(tree=str(repo / key)))
         if read_sources_response.exports != (domain.TESSER,):
             continue
         names = [source.name for source in read_sources_response.sources]
