@@ -10,19 +10,12 @@ import linkpolicy.client as client
 
 @ts.fake
 class FakeVerdictRepository(ports.VerdictRepository):
-    def __init__(
-        self,
-        *records: ports.VerdictRecord,
-        error: Exception | None = None,
-    ) -> None:
+    def __init__(self, *records: ports.VerdictRecord) -> None:
         self.records = list(records)
-        self.error = error
 
     def record_verdict(
         self, record_verdict_request: ports.RecordVerdictRequest
     ) -> ports.RecordVerdictResponse:
-        if self.error is not None:
-            raise self.error
         self.records.append(
             ports.VerdictRecord(
                 target_url=record_verdict_request.target_url,
@@ -35,8 +28,6 @@ class FakeVerdictRepository(ports.VerdictRepository):
     def list_verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
-        if self.error is not None:
-            raise self.error
         return ports.ListVerdictsResponse(verdicts=tuple(self.records))
 
 
@@ -91,17 +82,6 @@ def test_check_records_a_denial_as_the_denied_decision() -> None:
     assert fake_verdict_repository.records[0].reason == "host 'evil.example' is blocked"
 
 
-def test_check_crosses_a_repository_failure_as_the_contexts_unavailable() -> None:
-    fake_verdict_repository = FakeVerdictRepository(
-        error=ports.StoreUnavailable("linkpolicy store unavailable")
-    )
-
-    with pytest.raises(client.Unavailable):
-        application.LinkPolicyService(fake_verdict_repository).check_target(
-            client.CheckTargetRequest("https://ok.example/x")
-        )
-
-
 def test_list_verdicts_answers_nothing_when_nothing_was_recorded() -> None:
     link_policy_service = application.LinkPolicyService(FakeVerdictRepository())
 
@@ -144,20 +124,9 @@ def test_list_verdicts_returns_what_check_recorded() -> None:
     ]
 
 
-def test_list_verdicts_crosses_a_repository_failure_as_the_contexts_unavailable() -> None:
-    fake_verdict_repository = FakeVerdictRepository(
-        error=ports.StoreUnavailable("linkpolicy store unavailable")
-    )
-
-    with pytest.raises(client.Unavailable):
-        application.LinkPolicyService(fake_verdict_repository).list_verdicts(
-            client.ListVerdictsRequest()
-        )
-
-
 def test_check_refuses_an_empty_url_and_records_nothing() -> None:
     fake_verdict_repository = FakeVerdictRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.TargetRejected) as ei:
         application.LinkPolicyService(fake_verdict_repository).check_target(client.CheckTargetRequest(""))
     assert ei.value.code == "invalid_target_url"
     assert fake_verdict_repository.records == []

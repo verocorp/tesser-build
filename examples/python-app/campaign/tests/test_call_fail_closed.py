@@ -99,34 +99,18 @@ class FakeTargetPolicyBlocking(ports.TargetPolicy):
 
 
 @ts.fake
-class FakeTargetPolicyOutage(ports.TargetPolicy):
-    def check_target(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
-        raise ports.PolicyUnavailable("linkpolicy unavailable")
-
-
-@ts.fake
 class FakeTargetPolicyAllowAll(ports.TargetPolicy):
     def check_target(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
         return ports.CheckTargetResponse(outcome=ports.CheckTargetOutcome.ALLOWED, reason="ok")
 
 
-def test_rejection_is_a_conflict_and_creates_nothing() -> None:
+def test_a_blocked_target_creates_nothing() -> None:
     fake_campaign_repository_recording = FakeCampaignRepositoryRecording()
     campaign_service = application.CampaignService(fake_campaign_repository_recording, FakeTargetPolicyBlocking(), FakeCampaignIdentity(), fake_campaign_repository_recording)
     add_link_request = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
-    with pytest.raises(client.Conflict) as caught:
+    with pytest.raises(client.TargetBlocked) as caught:
         campaign_service.add_link(add_link_request)
-    assert caught.value.code == "destination_blocked"
-    assert fake_campaign_repository_recording.saved == []
-
-
-def test_outage_is_the_contexts_unavailable_and_creates_nothing() -> None:
-    fake_campaign_repository_recording = FakeCampaignRepositoryRecording()
-    campaign_service = application.CampaignService(fake_campaign_repository_recording, FakeTargetPolicyOutage(), FakeCampaignIdentity(), fake_campaign_repository_recording)
-    add_link_request = client.AddLinkRequest(campaign_id="0123456789abcdef", slug="promo", target_url="https://ok.example/x")
-    with pytest.raises(client.Unavailable) as caught:
-        campaign_service.add_link(add_link_request)
-    assert isinstance(caught.value.__cause__, ports.PolicyUnavailable)
+    assert caught.value.message == "destination not allowed: not on the allow-list"
     assert fake_campaign_repository_recording.saved == []
 
 

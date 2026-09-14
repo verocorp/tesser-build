@@ -29,18 +29,16 @@ class HttpHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.HttpResponse.problem(422, error.code, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.code, error.message)
-                case client.Conflict():
-                    return protocol.HttpResponse.problem(409, error.code, error.message)
-                case client.Unreadable():
-                    return protocol.HttpResponse.problem(
-                        503, "unavailable", "a dependency is unavailable; please retry"
-                    )
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
+                case client.CampaignNotFound():
+                    return protocol.HttpResponse.problem(404, "campaign_not_found", error.message)
+                case client.LinkNotFound():
+                    return protocol.HttpResponse.problem(404, "link_not_found", error.message)
+                case client.SlugTaken():
+                    return protocol.HttpResponse.problem(409, "slug_taken", error.message)
+                case client.TargetBlocked():
+                    return protocol.HttpResponse.problem(409, "target_blocked", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(201, {
@@ -69,18 +67,16 @@ class HttpHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.HttpResponse.problem(422, error.code, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.code, error.message)
-                case client.Conflict():
-                    return protocol.HttpResponse.problem(409, error.code, error.message)
-                case client.Unreadable():
-                    return protocol.HttpResponse.problem(
-                        503, "unavailable", "a dependency is unavailable; please retry"
-                    )
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
+                case client.CampaignNotFound():
+                    return protocol.HttpResponse.problem(404, "campaign_not_found", error.message)
+                case client.LinkNotFound():
+                    return protocol.HttpResponse.problem(404, "link_not_found", error.message)
+                case client.SlugTaken():
+                    return protocol.HttpResponse.problem(409, "slug_taken", error.message)
+                case client.TargetBlocked():
+                    return protocol.HttpResponse.problem(409, "target_blocked", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
@@ -106,18 +102,16 @@ class HttpHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.HttpResponse.problem(422, error.code, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.code, error.message)
-                case client.Conflict():
-                    return protocol.HttpResponse.problem(409, error.code, error.message)
-                case client.Unreadable():
-                    return protocol.HttpResponse.problem(
-                        503, "unavailable", "a dependency is unavailable; please retry"
-                    )
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
+                case client.CampaignNotFound():
+                    return protocol.HttpResponse.problem(404, "campaign_not_found", error.message)
+                case client.LinkNotFound():
+                    return protocol.HttpResponse.problem(404, "link_not_found", error.message)
+                case client.SlugTaken():
+                    return protocol.HttpResponse.problem(409, "slug_taken", error.message)
+                case client.TargetBlocked():
+                    return protocol.HttpResponse.problem(409, "target_blocked", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
@@ -136,18 +130,16 @@ class HttpHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.HttpResponse.problem(422, error.code, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.code, error.message)
-                case client.Conflict():
-                    return protocol.HttpResponse.problem(409, error.code, error.message)
-                case client.Unreadable():
-                    return protocol.HttpResponse.problem(
-                        503, "unavailable", "a dependency is unavailable; please retry"
-                    )
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
+                case client.CampaignNotFound():
+                    return protocol.HttpResponse.problem(404, "campaign_not_found", error.message)
+                case client.LinkNotFound():
+                    return protocol.HttpResponse.problem(404, "link_not_found", error.message)
+                case client.SlugTaken():
+                    return protocol.HttpResponse.problem(409, "slug_taken", error.message)
+                case client.TargetBlocked():
+                    return protocol.HttpResponse.problem(409, "target_blocked", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.json(200, {
@@ -166,18 +158,16 @@ class HttpHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.HttpResponse.problem(422, error.code, error.message)
-                case client.Missing():
-                    return protocol.HttpResponse.problem(404, error.code, error.message)
-                case client.Conflict():
-                    return protocol.HttpResponse.problem(409, error.code, error.message)
-                case client.Unreadable():
-                    return protocol.HttpResponse.problem(
-                        503, "unavailable", "a dependency is unavailable; please retry"
-                    )
-                case client.Unavailable():
-                    return protocol.HttpResponse.problem(503, "unavailable", error.message)
+                case client.CampaignNotFound():
+                    return protocol.HttpResponse.problem(404, "campaign_not_found", error.message)
+                case client.LinkNotFound():
+                    return protocol.HttpResponse.problem(404, "link_not_found", error.message)
+                case client.SlugTaken():
+                    return protocol.HttpResponse.problem(409, "slug_taken", error.message)
+                case client.TargetBlocked():
+                    return protocol.HttpResponse.problem(409, "target_blocked", error.message)
                 case _ as never:
                     typing.assert_never(never)
         return protocol.HttpResponse.redirect(resolve_slug_response.target_url)

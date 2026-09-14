@@ -21,23 +21,15 @@ class PolicyVerdictGateway(ts.Gateway):
     def list_verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
-        try:
-            list_verdicts_response = self._link_policy_client.list_verdicts(
-                linkpolicy_client.ListVerdictsRequest()
-            )
-        except linkpolicy_client.Unavailable as policy_error:
-            raise ports.VerdictSourceUnavailable(policy_error.message) from policy_error
+        list_verdicts_response = self._link_policy_client.list_verdicts(
+            linkpolicy_client.ListVerdictsRequest()
+        )
         records: list[ports.VerdictRecord] = []
         for v in list_verdicts_response.verdicts:
-            decision = _DECISION_BY_NAME.get(v.decision)
-            if decision is None:
-                raise ports.VerdictSourceUnavailable(
-                    f"link policy answered decision {v.decision!r}, which is not a verdict"
-                )
             records.append(
                 ports.VerdictRecord(
                     target_url=v.target_url,
-                    decision=decision,
+                    decision=_DECISION_BY_NAME[v.decision],
                     reason=v.reason,
                 )
             )

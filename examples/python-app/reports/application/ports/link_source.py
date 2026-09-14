@@ -24,10 +24,6 @@ class ListLinksResponse(ts.Response):
         self.links = links
 
 
-class LinkSourceUnavailable(ts.Error):
-    pass
-
-
 class LinkSource(ts.Port, typing.Protocol):
 
     def list_links(self, list_links_request: ListLinksRequest) -> ListLinksResponse: ...

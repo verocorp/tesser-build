@@ -7,16 +7,13 @@ import linkpolicy.application.ports as ports
 
 class InMemoryVerdictRepository(ts.Repository):
 
-    def __init__(self, *, down: bool = False) -> None:
+    def __init__(self) -> None:
         self._by_url: dict[str, ports.VerdictRecord] = {}
-        self._down = down
         self.close_count = 0
 
     def record_verdict(
         self, record_verdict_request: ports.RecordVerdictRequest
     ) -> ports.RecordVerdictResponse:
-        if self._down:
-            raise ports.StoreUnavailable("linkpolicy store unavailable")
         self._by_url[record_verdict_request.target_url] = ports.VerdictRecord(
             target_url=record_verdict_request.target_url,
             decision=record_verdict_request.decision,
@@ -27,8 +24,6 @@ class InMemoryVerdictRepository(ts.Repository):
     def list_verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
-        if self._down:
-            raise ports.StoreUnavailable("linkpolicy store unavailable")
         return ports.ListVerdictsResponse(verdicts=tuple(self._by_url.values()))
 
     def close(self) -> None:

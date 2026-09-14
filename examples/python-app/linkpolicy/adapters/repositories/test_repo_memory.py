@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 import linkpolicy.adapters.repositories as repositories
 import linkpolicy.application.ports as ports
 
@@ -58,26 +56,6 @@ def test_recording_the_same_url_twice_keeps_only_the_latest_verdict() -> None:
     assert [(v.decision, v.reason) for v in list_verdicts_response.verdicts] == [
         (ports.VerdictDecision.DENIED, "blocked")
     ]
-
-
-def test_record_fails_when_the_store_is_down() -> None:
-    in_memory_verdict_repository = repositories.InMemoryVerdictRepository(down=True)
-
-    with pytest.raises(ports.StoreUnavailable) as excinfo:
-        in_memory_verdict_repository.record_verdict(
-            ports.RecordVerdictRequest("https://ok.example/x", ports.VerdictDecision.ALLOWED, "ok")
-        )
-
-    assert str(excinfo.value) == "linkpolicy store unavailable"
-
-
-def test_all_fails_when_the_store_is_down() -> None:
-    in_memory_verdict_repository = repositories.InMemoryVerdictRepository(down=True)
-
-    with pytest.raises(ports.StoreUnavailable) as excinfo:
-        in_memory_verdict_repository.list_verdicts(ports.ListVerdictsRequest())
-
-    assert str(excinfo.value) == "linkpolicy store unavailable"
 
 
 def test_closing_a_repository_does_not_discard_what_it_recorded() -> None:

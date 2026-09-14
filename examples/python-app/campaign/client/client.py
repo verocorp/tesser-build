@@ -80,7 +80,7 @@ class Campaign(ts.Response):
         self.links = links
 
 
-class Rejected(ts.Error):
+class CampaignRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -88,30 +88,28 @@ class Rejected(ts.Error):
         self.message = message
 
 
-class Missing(ts.Error):
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
-class Conflict(ts.Error):
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
-class Unreadable(ts.Error):
+class CampaignNotFound(ts.Error):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
         self.message = message
 
 
-class Unavailable(ts.Error):
+class LinkNotFound(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class SlugTaken(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class TargetBlocked(ts.Error):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -119,8 +117,14 @@ class Unavailable(ts.Error):
 
 
 ERRORS: typing.Final[
-    tuple[type[Rejected], type[Missing], type[Conflict], type[Unreadable], type[Unavailable]]
-] = (Rejected, Missing, Conflict, Unreadable, Unavailable)
+    tuple[
+        type[CampaignRejected],
+        type[CampaignNotFound],
+        type[LinkNotFound],
+        type[SlugTaken],
+        type[TargetBlocked],
+    ]
+] = (CampaignRejected, CampaignNotFound, LinkNotFound, SlugTaken, TargetBlocked)
 
 
 class CreateCampaignResponse(ts.Response):
