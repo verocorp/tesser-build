@@ -18,7 +18,7 @@
   "examples/running": "ungated",
   "examples/serdepy": "app",
   "examples/spike-totalreturn": "ungated",
-  "examples/voice": "ungated",
+  "examples/voice": "app",
   "gclplugin": "ungated",
   "generator": "app",
   "internal": "ungated",
