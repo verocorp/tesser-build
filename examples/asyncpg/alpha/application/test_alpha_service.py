@@ -26,13 +26,13 @@ class FakeWidgetRepository(ports.WidgetRepository):
     async def add_widget(self, add_widget_request: ports.AddWidgetRequest) -> ports.AddWidgetResponse:
         if add_widget_request.name in self._part_by_name:
             return ports.AddWidgetResponse(
-                outcome=ports.Added.EXISTS, name=add_widget_request.name
+                outcome=ports.AddWidgetOutcome.EXISTS, name=add_widget_request.name
             )
         self._saved.append(add_widget_request.name)
         self._part_by_name[add_widget_request.name] = add_widget_request.part
         self._standing_by_name[add_widget_request.name] = add_widget_request.standing
         return ports.AddWidgetResponse(
-            outcome=ports.Added.ADDED, name=add_widget_request.name
+            outcome=ports.AddWidgetOutcome.ADDED, name=add_widget_request.name
         )
 
     async def save_widget(self, save_widget_request: ports.SaveWidgetRequest) -> ports.SaveWidgetResponse:
@@ -43,9 +43,9 @@ class FakeWidgetRepository(ports.WidgetRepository):
 
     async def load_widget(self, load_widget_request: ports.LoadWidgetRequest) -> ports.LoadWidgetResponse:
         if load_widget_request.name not in self._part_by_name:
-            return ports.LoadWidgetResponse(outcome=ports.Loaded.NOT_FOUND, widgets=())
+            return ports.LoadWidgetResponse(outcome=ports.LoadWidgetOutcome.NOT_FOUND, widgets=())
         return ports.LoadWidgetResponse(
-            outcome=ports.Loaded.FOUND,
+            outcome=ports.LoadWidgetOutcome.FOUND,
             widgets=(
                 ports.WidgetRecord(
                     name=load_widget_request.name,
@@ -275,7 +275,7 @@ class TestAlphaServiceMappers:
         widget_spec = application.MapToLoadedWidgetSpec(
             ports.LoadWidgetRequest(name="a"),
             ports.LoadWidgetResponse(
-                outcome=ports.Loaded.FOUND,
+                outcome=ports.LoadWidgetOutcome.FOUND,
                 widgets=(ports.WidgetRecord(name="a", part="p", standing="released"),),
             ),
         )
@@ -287,7 +287,7 @@ class TestAlphaServiceMappers:
         with pytest.raises(client.Missing) as caught:
             application.MapToLoadedWidgetSpec(
                 ports.LoadWidgetRequest(name="x"),
-                ports.LoadWidgetResponse(outcome=ports.Loaded.NOT_FOUND, widgets=()),
+                ports.LoadWidgetResponse(outcome=ports.LoadWidgetOutcome.NOT_FOUND, widgets=()),
             )
         assert caught.value.code == "unknown_widget"
         assert caught.value.message == "no widget 'x'"
@@ -321,7 +321,7 @@ class TestAlphaServiceMappers:
         widget = domain.Widget(
             application.MapToWidgetSpec(client.AddPartRequest(name="a", part="p"))
         )
-        add_widget_response = ports.AddWidgetResponse(outcome=ports.Added.ADDED, name="a")
+        add_widget_response = ports.AddWidgetResponse(outcome=ports.AddWidgetOutcome.ADDED, name="a")
         assert application.MapToAddPartResponse(add_widget_response, widget).name == "a"
         assert application.MapToAddPartResponse(add_widget_response, widget).part == "a"
         assert application.MapToAddPartResponse(add_widget_response, widget).standing == "kept"
@@ -330,7 +330,7 @@ class TestAlphaServiceMappers:
         widget = domain.Widget(
             application.MapToWidgetSpec(client.AddPartRequest(name="a", part="p"))
         )
-        add_widget_response = ports.AddWidgetResponse(outcome=ports.Added.EXISTS, name="a")
+        add_widget_response = ports.AddWidgetResponse(outcome=ports.AddWidgetOutcome.EXISTS, name="a")
         with pytest.raises(client.Conflict) as caught:
             application.MapToAddPartResponse(add_widget_response, widget)
         assert caught.value.code == "widget_exists"

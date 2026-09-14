@@ -29,7 +29,7 @@ class TestPostgresWidgetStore:
             missing = await widget_repository.find_widget(ports.FindWidgetRequest(name="x"))
         await database.close()
         assert saved.name == "a"
-        assert loaded.outcome is ports.Loaded.FOUND
+        assert loaded.outcome is ports.LoadWidgetOutcome.FOUND
         assert loaded.widgets[0].part == "p"
         assert loaded.widgets[0].standing == "kept"
         assert found.found is ports.Found.YES
@@ -71,7 +71,7 @@ class TestPostgresWidgetStore:
         async with postgres_widget_store.transaction() as widget_repository:
             loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
         await database.close()
-        assert again.outcome is ports.Added.EXISTS
+        assert again.outcome is ports.AddWidgetOutcome.EXISTS
         assert loaded.widgets[0].part == "p"
         assert loaded.widgets[0].standing == "released"
 
@@ -103,7 +103,7 @@ class TestPostgresWidgetStore:
         async with postgres_widget_store.transaction() as widget_repository:
             loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="x"))
         await database.close()
-        assert loaded.outcome is ports.Loaded.NOT_FOUND
+        assert loaded.outcome is ports.LoadWidgetOutcome.NOT_FOUND
         assert loaded.widgets == ()
 
     async def test_a_transaction_that_raises_is_rolled_back(self) -> None:

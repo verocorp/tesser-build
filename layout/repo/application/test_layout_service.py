@@ -229,7 +229,7 @@ class FakeRepoReader(ports.RepoReader):
         self._read_repo_response = read_repo_response
         self.roots: list[str] = []
 
-    def read(self, read_repo_request: ports.ReadRepoRequest) -> ports.ReadRepoResponse:
+    def read_repo(self, read_repo_request: ports.ReadRepoRequest) -> ports.ReadRepoResponse:
         self.roots.append(read_repo_request.repo_root)
         return self._read_repo_response
 

@@ -7,7 +7,7 @@ import tessercheck.application.ports as ports
 
 class FilesystemSourceWriter(ts.Repository):
 
-    def write(
+    def write_sources(
         self, write_sources_request: ports.WriteSourcesRequest
     ) -> ports.WriteSourcesResponse:
         base = pathlib.Path(write_sources_request.tree).resolve()

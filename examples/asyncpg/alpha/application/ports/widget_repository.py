@@ -11,12 +11,12 @@ class Found(enum.Enum):
     NO = "no"
 
 
-class Added(enum.Enum):
+class AddWidgetOutcome(enum.Enum):
     ADDED = "added"
     EXISTS = "exists"
 
 
-class Loaded(enum.Enum):
+class LoadWidgetOutcome(enum.Enum):
     FOUND = "found"
     NOT_FOUND = "not_found"
 
@@ -35,7 +35,7 @@ class AddWidgetRequest(ts.Request):
 
 class AddWidgetResponse(ts.Response):
 
-    def __init__(self, outcome: Added, name: str) -> None:
+    def __init__(self, outcome: AddWidgetOutcome, name: str) -> None:
         self.outcome = outcome
         self.name = name
 
@@ -70,7 +70,7 @@ class WidgetRecord(ts.Response):
 
 class LoadWidgetResponse(ts.Response):
 
-    def __init__(self, outcome: Loaded, widgets: tuple[WidgetRecord, ...]) -> None:
+    def __init__(self, outcome: LoadWidgetOutcome, widgets: tuple[WidgetRecord, ...]) -> None:
         self.outcome = outcome
         self.widgets = widgets
 

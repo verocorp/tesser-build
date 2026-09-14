@@ -137,7 +137,7 @@ class LayoutService(ts.ApplicationService):
 
     def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
         repo_root = domain.RepoRoot(check_request.repo_root)
-        read_repo_response = self._repo_reader.read(MapToReadRepoRequest(repo_root))
+        read_repo_response = self._repo_reader.read_repo(MapToReadRepoRequest(repo_root))
         repo = domain.Repo(MapToRepoSpec(read_repo_response))
         match repo.health():
             case domain.Health.CLEAN:
@@ -149,6 +149,6 @@ class LayoutService(ts.ApplicationService):
 
     def trees(self, trees_request: client.TreesRequest) -> client.TreesResponse:
         repo_root = domain.RepoRoot(trees_request.repo_root)
-        read_repo_response = self._repo_reader.read(MapToReadRepoRequest(repo_root))
+        read_repo_response = self._repo_reader.read_repo(MapToReadRepoRequest(repo_root))
         repo = domain.Repo(MapToRepoSpec(read_repo_response))
         return MapToTreesResponse(repo)

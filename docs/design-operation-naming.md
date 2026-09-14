@@ -331,8 +331,15 @@ application errors in `application/ports/`, so the relay half of 7 holds by
 placement, but ports themselves are allowed a `port_error` today, so the
 port half of 7 is a reversal, not a gap. `TB081` checks that an operation
 takes one `ts.Request` and returns one `ts.Response`, and `TB085` derives a
-local's name from its class, but neither derives a message's name from the
-operation, so 6 is unenforced. Which layer would carry the rest:
+local's name from its class. Since 2026-09-14 `TB085` also carries the
+single-declaration halves of 1, 2, and 6: on every client, port,
+application client, and relay protocol method, an operation has at least
+two segments, `start_` and `run_` appear only on a relay (where they are
+required), and the request, response, and the response's `outcome` field
+derive from the operation; on every public orchestrator method, the name is
+not `run`, carries no calling-mode prefix, and has two segments. The outcome
+half reads only a field named `outcome`, because placement cannot tell a
+data enum from an outcome enum. Which layer would carry the rest:
 
 - **tessercheck** can carry the mechanical halves: an operation name has at
   least two segments (1); an orchestrator method is not `run` (2); the relay

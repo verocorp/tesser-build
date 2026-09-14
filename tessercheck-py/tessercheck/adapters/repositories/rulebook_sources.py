@@ -7,7 +7,7 @@ import tessercheck.application.ports as ports
 
 class FilesystemRulebookSources(ts.Repository):
 
-    def read(
+    def read_rulebook(
         self, read_rulebook_request: ports.ReadRulebookRequest
     ) -> ports.ReadRulebookResponse:
         base = pathlib.Path(read_rulebook_request.tree)

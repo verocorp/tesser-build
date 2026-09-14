@@ -28,9 +28,9 @@ class MapToLoadedWidgetSpec(ts.Mapper, domain.WidgetSpec):
         load_widget_response: ports.LoadWidgetResponse,
     ) -> None:
         match load_widget_response.outcome:
-            case ports.Loaded.FOUND:
+            case ports.LoadWidgetOutcome.FOUND:
                 record = load_widget_response.widgets[0]
-            case ports.Loaded.NOT_FOUND:
+            case ports.LoadWidgetOutcome.NOT_FOUND:
                 raise client.Missing(
                     code="unknown_widget",
                     message=f"no widget {load_widget_request.name!r}",
@@ -106,9 +106,9 @@ class MapToAddPartResponse(ts.Mapper, client.AddPartResponse):
         self, add_widget_response: ports.AddWidgetResponse, widget: domain.Widget
     ) -> None:
         match add_widget_response.outcome:
-            case ports.Added.ADDED:
+            case ports.AddWidgetOutcome.ADDED:
                 pass
-            case ports.Added.EXISTS:
+            case ports.AddWidgetOutcome.EXISTS:
                 raise client.Conflict(
                     code="widget_exists",
                     message=f"widget {add_widget_response.name!r} is already stored",

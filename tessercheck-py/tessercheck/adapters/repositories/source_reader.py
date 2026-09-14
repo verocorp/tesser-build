@@ -39,7 +39,7 @@ STDLIB_DIRECTIVE: typing.Final[str] = "stdlib"
 
 class FilesystemSourceReader(ts.Repository):
 
-    def sources(
+    def read_sources(
         self, read_sources_request: ports.ReadSourcesRequest
     ) -> ports.ReadSourcesResponse:
         base = pathlib.Path(read_sources_request.tree)

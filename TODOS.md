@@ -124,6 +124,47 @@ Three more the enactment left standing, verified against the source on
   the specs-app job also fetches Chromium), so add a printed hint for the
   browser step; pip cannot do it.
 
+## Left open by the operation-name checks (2026-09-14)
+
+TB085 now checks rules 1, 2, and 6 of `docs/design-operation-naming.md` on
+every client, port, application client, and relay protocol method, and
+rules 1 and 2 on every public orchestrator method. What the checks do not
+yet reach, and the names they found that were deferred rather than renamed:
+
+- [ ] **Nine deferred names carry `# tesser:debt TB085`.**
+  `TessercheckClient.check / hook / mark / rename / rulebook` and
+  `RepoClient.check / trees` are one-word client operations; renaming each
+  needs a word for its thing (`check_tree`, `render_rulebook`, `list_trees`
+  are candidates) and derived messages, and `check_file` already sits beside
+  `check`. `ParcelWire.to_payload` is the serdepy item above. Five more sit
+  inside the test suite's shared kinds fixture (`Quotes.quote`,
+  `Catalog.lookup`, `QuotesRunner.run_quote`, `ShopApplicationClient.quote`,
+  `Flow.run`), marked rather than renamed because about fifteen tests quote
+  those class names; the markers also prove each dispatch branch fires,
+  since a marker that suppresses nothing fails the clean-together test.
+- [ ] **The outcome derivation reads only a field named `outcome`.** Placement
+  cannot tell a data enum from an outcome enum, so an outcome on a field
+  with another name is not checked: asyncpg `FindWidgetResponse.found`
+  (`Found.YES / NO`), `HasKeyResponse.held` (`Held.YES / NO`), and python-app
+  `SlugTakenResponse.availability` (`SlugAvailability`). Renaming those
+  fields to `outcome` reaches client responses and end-to-end tests.
+- [ ] **Protocol-module ports are not operations to these checks.** llmport
+  `ToolSurface.instructions / begin / status` and python-app `Host.run` sit
+  in `protocol/`, take no request, and are the surfaces Chris deferred.
+- [ ] **Rules 3, 4, and 5 are the next build.** A runner's methods are its
+  relay's, a runtime handler is exposed as `<operation>_handler`, and one
+  name runs across the chain. They read across modules through the
+  registration binding, which nothing reads today, and need the TB023
+  carve-out for a runtime's nested handler first.
+- [ ] **The transport-category client error names go with the error rework.**
+  A check that a client error is not `Missing`, `Conflict`, `Unavailable`,
+  `Unreadable`, or bare `Rejected` fires on 22 declarations; it lands with
+  the errorspy and python-app rework above so the check and its zero-findings
+  proof arrive together.
+- [ ] **The skill does not yet teach these rules.** A finding's message is
+  the only guidance an agent gets; the naming rows belong in
+  `skills/tesser-build/python.md` with a `skill-version` bump.
+
 ## Left standing by the v0.1.1.0 adversarial passes (2026-09-14, PR #191)
 
 Two adversarial reviewers (Codex and a Claude subagent) ran on the naming

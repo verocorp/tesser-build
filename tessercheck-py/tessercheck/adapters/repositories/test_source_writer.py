@@ -14,7 +14,7 @@ def test_a_rewritten_source_replaces_the_file_it_names(tmp_path: pathlib.Path) -
         tree=str(tmp_path),
         sources=(ports.RewrittenSource(path="widget.py", text="now = 2\n"),),
     )
-    write_sources_response = filesystem_source_writer.write(write_sources_request)
+    write_sources_response = filesystem_source_writer.write_sources(write_sources_request)
     assert write_sources_response.written == 1
     assert module.read_text(encoding="utf-8") == "now = 2\n"
 
@@ -32,7 +32,7 @@ def test_a_symlinked_file_is_left_alone_rather_than_written_through(
         tree=str(tree),
         sources=(ports.RewrittenSource(path="widget.py", text="now = 2\n"),),
     )
-    write_sources_response = filesystem_source_writer.write(write_sources_request)
+    write_sources_response = filesystem_source_writer.write_sources(write_sources_request)
     assert write_sources_response.written == 0
     assert outside.read_text(encoding="utf-8") == "was = 1\n"
 
@@ -49,7 +49,7 @@ def test_a_path_climbing_out_of_the_tree_is_left_alone(
         tree=str(tree),
         sources=(ports.RewrittenSource(path="../outside.py", text="now = 2\n"),),
     )
-    write_sources_response = filesystem_source_writer.write(write_sources_request)
+    write_sources_response = filesystem_source_writer.write_sources(write_sources_request)
     assert write_sources_response.written == 0
     assert outside.read_text(encoding="utf-8") == "was = 1\n"
 
@@ -65,7 +65,7 @@ def test_a_file_below_a_subdirectory_of_the_tree_is_still_written(
         tree=str(tmp_path),
         sources=(ports.RewrittenSource(path="mod/widget.py", text="now = 2\n"),),
     )
-    write_sources_response = filesystem_source_writer.write(write_sources_request)
+    write_sources_response = filesystem_source_writer.write_sources(write_sources_request)
     assert write_sources_response.written == 1
     assert module.read_text(encoding="utf-8") == "now = 2\n"
 
@@ -75,6 +75,6 @@ def test_writing_nothing_touches_nothing(tmp_path: pathlib.Path) -> None:
     module.write_text("was = 1\n", encoding="utf-8")
     filesystem_source_writer = repositories.FilesystemSourceWriter()
     write_sources_request = ports.WriteSourcesRequest(tree=str(tmp_path), sources=())
-    write_sources_response = filesystem_source_writer.write(write_sources_request)
+    write_sources_response = filesystem_source_writer.write_sources(write_sources_request)
     assert write_sources_response.written == 0
     assert module.read_text(encoding="utf-8") == "was = 1\n"

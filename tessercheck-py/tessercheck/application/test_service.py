@@ -15,7 +15,7 @@ class FakeSourceReader(ports.SourceReader):
         self.root = root
         self.roots: list[str] = []
 
-    def sources(
+    def read_sources(
         self, read_sources_request: ports.ReadSourcesRequest
     ) -> ports.ReadSourcesResponse:
         self.roots.append(read_sources_request.tree)
@@ -37,7 +37,7 @@ class FakeSourceWriter(ports.SourceWriter):
     def __init__(self) -> None:
         self.written: list[tuple[str, str]] = []
 
-    def write(
+    def write_sources(
         self, write_sources_request: ports.WriteSourcesRequest
     ) -> ports.WriteSourcesResponse:
         for source in write_sources_request.sources:
@@ -51,7 +51,7 @@ class FakeRulebookSources(ports.RulebookSources):
         self.checks_text = checks_text
         self.roots: list[str] = []
 
-    def read(
+    def read_rulebook(
         self, read_rulebook_request: ports.ReadRulebookRequest
     ) -> ports.ReadRulebookResponse:
         self.roots.append(read_rulebook_request.tree)
@@ -67,7 +67,7 @@ class FakePreparedReader(ports.SourceReader):
     def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
         self.read_sources_response = read_sources_response
 
-    def sources(
+    def read_sources(
         self, read_sources_request: ports.ReadSourcesRequest
     ) -> ports.ReadSourcesResponse:
         return self.read_sources_response
@@ -79,7 +79,7 @@ class FakeScriptedReader(ports.SourceReader):
         self.responses = responses
         self.reads = 0
 
-    def sources(
+    def read_sources(
         self, read_sources_request: ports.ReadSourcesRequest
     ) -> ports.ReadSourcesResponse:
         self.reads += 1

@@ -97,7 +97,7 @@ def check_file_raw(root: pathlib.Path, path: str) -> client.CheckFileResponse:
 
 
 def governed_paths(root: pathlib.Path) -> tuple[str, ...]:
-    read_sources_response = repositories.FilesystemSourceReader().sources(
+    read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(root))
     )
     return tuple(source.path for source in read_sources_response.sources)

@@ -42,7 +42,7 @@ RUFF: typing.Final[str] = "ruff.toml"
 
 class FilesystemRepoReader(ts.Repository):
 
-    def read(self, read_repo_request: ports.ReadRepoRequest) -> ports.ReadRepoResponse:
+    def read_repo(self, read_repo_request: ports.ReadRepoRequest) -> ports.ReadRepoResponse:
         base = pathlib.Path(read_repo_request.repo_root)
         if not base.is_dir():
             return ports.ReadRepoResponse(

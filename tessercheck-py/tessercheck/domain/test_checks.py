@@ -7091,6 +7091,234 @@ def test_a_port_method_speaks_one_request_and_one_response() -> None:
     )
 
 
+def test_an_operation_is_named_for_a_verb_and_the_thing_it_acts_on() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
+                "import enum\n"
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SaveItemOutcome(enum.Enum):\n"
+                "    STORED = 'stored'\n"
+                "class Verdict(enum.Enum):\n"
+                "    STORED = 'stored'\n"
+                "class SaveRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SaveResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SaveItemRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SaveItemResponse(ts.Response):\n"
+                "    def __init__(self, outcome: SaveItemOutcome) -> None:\n"
+                "        self.outcome = outcome\n"
+                "class LoadItemRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class LoadItemResponse(ts.Response):\n"
+                "    def __init__(self, outcome: Verdict) -> None:\n"
+                "        self.outcome = outcome\n"
+                "class Record(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Sink(ts.Port, typing.Protocol):\n"
+                "    def save(self, save_request: SaveRequest) -> SaveResponse: ...\n"
+                "    def start_saving_item(self, save_item_request: SaveItemRequest) -> SaveItemResponse: ...\n"
+                "    def save_item(self, save_item_request: SaveItemRequest) -> SaveItemResponse: ...\n"
+                "    def keep_item(self, save_item_request: SaveItemRequest) -> Record: ...\n"
+                "    def load_item(self, load_item_request: LoadItemRequest) -> LoadItemResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.ports.sink.Sink.save names the operation save; an operation is a "
+        "verb and the business thing it acts on, so its name has at least two segments" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.ports.sink.Sink.start_saving_item begins with start_; start_ and "
+        "run_ belong to a relay and its runners, because only a relay's caller chooses how "
+        "it waits" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.ports.sink.Sink.keep_item takes a SaveItemRequest, not a "
+        "KeepItemRequest; a request is named for the operation it carries, because a "
+        "message named for anything else is a message two operations can share" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.ports.sink.Sink.keep_item answers a Record, not a "
+        "KeepItemResponse; a response is named for the operation it carries, because a "
+        "message named for anything else is a message two operations can share" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.ports.sink.Sink.load_item answers an outcome of Verdict, not "
+        "LoadItemOutcome; an outcome is named for the operation that ends in it, because "
+        "each member reads as a sentence after that act" in f
+        for f in findings
+    ), findings
+    assert not any("Sink.save_item " in f for f in findings), findings
+
+
+def test_a_relay_method_is_a_calling_mode_and_the_operation_it_carries() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/orders.py",
+                "shop.application.relays.orders",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class ConfirmOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ConfirmOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class StartConfirmOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class OrdersRunner(ts.Relay, typing.Protocol):\n"
+                "    async def confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
+                " -> ConfirmOrderResponse: ...\n"
+                "    async def start_confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
+                " -> StartConfirmOrderResponse: ...\n"
+                "    async def run_confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
+                " -> ConfirmOrderResponse: ...\n"
+                "    async def start_cancel_order(self, confirm_order_request: ConfirmOrderRequest)"
+                " -> ConfirmOrderResponse: ...\n"
+                "    async def run_ship(self, confirm_order_request: ConfirmOrderRequest)"
+                " -> ConfirmOrderResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.relays.orders.OrdersRunner.confirm_order names no calling mode; a "
+        "relay method is start_ or run_ followed by the operation it carries, because the "
+        "verb says how its caller waits" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.orders.OrdersRunner.start_cancel_order takes a "
+        "ConfirmOrderRequest, not a CancelOrderRequest; a request is named for the "
+        "operation it carries" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.orders.OrdersRunner.start_cancel_order answers a "
+        "ConfirmOrderResponse, not a StartCancelOrderResponse; a response is named for the "
+        "operation it carries" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.orders.OrdersRunner.run_ship names the operation ship; an "
+        "operation is a verb and the business thing it acts on" in f
+        for f in findings
+    ), findings
+    assert not any("OrdersRunner.start_confirm_order " in f for f in findings), findings
+    assert not any("OrdersRunner.run_confirm_order " in f for f in findings), findings
+
+
+def test_an_orchestrator_method_is_named_for_its_operation_and_never_run() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/orchestrators/named.py",
+                "shop.application.orchestrators.named",
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class Named(ts.Orchestrator):\n"
+                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
+                "        self._quotes_runner = quotes_runner\n"
+                "    async def run(self, run_quote_request: relays.RunQuoteRequest) -> relays.RunQuoteResponse:\n"
+                "        return await self._quotes_runner.run_quote(run_quote_request)\n"
+                "    async def run_quote_price(self, run_quote_request: relays.RunQuoteRequest) -> relays.RunQuoteResponse:\n"
+                "        return await self._quotes_runner.run_quote(run_quote_request)\n"
+                "    async def price(self, run_quote_request: relays.RunQuoteRequest) -> relays.RunQuoteResponse:\n"
+                "        return await self._quotes_runner.run_quote(run_quote_request)\n"
+                "    async def price_quote(self, run_quote_request: relays.RunQuoteRequest) -> relays.RunQuoteResponse:\n"
+                "        return await self._quotes_runner.run_quote(run_quote_request)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.orchestrators.named.Named.run is run; an orchestrator method is "
+        "named for the operation it carries, because run says only that it is invoked, and "
+        "an orchestrator may carry more than one operation" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.orchestrators.named.Named.run_quote_price begins with run_; "
+        "start_ and run_ belong to a relay and its runners" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.orchestrators.named.Named.price names the operation price; an "
+        "operation is a verb and the business thing it acts on, so its name has at least "
+        "two segments" in f
+        for f in findings
+    ), findings
+    assert not any("Named.price_quote" in f and "TB085" in f for f in findings), findings
+
+
+def test_a_client_names_its_operations_and_a_fake_of_it_is_not_asked_to() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/client/other.py",
+                "shop.client.other",
+                "import typing\n"
+                "import tesser.context as ts\n"
+                "class LookRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class LookResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class OtherClient(ts.Client, typing.Protocol):\n"
+                "    def look(self, look_request: LookRequest) -> LookResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/adapters/handlers/test_cli.py",
+                "shop.adapters.handlers.test_cli",
+                "import tesser.testing as ts\n"
+                "import shop.client.client as client\n"
+                "@ts.fake\n"
+                "class FakeClient(client.Client):\n"
+                "    def ask(self, ask_question_request: client.AskQuestionRequest)"
+                " -> client.AskQuestionResponse:\n"
+                "        return client.AskQuestionResponse(text=ask_question_request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.client.other.OtherClient.look names the operation look; an operation is a verb "
+        "and the business thing it acts on, so its name has at least two segments" in f
+        for f in findings
+    ), findings
+    assert not any("FakeClient.ask names the operation" in f for f in findings), findings
+
+
 def test_an_adapter_reaches_application_only_through_ports() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -7205,25 +7433,28 @@ def test_a_conforming_ports_module_is_silent() -> None:
                 "import enum\n"
                 "import typing\n"
                 "import tesser.application as ts\n"
-                "class Outcome(enum.Enum):\n"
+                "class SaveItemOutcome(enum.Enum):\n"
                 "    STORED = 'stored'\n"
                 "    REFUSED = 'refused'\n"
                 "class ItemView(ts.Response):\n"
                 "    def __init__(self, id: str) -> None:\n"
                 "        self.id = id\n"
-                "class SaveRequest(ts.Request):\n"
+                "class SaveItemRequest(ts.Request):\n"
                 "    def __init__(self, id: str) -> None:\n"
                 "        self.id = id\n"
-                "class SaveResponse(ts.Response):\n"
-                "    def __init__(self, outcome: Outcome, items: tuple[ItemView, ...]) -> None:\n"
+                "class SaveItemResponse(ts.Response):\n"
+                "    def __init__(self, outcome: SaveItemOutcome, items: tuple[ItemView, ...]) -> None:\n"
                 "        self.outcome = outcome\n"
                 "        self.items = items\n"
-                "class ListRequest(ts.Request):\n"
+                "class ListItemsRequest(ts.Request):\n"
                 "    def __init__(self) -> None:\n"
                 "        return None\n"
+                "class ListItemsResponse(ts.Response):\n"
+                "    def __init__(self, items: tuple[ItemView, ...]) -> None:\n"
+                "        self.items = items\n"
                 "class Sink(ts.Port, typing.Protocol):\n"
-                "    def save(self, save_request: SaveRequest) -> SaveResponse: ...\n"
-                "    def all(self, list_request: ListRequest) -> SaveResponse: ...\n",
+                "    def save_item(self, save_item_request: SaveItemRequest) -> SaveItemResponse: ...\n"
+                "    def list_items(self, list_items_request: ListItemsRequest) -> ListItemsResponse: ...\n",
                 False,
             ),
         ))).violations()
@@ -7568,7 +7799,7 @@ def test_a_port_method_declares_a_shape_and_never_a_body() -> None:
         "and never a body, because a ports module holds no logic to import" in f
         for f in findings
     )
-    assert not any("Sink.drop" in f for f in findings)
+    assert not any("Sink.drop carries a body" in f for f in findings)
 
 
 def test_a_debt_marked_ports_file_is_still_governed() -> None:
@@ -7899,7 +8130,7 @@ def test_a_port_speaks_shapes_it_declares_itself() -> None:
         "bare ts.Request or ts.Response, which two ports would share" in f
         for f in findings
     ), f"two ports could share the base classes as their whole vocabulary: {findings}"
-    assert not any("Sink.own" in f for f in findings)
+    assert not any("Sink.own names a shape it does not declare" in f for f in findings)
 
 
 def test_a_ports_class_carries_no_class_level_statement() -> None:
@@ -8128,7 +8359,7 @@ def test_a_port_declares_only_the_calls_an_implementer_provides() -> None:
         for f in findings
     ), f"an underscore prefix bought a rule-free port method: {findings}"
     assert any("Sink.__enter__ is not a call an implementer provides" in f for f in findings)
-    assert not any("Sink.save" in f for f in findings)
+    assert not any("Sink.save is not a call an implementer provides" in f for f in findings)
 
 
 def test_a_ports_module_runs_nothing_at_import() -> None:
@@ -12056,14 +12287,14 @@ def _kinds_spec(
             "shop.client.client",
             "import typing\n"
             "import tesser.context as ts\n"
-            "class AskRequest(ts.Request):\n"
+            "class AskQuestionRequest(ts.Request):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
-            "class AskResponse(ts.Response):\n"
+            "class AskQuestionResponse(ts.Response):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Client(ts.Client, typing.Protocol):\n"
-            "    def ask(self, ask_request: AskRequest) -> AskResponse: ...\n",
+            "    def ask_question(self, ask_question_request: AskQuestionRequest) -> AskQuestionResponse: ...\n",
             False,
         ),
         (
@@ -12089,7 +12320,7 @@ def _kinds_spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Quotes(ts.Port, typing.Protocol):\n"
-            "    async def quote(self, quote_request: QuoteRequest) -> QuoteResponse: ...\n",
+            "    async def quote(self, quote_request: QuoteRequest) -> QuoteResponse: ...  # tesser:debt TB085\n",
             False,
         ),
         (
@@ -12104,7 +12335,7 @@ def _kinds_spec(
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class Catalog(ts.Port, typing.Protocol):\n"
-            "    def lookup(self, lookup_request: LookupRequest) -> LookupResponse: ...\n",
+            "    def lookup(self, lookup_request: LookupRequest) -> LookupResponse: ...  # tesser:debt TB085\n",
             False,
         ),
         (
@@ -12128,7 +12359,7 @@ def _kinds_spec(
             "        self.text = text\n"
             "class QuotesRunner(ts.Relay, typing.Protocol):\n"
             "    async def run_quote(self, run_quote_request: RunQuoteRequest)"
-            " -> RunQuoteResponse: ...\n",
+            " -> RunQuoteResponse: ...  # tesser:debt TB085\n",
             False,
         ),
         (
@@ -12145,7 +12376,7 @@ def _kinds_spec(
             "import shop.application.relays as relays\n"
             "class ShopApplicationClient(ts.Client, typing.Protocol):\n"
             "    def quote(self, run_quote_request: relays.RunQuoteRequest)"
-            " -> relays.RunQuoteResponse: ...\n",
+            " -> relays.RunQuoteResponse: ...  # tesser:debt TB085\n",
             False,
         ),
         (
@@ -12184,8 +12415,8 @@ def _kinds_spec(
             "import tesser.application as ts\n"
             "import shop.client.client as client\n"
             "class AskService(ts.ApplicationService):\n"
-            "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
-            "        return client.AskResponse(text=ask_request.text)\n",
+            "    def ask_question(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+            "        return client.AskQuestionResponse(text=ask_question_request.text)\n",
             False,
         ),
         (
@@ -12220,7 +12451,7 @@ def _kinds_spec(
             "class Flow(ts.Orchestrator):\n"
             "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
             "        self._quotes_runner = quotes_runner\n"
-            "    async def run(self, run_quote_request: relays.RunQuoteRequest) -> FlowResponse:\n"
+            "    async def run(self, run_quote_request: relays.RunQuoteRequest) -> FlowResponse:  # tesser:debt TB085\n"
             "        name = thing.Name(run_quote_request.text)\n"
             "        run_quote_response = await self._quotes_runner.run_quote(MapToRunQuoteRequest(name))\n"
             "        return MapToFlowResponse(run_quote_response)\n",
@@ -17263,8 +17494,8 @@ def test_an_init_keeps_its_parameters_name_in_the_field_it_sets() -> None:
             (
                 "mod/application/ports/__init__.py",
                 "mod.application.ports",
-                "from mod.application.ports.sink import SaveRequest as SaveRequest\n"
-                "from mod.application.ports.sink import SaveResponse as SaveResponse\n"
+                "from mod.application.ports.sink import SaveTextRequest as SaveTextRequest\n"
+                "from mod.application.ports.sink import SaveTextResponse as SaveTextResponse\n"
                 "from mod.application.ports.sink import Sink as Sink\n",
                 True,
             ),
@@ -17273,14 +17504,14 @@ def test_an_init_keeps_its_parameters_name_in_the_field_it_sets() -> None:
                 "mod.application.ports.sink",
                 "import typing\n"
                 "import tesser.application as ts\n"
-                "class SaveRequest(ts.Request):\n"
+                "class SaveTextRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class SaveResponse(ts.Response):\n"
+                "class SaveTextResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
                 "class Sink(ts.Port, typing.Protocol):\n"
-                "    def save(self, save_request: SaveRequest) -> SaveResponse: ...\n",
+                "    def save_text(self, save_text_request: SaveTextRequest) -> SaveTextResponse: ...\n",
                 False,
             ),
             (
@@ -17350,9 +17581,9 @@ def test_a_relay_speaks_messages_that_carry_the_domain_and_snapshots_that_hold_n
                 "shop/application/relays/__init__.py",
                 "shop.application.relays",
                 "from shop.application.relays.orders import OrderRelay as OrderRelay\n"
-                "from shop.application.relays.orders import RunRequest as RunRequest\n"
-                "from shop.application.relays.orders import RunRequestSnapshot as RunRequestSnapshot\n"
-                "from shop.application.relays.orders import RunResponse as RunResponse\n",
+                "from shop.application.relays.orders import PlaceOrderRequest as PlaceOrderRequest\n"
+                "from shop.application.relays.orders import PlaceOrderRequestSnapshot as PlaceOrderRequestSnapshot\n"
+                "from shop.application.relays.orders import PlaceOrderResponse as PlaceOrderResponse\n",
                 True,
             ),
             (
@@ -17362,19 +17593,19 @@ def test_a_relay_speaks_messages_that_carry_the_domain_and_snapshots_that_hold_n
                 "import typing\n"
                 "import tesser.application as ts\n"
                 "import shop.domain.thing as thing\n"
-                "class RunRequest(ts.Request):\n"
+                "class PlaceOrderRequest(ts.Request):\n"
                 "    def __init__(self, name: thing.Name) -> None:\n"
                 "        self.name = name\n"
-                "class RunResponse(ts.Response):\n"
+                "class PlaceOrderResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class RunRequestSnapshot(ts.Serde):\n"
-                "    def serialize(self, run_request: RunRequest) -> bytes:\n"
-                "        return json.dumps({'name': str(run_request.name)}).encode()\n"
-                "    def deserialize(self, buf: bytes) -> RunRequest:\n"
-                "        return RunRequest(name=thing.Name(json.loads(buf)['name']))\n"
+                "class PlaceOrderRequestSnapshot(ts.Serde):\n"
+                "    def serialize(self, place_order_request: PlaceOrderRequest) -> bytes:\n"
+                "        return json.dumps({'name': str(place_order_request.name)}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> PlaceOrderRequest:\n"
+                "        return PlaceOrderRequest(name=thing.Name(json.loads(buf)['name']))\n"
                 "class OrderRelay(ts.Relay, typing.Protocol):\n"
-                "    async def run(self, run_request: RunRequest) -> RunResponse: ...\n",
+                "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n",
                 False,
             ),
             (
