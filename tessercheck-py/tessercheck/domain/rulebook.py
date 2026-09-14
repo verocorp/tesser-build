@@ -95,6 +95,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "fn.name": "⟨function⟩",
     "read": "⟨name⟩",
     "mode": "⟨prefix⟩",
+    "count": "⟨count⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {

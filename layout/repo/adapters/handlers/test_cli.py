@@ -21,11 +21,11 @@ class FakeClientScripted(client.RepoClient):
         self._counts = counts
         self._trees = trees
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
-        return client.CheckResponse(problems=self._problems, counts=self._counts)
+    def check_layout(self, check_layout_request: client.CheckLayoutRequest) -> client.CheckLayoutResponse:
+        return client.CheckLayoutResponse(problems=self._problems, counts=self._counts)
 
-    def trees(self, trees_request: client.TreesRequest) -> client.TreesResponse:
-        return client.TreesResponse(trees=self._trees)
+    def list_trees(self, list_trees_request: client.ListTreesRequest) -> client.ListTreesResponse:
+        return client.ListTreesResponse(trees=self._trees)
 
 
 def test_a_clean_check_exits_zero_with_the_summary_line() -> None:

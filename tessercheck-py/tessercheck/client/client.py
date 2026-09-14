@@ -3,13 +3,13 @@ import typing
 import tesser.context as ts
 
 
-class CheckRequest(ts.Request):
+class CheckTreeRequest(ts.Request):
 
     def __init__(self, tree: str) -> None:
         self.tree = tree
 
 
-class CheckResponse(ts.Response):
+class CheckTreeResponse(ts.Response):
 
     def __init__(self, findings: tuple[str, ...]) -> None:
         self.findings = findings
@@ -32,7 +32,7 @@ class CheckFileResponse(ts.Response):
         self.codes = codes
 
 
-class HookRequest(ts.Request):
+class CheckWriteRequest(ts.Request):
 
     def __init__(self, tree: str, path: str, conf: str) -> None:
         self.tree = tree
@@ -40,7 +40,7 @@ class HookRequest(ts.Request):
         self.conf = conf
 
 
-class HookResponse(ts.Response):
+class CheckWriteResponse(ts.Response):
 
     def __init__(
         self,
@@ -57,38 +57,38 @@ class HookResponse(ts.Response):
         self.codes = codes
 
 
-class MarkRequest(ts.Request):
+class MarkDebtRequest(ts.Request):
 
     def __init__(self, tree: str) -> None:
         self.tree = tree
 
 
-class MarkResponse(ts.Response):
+class MarkDebtResponse(ts.Response):
 
     def __init__(self, files: int, remaining: tuple[str, ...]) -> None:
         self.files = files
         self.remaining = remaining
 
 
-class RulebookRequest(ts.Request):
+class RenderRulebookRequest(ts.Request):
 
     def __init__(self, tree: str) -> None:
         self.tree = tree
 
 
-class RulebookResponse(ts.Response):
+class RenderRulebookResponse(ts.Response):
 
     def __init__(self, rendered: str) -> None:
         self.rendered = rendered
 
 
-class RenameRequest(ts.Request):
+class ApplyRenamesRequest(ts.Request):
 
     def __init__(self, tree: str) -> None:
         self.tree = tree
 
 
-class RenameResponse(ts.Response):
+class ApplyRenamesResponse(ts.Response):
 
     def __init__(self, files: int, remaining: tuple[str, ...]) -> None:
         self.files = files
@@ -108,14 +108,14 @@ ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
 
 class TessercheckClient(ts.Client, typing.Protocol):
 
-    def check(self, check_request: CheckRequest) -> CheckResponse: ...  # tesser:debt TB085
+    def check_tree(self, check_tree_request: CheckTreeRequest) -> CheckTreeResponse: ...
 
     def check_file(self, check_file_request: CheckFileRequest) -> CheckFileResponse: ...
 
-    def hook(self, hook_request: HookRequest) -> HookResponse: ...  # tesser:debt TB085
+    def check_write(self, check_write_request: CheckWriteRequest) -> CheckWriteResponse: ...
 
-    def mark(self, mark_request: MarkRequest) -> MarkResponse: ...  # tesser:debt TB085
+    def mark_debt(self, mark_debt_request: MarkDebtRequest) -> MarkDebtResponse: ...
 
-    def rename(self, rename_request: RenameRequest) -> RenameResponse: ...  # tesser:debt TB085
+    def apply_renames(self, apply_renames_request: ApplyRenamesRequest) -> ApplyRenamesResponse: ...
 
-    def rulebook(self, rulebook_request: RulebookRequest) -> RulebookResponse: ...  # tesser:debt TB085
+    def render_rulebook(self, render_rulebook_request: RenderRulebookRequest) -> RenderRulebookResponse: ...

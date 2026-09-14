@@ -24,12 +24,12 @@ def main() -> int:
     tree = args[0] if args else _HERE
     tessercheck = component.Tessercheck(component.Config(component.Spec()))
     try:
-        rename_response = tessercheck.client.rename(client.RenameRequest(tree=tree))
+        apply_renames_response = tessercheck.client.apply_renames(client.ApplyRenamesRequest(tree=tree))
     finally:
         tessercheck.close()
-    print(f"renamed {rename_response.files} file(s)")
-    if rename_response.remaining:
-        print(f"{len(rename_response.remaining)} finding(s) this cannot repair:")
-        for finding in rename_response.remaining:
+    print(f"renamed {apply_renames_response.files} file(s)")
+    if apply_renames_response.remaining:
+        print(f"{len(apply_renames_response.remaining)} finding(s) this cannot repair:")
+        for finding in apply_renames_response.remaining:
             print(finding)
-    return 1 if rename_response.remaining else 0
+    return 1 if apply_renames_response.remaining else 0

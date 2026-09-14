@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class RootForm(enum.Enum):
+class ReadSourcesOutcome(enum.Enum):
     APP = "app"
     MISSING = "missing"
     UNREADABLE = "unreadable"
@@ -45,7 +45,7 @@ class ReadSourcesResponse(ts.Response):
 
     def __init__(
         self,
-        root: RootForm,
+        outcome: ReadSourcesOutcome,
         nested: tuple[str, ...],
         symlinked: tuple[str, ...],
         sources: tuple[SourceFile, ...],
@@ -55,7 +55,7 @@ class ReadSourcesResponse(ts.Response):
         pure_stdlib: tuple[str, ...],
         pruned: tuple[str, ...],
     ) -> None:
-        self.root = root
+        self.outcome = outcome
         self.nested = nested
         self.symlinked = symlinked
         self.sources = sources

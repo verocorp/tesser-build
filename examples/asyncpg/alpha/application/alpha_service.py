@@ -214,4 +214,4 @@ class AlphaService(ts.ApplicationService):
                 )
         except ports.StoreUnavailable as store_error:
             raise client.Unavailable(message="the widget store is unavailable") from store_error
-        return client.FindWidgetResponse(found=find_widget_response.found.value)
+        return client.FindWidgetResponse(found=find_widget_response.outcome.value)

@@ -32,14 +32,14 @@ class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
                 case _ as unreachable_form:
                     typing.assert_never(unreachable_form)
             rows.append((source.path, source.name, text, is_package))
-        match read_sources_response.root:
-            case ports.RootForm.APP:
+        match read_sources_response.outcome:
+            case ports.ReadSourcesOutcome.APP:
                 declared = domain.DECLARED_APP
-            case ports.RootForm.MISSING:
+            case ports.ReadSourcesOutcome.MISSING:
                 declared = domain.DECLARED_MISSING
-            case ports.RootForm.UNREADABLE:
+            case ports.ReadSourcesOutcome.UNREADABLE:
                 declared = domain.DECLARED_UNREADABLE
-            case ports.RootForm.UNRECOGNIZED:
+            case ports.ReadSourcesOutcome.UNRECOGNIZED:
                 declared = domain.DECLARED_UNRECOGNIZED
             case _ as unreachable_root:
                 typing.assert_never(unreachable_root)
@@ -57,7 +57,7 @@ class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
         )
 
 
-class MapToCheckResponse(ts.Mapper, client.CheckResponse):
+class MapToCheckTreeResponse(ts.Mapper, client.CheckTreeResponse):
 
     def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
@@ -96,10 +96,10 @@ class MapToCheckFileResponse(ts.Mapper, client.CheckFileResponse):
         )
 
 
-class MapToHookResponse(ts.Mapper, client.HookResponse):
+class MapToCheckWriteResponse(ts.Mapper, client.CheckWriteResponse):
 
-    def __init__(self, codebase: domain.Codebase, hook_request: client.HookRequest) -> None:
-        match codebase.governance(domain.Path(hook_request.path)):
+    def __init__(self, codebase: domain.Codebase, check_write_request: client.CheckWriteRequest) -> None:
+        match codebase.governance(domain.Path(check_write_request.path)):
             case domain.Governance.GOVERNED:
                 governance = domain.GOVERNANCE_GOVERNED
             case domain.Governance.SKIPPED:
@@ -112,7 +112,7 @@ class MapToHookResponse(ts.Mapper, client.HookResponse):
                 typing.assert_never(never)
         violations = codebase.violations()
         hook_run = domain.HookRun(domain.HookRunSpec(
-            conf=hook_request.conf, governance=governance, findings=len(violations)
+            conf=check_write_request.conf, governance=governance, findings=len(violations)
         ))
         match hook_run.action():
             case domain.HookAction.DISABLED:
@@ -163,7 +163,7 @@ class MapToMarkingSpec(ts.Mapper, domain.MarkingSpec):
         )
 
 
-class MapToMarkResponse(ts.Mapper, client.MarkResponse):
+class MapToMarkDebtResponse(ts.Mapper, client.MarkDebtResponse):
 
     def __init__(
         self,
@@ -232,7 +232,7 @@ class MapToRulebookSpec(ts.Mapper, domain.RulebookSpec):
         )
 
 
-class MapToRulebookResponse(ts.Mapper, client.RulebookResponse):
+class MapToRenderRulebookResponse(ts.Mapper, client.RenderRulebookResponse):
 
     def __init__(self, rulebook: domain.Rulebook) -> None:
         super().__init__(rendered=str(rulebook))
@@ -257,7 +257,7 @@ class MapToWriteSourcesRequest(ts.Mapper, ports.WriteSourcesRequest):
         )
 
 
-class MapToRenameResponse(ts.Mapper, client.RenameResponse):
+class MapToApplyRenamesResponse(ts.Mapper, client.ApplyRenamesResponse):
 
     def __init__(
         self,
@@ -287,11 +287,11 @@ class TessercheckService(ts.ApplicationService):
         self._source_writer = source_writer
         self._rulebook_sources = rulebook_sources
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
-        tree_root = domain.TreeRoot(check_request.tree)
+    def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
+        tree_root = domain.TreeRoot(check_tree_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        return MapToCheckResponse(read_sources_response)
+        return MapToCheckTreeResponse(read_sources_response)
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
         tree_root = domain.TreeRoot(check_file_request.tree)
@@ -301,16 +301,16 @@ class TessercheckService(ts.ApplicationService):
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
         return MapToCheckFileResponse(codebase, path)
 
-    def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
-        tree_root = domain.TreeRoot(hook_request.tree)
+    def check_write(self, check_write_request: client.CheckWriteRequest) -> client.CheckWriteResponse:
+        tree_root = domain.TreeRoot(check_write_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        path = domain.Path(hook_request.path)
+        path = domain.Path(check_write_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
-        return MapToHookResponse(codebase, hook_request)
+        return MapToCheckWriteResponse(codebase, check_write_request)
 
-    def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
-        tree_root = domain.TreeRoot(mark_request.tree)
+    def mark_debt(self, mark_debt_request: client.MarkDebtRequest) -> client.MarkDebtResponse:
+        tree_root = domain.TreeRoot(mark_debt_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
@@ -319,10 +319,10 @@ class TessercheckService(ts.ApplicationService):
         write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
         write_sources_response = self._source_writer.write_sources(write_sources_request)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        return MapToMarkResponse(write_sources_response, read_sources_response)
+        return MapToMarkDebtResponse(write_sources_response, read_sources_response)
 
-    def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
-        tree_root = domain.TreeRoot(rename_request.tree)
+    def apply_renames(self, apply_renames_request: client.ApplyRenamesRequest) -> client.ApplyRenamesResponse:
+        tree_root = domain.TreeRoot(apply_renames_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
@@ -331,14 +331,14 @@ class TessercheckService(ts.ApplicationService):
         write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
         write_sources_response = self._source_writer.write_sources(write_sources_request)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        return MapToRenameResponse(write_sources_response, read_sources_response)
+        return MapToApplyRenamesResponse(write_sources_response, read_sources_response)
 
-    def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
-        tree_root = domain.TreeRoot(rulebook_request.tree)
+    def render_rulebook(self, render_rulebook_request: client.RenderRulebookRequest) -> client.RenderRulebookResponse:
+        tree_root = domain.TreeRoot(render_rulebook_request.tree)
         read_rulebook_request = MapToReadRulebookRequest(tree_root)
         read_rulebook_response = self._rulebook_sources.read_rulebook(read_rulebook_request)
         try:
             rulebook = domain.Rulebook(MapToRulebookSpec(read_rulebook_response))
         except errors.DomainError as domain_error:
             raise client.Rejected(domain_error.code, domain_error.message) from domain_error
-        return MapToRulebookResponse(rulebook)
+        return MapToRenderRulebookResponse(rulebook)

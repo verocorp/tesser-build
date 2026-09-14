@@ -11,7 +11,7 @@ class WeightClass(enum.Enum):
     LIGHT = "light"
 
 
-class ParcelRecord(ts.Request):
+class ManifestParcelRequest(ts.Request):
 
     def __init__(
         self,
@@ -32,7 +32,7 @@ class ParcelRecord(ts.Request):
         self.weight_class = weight_class
 
 
-class PayloadResponse(ts.Response):
+class Parcel(ts.Response):
 
     def __init__(
         self,
@@ -53,6 +53,12 @@ class PayloadResponse(ts.Response):
         self.weight_class = weight_class
 
 
+class ManifestParcelResponse(ts.Response):
+
+    def __init__(self, parcel: Parcel) -> None:
+        self.parcel = parcel
+
+
 class ParcelWire(ts.Port, typing.Protocol):
 
-    def to_payload(self, parcel_record: ParcelRecord) -> PayloadResponse: ...  # tesser:debt TB085
+    def manifest_parcel(self, manifest_parcel_request: ManifestParcelRequest) -> ManifestParcelResponse: ...

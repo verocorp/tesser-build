@@ -37,7 +37,7 @@ class BetaService(ts.ApplicationService):
                 has_key_response = await key_repository.has_key(MapToHasKeyRequest(key))
         except ports.StoreUnavailable as store_error:
             raise client.Unavailable(message="the key store is unavailable") from store_error
-        return client.CheckKeyResponse(held=has_key_response.held.value)
+        return client.CheckKeyResponse(held=has_key_response.outcome.value)
 
     async def hold_key(self, hold_key_request: client.HoldKeyRequest) -> client.HoldKeyResponse:
         try:

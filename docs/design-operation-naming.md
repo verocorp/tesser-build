@@ -121,7 +121,7 @@ no verb, a response is named for what it is) is assumed throughout.
    it on 2026-09-13.) The kinds seen so far, a catalog and
    not a closed set: the act done, sometimes in more than one way
    (`Taken.TAKEN / HELD`); the step or reason it stopped; the answer to a
-   question (`SlugAvailability.TAKEN / FREE`); and what the engine crossing
+   question (`SlugTakenOutcome.TAKEN / FREE`); and what the engine crossing
    added (`ALREADY_STARTED`). The last kind exists only on relay responses,
    because only a relay crosses an engine, and it is produced by the runner
    translating the engine's refusal, never by the orchestrator. It exists
@@ -337,9 +337,11 @@ application client, and relay protocol method, an operation has at least
 two segments, `start_` and `run_` appear only on a relay (where they are
 required), and the request, response, and the response's `outcome` field
 derive from the operation; on every public orchestrator method, the name is
-not `run`, carries no calling-mode prefix, and has two segments. The outcome
-half reads only a field named `outcome`, because placement cannot tell a
-data enum from an outcome enum. Which layer would carry the rest:
+not `run`, carries no calling-mode prefix, and has two segments. An
+enum-typed field on an operation's own response is its outcome: there is at
+most one, it is named `outcome`, and a data enum rides inside a record
+rather than on the response (Chris, 2026-09-14; whether every response must
+carry exactly one is an open follow-up). Which layer would carry the rest:
 
 - **tessercheck** can carry the mechanical halves: an operation name has at
   least two segments (1); an orchestrator method is not `run` (2); the relay

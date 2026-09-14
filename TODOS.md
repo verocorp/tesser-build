@@ -78,19 +78,9 @@ question-shaped words; the `verdict` / `presence` field renames to
 Three more the enactment left standing, verified against the source on
 2026-09-14 rather than taken from the round reports:
 
-- [ ] **serdepy's `ParcelWire.to_payload` fails rules 1 and 6.**
-  `examples/serdepy/parcel/application/ports/parcel_wire.py` declares one
-  port whose one method is `to_payload(ParcelRecord) -> PayloadResponse`.
-  "To" is a preposition and "payload" a transport word; the request is
-  named for a record and the response for a payload, neither derived from
-  an operation. The record IS a `ts.Request` (the round-2 report said
-  otherwise). The port was created on purpose by
-  `docs/design-application-ports-migration.md` option 1 and the
-  serialization skill cites the file, so the port stays and only the names
-  move: `publish_parcel` with `PublishParcelRequest` / `PublishParcelResponse`
-  (or `manifest_parcel` if the far side is to be a carrier manifest — the
-  tree does not say what consumes the wire, and that choice is Chris's).
-  Five files, all in the tree; the skill cites the path, not the classes.
+- [x] **serdepy's `ParcelWire.to_payload` is `manifest_parcel` (2026-09-14).**
+  `ManifestParcelRequest` in, `ManifestParcelResponse(parcel: Parcel)` out;
+  the port and its gateway stay, as the ports-migration design chose.
 - [ ] **The transport-category errors still stand in errorspy and
   python-app.** Both `campaign` clients declare `Rejected` / `Missing` /
   `Conflict` / `Unavailable` / `Unreadable`; python-app's `linkpolicy`
@@ -131,23 +121,30 @@ every client, port, application client, and relay protocol method, and
 rules 1 and 2 on every public orchestrator method. What the checks do not
 yet reach, and the names they found that were deferred rather than renamed:
 
-- [ ] **Nine deferred names carry `# tesser:debt TB085`.**
-  `TessercheckClient.check / hook / mark / rename / rulebook` and
-  `RepoClient.check / trees` are one-word client operations; renaming each
-  needs a word for its thing (`check_tree`, `render_rulebook`, `list_trees`
-  are candidates) and derived messages, and `check_file` already sits beside
-  `check`. `ParcelWire.to_payload` is the serdepy item above. Five more sit
-  inside the test suite's shared kinds fixture (`Quotes.quote`,
-  `Catalog.lookup`, `QuotesRunner.run_quote`, `ShopApplicationClient.quote`,
-  `Flow.run`), marked rather than renamed because about fifteen tests quote
-  those class names; the markers also prove each dispatch branch fires,
-  since a marker that suppresses nothing fails the clean-together test.
-- [ ] **The outcome derivation reads only a field named `outcome`.** Placement
-  cannot tell a data enum from an outcome enum, so an outcome on a field
-  with another name is not checked: asyncpg `FindWidgetResponse.found`
-  (`Found.YES / NO`), `HasKeyResponse.held` (`Held.YES / NO`), and python-app
-  `SlugTakenResponse.availability` (`SlugAvailability`). Renaming those
-  fields to `outcome` reaches client responses and end-to-end tests.
+- [x] **The deferred operation names are named (2026-09-14, Chris adopted
+  the names).** Chosen by the strategic-design test (the context's own word,
+  one concept one term, no technology word inward of an adapter):
+  `TessercheckClient.check_tree / check_write / mark_debt / apply_renames /
+  render_rulebook`, `RepoClient.check_layout / list_trees`, and serdepy
+  `ParcelWire.manifest_parcel`, whose parcel data now rides in a `Parcel`
+  record. Console script names (`tessercheck-hook`, ...) and handler methods
+  stay, since those are the host's words. The shared kinds fixture's five
+  marked names were renamed with every other incidental fixture operation:
+  Chris ruled that test fixtures pass the naming checks in spirit.
+- [x] **An enum on an operation's response is its one outcome, named
+  `outcome` (2026-09-14, Chris).** TB085 now flags a second enum field and an
+  enum field with another name; records no operation returns keep their data
+  enums. Conformed: asyncpg `FindWidgetOutcome` and `HasKeyOutcome`, minimal
+  `HasKeyResponse.outcome`, python-app `SlugTakenOutcome`, tessercheck-py
+  `ReadSourcesOutcome`, and serdepy's `weight_class` moved into the `Parcel`
+  record.
+- [ ] **Consider exactly one outcome on every operation response.** Chris's
+  follow-up to the at-most-one ruling. Measured 2026-09-14: 67 of 94
+  operation responses across the twelve trees carry no enum at all, so each
+  would gain a one-member enum such as `SaveWidgetOutcome.SAVED`, the shape
+  of `StartConfirmOrderOutcome.STARTED` that a Codex review flagged as a
+  match with nothing to decide. Weigh that against the gain of every caller
+  matching every answer the same way.
 - [ ] **Protocol-module ports are not operations to these checks.** llmport
   `ToolSurface.instructions / begin / status` and python-app `Host.run` sit
   in `protocol/`, take no request, and are the surfaces Chris deferred.

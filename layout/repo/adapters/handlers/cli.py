@@ -20,11 +20,11 @@ class Handler(ts.Handler):
     def check(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
         root = cli_request.arg(0, "repo-root", _CHECK_USAGE)
         cli_request.no_extra_args(1, _CHECK_USAGE)
-        check_response = self._repo_client.check(client.CheckRequest(repo_root=root))
-        if check_response.problems:
-            lines = "\n".join(f"layout: {problem}" for problem in check_response.problems)
+        check_layout_response = self._repo_client.check_layout(client.CheckLayoutRequest(repo_root=root))
+        if check_layout_response.problems:
+            lines = "\n".join(f"layout: {problem}" for problem in check_layout_response.problems)
             return protocol.CliResponse(1, stdout="", stderr=lines)
-        rows, apps = check_response.counts
+        rows, apps = check_layout_response.counts
         return protocol.CliResponse.ok(
             f"layout: {rows} rows, {apps} app trees — disk, declarations, and gates agree"
         )
@@ -32,9 +32,9 @@ class Handler(ts.Handler):
     def trees(self, cli_request: protocol.CliRequest) -> protocol.CliResponse:
         root = cli_request.arg(0, "repo-root", _TREES_USAGE)
         cli_request.no_extra_args(1, _TREES_USAGE)
-        check_response = self._repo_client.check(client.CheckRequest(repo_root=root))
-        if check_response.problems:
-            lines = "\n".join(f"layout: {problem}" for problem in check_response.problems)
+        check_layout_response = self._repo_client.check_layout(client.CheckLayoutRequest(repo_root=root))
+        if check_layout_response.problems:
+            lines = "\n".join(f"layout: {problem}" for problem in check_layout_response.problems)
             return protocol.CliResponse(1, stdout="", stderr=lines)
-        trees_response = self._repo_client.trees(client.TreesRequest(repo_root=root))
-        return protocol.CliResponse.ok("\n".join(trees_response.trees))
+        list_trees_response = self._repo_client.list_trees(client.ListTreesRequest(repo_root=root))
+        return protocol.CliResponse.ok("\n".join(list_trees_response.trees))

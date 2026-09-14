@@ -11,7 +11,7 @@ def test_a_declared_tree_reads_as_an_app(tmp_path: pathlib.Path) -> None:
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.APP
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.APP
     assert read_sources_response.sources == ()
     assert read_sources_response.nested == ()
     assert read_sources_response.symlinked == ()
@@ -22,7 +22,7 @@ def test_a_tree_with_no_declaration_reads_as_missing(tmp_path: pathlib.Path) -> 
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.MISSING
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.MISSING
 
 
 def test_a_declaration_that_does_not_open_with_app_reads_as_unrecognized(
@@ -32,7 +32,7 @@ def test_a_declaration_that_does_not_open_with_app_reads_as_unrecognized(
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.UNRECOGNIZED
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.UNRECOGNIZED
 
 
 def test_an_undecodable_declaration_reads_as_unreadable(tmp_path: pathlib.Path) -> None:
@@ -40,7 +40,7 @@ def test_an_undecodable_declaration_reads_as_unreadable(tmp_path: pathlib.Path) 
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.UNREADABLE
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.UNREADABLE
 
 
 def test_a_bom_prefixed_declaration_still_reads_as_an_app(tmp_path: pathlib.Path) -> None:
@@ -48,7 +48,7 @@ def test_a_bom_prefixed_declaration_still_reads_as_an_app(tmp_path: pathlib.Path
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.APP
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.APP
 
 
 def test_export_and_import_directives_are_carried_through(tmp_path: pathlib.Path) -> None:
@@ -69,7 +69,7 @@ def test_a_stdlib_directive_is_carried_through(tmp_path: pathlib.Path) -> None:
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.APP
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.APP
     assert read_sources_response.pure_stdlib == ("collections.abc", "copy")
 
 
@@ -80,7 +80,7 @@ def test_a_stdlib_naming_a_path_makes_the_declaration_unrecognized(
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.UNRECOGNIZED
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.UNRECOGNIZED
     assert read_sources_response.pure_stdlib == ()
 
 
@@ -91,7 +91,7 @@ def test_a_directive_with_no_value_makes_the_declaration_unrecognized(
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.UNRECOGNIZED
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.UNRECOGNIZED
 
 
 def test_a_skip_naming_a_path_makes_the_declaration_unrecognized(
@@ -101,7 +101,7 @@ def test_a_skip_naming_a_path_makes_the_declaration_unrecognized(
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.UNRECOGNIZED
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.UNRECOGNIZED
 
 
 def test_a_skipped_directory_is_not_walked(tmp_path: pathlib.Path) -> None:
@@ -238,5 +238,5 @@ def test_an_undeclared_tree_still_reports_what_it_did_not_enter(tmp_path: pathli
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))
     )
-    assert read_sources_response.root is ports.RootForm.MISSING
+    assert read_sources_response.outcome is ports.ReadSourcesOutcome.MISSING
     assert read_sources_response.pruned == (".venv",)

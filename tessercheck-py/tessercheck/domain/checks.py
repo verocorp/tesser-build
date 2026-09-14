@@ -154,6 +154,10 @@ RESPONSE_SUFFIX: typing.Final[str] = "Response"
 
 OUTCOME_SUFFIX: typing.Final[str] = "Outcome"
 
+MESSAGE_BLOCKS: typing.Final[frozenset[str]] = frozenset(
+    {"request", "response", "port_request", "port_response", "relay_request", "relay_response"}
+)
+
 RELAY_CALLERS: typing.Final[frozenset[str]] = frozenset({"service", "actions", "orchestrator"})
 
 PACKAGE_HOMES: typing.Final[frozenset[str]] = frozenset(
@@ -1983,6 +1987,12 @@ class AttrRows(ts.ValueObject):
                 return Symbol(SymbolSpec(held_module, held_name))
         return None
 
+    def fields(self, text: Text) -> Names:
+        wanted = str(text)
+        return Names(tuple(
+            name for module_name, cls, name, _, _ in self._items if f"{module_name}|{cls}" == wanted
+        ))
+
 
 class ReturnRows(ts.ValueObject):
 
@@ -2044,7 +2054,9 @@ class RegistrySpec(ts.Spec):
         returns: tuple[tuple[str, str, str, str, str], ...] = (),
         attrs: tuple[tuple[str, str, str, str, str], ...] = (),
         package_attrs: tuple[tuple[str, str], ...] = (),
+        enums: tuple[tuple[str, str], ...] = (),
     ) -> None:
+        self.enums = enums
         self.export_packages = export_packages
         self.returns = returns
         self.attrs = attrs
@@ -2091,8 +2103,10 @@ class Registry(ts.ValueObject):
     _returns: ReturnRows
     _attrs: AttrRows
     _package_attrs: SymbolRows
+    _enums: SymbolRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_enums", SymbolRows(spec.enums))
         object.__setattr__(self, "_export_packages", NameRows(spec.export_packages))
         object.__setattr__(self, "_returns", ReturnRows(spec.returns))
         object.__setattr__(self, "_attrs", AttrRows(spec.attrs))
@@ -2174,6 +2188,9 @@ class Registry(ts.ValueObject):
 
     def domain_enums(self) -> Symbols:
         return self._domain_enums.symbols()
+
+    def enums(self) -> Symbols:
+        return self._enums.symbols()
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
@@ -5875,6 +5892,7 @@ class ClassDecl(ts.Entity):
         own = self._registry.kinds().block_of(Symbol(SymbolSpec(str(self._module), str(self._name))))
         relayed = own is not None and str(own) == RELAY_BLOCK
         attr_rows = self._registry.attrs()
+        symbols = self._registry.enums()
         for signature in self._signatures:
             if str(signature.name()).startswith("_"):
                 continue
@@ -5924,7 +5942,13 @@ class ClassDecl(ts.Entity):
             asked = str(MessageName(operation))
             answered = str(MessageName(operation if mode in (None, RUN_MODE) else str(signature.name())))
             params = signature.params()
-            taken = params[0].symbol() if len(params) == 1 else None
+            taken = (
+                params[0].symbol()
+                if len(params) == 1 and str(params[0].block()) in MESSAGE_BLOCKS
+                else None
+            )
+            if taken is not None and str(taken.module()).split(".")[0] == TESSER:
+                taken = None
             if taken is not None and str(taken.name()) != asked + REQUEST_SUFFIX:
                 actual = str(taken.name())
                 derived = asked + REQUEST_SUFFIX
@@ -5939,7 +5963,13 @@ class ClassDecl(ts.Entity):
                     ))
                 )
             returned = signature.returns()
-            given = returned.symbol() if returned is not None else None
+            given = (
+                returned.symbol()
+                if returned is not None and str(returned.block()) in MESSAGE_BLOCKS
+                else None
+            )
+            if given is not None and str(given.module()).split(".")[0] == TESSER:
+                given = None
             if given is None:
                 continue
             if str(given.name()) != answered + RESPONSE_SUFFIX:
@@ -5955,7 +5985,37 @@ class ClassDecl(ts.Entity):
                         "else is a message two operations can share",
                     ))
                 )
-            held = attr_rows.held(Text(f"{given.module()}|{given.name()}|{OUTCOME_FIELD}"))
+            owner = f"{given.module()}|{given.name()}"
+            answers = tuple(
+                field
+                for field in attr_rows.fields(Text(owner))
+                if (typed := attr_rows.held(Text(f"{owner}|{field}"))) is not None and typed in symbols
+            )
+            if len(answers) > 1:
+                count = len(answers)
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} answers {count} outcomes; a response carries at most one "
+                        "outcome, because its caller matches one answer",
+                    ))
+                )
+            for field in answers:
+                if field == OUTCOME_FIELD:
+                    continue
+                found.append(
+                    Violation(ViolationSpec(
+                        path,
+                        line,
+                        "TB085",
+                        f"{where} carries its outcome on {field}; a response's outcome is the "
+                        "field named outcome, because an enum on a response is the answer its "
+                        "caller matches, and a data enum rides inside a record",
+                    ))
+                )
+            held = attr_rows.held(Text(f"{owner}|{OUTCOME_FIELD}"))
             if held is not None and str(held.name()) != answered + OUTCOME_SUFFIX:
                 actual = str(held.name())
                 derived = answered + OUTCOME_SUFFIX
@@ -12109,6 +12169,12 @@ class Codebase(ts.AggregateRoot):
         )
         kind_rows = tuple((module_name, class_name, block_name) for (module_name, class_name), block_name in sorted(blocks.items()))
         domain_enum_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._domain_enums))
+        enum_rows = tuple(sorted(
+            (module.name(), stmt.name)
+            for module in self._modules
+            for stmt in module.class_defs()
+            if stmt.name in module.enums()
+        ))
         outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
         action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
         context_rows = self._contexts
@@ -12162,6 +12228,7 @@ class Codebase(ts.AggregateRoot):
             returns=return_rows,
             attrs=attr_rows,
             package_attrs=package_attr_rows,
+            enums=enum_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
@@ -12239,6 +12306,7 @@ class Codebase(ts.AggregateRoot):
             returns=return_rows,
             attrs=attr_rows,
             package_attrs=package_attr_rows,
+            enums=enum_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())

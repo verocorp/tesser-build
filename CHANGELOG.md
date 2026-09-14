@@ -5,6 +5,38 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.3.0] - 2026-09-14
+
+An operation's response now says its answer in one place: an enum on the
+response is its outcome, and there is only one, named `outcome`. The last
+one-word operations in the analyzer, the layout check, and serdepy have
+their words, and the analyzer's own test fixtures pass the naming checks.
+
+### Added
+- **One outcome per operation response, under TB085.** An enum-typed field
+  on an operation's own response is its outcome: a second enum field is a
+  finding, and so is an enum field not named `outcome`. Records that no
+  operation returns keep their data enums. The analyzer's registry now knows
+  every enum in the tree, not only the domain's.
+
+### Changed
+- **Names chosen by the ubiquitous-language test**, replacing eight debt
+  markers: `TessercheckClient.check_tree / check_write / mark_debt /
+  apply_renames / render_rulebook`, `RepoClient.check_layout / list_trees`,
+  and serdepy `ParcelWire.manifest_parcel`, whose parcel data now rides in a
+  `Parcel` record. Console scripts and CLI handler methods keep the host's
+  words.
+- **Answers moved onto `outcome` fields:** asyncpg `FindWidgetOutcome` and
+  `HasKeyOutcome`, minimal `HasKeyResponse.outcome`, python-app
+  `SlugTakenOutcome`, tessercheck-py `ReadSourcesOutcome` (was `RootForm`).
+- **The naming derivation reads only real messages.** A request or response
+  name is derived only when the slot is a declared request or response, not
+  a domain type or tesser's own `ts.Request` / `ts.Response`, which TB081 and
+  the port shape rule already report.
+- **Test fixtures pass the naming checks.** Every incidental one-word
+  operation across 42 analyzer tests and the shared kinds fixture now names
+  a verb and its thing; no fixture carries a naming debt marker.
+
 ## [0.1.2.0] - 2026-09-14
 
 The analyzer now checks that an operation is named for a verb and the thing

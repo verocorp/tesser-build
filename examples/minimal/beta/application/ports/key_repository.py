@@ -19,8 +19,8 @@ class HasKeyRequest(ts.Request):
 
 class HasKeyResponse(ts.Response):
 
-    def __init__(self, held: HasKeyOutcome) -> None:
-        self.held = held
+    def __init__(self, outcome: HasKeyOutcome) -> None:
+        self.outcome = outcome
 
 
 class KeyRepository(ts.Port, typing.Protocol):

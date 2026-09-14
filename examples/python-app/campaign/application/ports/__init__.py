@@ -25,7 +25,7 @@ from campaign.application.ports.campaign_repository import MoneyRecord as MoneyR
 from campaign.application.ports.target_policy import PolicyUnavailable as PolicyUnavailable
 from campaign.application.ports.campaign_repository import SaveCampaignRequest as SaveCampaignRequest
 from campaign.application.ports.campaign_repository import SaveCampaignResponse as SaveCampaignResponse
-from campaign.application.ports.campaign_repository import SlugAvailability as SlugAvailability
+from campaign.application.ports.campaign_repository import SlugTakenOutcome as SlugTakenOutcome
 from campaign.application.ports.campaign_repository import SlugTakenRequest as SlugTakenRequest
 from campaign.application.ports.campaign_repository import SlugTakenResponse as SlugTakenResponse
 from campaign.application.ports.campaign_repository import StoreUnavailable as StoreUnavailable

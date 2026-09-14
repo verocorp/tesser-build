@@ -13,7 +13,7 @@ import beta.client as client
 class FakeKeyRepository(ports.KeyRepository):
 
     def has_key(self, has_key_request: ports.HasKeyRequest) -> ports.HasKeyResponse:
-        return ports.HasKeyResponse(held=ports.HasKeyOutcome.YES)
+        return ports.HasKeyResponse(outcome=ports.HasKeyOutcome.YES)
 
 
 class TestBetaService:
