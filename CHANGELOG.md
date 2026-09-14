@@ -5,6 +5,34 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.2.0] - 2026-09-14
+
+The analyzer now checks that an operation is named for a verb and the thing
+it acts on, and that the messages it speaks are named for it. A one-word
+port method, a relay method without its calling mode, or a response named
+for something else is a finding the moment it is written.
+
+### Added
+- **Operation-name checks under TB085**, the single-declaration halves of
+  rules 1, 2, and 6 of `docs/design-operation-naming.md`. On every client,
+  port, application client, and relay protocol method: an operation has at
+  least two segments; `start_` and `run_` appear only on a relay, where one
+  of them is required; the request is `<Op>Request`, the response
+  `<Op>Response` (`Start<Op>Response` on a `start_` relay method), and a
+  response field named `outcome` is typed `<Op>Outcome`. On every public
+  orchestrator method: never `run`, no calling-mode prefix, two segments.
+  A test fake doubling a client is not checked, because the client is.
+
+### Changed
+- **Ports renamed to the operation their messages already named:** layout
+  `RepoReader.read_repo`; tessercheck-py `RulebookSources.read_rulebook`,
+  `SourceReader.read_sources`, `SourceWriter.write_sources`.
+- **asyncpg outcome enums derive from their operations:**
+  `AddWidgetOutcome`, `LoadWidgetOutcome`.
+- **Names waiting on a word carry `# tesser:debt TB085`:**
+  `TessercheckClient.check / hook / mark / rename / rulebook`,
+  `RepoClient.check / trees`, serdepy `ParcelWire.to_payload`.
+
 ## [0.1.1.0] - 2026-09-14
 
 An operation is named for what it does to a business thing, and what it
