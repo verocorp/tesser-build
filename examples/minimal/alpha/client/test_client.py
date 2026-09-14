@@ -3,13 +3,13 @@ from __future__ import annotations
 import alpha.client as client
 
 
-class TestRejected:
+class TestWidgetRejected:
 
-    def test_a_rejection_carries_its_code_and_message(self) -> None:
-        rejected = client.Rejected("empty_name", "a name is never empty")
-        assert rejected.code == "empty_name"
-        assert rejected.message == "a name is never empty"
-        assert str(rejected) == "a name is never empty"
+    def test_a_rejected_widget_carries_its_code_and_message(self) -> None:
+        widget_rejected = client.WidgetRejected("empty_name", "a name is never empty")
+        assert widget_rejected.code == "empty_name"
+        assert widget_rejected.message == "a name is never empty"
+        assert str(widget_rejected) == "a name is never empty"
 
 
 class TestErrors:

@@ -23,6 +23,6 @@ class BetaService(ts.ApplicationService):
         try:
             key = domain.Key(check_key_request.key)
         except errors.DomainError as domain_error:
-            raise client.Rejected(domain_error.code, domain_error.message) from domain_error
+            raise client.KeyRejected(domain_error.code, domain_error.message) from domain_error
         has_key_response = self._key_repository.has_key(MapToHasKeyRequest(key))
         return client.CheckKeyResponse(held=has_key_response.outcome.value)

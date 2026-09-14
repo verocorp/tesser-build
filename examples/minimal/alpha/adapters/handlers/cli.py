@@ -22,7 +22,7 @@ class Handler(ts.Handler):
             add_part_response = self._alpha_client.add_part(client.AddPartRequest(name=name, part=part))
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.WidgetRejected():
                     return protocol.CliResponse(exit_code=2, line=protocol.Line(text=error.message))
                 case _ as never:
                     typing.assert_never(never)

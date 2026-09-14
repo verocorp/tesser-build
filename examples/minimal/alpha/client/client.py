@@ -31,7 +31,7 @@ class CreateWidgetResponse(ts.Response):
         self.name = name
 
 
-class Rejected(ts.Error):
+class WidgetRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -39,7 +39,7 @@ class Rejected(ts.Error):
         self.message = message
 
 
-ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
+ERRORS: typing.Final[tuple[type[WidgetRejected]]] = (WidgetRejected,)
 
 
 class AlphaClient(ts.Client, typing.Protocol):

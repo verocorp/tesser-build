@@ -25,6 +25,6 @@ class TestBetaService:
 
     def test_an_empty_key_is_rejected_in_the_context_s_own_words(self) -> None:
         beta_service = application.BetaService(FakeKeyRepository())
-        with pytest.raises(client.Rejected) as raised:
+        with pytest.raises(client.KeyRejected) as raised:
             beta_service.check_key(client.CheckKeyRequest(key=""))
         assert raised.value.code == "empty_key"

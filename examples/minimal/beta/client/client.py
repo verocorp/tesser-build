@@ -17,7 +17,7 @@ class CheckKeyResponse(ts.Response):
         self.held = held
 
 
-class Rejected(ts.Error):
+class KeyRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
