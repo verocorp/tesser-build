@@ -11,23 +11,6 @@ import ordering.application.relays as relays
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class MapToStartConfirmOrderResponse(ts.Mapper, relays.StartConfirmOrderResponse):
-
-    def __init__(self, key: str) -> None:
-        super().__init__(outcome=relays.StartConfirmOrderOutcome.STARTED, order_id=key)
-
-
-class MapToAlreadyStartedConfirmOrderResponse(ts.Mapper, relays.ConfirmOrderResponse):
-
-    def __init__(self, key: str, refusal: str) -> None:
-        super().__init__(
-            outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
-            order_id=key,
-            confirmed_orders=(),
-            reasons=(refusal,),
-        )
-
-
 class RestateOrderOrchestratorChildRunner(ts.Runner):
 
     def __init__(
@@ -47,7 +30,9 @@ class RestateOrderOrchestratorChildRunner(ts.Runner):
             key=key,
             arg=confirm_order_request,
         )
-        return MapToStartConfirmOrderResponse(key)
+        return relays.StartConfirmOrderResponse(
+            outcome=relays.StartConfirmOrderOutcome.STARTED, order_id=key
+        )
 
     async def run_confirm_order(
         self, confirm_order_request: relays.ConfirmOrderRequest
@@ -61,5 +46,10 @@ class RestateOrderOrchestratorChildRunner(ts.Runner):
             )
         except restate.TerminalError as terminal_error:
             if terminal_error.status_code == 409 and terminal_error.message == _ALREADY_INVOKED:
-                return MapToAlreadyStartedConfirmOrderResponse(key, _ALREADY_INVOKED)
+                return relays.ConfirmOrderResponse(
+                    outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
+                    order_id=key,
+                    confirmed_orders=(),
+                    reasons=(),
+                )
             raise

@@ -82,7 +82,7 @@ class FakeStartedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
             outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
             order_id=str(confirm_order_request.order.identity),
             confirmed_orders=(),
-            reasons=("the workflow method was already invoked",),
+            reasons=(),
         )
 
 
@@ -171,4 +171,4 @@ class TestOrderService:
                     place_order_request()
                 )
             )
-        assert excinfo.value.message == "the workflow method was already invoked"
+        assert excinfo.value.message == "the order was already started"

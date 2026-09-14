@@ -7,6 +7,8 @@ import tesser.application as ts
 import ordering.application.relays as relays
 import ordering.domain as domain
 
+_ALREADY_STARTED: typing.Final[str] = "the order was already started"
+
 
 class MapToPurchaseSpec(ts.Mapper, domain.PurchaseSpec):
 
@@ -71,6 +73,17 @@ class MapToPayForOrderResponseFromConfirmOrderResponse(ts.Mapper, relays.PayForO
         )
 
 
+class MapToPayForOrderResponseFromStartedOrder(ts.Mapper, relays.PayForOrderResponse):
+
+    def __init__(self, order: domain.Order) -> None:
+        super().__init__(
+            outcome=relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED,
+            order_id=str(order.identity),
+            purchases=(),
+            reasons=(_ALREADY_STARTED,),
+        )
+
+
 class MapToPayForOrderResponseFromTakePaymentResponse(ts.Mapper, relays.PayForOrderResponse):
 
     def __init__(
@@ -104,13 +117,12 @@ class PurchaseOrchestrator(ts.Orchestrator):
         match confirm_order_response.outcome:  # tesser:debt TB082
             case relays.ConfirmOrderOutcome.CONFIRMED:
                 purchase = domain.Purchase(MapToPurchaseSpec(order, confirm_order_response))
-            case (
-                relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND
-                | relays.ConfirmOrderOutcome.ALREADY_STARTED
-            ):
+            case relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND:
                 return MapToPayForOrderResponseFromConfirmOrderResponse(
                     order, confirm_order_response
                 )
+            case relays.ConfirmOrderOutcome.ALREADY_STARTED:
+                return MapToPayForOrderResponseFromStartedOrder(order)
             case _ as never:
                 typing.assert_never(never)
         payment_method = pay_for_order_request.payment_method

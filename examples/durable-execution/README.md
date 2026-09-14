@@ -346,15 +346,26 @@ host mounts the runtime's `Service` and `Workflow` at startup, when no
 workflow context exists yet. So the runtime owns every handler, and each
 runner reaches its own through the runtime.
 
-**A runner and the runtime hand a message on whole and read almost nothing
-off it.** That property is weaker than it was. A runner is now the one place
-`ALREADY_STARTED` can be produced — only a relay crosses an engine, and only
-the runner can recognise the engine's refusal — so three runner modules build
-a relay response through a mapper and name its fields (`outcome`, `order_id`,
-`confirmed_orders`/`purchases`, `reasons`). No field of a *domain* object
-appears there, and no `sku`, `cents`, `quantity` or `total_cents` does. Every
-encoding is still a snapshot beside its message in `relays/`, and the one
-domain read left is
+**A runner and the runtime never read or name the payload.** The order's
+fields — `sku`, `cents`, `quantity`, `total_cents` — cross only through the
+snapshot, and no runner or runtime module names one. Three runners do
+*construct* a relay response: when the ingress or the SDK refuses with the
+engine's already-invoked 409, the runner answers
+`ConfirmOrderOutcome.ALREADY_STARTED` (or `PayForOrderOutcome.ALREADY_STARTED`)
+directly. That is the adapter fulfilling its protocol, the same as
+`MemoryProductCatalogRepository` naming the fields of
+`GetProductPriceResponse`; two runners writing the same construction are two
+implementations of one relay, not duplicated logic.
+
+The reason tuple is **empty** on that member. The server's refusal text
+("the workflow method was already invoked") is the engine's word, not the
+application's: the runner keeps it as its recognition test and never carries
+it inward. The member *is* the word, and the service and the parent
+orchestrator each say it in their own language — "the order was already
+started".
+
+Every encoding is still a snapshot beside its message in `relays/`, and the
+one payload read left is
 `str(<request>.order.identity)` in the three workflow runners, for the
 workflow key Restate requires. The SDK splices that key into the request
 path unencoded (`restate/client.py`, `endpoint += f"/{key}"`), and the id

@@ -17,23 +17,6 @@ _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOU
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class MapToStartConfirmOrderResponse(ts.Mapper, relays.StartConfirmOrderResponse):
-
-    def __init__(self, key: str) -> None:
-        super().__init__(outcome=relays.StartConfirmOrderOutcome.STARTED, order_id=key)
-
-
-class MapToAlreadyStartedConfirmOrderResponse(ts.Mapper, relays.ConfirmOrderResponse):
-
-    def __init__(self, key: str, refusal: str) -> None:
-        super().__init__(
-            outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
-            order_id=key,
-            confirmed_orders=(),
-            reasons=(refusal,),
-        )
-
-
 class RestateOrderOrchestratorRunner(ts.Runner):
 
     def __init__(self, ingress: str, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
@@ -50,7 +33,9 @@ class RestateOrderOrchestratorRunner(ts.Runner):
                 key=urllib_parse.quote(key, safe=""),
                 arg=confirm_order_request,
             )
-        return MapToStartConfirmOrderResponse(key)
+        return relays.StartConfirmOrderResponse(
+            outcome=relays.StartConfirmOrderOutcome.STARTED, order_id=key
+        )
 
     async def run_confirm_order(
         self, confirm_order_request: relays.ConfirmOrderRequest
@@ -78,4 +63,9 @@ class RestateOrderOrchestratorRunner(ts.Runner):
                 and refusal.get("message") == _ALREADY_INVOKED
             ):
                 raise
-            return MapToAlreadyStartedConfirmOrderResponse(key, _ALREADY_INVOKED)
+            return relays.ConfirmOrderResponse(
+                outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
+                order_id=key,
+                confirmed_orders=(),
+                reasons=(),
+            )

@@ -9,6 +9,8 @@ import ordering.client as client
 import ordering.domain as domain
 import tesser.errors as errors
 
+_ALREADY_STARTED: typing.Final[str] = "the order was already started"
+
 
 class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
 
@@ -58,6 +60,6 @@ class PurchaseService(ts.ApplicationService):
             case relays.PayForOrderOutcome.PAYMENT_DECLINED:
                 raise client.PaymentDeclined(pay_for_order_response.reasons[0])
             case relays.PayForOrderOutcome.ALREADY_STARTED:
-                raise client.OrderAlreadyStarted(pay_for_order_response.reasons[0])
+                raise client.OrderAlreadyStarted(_ALREADY_STARTED)
             case _ as never:
                 typing.assert_never(never)

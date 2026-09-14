@@ -71,7 +71,7 @@ class FakeStartedPurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
             outcome=relays.PayForOrderOutcome.ALREADY_STARTED,
             order_id=str(pay_for_order_request.order.identity),
             purchases=(),
-            reasons=("the workflow method was already invoked",),
+            reasons=(),
         )
 
 
@@ -158,4 +158,4 @@ class TestPurchaseService:
                     FakeStartedPurchaseOrchestratorRunner()
                 ).pay_for_order(pay_for_order_request())
             )
-        assert excinfo.value.message == "the workflow method was already invoked"
+        assert excinfo.value.message == "the order was already started"

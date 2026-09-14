@@ -149,7 +149,7 @@ class TestRestateOrderOrchestratorChildRunner:
         assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.ALREADY_STARTED
         assert confirm_order_response.order_id == "o5"
         assert confirm_order_response.confirmed_orders == ()
-        assert confirm_order_response.reasons == ("the workflow method was already invoked",)
+        assert confirm_order_response.reasons == ()
 
     def test_any_other_terminal_error_is_a_fault_the_cancellation_409_included(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(

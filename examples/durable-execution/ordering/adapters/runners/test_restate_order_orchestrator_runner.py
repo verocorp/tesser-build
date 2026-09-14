@@ -242,7 +242,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
         assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.ALREADY_STARTED
         assert confirm_order_response.order_id == "o1"
         assert confirm_order_response.confirmed_orders == ()
-        assert confirm_order_response.reasons == ("the workflow method was already invoked",)
+        assert confirm_order_response.reasons == ()
 
     def test_a_cancellation_409_is_a_fault_because_only_the_message_tells_it_apart(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085

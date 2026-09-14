@@ -130,7 +130,7 @@ class FakeStartedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
             outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
             order_id=str(confirm_order_request.order.identity),
             confirmed_orders=(),
-            reasons=("the workflow method was already invoked",),
+            reasons=(),
         )
 
 
@@ -215,7 +215,7 @@ class TestPurchaseOrchestrator:
         assert (
             pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
         )
-        assert pay_for_order_response.reasons == ("the workflow method was already invoked",)
+        assert pay_for_order_response.reasons == ("the order was already started",)
         assert fake_purchase_actions_runner.taken == []
 
     def test_a_declined_payment_is_the_parents_payment_declined(self) -> None:

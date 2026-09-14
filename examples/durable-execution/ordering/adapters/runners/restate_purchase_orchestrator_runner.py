@@ -17,17 +17,6 @@ _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOU
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class MapToAlreadyStartedPayForOrderResponse(ts.Mapper, relays.PayForOrderResponse):
-
-    def __init__(self, key: str, refusal: str) -> None:
-        super().__init__(
-            outcome=relays.PayForOrderOutcome.ALREADY_STARTED,
-            order_id=key,
-            purchases=(),
-            reasons=(refusal,),
-        )
-
-
 class RestatePurchaseOrchestratorRunner(ts.Runner):
 
     def __init__(self, ingress: str, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
@@ -60,4 +49,9 @@ class RestatePurchaseOrchestratorRunner(ts.Runner):
                 and refusal.get("message") == _ALREADY_INVOKED
             ):
                 raise
-            return MapToAlreadyStartedPayForOrderResponse(key, _ALREADY_INVOKED)
+            return relays.PayForOrderResponse(
+                outcome=relays.PayForOrderOutcome.ALREADY_STARTED,
+                order_id=key,
+                purchases=(),
+                reasons=(),
+            )

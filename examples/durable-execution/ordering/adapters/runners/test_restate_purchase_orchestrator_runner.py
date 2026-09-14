@@ -169,7 +169,7 @@ class TestRestatePurchaseOrchestratorRunner:
         assert pay_for_order_response.outcome is relays.PayForOrderOutcome.ALREADY_STARTED
         assert pay_for_order_response.order_id == "o1"
         assert pay_for_order_response.purchases == ()
-        assert pay_for_order_response.reasons == ("the workflow method was already invoked",)
+        assert pay_for_order_response.reasons == ()
 
     def test_every_other_refusal_is_a_fault(self) -> None:
         for answer, status_line, status_code in (
