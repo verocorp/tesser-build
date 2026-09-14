@@ -72,7 +72,7 @@ def test_every_status_is_reachable_with_a_problem_body() -> None:
             "type"
         ]
     )
-    seen[503] = str(down_handler.get_campaign("c1").body["type"])
+    seen[500] = str(down_handler.get_campaign("c1").body["type"])
 
-    assert set(seen) == {400, 404, 409, 422, 503}
+    assert set(seen) == {400, 404, 409, 422, 500}
     assert all(t.startswith("/problems/") for t in seen.values())

@@ -74,14 +74,21 @@ class Rejection(ts.Response):
         self.problems = problems
 
 
-class Rejected(ts.Error):
+class CampaignRejected(ts.Error):
 
     def __init__(self, rejection: Rejection) -> None:
         super().__init__(rejection.message)
         self.rejection = rejection
 
 
-class Missing(ts.Error):
+class CampaignNotFound(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class LinkNotAdded(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -89,37 +96,22 @@ class Missing(ts.Error):
         self.message = message
 
 
-class Conflict(ts.Error):
+class LinkNotDeactivated(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
-        self.message = message
-
-
-class Unavailable(ts.Error):
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.message = message
-
-
-class Unreadable(ts.Error):
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
         self.message = message
 
 
 ERRORS: typing.Final[
     tuple[
-        type[Rejected],
-        type[Missing],
-        type[Conflict],
-        type[Unavailable],
-        type[Unreadable],
+        type[CampaignRejected],
+        type[CampaignNotFound],
+        type[LinkNotAdded],
+        type[LinkNotDeactivated],
     ]
-] = (Rejected, Missing, Conflict, Unavailable, Unreadable)
+] = (CampaignRejected, CampaignNotFound, LinkNotAdded, LinkNotDeactivated)
 
 
 class CreateCampaignResponse(ts.Response):

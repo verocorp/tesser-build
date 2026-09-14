@@ -168,7 +168,7 @@ def test_a_window_start_that_is_not_a_string_is_400() -> None:
 
 def test_a_validation_failure_is_422_carrying_the_code_title_and_field() -> None:
     fake_campaign_client = FakeCampaignClient(
-        error=client.Rejected(
+        error=client.CampaignRejected(
             client.Rejection("bad_slug", "invalid slug 'BAD'", "links[0].slug", ())
         )
     )
@@ -187,7 +187,7 @@ def test_a_validation_failure_is_422_carrying_the_code_title_and_field() -> None
 
 def test_an_aggregated_validation_failure_lists_every_invalid_param() -> None:
     fake_campaign_client = FakeCampaignClient(
-        error=client.Rejected(
+        error=client.CampaignRejected(
             client.Rejection(
                 "validation_failed",
                 "one or more fields are invalid",
@@ -212,23 +212,23 @@ def test_an_aggregated_validation_failure_lists_every_invalid_param() -> None:
     assert "field" not in response.body
 
 
-def test_a_missing_campaign_is_404() -> None:
+def test_a_campaign_not_found_is_404_named_for_the_situation() -> None:
     fake_campaign_client = FakeCampaignClient(
-        error=client.Missing("campaign_missing", "no campaign 'nope'")
+        error=client.CampaignNotFound("no campaign 'nope'")
     )
     response = handlers.Handler(fake_campaign_client).get_campaign("nope")
     assert response.status == 404
     assert response.body == {
-        "type": "/problems/campaign_missing",
-        "title": "campaign missing",
+        "type": "/problems/campaign_not_found",
+        "title": "campaign not found",
         "status": 404,
         "detail": "no campaign 'nope'",
     }
 
 
-def test_a_conflict_is_409() -> None:
+def test_a_link_not_added_is_409_carrying_the_domain_code() -> None:
     fake_campaign_client = FakeCampaignClient(
-        error=client.Conflict("duplicate_slug", "slug spring-sale already in c1")
+        error=client.LinkNotAdded("duplicate_slug", "slug spring-sale already in c1")
     )
     response = handlers.Handler(fake_campaign_client).add_link(
         "c1", json.dumps({"slug": "spring-sale", "target_url": "https://x.com"})
@@ -238,18 +238,18 @@ def test_a_conflict_is_409() -> None:
     assert response.body["detail"] == "slug spring-sale already in c1"
 
 
-def test_an_unavailable_store_is_503_and_leaks_nothing() -> None:
+def test_a_link_not_deactivated_is_404_carrying_the_domain_code() -> None:
     fake_campaign_client = FakeCampaignClient(
-        error=client.Unavailable("campaign storage cannot answer for 'c1'")
+        error=client.LinkNotDeactivated("link_missing", "no link 'ghost-link'")
     )
-    response = handlers.Handler(fake_campaign_client).get_campaign("c1")
+    response = handlers.Handler(fake_campaign_client).deactivate_link("c1", "ghost-link")
+    assert response.status == 404
     assert response.body == {
-        "type": "/problems/unavailable",
-        "title": "Service Unavailable",
-        "status": 503,
-        "detail": "please retry",
+        "type": "/problems/link_missing",
+        "title": "link missing",
+        "status": 404,
+        "detail": "no link 'ghost-link'",
     }
-    assert response.status == 503
 
 
 def test_an_unexpected_failure_is_500_and_leaks_nothing() -> None:
@@ -313,17 +313,3 @@ def test_deactivating_a_link_answers_200_and_hands_the_client_the_slug() -> None
     req = fake_campaign_client.requests[0]
     assert isinstance(req, client.DeactivateLinkRequest)
     assert (req.campaign_id, req.slug) == ("c1", "spring-sale")
-
-
-def test_an_unreadable_record_is_503_and_leaks_nothing() -> None:
-    fake_campaign_client = FakeCampaignClient(
-        error=client.Unreadable("corrupted campaign record 'c1': [bad_slug] bad")
-    )
-    response = handlers.Handler(fake_campaign_client).get_campaign("c1")
-    assert response.body == {
-        "type": "/problems/unavailable",
-        "title": "Service Unavailable",
-        "status": 503,
-        "detail": "please retry",
-    }
-    assert response.status == 503

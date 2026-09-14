@@ -60,10 +60,6 @@ class FindCampaignResponse(ts.Response):
         self.campaigns = campaigns
 
 
-class StorageUnavailable(ts.Error):
-    pass
-
-
 class CampaignRepository(ts.Port, typing.Protocol):
 
     def save_campaign(

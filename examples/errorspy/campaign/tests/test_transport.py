@@ -55,7 +55,7 @@ def test_not_found_is_404() -> None:
     response = handler.get_campaign("nope")
 
     assert response.status == 404
-    assert response.body["type"] == "/problems/campaign_missing"
+    assert response.body["type"] == "/problems/campaign_not_found"
 
 
 def test_conflict_is_409() -> None:
@@ -143,7 +143,7 @@ def test_aggregated_validation_lists_all_invalid_params() -> None:
     assert codes == {"bad_slug", "bad_target_url"}
 
 
-def test_an_unavailable_store_is_503() -> None:
+def test_a_storage_outage_is_a_fault_and_the_handler_answers_500() -> None:
     handler = handlers.Handler(
         application.CampaignService(
             repositories.StorageCampaignRepository(storage.FakeStorage(down=True))
@@ -152,5 +152,5 @@ def test_an_unavailable_store_is_503() -> None:
 
     response = handler.get_campaign("c1")
 
-    assert response.status == 503
-    assert response.body["type"] == "/problems/unavailable"
+    assert response.status == 500
+    assert response.body["type"] == "/problems/internal"

@@ -27,9 +27,8 @@ class MapToCampaignSpec(ts.Mapper, domain.CampaignSpec):
             case ports.FindCampaignOutcome.FOUND:
                 record = find_campaign_response.campaigns[0]
             case ports.FindCampaignOutcome.NOT_FOUND:
-                raise client.Missing(
-                    code="campaign_missing",
-                    message=f"no campaign {find_campaign_request.campaign_id!r}",
+                raise client.CampaignNotFound(
+                    message=f"no campaign {find_campaign_request.campaign_id!r}"
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -154,7 +153,7 @@ class CampaignService(ts.ApplicationService):
             campaign = domain.Campaign(campaign_spec)
         except errors.DomainError as domain_error:
             rejection = MapToRejection(domain_error)
-            raise client.Rejected(rejection) from domain_error
+            raise client.CampaignRejected(rejection) from domain_error
         self._campaign_repository.save_campaign(MapToSaveCampaignRequest(campaign))
         return MapToCreateCampaignResponse(MapToCampaign(campaign))
 
@@ -165,24 +164,14 @@ class CampaignService(ts.ApplicationService):
             campaign_id = domain.CampaignID(get_campaign_request.campaign_id)
         except errors.DomainError as domain_error:
             rejection = MapToRejection(domain_error)
-            raise client.Rejected(rejection) from domain_error
+            raise client.CampaignRejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
-        try:
-            find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
-        except ports.StorageUnavailable as port_error:
-            raise client.Unavailable(
-                message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
-            ) from port_error
+        find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
-        try:
-            campaign = domain.Campaign(campaign_spec)
-        except errors.DomainError as domain_error:
-            raise client.Unreadable(
-                message=f"corrupted campaign record {find_campaign_request.campaign_id!r}: {domain_error}"
-            ) from domain_error
+        campaign = domain.Campaign(campaign_spec)
         return MapToGetCampaignResponse(MapToCampaign(campaign))
 
     def add_link(self, add_link_request: client.AddLinkRequest) -> client.AddLinkResponse:
@@ -195,24 +184,14 @@ class CampaignService(ts.ApplicationService):
             campaign_id = domain.CampaignID(add_link_request.campaign_id)
         except errors.DomainError as domain_error:
             rejection = MapToRejection(domain_error)
-            raise client.Rejected(rejection) from domain_error
+            raise client.CampaignRejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
-        try:
-            find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
-        except ports.StorageUnavailable as port_error:
-            raise client.Unavailable(
-                message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
-            ) from port_error
+        find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
-        try:
-            campaign = domain.Campaign(campaign_spec)
-        except errors.DomainError as domain_error:
-            raise client.Unreadable(
-                message=f"corrupted campaign record {find_campaign_request.campaign_id!r}: {domain_error}"
-            ) from domain_error
+        campaign = domain.Campaign(campaign_spec)
         try:
             campaign.add_link(
                 domain.ShortLinkSpec(
@@ -220,7 +199,7 @@ class CampaignService(ts.ApplicationService):
                 )
             )
         except errors.DomainError as domain_error:
-            raise client.Conflict(
+            raise client.LinkNotAdded(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
         self._campaign_repository.save_campaign(MapToSaveCampaignRequest(campaign))
@@ -233,33 +212,23 @@ class CampaignService(ts.ApplicationService):
             campaign_id = domain.CampaignID(deactivate_link_request.campaign_id)
         except errors.DomainError as domain_error:
             rejection = MapToRejection(domain_error)
-            raise client.Rejected(rejection) from domain_error
+            raise client.CampaignRejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
-        try:
-            find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
-        except ports.StorageUnavailable as port_error:
-            raise client.Unavailable(
-                message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
-            ) from port_error
+        find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
         campaign_spec = MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
-        try:
-            campaign = domain.Campaign(campaign_spec)
-        except errors.DomainError as domain_error:
-            raise client.Unreadable(
-                message=f"corrupted campaign record {find_campaign_request.campaign_id!r}: {domain_error}"
-            ) from domain_error
+        campaign = domain.Campaign(campaign_spec)
         try:
             slug = domain.Slug(deactivate_link_request.slug)
         except errors.DomainError as domain_error:
             rejection = MapToRejection(domain_error)
-            raise client.Rejected(rejection) from domain_error
+            raise client.CampaignRejected(rejection) from domain_error
         try:
             campaign.deactivate_link(slug)
         except errors.DomainError as domain_error:
-            raise client.Missing(
+            raise client.LinkNotDeactivated(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
         self._campaign_repository.save_campaign(MapToSaveCampaignRequest(campaign))

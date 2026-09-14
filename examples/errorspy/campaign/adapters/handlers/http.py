@@ -8,14 +8,6 @@ import tesser.adapters as ts
 import campaign.client as client
 import protocol
 
-_UNAVAILABLE: typing.Final[dict[str, object]] = {
-    "type": "/problems/unavailable",
-    "title": "Service Unavailable",
-    "status": 503,
-    "detail": "please retry",
-}
-
-
 class Handler(ts.Handler):
 
     def __init__(self, campaign_client: client.CampaignClient) -> None:
@@ -76,7 +68,7 @@ class Handler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     rejection = error.rejection
                     problem: dict[str, object] = {
                         "type": f"/problems/{rejection.code}",
@@ -96,17 +88,17 @@ class Handler(ts.Handler):
                             for reported in rejection.problems
                         ]
                     return protocol.Response(422, problem)
-                case client.Missing():
+                case client.CampaignNotFound():
                     return protocol.Response(
                         404,
                         {
-                            "type": f"/problems/{error.code}",
-                            "title": error.code.replace("_", " "),
+                            "type": "/problems/campaign_not_found",
+                            "title": "campaign not found",
                             "status": 404,
                             "detail": error.message,
                         },
                     )
-                case client.Conflict():
+                case client.LinkNotAdded():
                     return protocol.Response(
                         409,
                         {
@@ -116,10 +108,16 @@ class Handler(ts.Handler):
                             "detail": error.message,
                         },
                     )
-                case client.Unavailable():
-                    return protocol.Response(503, _UNAVAILABLE)
-                case client.Unreadable():
-                    return protocol.Response(503, _UNAVAILABLE)
+                case client.LinkNotDeactivated():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
                 case _ as never:
                     typing.assert_never(never)
         except Exception:
@@ -151,7 +149,7 @@ class Handler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     rejection = error.rejection
                     problem: dict[str, object] = {
                         "type": f"/problems/{rejection.code}",
@@ -171,17 +169,17 @@ class Handler(ts.Handler):
                             for reported in rejection.problems
                         ]
                     return protocol.Response(422, problem)
-                case client.Missing():
+                case client.CampaignNotFound():
                     return protocol.Response(
                         404,
                         {
-                            "type": f"/problems/{error.code}",
-                            "title": error.code.replace("_", " "),
+                            "type": "/problems/campaign_not_found",
+                            "title": "campaign not found",
                             "status": 404,
                             "detail": error.message,
                         },
                     )
-                case client.Conflict():
+                case client.LinkNotAdded():
                     return protocol.Response(
                         409,
                         {
@@ -191,10 +189,16 @@ class Handler(ts.Handler):
                             "detail": error.message,
                         },
                     )
-                case client.Unavailable():
-                    return protocol.Response(503, _UNAVAILABLE)
-                case client.Unreadable():
-                    return protocol.Response(503, _UNAVAILABLE)
+                case client.LinkNotDeactivated():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
                 case _ as never:
                     typing.assert_never(never)
         except Exception:
@@ -249,7 +253,7 @@ class Handler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     rejection = error.rejection
                     problem: dict[str, object] = {
                         "type": f"/problems/{rejection.code}",
@@ -269,17 +273,17 @@ class Handler(ts.Handler):
                             for reported in rejection.problems
                         ]
                     return protocol.Response(422, problem)
-                case client.Missing():
+                case client.CampaignNotFound():
                     return protocol.Response(
                         404,
                         {
-                            "type": f"/problems/{error.code}",
-                            "title": error.code.replace("_", " "),
+                            "type": "/problems/campaign_not_found",
+                            "title": "campaign not found",
                             "status": 404,
                             "detail": error.message,
                         },
                     )
-                case client.Conflict():
+                case client.LinkNotAdded():
                     return protocol.Response(
                         409,
                         {
@@ -289,10 +293,16 @@ class Handler(ts.Handler):
                             "detail": error.message,
                         },
                     )
-                case client.Unavailable():
-                    return protocol.Response(503, _UNAVAILABLE)
-                case client.Unreadable():
-                    return protocol.Response(503, _UNAVAILABLE)
+                case client.LinkNotDeactivated():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
                 case _ as never:
                     typing.assert_never(never)
         except Exception:
@@ -324,7 +334,7 @@ class Handler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     rejection = error.rejection
                     problem: dict[str, object] = {
                         "type": f"/problems/{rejection.code}",
@@ -344,17 +354,17 @@ class Handler(ts.Handler):
                             for reported in rejection.problems
                         ]
                     return protocol.Response(422, problem)
-                case client.Missing():
+                case client.CampaignNotFound():
                     return protocol.Response(
                         404,
                         {
-                            "type": f"/problems/{error.code}",
-                            "title": error.code.replace("_", " "),
+                            "type": "/problems/campaign_not_found",
+                            "title": "campaign not found",
                             "status": 404,
                             "detail": error.message,
                         },
                     )
-                case client.Conflict():
+                case client.LinkNotAdded():
                     return protocol.Response(
                         409,
                         {
@@ -364,10 +374,16 @@ class Handler(ts.Handler):
                             "detail": error.message,
                         },
                     )
-                case client.Unavailable():
-                    return protocol.Response(503, _UNAVAILABLE)
-                case client.Unreadable():
-                    return protocol.Response(503, _UNAVAILABLE)
+                case client.LinkNotDeactivated():
+                    return protocol.Response(
+                        404,
+                        {
+                            "type": f"/problems/{error.code}",
+                            "title": error.code.replace("_", " "),
+                            "status": 404,
+                            "detail": error.message,
+                        },
+                    )
                 case _ as never:
                     typing.assert_never(never)
         except Exception:
