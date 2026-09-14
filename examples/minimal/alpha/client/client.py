@@ -19,6 +19,18 @@ class AddPartResponse(ts.Response):
         self.standing = standing
 
 
+class CreateWidgetRequest(ts.Request):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class CreateWidgetResponse(ts.Response):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class Rejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
@@ -33,3 +45,5 @@ ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
 class AlphaClient(ts.Client, typing.Protocol):
 
     def add_part(self, add_part_request: AddPartRequest) -> AddPartResponse: ...
+
+    def create_widget(self, create_widget_request: CreateWidgetRequest) -> CreateWidgetResponse: ...

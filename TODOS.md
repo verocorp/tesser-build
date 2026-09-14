@@ -154,21 +154,21 @@ yet reach, and the names they found that were deferred rather than renamed:
   class mirrors its application client and services mirror the context
   client (TB081). The pairing reads names, not the registration binding, so
   the TB023 carve-out was not needed first.
-- [ ] **minimal's `RegisterWidgetRelay` has no caller.** Nothing holds it, so
-  `relays/__init__.py` cannot re-export it (TB042: a role `__init__`
-  re-exports only what a module outside the role reads). A service operation
-  that runs the orchestrator would give it one, at the cost of a new client
-  operation in minimal; the alternative is to rule that a relay's runner
-  counts as its reader.
-- [ ] **Confirm the uniqueness scope.** The check covers actions and
-  orchestrator operations in a context. A service's client word that
-  coincides with a workflow's (`PurchaseService.pay_for_order` and
-  `PurchaseOrchestrator.pay_for_order`) is left alone, on the reading that
-  the service is the same act seen through the client (rule 3). Taken as the
-  default, not ruled.
-- [ ] **Confirm minimal's words.** `keep_widget` (the action saves a kept
-  widget) and `register_widget` (the orchestrator's act) were taken as
-  defaults when Chris said `WidgetFlow` was poorly named.
+- [x] **minimal's `RegisterWidgetRelay` has a caller (2026-09-14, Chris: "do
+  the service that runs the orch").** `AlphaService.create_widget` runs
+  `WidgetOrchestrator.register_widget` through `InlineRegisterWidgetRelay`,
+  and `relays/__init__.py` re-exports the relay.
+- [x] **One uniqueness check across four kinds (2026-09-14, Chris).** No two
+  services, actions classes, orchestrators, or relays in a context share a
+  public method name; a relay's calling-mode prefix keeps it apart from its
+  far side. The one collision it found was renamed on the client side:
+  `pay_for_order` became `make_order_payment`, for now.
+- [ ] **"Submit" tentatively means a call that does not wait.** Chris,
+  2026-09-14. `submit_order` starts the confirm workflow and `place_order`
+  waits for it; nothing checks that a `submit_` operation calls a `start_`
+  relay method, and the word is not settled.
+- [x] **minimal's words stand (2026-09-14, Chris: "your recs are fine").**
+  `keep_widget`, `register_widget`, and the client's `create_widget`.
 - [ ] **The TB023 carve-out for a runtime's nested handlers is still open.**
   The four `# tesser:debt TB023` markers on durable-execution's registration
   callbacks stand; the chain checks read those handlers without it.

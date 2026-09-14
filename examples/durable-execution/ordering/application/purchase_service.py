@@ -14,15 +14,15 @@ _ALREADY_STARTED: typing.Final[str] = "the order was already started"
 
 class MapToOrderSpec(ts.Mapper, domain.OrderSpec):
 
-    def __init__(self, pay_for_order_request: client.PayForOrderRequest) -> None:
+    def __init__(self, make_order_payment_request: client.MakeOrderPaymentRequest) -> None:
         super().__init__(
-            order_id=pay_for_order_request.order_id,
-            sku=pay_for_order_request.sku,
-            quantity=pay_for_order_request.quantity,
+            order_id=make_order_payment_request.order_id,
+            sku=make_order_payment_request.sku,
+            quantity=make_order_payment_request.quantity,
         )
 
 
-class MapToPayForOrderResponse(ts.Mapper, client.PayForOrderResponse):
+class MapToMakeOrderPaymentResponse(ts.Mapper, client.MakeOrderPaymentResponse):
 
     def __init__(self, pay_for_order_response: relays.PayForOrderResponse) -> None:
         super().__init__(
@@ -39,12 +39,12 @@ class PurchaseService(ts.ApplicationService):
     ) -> None:
         self._pay_for_order_relay = pay_for_order_relay
 
-    async def pay_for_order(
-        self, pay_for_order_request: client.PayForOrderRequest
-    ) -> client.PayForOrderResponse:
+    async def make_order_payment(
+        self, make_order_payment_request: client.MakeOrderPaymentRequest
+    ) -> client.MakeOrderPaymentResponse:
         try:
-            order = domain.Order(MapToOrderSpec(pay_for_order_request))
-            payment_method = domain.PaymentMethod(pay_for_order_request.payment_method)
+            order = domain.Order(MapToOrderSpec(make_order_payment_request))
+            payment_method = domain.PaymentMethod(make_order_payment_request.payment_method)
         except errors.DomainError as domain_error:
             raise client.OrderRejected(
                 code=domain_error.code, message=domain_error.message
@@ -54,7 +54,7 @@ class PurchaseService(ts.ApplicationService):
         )
         match pay_for_order_response.outcome:  # tesser:debt TB082
             case relays.PayForOrderOutcome.PAID:
-                return MapToPayForOrderResponse(pay_for_order_response)
+                return MapToMakeOrderPaymentResponse(pay_for_order_response)
             case relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED:
                 raise client.OrderNotConfirmed(pay_for_order_response.reasons[0])
             case relays.PayForOrderOutcome.PAYMENT_DECLINED:

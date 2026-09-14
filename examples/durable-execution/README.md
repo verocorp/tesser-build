@@ -43,7 +43,7 @@ with either thing.
 | `run_` — the caller waits for the result | `run_confirm_order`, ingress `workflow_call`, behind `POST /orders` | `run_price_product`, `ctx.service_call`, inside the workflow |
 
 `POST /purchases` is the third use case and the first scenario on top of the
-grid: a **purchase** is an order paid for. `PurchaseService.pay_for_order` builds the
+grid: a **purchase** is an order paid for. `PurchaseService.make_order_payment` builds the
 same `Order` and hands it to `PayForOrderRelay.run_pay_for_order`;
 the `PurchaseOrchestrator` workflow runs `OrderOrchestrator/confirm_order` as a **child
 workflow** under the order's own key, waits for its total, and then runs the
@@ -186,7 +186,7 @@ what it was asked, never a wrong price.
 `charge_payment_method`: a bare `charge` said what to do and never what to
 do it to, and the request carried an order id and cents and nothing to
 charge. A `PaymentMethod` value object now rides from the client's
-`PayForOrderRequest` through the parent relay into
+`MakeOrderPaymentRequest` through the parent relay into
 `ChargePaymentMethodRequest`, so the operation charges what its name says.
 `adapters/gateways/memory_payment_processor.py` is
 the stand-in, and it decides nothing the domain owns:
@@ -392,7 +392,7 @@ This tree is the worked example for `docs/design-app-service-types.md`:
   use cases, built once by the component. Every method does the once-only
   work (validate at the door, build the `Order`); `submit_order` starts the
   order orchestrator through `ConfirmOrderRelay.start_confirm_order`,
-  `place_order` runs it through `run_confirm_order`, and `pay_for_order`
+  `place_order` runs it through `run_confirm_order`, and `make_order_payment`
   runs the purchase orchestrator through
   `PayForOrderRelay.run_pay_for_order`. Two services because
   two relays: a service holds the methods that share its dependencies, so the
@@ -434,8 +434,8 @@ class Ordering(ts.Component):
         async def place_order(self, place_order_request):
             return await self._order_service.place_order(place_order_request)
 
-        async def pay_for_order(self, pay_for_order_request):
-            return await self._purchase_service.pay_for_order(pay_for_order_request)
+        async def make_order_payment(self, make_order_payment_request):
+            return await self._purchase_service.make_order_payment(make_order_payment_request)
 
     def __init__(self, config: Config) -> None:
         ...

@@ -74,10 +74,10 @@ class Handler(ts.Handler):
             ).encode(),
         )
 
-    async def pay_for_order(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+    async def make_order_payment(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
         try:
-            pay_for_order_response = await self._ordering_client.pay_for_order(
-                client.PayForOrderRequest(
+            make_order_payment_response = await self._ordering_client.make_order_payment(
+                client.MakeOrderPaymentRequest(
                     order_id=http_request.text("order_id"),
                     sku=http_request.text("sku"),
                     quantity=http_request.integer("quantity"),
@@ -102,9 +102,9 @@ class Handler(ts.Handler):
             status_code=200,
             body=json.dumps(
                 {
-                    "order_id": pay_for_order_response.order_id,
-                    "total_cents": pay_for_order_response.total_cents,
-                    "payment_reference": pay_for_order_response.payment_reference,
+                    "order_id": make_order_payment_response.order_id,
+                    "total_cents": make_order_payment_response.total_cents,
+                    "payment_reference": make_order_payment_response.payment_reference,
                 }
             ).encode(),
         )

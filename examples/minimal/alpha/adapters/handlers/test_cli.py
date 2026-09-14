@@ -13,11 +13,17 @@ class FakeClient(client.AlphaClient):
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         return client.AddPartResponse(name=add_part_request.name, standing="kept")
 
+    def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
+        return client.CreateWidgetResponse(name=create_widget_request.name)
+
 
 @ts.fake
 class FakeRejectingClient(client.AlphaClient):
 
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
+        raise client.Rejected("empty_name", "a name is never empty")
+
+    def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
         raise client.Rejected("empty_name", "a name is never empty")
 
 
