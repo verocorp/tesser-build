@@ -2,7 +2,8 @@ from campaign.client.client import AddLinkRequest as AddLinkRequest
 from campaign.client.client import AddLinkResponse as AddLinkResponse
 from campaign.client.client import Campaign as Campaign
 from campaign.client.client import CampaignClient as CampaignClient
-from campaign.client.client import Conflict as Conflict
+from campaign.client.client import CampaignNotFound as CampaignNotFound
+from campaign.client.client import CampaignRejected as CampaignRejected
 from campaign.client.client import CreateCampaignRequest as CreateCampaignRequest
 from campaign.client.client import CreateCampaignResponse as CreateCampaignResponse
 from campaign.client.client import DeactivateLinkRequest as DeactivateLinkRequest
@@ -11,11 +12,10 @@ from campaign.client.client import ERRORS as ERRORS
 from campaign.client.client import GetCampaignRequest as GetCampaignRequest
 from campaign.client.client import GetCampaignResponse as GetCampaignResponse
 from campaign.client.client import Link as Link
+from campaign.client.client import LinkNotFound as LinkNotFound
 from campaign.client.client import ListLinksRequest as ListLinksRequest
 from campaign.client.client import ListLinksResponse as ListLinksResponse
-from campaign.client.client import Missing as Missing
-from campaign.client.client import Rejected as Rejected
 from campaign.client.client import ResolveSlugRequest as ResolveSlugRequest
 from campaign.client.client import ResolveSlugResponse as ResolveSlugResponse
-from campaign.client.client import Unavailable as Unavailable
-from campaign.client.client import Unreadable as Unreadable
+from campaign.client.client import SlugTaken as SlugTaken
+from campaign.client.client import TargetBlocked as TargetBlocked

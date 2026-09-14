@@ -3,21 +3,15 @@ from __future__ import annotations
 import linkpolicy.client as client
 
 
-class TestRejected:
+class TestTargetRejected:
 
-    def test_a_rejection_carries_its_code_and_message(self) -> None:
-        rejected = client.Rejected("invalid_target_url", "target url 'nope' must be http(s)")
-        assert rejected.code == "invalid_target_url"
-        assert rejected.message == "target url 'nope' must be http(s)"
-        assert str(rejected) == "target url 'nope' must be http(s)"
-
-
-class TestUnavailable:
-
-    def test_an_unavailable_store_carries_its_message(self) -> None:
-        unavailable = client.Unavailable("the verdict store is unavailable")
-        assert unavailable.message == "the verdict store is unavailable"
-        assert str(unavailable) == "the verdict store is unavailable"
+    def test_a_rejected_target_carries_its_code_and_message(self) -> None:
+        target_rejected = client.TargetRejected(
+            "invalid_target_url", "target url 'nope' must be http(s)"
+        )
+        assert target_rejected.code == "invalid_target_url"
+        assert target_rejected.message == "target url 'nope' must be http(s)"
+        assert str(target_rejected) == "target url 'nope' must be http(s)"
 
 
 class TestErrors:

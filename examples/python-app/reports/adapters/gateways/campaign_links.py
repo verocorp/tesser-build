@@ -12,10 +12,7 @@ class CampaignLinkGateway(ts.Gateway):
         self._campaign_client = campaign_client
 
     def list_links(self, list_links_request: ports.ListLinksRequest) -> ports.ListLinksResponse:
-        try:
-            list_links_response = self._campaign_client.list_links(campaign_client.ListLinksRequest())
-        except campaign_client.Unavailable as campaign_error:
-            raise ports.LinkSourceUnavailable(campaign_error.message) from campaign_error
+        list_links_response = self._campaign_client.list_links(campaign_client.ListLinksRequest())
         return ports.ListLinksResponse(
             links=tuple(
                 ports.LinkRecord(slug=v.slug, target_url=v.target_url)

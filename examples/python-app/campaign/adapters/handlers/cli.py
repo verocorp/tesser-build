@@ -26,24 +26,26 @@ class CliHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.CliResponse(
                         2, stdout="", stderr=f"[{error.code}] {error.message}"
                     )
-                case client.Missing():
+                case client.CampaignNotFound():
                     return protocol.CliResponse(
-                        1, stdout="", stderr=f"[{error.code}] {error.message}"
+                        1, stdout="", stderr=f"[campaign_not_found] {error.message}"
                     )
-                case client.Conflict():
+                case client.LinkNotFound():
                     return protocol.CliResponse(
-                        1, stdout="", stderr=f"[{error.code}] {error.message}"
+                        1, stdout="", stderr=f"[link_not_found] {error.message}"
                     )
-                case client.Unreadable():
+                case client.SlugTaken():
                     return protocol.CliResponse(
-                        1, stdout="", stderr="a dependency is unavailable; please retry"
+                        1, stdout="", stderr=f"[slug_taken] {error.message}"
                     )
-                case client.Unavailable():
-                    return protocol.CliResponse(1, stdout="", stderr=error.message)
+                case client.TargetBlocked():
+                    return protocol.CliResponse(
+                        1, stdout="", stderr=f"[target_blocked] {error.message}"
+                    )
                 case _ as never:
                     typing.assert_never(never)
         return protocol.CliResponse.ok(
@@ -62,24 +64,26 @@ class CliHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.CliResponse(
                         2, stdout="", stderr=f"[{error.code}] {error.message}"
                     )
-                case client.Missing():
+                case client.CampaignNotFound():
                     return protocol.CliResponse(
-                        1, stdout="", stderr=f"[{error.code}] {error.message}"
+                        1, stdout="", stderr=f"[campaign_not_found] {error.message}"
                     )
-                case client.Conflict():
+                case client.LinkNotFound():
                     return protocol.CliResponse(
-                        1, stdout="", stderr=f"[{error.code}] {error.message}"
+                        1, stdout="", stderr=f"[link_not_found] {error.message}"
                     )
-                case client.Unreadable():
+                case client.SlugTaken():
                     return protocol.CliResponse(
-                        1, stdout="", stderr="a dependency is unavailable; please retry"
+                        1, stdout="", stderr=f"[slug_taken] {error.message}"
                     )
-                case client.Unavailable():
-                    return protocol.CliResponse(1, stdout="", stderr=error.message)
+                case client.TargetBlocked():
+                    return protocol.CliResponse(
+                        1, stdout="", stderr=f"[target_blocked] {error.message}"
+                    )
                 case _ as never:
                     typing.assert_never(never)
         return protocol.CliResponse.ok(f"campaign {add_link_response.campaign.campaign_id} now has {len(add_link_response.campaign.links)} link(s)")
@@ -94,24 +98,26 @@ class CliHandler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.CampaignRejected():
                     return protocol.CliResponse(
                         2, stdout="", stderr=f"[{error.code}] {error.message}"
                     )
-                case client.Missing():
+                case client.CampaignNotFound():
                     return protocol.CliResponse(
-                        1, stdout="", stderr=f"[{error.code}] {error.message}"
+                        1, stdout="", stderr=f"[campaign_not_found] {error.message}"
                     )
-                case client.Conflict():
+                case client.LinkNotFound():
                     return protocol.CliResponse(
-                        1, stdout="", stderr=f"[{error.code}] {error.message}"
+                        1, stdout="", stderr=f"[link_not_found] {error.message}"
                     )
-                case client.Unreadable():
+                case client.SlugTaken():
                     return protocol.CliResponse(
-                        1, stdout="", stderr="a dependency is unavailable; please retry"
+                        1, stdout="", stderr=f"[slug_taken] {error.message}"
                     )
-                case client.Unavailable():
-                    return protocol.CliResponse(1, stdout="", stderr=error.message)
+                case client.TargetBlocked():
+                    return protocol.CliResponse(
+                        1, stdout="", stderr=f"[target_blocked] {error.message}"
+                    )
                 case _ as never:
                     typing.assert_never(never)
         active = sum(1 for link in deactivate_link_response.campaign.links if link.status == "active")

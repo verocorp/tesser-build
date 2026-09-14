@@ -308,7 +308,7 @@ def test_resolve_refuses_a_request_with_no_slug_on_the_path() -> None:
 
 
 def test_a_rejection_is_422_carrying_the_contexts_code_and_wording() -> None:
-    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Rejected("invalid_slug", "slug is malformed")))
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.CampaignRejected("invalid_slug", "slug is malformed")))
 
     http_response = http_handler.add_link(
         protocol.HttpRequest(
@@ -329,8 +329,8 @@ def test_a_rejection_is_422_carrying_the_contexts_code_and_wording() -> None:
     }
 
 
-def test_a_missing_campaign_is_404_carrying_the_contexts_code() -> None:
-    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Missing("campaign_missing", "no campaign with id 'x'")))
+def test_a_campaign_not_found_is_404_named_for_the_situation() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.CampaignNotFound("no campaign with id 'x'")))
 
     http_response = http_handler.add_link(
         protocol.HttpRequest(
@@ -345,11 +345,11 @@ def test_a_missing_campaign_is_404_carrying_the_contexts_code() -> None:
     )
 
     assert http_response.status_code == 404
-    assert http_response.json_body()["type"] == "/problems/campaign_missing"
+    assert http_response.json_body()["type"] == "/problems/campaign_not_found"
 
 
-def test_a_conflict_is_409_carrying_the_contexts_code() -> None:
-    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Conflict("duplicate_slug", "slug 'promo' already exists")))
+def test_a_taken_slug_is_409_named_for_the_situation() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.SlugTaken("slug 'promo' already exists")))
 
     http_response = http_handler.add_link(
         protocol.HttpRequest(
@@ -364,25 +364,25 @@ def test_a_conflict_is_409_carrying_the_contexts_code() -> None:
     )
 
     assert http_response.status_code == 409
-    assert http_response.json_body()["type"] == "/problems/duplicate_slug"
+    assert http_response.json_body()["type"] == "/problems/slug_taken"
 
 
-def test_an_unavailable_dependency_is_503_in_the_contexts_words() -> None:
-    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Unavailable("the campaign store is unavailable")))
+def test_a_link_not_found_is_404_named_for_the_situation() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.LinkNotFound("no active link for slug 'promo'")))
 
-    http_response = http_handler.get_campaign(
-        protocol.HttpRequest("GET", "/", {"campaign_id": "0123456789abcdef"}, {}, {}, b"")
+    http_response = http_handler.resolve_slug(
+        protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b"")
     )
 
-    assert http_response.status_code == 503
+    assert http_response.status_code == 404
     assert http_response.json_body() == {
-        "type": "/problems/unavailable",
-        "detail": "the campaign store is unavailable",
+        "type": "/problems/link_not_found",
+        "detail": "no active link for slug 'promo'",
     }
 
 
-def test_an_unreadable_record_is_503_and_leaks_nothing() -> None:
-    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.Unreadable("stored campaign 'x' cannot be read back")))
+def test_a_blocked_target_is_409_named_for_the_situation() -> None:
+    http_handler = handlers.HttpHandler(FakeCampaignClientScripted(error=client.TargetBlocked("destination not allowed: on the deny-list")))
 
     http_response = http_handler.add_link(
         protocol.HttpRequest(
@@ -391,15 +391,15 @@ def test_an_unreadable_record_is_503_and_leaks_nothing() -> None:
             {},
             {},
             {},
-            b'{"campaign_id": "0123456789abcdef", "slug": "BAD",'
-            b' "target_url": "https://ok.example/x"}',
+            b'{"campaign_id": "0123456789abcdef", "slug": "promo",'
+            b' "target_url": "https://bad.example/x"}',
         )
     )
 
-    assert http_response.status_code == 503
+    assert http_response.status_code == 409
     assert http_response.json_body() == {
-        "type": "/problems/unavailable",
-        "detail": "a dependency is unavailable; please retry",
+        "type": "/problems/target_blocked",
+        "detail": "destination not allowed: on the deny-list",
     }
 
 

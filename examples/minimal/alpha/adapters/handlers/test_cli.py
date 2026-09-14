@@ -21,10 +21,10 @@ class FakeClient(client.AlphaClient):
 class FakeRejectingClient(client.AlphaClient):
 
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
-        raise client.Rejected("empty_name", "a name is never empty")
+        raise client.WidgetRejected("empty_name", "a name is never empty")
 
     def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
-        raise client.Rejected("empty_name", "a name is never empty")
+        raise client.WidgetRejected("empty_name", "a name is never empty")
 
 
 class TestHandler:

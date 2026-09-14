@@ -80,26 +80,12 @@ Three more the enactment left standing, verified against the source on
 - [x] **serdepy's `ParcelWire.to_payload` is `manifest_parcel` (2026-09-14).**
   `ManifestParcelRequest` in, `ManifestParcelResponse(parcel: Parcel)` out;
   the port and its gateway stay, as the ports-migration design chose.
-- [ ] **The transport-category errors still stand in errorspy and
-  python-app.** Both `campaign` clients declare `Rejected` / `Missing` /
-  `Conflict` / `Unavailable` / `Unreadable`; python-app's `linkpolicy`
-  client declares `Rejected` / `Unavailable` and `reports` declares
-  `Unavailable` / `Unreadable`. Six port modules declare an `Unavailable`
-  error (rule 7: a port declares none) and three cross-context gateways
-  re-raise a peer's `Unavailable` as their own port's. Counts: errorspy 13
-  raise sites, 4 handler matches, 1 port error; python-app 33 raise sites,
-  9 handler matches, 5 port errors. Rules 12 and 14 applied as
-  durable-execution applied them: `Unavailable` and `Unreadable` are faults
-  (class, service catch-and-translate, port error, gateway translation all
-  go; the host's catch-all turns the 503 into a 500); `Missing` becomes
-  `CampaignNotFound` / `LinkNotFound`; `Conflict` splits into the words the
-  tree already has (`SlugTaken` from the repository's `TAKEN`,
-  `DestinationBlocked` from the policy check, the aggregate transitions'
-  own codes); `Rejected` stays a situation named for the thing, its status
-  the open entry above. Nothing decided on 2026-09-14 blocks it; it is held
-  only for review size. The NEXT PR after the naming enactment merges, with
-  durable-execution's README section "Two failure classes, and nothing
-  else" as the brief.
+- [x] **The transport-category errors are gone (2026-09-14, v0.1.6.0).**
+  errorspy, python-app, asyncpg, and minimal follow durable-execution:
+  `Unavailable`, `Unreadable`, and every port error are faults the host
+  answers; `Missing`, `Conflict`, and bare `Rejected` became situations
+  named for what happened. The open items it left are in "Left open by the
+  error-names change" below.
 - [ ] **`scripts/install-dev` misses `specs-app`.** Its file list comes
   from a hand-written `find examples layout tessercheck-py tesser-py`
   line; `specs-app` has an `app` row and a `requirements-dev.txt`
@@ -172,17 +158,45 @@ yet reach, and the names they found that were deferred rather than renamed:
 - [ ] **The TB023 carve-out for a runtime's nested handlers is still open.**
   The four `# tesser:debt TB023` markers on durable-execution's registration
   callbacks stand; the chain checks read those handlers without it.
-- [ ] **The transport-category client error names go with the error rework.**
-  A check that a client error is not `Missing`, `Conflict`, `Unavailable`,
-  `Unreadable`, or bare `Rejected` fires on 22 declarations; it lands with
-  the errorspy and python-app rework above so the check and its zero-findings
-  proof arrive together.
+- [x] **The client error-name check landed with the rework (2026-09-14).**
+  TB085 refuses a context error named `Missing`, `Conflict`, `Unavailable`,
+  `Unreadable`, or a bare `Rejected`; it fired on 23 declarations in five
+  trees (not 22), and removing the `port_error` placement row made the 9
+  port errors TB052 findings.
 - [ ] **The skill does not yet teach these rules.** A finding's message is
   the only guidance an agent gets; the naming rows belong in
   `skills/tesser-build/python.md` with a `skill-version` bump. Its
   durable-execution walkthrough also still names relays and runners the old
   way (`OrderActionsRunner`, `relays.OrderOrchestratorRequest`, `run`), so the
   relay and runner naming rules go in with it.
+
+## Left open by the error-names change (2026-09-14, v0.1.6.0)
+
+- [ ] **The skill still teaches port errors and their translation.** Chris
+  kept the skill walkthrough out of this change. `python.md` cites errorspy
+  as the verified implementation at the port (around line 938), the service
+  (around 1066), and the storage repository (around 1347), and each shows a
+  port error, a service catching it, or a repository translating a vendor
+  outage, all of which are gone from errorspy. `application-services.md`
+  and `handlers.md` teach the same one-arm translation. An agent following
+  the skill today writes code the analyzer refuses.
+- [ ] **errorspy answers 404 for a link already deactivated.**
+  `LinkNotDeactivated` carries `link_missing` or `already_deactivated` and
+  the handler answers both 404, as `Missing` did before. The status for the
+  second reason was never ruled; it waits with the per-reason situations on
+  the transitions returning an outcome.
+- [ ] **No test proves a host turns a fault into 500 in python-app.** The
+  hosts take a concrete `app.PythonApp` or build one with `app.load()`, so
+  there is no port for a fake to mirror; the handler tests prove a plain
+  `RuntimeError` leaves the handler, and the host's `except Exception` is
+  untested. errorspy has no host, so its handler's own `except Exception`
+  is where a fault stops, which is not the host's catch-all rule 14 names.
+- [ ] **An unknown peer decision is an untested `KeyError`.** python-app's
+  `target_policy` and `policy_verdicts` gateways now read
+  `_OUTCOME_BY_DECISION[...]` directly instead of raising a port error on a
+  miss, so a decision the peer adds is a fault; nothing pins it.
+- [ ] **minimal's beta client declares `KeyRejected` with no `ERRORS`
+  tuple and no totality test.** It had neither before either.
 
 ## Left standing by the v0.1.1.0 adversarial passes (2026-09-14, PR #191)
 

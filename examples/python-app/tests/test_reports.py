@@ -37,7 +37,7 @@ def test_blocked_destination_never_becomes_a_link() -> None:
                     create_campaign_response.campaign.campaign_id, "bad", "http://ok.example/a"
                 )
             )
-        except campaign_client.Conflict:
+        except campaign_client.TargetBlocked:
             pass
         assert (
             python_app.reports.client.links_by_verdict(reports_client.LinksByVerdictRequest()).links

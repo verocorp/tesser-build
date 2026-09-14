@@ -47,17 +47,9 @@ class TestBetaCheckGateway:
         check_name_response = await beta_check_gateway.check_name(ports.CheckNameRequest(name="a"))
         assert check_name_response.outcome is ports.CheckNameOutcome.OK
 
-    async def test_a_beta_that_cannot_answer_is_the_ports_unavailable(self) -> None:
-        beta_check_gateway = gateways.BetaCheckGateway(
-            FakeRefusingBetaClient(beta_client.Unavailable("the key store is unavailable"))
-        )
-        with pytest.raises(ports.BetaUnavailable) as caught:
-            await beta_check_gateway.check_name(ports.CheckNameRequest(name="a"))
-        assert isinstance(caught.value.__cause__, beta_client.Unavailable)
-
     async def test_a_beta_rejection_is_our_bug_and_leaves_the_gateway_untranslated(self) -> None:
         beta_check_gateway = gateways.BetaCheckGateway(
-            FakeRefusingBetaClient(beta_client.Rejected("empty_key", "a key is never empty"))
+            FakeRefusingBetaClient(beta_client.KeyRejected("empty_key", "a key is never empty"))
         )
-        with pytest.raises(beta_client.Rejected):
+        with pytest.raises(beta_client.KeyRejected):
             await beta_check_gateway.check_name(ports.CheckNameRequest(name="a"))

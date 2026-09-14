@@ -6,6 +6,7 @@ import campaign.adapters.repositories as repositories
 import campaign.application as application
 import campaign.application.ports as ports
 import campaign.client as client
+import tesser.errors as errors
 import storage
 
 
@@ -30,30 +31,21 @@ def test_save_then_find_roundtrip() -> None:
     assert campaign_spec.links[0].slug == "spring-sale"
 
 
-def test_missing_is_the_contexts_missing() -> None:
+def test_a_campaign_never_saved_is_the_contexts_campaign_not_found() -> None:
     storage_campaign_repository = repositories.StorageCampaignRepository(
         storage.FakeStorage()
     )
     find_campaign_request = ports.FindCampaignRequest(campaign_id="nope")
     find_campaign_response = storage_campaign_repository.find_campaign(find_campaign_request)
-    with pytest.raises(client.Missing) as ei:
+    with pytest.raises(client.CampaignNotFound) as ei:
         application.MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
             find_campaign_response=find_campaign_response,
         )
-    assert ei.value.code == "campaign_missing"
+    assert ei.value.message == "no campaign 'nope'"
 
 
-def test_outage_is_the_port_error_not_the_vendors() -> None:
-    storage_campaign_repository = repositories.StorageCampaignRepository(
-        storage.FakeStorage(down=True)
-    )
-    with pytest.raises(ports.StorageUnavailable) as ei:
-        storage_campaign_repository.find_campaign(ports.FindCampaignRequest(campaign_id="c1"))
-    assert not isinstance(ei.value, storage.StorageError)
-
-
-def test_corrupted_record_is_unreadable_not_a_rejection() -> None:
+def test_a_corrupted_record_is_a_fault_not_a_rejection() -> None:
     backend = storage.FakeStorage()
     backend.put(
         "c1",
@@ -64,7 +56,6 @@ def test_corrupted_record_is_unreadable_not_a_rejection() -> None:
     )
     storage_campaign_repository = repositories.StorageCampaignRepository(backend)
     campaign_service = application.CampaignService(storage_campaign_repository)
-    with pytest.raises(client.Unreadable) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         campaign_service.get_campaign(client.GetCampaignRequest(campaign_id="c1"))
-    assert isinstance(ei.value.__cause__, Exception)
-    assert "bad_slug" in str(ei.value.__cause__)
+    assert "bad_slug" in str(ei.value)

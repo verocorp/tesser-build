@@ -110,10 +110,6 @@ class ListCampaignsResponse(ts.Response):
         self.campaigns = campaigns
 
 
-class StoreUnavailable(ts.Error):
-    pass
-
-
 class CampaignRepository(ts.Port, typing.Protocol):
 
     def save_campaign(self, save_campaign_request: SaveCampaignRequest) -> SaveCampaignResponse: ...

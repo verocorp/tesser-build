@@ -3,13 +3,15 @@ from __future__ import annotations
 import tessercheck.client as client
 
 
-class TestRejected:
+class TestRulebookNotRendered:
 
-    def test_a_rejection_carries_its_code_and_message(self) -> None:
-        rejected = client.Rejected("unreadable", "TS_NAME_BY_BLOCK not found in checks.py")
-        assert rejected.code == "unreadable"
-        assert rejected.message == "TS_NAME_BY_BLOCK not found in checks.py"
-        assert str(rejected) == "TS_NAME_BY_BLOCK not found in checks.py"
+    def test_a_rulebook_that_was_not_rendered_carries_its_code_and_message(self) -> None:
+        rulebook_not_rendered = client.RulebookNotRendered(
+            "rulebook_unreadable", "TS_NAME_BY_BLOCK not found in checks.py"
+        )
+        assert rulebook_not_rendered.code == "rulebook_unreadable"
+        assert rulebook_not_rendered.message == "TS_NAME_BY_BLOCK not found in checks.py"
+        assert str(rulebook_not_rendered) == "TS_NAME_BY_BLOCK not found in checks.py"
 
 
 class TestErrors:
