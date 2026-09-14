@@ -88,17 +88,6 @@ class PriceProductResponseSnapshot(ts.Serde):
             price_product_outcome = PriceProductOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
         except ValueError as value_error:
             raise ValueError("a price product response names a priced outcome") from value_error  # tesser:debt TB082
-        match price_product_outcome:  # tesser:debt TB082
-            case PriceProductOutcome.PRICED:
-                expected = 1
-            case PriceProductOutcome.PRICE_NOT_FOUND:
-                expected = 0
-            case _ as never:
-                typing.assert_never(never)  # tesser:debt TB082
-        if len(snapshot["prices"]) != expected:  # tesser:debt TB082
-            raise ValueError(  # tesser:debt TB082
-                f"a {price_product_outcome.value} product carries {expected} price(s)"
-            )
         return PriceProductResponse(
             outcome=price_product_outcome,
             prices=tuple(Price(cents=price["cents"]) for price in snapshot["prices"]),  # tesser:debt TB082

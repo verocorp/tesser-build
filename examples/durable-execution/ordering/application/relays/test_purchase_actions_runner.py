@@ -90,8 +90,6 @@ class TestTakePaymentResponseSnapshot:
             b'{"outcome": "taken", "order_id": "o1", "payments": [{"reference": "pay-o1", "cents": true}], "reasons": []}',
             b'{"outcome": "taken", "order_id": "o1", "payments": [{"reference": 7, "cents": 750}], "reasons": []}',
             b'{"outcome": "taken", "order_id": "o1", "payments": [{"reference": "", "cents": 750}], "reasons": []}',
-            b'{"outcome": "taken", "order_id": "o1", "payments": [], "reasons": []}',
-            b'{"outcome": "declined", "order_id": "o1", "payments": [{"reference": "pay-o1", "cents": 750}], "reasons": []}',
             b'{"outcome": "refused", "order_id": "o1", "payments": [], "reasons": []}',
             b'["o1", "pay-o1", 750]',
         ):

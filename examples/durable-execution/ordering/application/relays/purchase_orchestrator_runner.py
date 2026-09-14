@@ -118,21 +118,6 @@ class PayForOrderResponseSnapshot(ts.Serde):
             pay_for_order_outcome = PayForOrderOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
         except ValueError as value_error:
             raise ValueError("a pay for order response names a paying outcome") from value_error  # tesser:debt TB082
-        match pay_for_order_outcome:  # tesser:debt TB082
-            case PayForOrderOutcome.PAID:
-                expected = 1
-            case (
-                PayForOrderOutcome.ORDER_NOT_CONFIRMED
-                | PayForOrderOutcome.PAYMENT_DECLINED
-                | PayForOrderOutcome.ALREADY_STARTED
-            ):
-                expected = 0
-            case _ as never:
-                typing.assert_never(never)  # tesser:debt TB082
-        if len(snapshot["purchases"]) != expected:  # tesser:debt TB082
-            raise ValueError(  # tesser:debt TB082
-                f"a {pay_for_order_outcome.value} order carries {expected} purchase(s)"
-            )
         return PayForOrderResponse(
             outcome=pay_for_order_outcome,
             order_id=snapshot["order_id"],

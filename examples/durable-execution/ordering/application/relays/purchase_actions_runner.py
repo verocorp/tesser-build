@@ -117,17 +117,6 @@ class TakePaymentResponseSnapshot(ts.Serde):
             take_payment_outcome = TakePaymentOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
         except ValueError as value_error:
             raise ValueError("a take payment response names a taking outcome") from value_error  # tesser:debt TB082
-        match take_payment_outcome:  # tesser:debt TB082
-            case TakePaymentOutcome.TAKEN:
-                expected = 1
-            case TakePaymentOutcome.DECLINED:
-                expected = 0
-            case _ as never:
-                typing.assert_never(never)  # tesser:debt TB082
-        if len(snapshot["payments"]) != expected:  # tesser:debt TB082
-            raise ValueError(  # tesser:debt TB082
-                f"a {take_payment_outcome.value} payment carries {expected} payment(s)"
-            )
         return TakePaymentResponse(
             outcome=take_payment_outcome,
             order_id=snapshot["order_id"],

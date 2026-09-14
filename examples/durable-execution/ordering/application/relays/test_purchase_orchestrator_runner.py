@@ -84,8 +84,6 @@ class TestPayForOrderResponseSnapshot:
             b'{"outcome": "paid", "order_id": "o1", "purchases": [{"total_cents": "500", "payment_reference": "pay-o1"}], "reasons": []}',
             b'{"outcome": "paid", "order_id": "o1", "purchases": [{"total_cents": 500, "payment_reference": 7}], "reasons": []}',
             b'{"outcome": "paid", "order_id": {}, "purchases": [], "reasons": []}',
-            b'{"outcome": "paid", "order_id": "o1", "purchases": [], "reasons": []}',
-            b'{"outcome": "payment_declined", "order_id": "o1", "purchases": [{"total_cents": 500, "payment_reference": "pay-o1"}], "reasons": []}',
             b'{"outcome": "settled", "order_id": "o1", "purchases": [], "reasons": []}',
             b'["o1", 500, "pay-o1"]',
         ):

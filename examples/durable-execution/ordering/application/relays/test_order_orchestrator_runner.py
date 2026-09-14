@@ -61,8 +61,6 @@ class TestConfirmOrderResponseSnapshot:
             b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [{"total_cents": NaN}], "reasons": []}',
             b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [{"total_cents": "500"}], "reasons": []}',
             b'{"outcome": "confirmed", "order_id": {}, "confirmed_orders": [], "reasons": []}',
-            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [], "reasons": []}',
-            b'{"outcome": "already_started", "order_id": "o1", "confirmed_orders": [{"total_cents": 500}], "reasons": []}',
             b'{"outcome": "unconfirmed", "order_id": "o1", "confirmed_orders": [], "reasons": []}',
             b'["o1", 500]',
         ):

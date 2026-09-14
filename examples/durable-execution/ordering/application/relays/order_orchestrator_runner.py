@@ -103,17 +103,6 @@ class ConfirmOrderResponseSnapshot(ts.Serde):
             confirm_order_outcome = ConfirmOrderOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
         except ValueError as value_error:
             raise ValueError("a confirm order response names a confirming outcome") from value_error  # tesser:debt TB082
-        match confirm_order_outcome:  # tesser:debt TB082
-            case ConfirmOrderOutcome.CONFIRMED:
-                expected = 1
-            case ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND | ConfirmOrderOutcome.ALREADY_STARTED:
-                expected = 0
-            case _ as never:
-                typing.assert_never(never)  # tesser:debt TB082
-        if len(snapshot["confirmed_orders"]) != expected:  # tesser:debt TB082
-            raise ValueError(  # tesser:debt TB082
-                f"a {confirm_order_outcome.value} order carries {expected} confirmed order(s)"
-            )
         return ConfirmOrderResponse(
             outcome=confirm_order_outcome,
             order_id=snapshot["order_id"],

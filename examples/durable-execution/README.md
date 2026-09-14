@@ -505,20 +505,21 @@ application packages, `ts.Relay` is a kind, a relay message may carry a domain
 object, `ts.Serde` is an application kind and a snapshot's body is checked,
 `adapters/runners/` and `adapters/runtimes/` are adapter kind packages holding
 `ts.Runner` and `ts.Runtime`, and a component publishes its client and its
-runtimes. What the outcome-on-response shape costs on top of that is 129
+runtimes. What the outcome-on-response shape costs on top of that is 113
 `# tesser:debt` markers, every one written mechanically by `tessercheck-mark`,
 and that list is the analyzer's work list:
 
-- **`TB082`, 76.** Fifty-nine are in the four relay modules: a snapshot now reads
-  an outcome, checks the record count per member, and rebuilds a tuple, and
-  none of `len`, `tuple`, `list`, `all`, or the enum constructor is on the
-  snapshot's call allowlist. Eight are the runtime serde wrappers' `try`
-  around the snapshot. Six are the `match` on a response's outcome field in a
-  service or an orchestrator, which the analyzer reads as "not a call on a
-  domain object" because a class named `*Outcome` activates nothing. Three
-  are in `OrderSnapshot`, which raises and catches to refuse a body. One is
-  the parent orchestrator matching a second time, once per relay it depends
-  on.
+- **`TB082`, 60.** Forty-three are in the four relay modules, and they are
+  one ask: widen the snapshot's call allowlist. A response snapshot reads an
+  outcome (`<Outcome>(snapshot.get("outcome"))`), checks each element of a
+  collection (`all(...)` over a comprehension), and rebuilds the collections
+  (`tuple(...)`, `list(...)`) — none of which the snapshot rule admits, and
+  all of which are shape, not decision. Eight are the runtime serde wrappers'
+  `try` around the snapshot. Six are the `match` on a response's outcome
+  field in a service or an orchestrator, which the analyzer reads as "not a
+  call on a domain object" because a class named `*Outcome` activates
+  nothing. Three are in `OrderSnapshot`, which raises and catches to refuse a
+  body.
 - **`TB085`, 23.** Nineteen on the hand-written doubles of the SDK's
   `restate.WorkflowContext` and of the ingress, foreign classes that are no
   tesser kind; four on `<Outcome>(snapshot.get("outcome"))`, a call the
@@ -527,6 +528,8 @@ and that list is the analyzer's work list:
   an ingress URL rather than a spec or a DTO. Moving the same data to a
   module-level constant trades them for nine `TB071`s, so there is no legal
   placement in a test module for data that is not construction data.
+- The parent orchestrator's second `match` is no longer among them: the
+  count check leaving the snapshots took the marker with it.
 - **`TB023`, 7** — the nested handlers the SDK registers and the routes `main`
   declares, the separately gated nested-def wave. **`TB072`, 6** — the two
   hand-written doubles. **`TB052`, 5** — a plain `enum.Enum` outcome in a
@@ -617,12 +620,16 @@ body `POST /OrderOrchestrator/o1/confirm_order/send` carries is:
 {"order_id": "o1", "sku": "widget", "quantity": 2}
 ```
 
-**A response snapshot checks the record count against the outcome.** A field
-only some members can fill is a tuple of zero or one — `prices`,
-`confirmed_orders`, `payments`, `purchases` — so the response is truthful for
-every member, and the snapshot refuses a `PRICED` that carries no price and a
-`PRICE_NOT_FOUND` that carries one. That count check is the part of the shape
-the snapshot rule does not admit today; see the marker list above.
+**A snapshot decides once, and only about shape.** A field only some members
+can fill is a tuple of zero or one — `prices`, `confirmed_orders`, `payments`,
+`purchases` — and the snapshot checks the shape of the collection and of every
+element in it, and stops there. It does **not** check that a `PRICED` response
+carries exactly one price: whether the count agrees with the outcome is
+consistency between two fields, not shape, and a snapshot that judged it would
+be deciding twice. A payload where they disagree becomes an `IndexError` in
+the consumer's happy arm, where it reads `xs[0]` — a fault, which is right,
+because both ends of this wire are ours and a disagreement there is a bug in
+us, not a caller's mistake.
 
 The SDK cannot serialize a `ts.Request` on its own — `restate.serde.DefaultSerde`
 handles msgspec Structs, Pydantic models, and dataclasses; anything else falls

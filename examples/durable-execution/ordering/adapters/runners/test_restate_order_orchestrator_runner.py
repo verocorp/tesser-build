@@ -291,7 +291,6 @@ class TestRestateOrderOrchestratorRunnerRunning:
     def test_a_success_body_that_is_not_the_workflows_result_is_a_fault(self) -> None:
         for answer in (
             b'{"outcome": "confirmed", "order_id": "o1"}',
-            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [], "reasons": []}',
             b"<html>gateway</html>",
             b"",
         ):

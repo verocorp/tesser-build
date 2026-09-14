@@ -67,8 +67,6 @@ class TestPriceProductResponseSnapshot:
             b'{"outcome": "priced", "prices": [{"cents": true}], "reasons": []}',
             b'{"outcome": "priced", "prices": [{"cents": "250"}], "reasons": []}',
             b'{"outcome": "unpriced", "prices": [], "reasons": []}',
-            b'{"outcome": "priced", "prices": [], "reasons": []}',
-            b'{"outcome": "price_not_found", "prices": [{"cents": 250}], "reasons": []}',
             b'{"outcome": "priced", "prices": [{"cents": 250}], "reasons": [7]}',
             b'[250]',
         ):

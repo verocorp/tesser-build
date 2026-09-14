@@ -202,7 +202,6 @@ class TestRestatePurchaseOrchestratorRunner:
     def test_a_success_body_that_is_not_the_workflows_result_is_a_fault(self) -> None:
         for answer in (
             b'{"outcome": "paid", "order_id": "o1"}',
-            b'{"outcome": "paid", "order_id": "o1", "purchases": [], "reasons": []}',
             b"<html>gateway</html>",
             b"",
         ):
