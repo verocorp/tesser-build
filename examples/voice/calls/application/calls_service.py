@@ -3,6 +3,7 @@ from __future__ import annotations
 import tesser.application as ts
 
 import calls.application.ports as ports
+import calls.application.relays as relays
 import calls.client as client
 import calls.domain as domain
 
@@ -16,7 +17,7 @@ class MapToCallSpec(ts.Mapper, domain.CallSpec):
         )
 
 
-class MapToSaveCallRequest(ts.Mapper, ports.SaveCallRequest):
+class MapToPlaceCallRequest(ts.Mapper, relays.PlaceCallRequest):
 
     def __init__(self, call: domain.Call) -> None:
         super().__init__(
@@ -28,8 +29,8 @@ class MapToSaveCallRequest(ts.Mapper, ports.SaveCallRequest):
 
 class MapToPlaceCallResponse(ts.Mapper, client.PlaceCallResponse):
 
-    def __init__(self, save_call_response: ports.SaveCallResponse) -> None:
-        super().__init__(call_id=save_call_response.call_id)
+    def __init__(self, place_call_response: relays.PlaceCallResponse) -> None:
+        super().__init__(call_id=place_call_response.call_id)
 
 
 class MapToLoadCallRequest(ts.Mapper, ports.LoadCallRequest):
@@ -52,14 +53,14 @@ class MapToGetCallResponse(ts.Mapper, client.GetCallResponse):
 
 class CallsService(ts.ApplicationService):
 
-    def __init__(self, call_store: ports.CallStore) -> None:
+    def __init__(self, call_orchestrator_runner: relays.CallOrchestratorRunner, call_store: ports.CallStore) -> None:
+        self._call_orchestrator_runner = call_orchestrator_runner
         self._call_store = call_store
 
     async def place_call(self, place_call_request: client.PlaceCallRequest) -> client.PlaceCallResponse:
         call = domain.Call(MapToCallSpec(place_call_request))
-        async with self._call_store.transaction() as call_repository:
-            save_call_response = await call_repository.save_call(MapToSaveCallRequest(call))
-        return MapToPlaceCallResponse(save_call_response)
+        place_call_response = await self._call_orchestrator_runner.run_place_call(MapToPlaceCallRequest(call))
+        return MapToPlaceCallResponse(place_call_response)
 
     async def get_call(self, get_call_request: client.GetCallRequest) -> client.GetCallResponse:
         call_id = domain.CallId(get_call_request.call_id)

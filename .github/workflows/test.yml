@@ -169,11 +169,20 @@ jobs:
     # Gates the voice example at the same bar: tessercheck zero findings +
     # mypy --strict + pytest. One context, calls, whose root-tier test places
     # a call for a person through the client and reads the person's name back
-    # by the call id. The service is a shell over an asyncpg repository; the
-    # service container is the database CALLS_STORAGE points at.
-    name: voice example (tessercheck + mypy --strict + pytest against Postgres)
+    # by the call id. place_call runs a Restate workflow whose action writes the
+    # call to Postgres; the service containers are the database CALLS_STORAGE
+    # points at and the Restate server, which dials the endpoint the verify
+    # arm serves on the runner through host.docker.internal.
+    name: voice example (tessercheck + mypy --strict + pytest against Postgres and Restate)
     runs-on: ubuntu-latest
     services:
+      restate:
+        image: restatedev/restate:1.7
+        ports:
+          - 8080:8080
+          - 9070:9070
+        options: >-
+          --add-host=host.docker.internal:host-gateway
       postgres:
         image: postgres:16
         env:
@@ -197,6 +206,8 @@ jobs:
       - name: examples/voice — tessercheck + mypy --strict + pytest
         env:
           CALLS_STORAGE: postgres://tesser@localhost:5432/tesser
+          RESTATE_INGRESS: http://localhost:8080
+          RESTATE_ADMIN: http://localhost:9070
         run: scripts/verify voice
 
   asyncpg-example:

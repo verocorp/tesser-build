@@ -14,13 +14,14 @@ class FakeConfigRepository(app.AppConfigRepository):
 
     def get(self) -> app.AppConfig:
         calls_storage = os.environ["CALLS_STORAGE"]
-        return app.AppConfig(app.Spec(calls_component.Config(calls_component.Spec(calls_storage))))
+        ingress = os.environ["RESTATE_INGRESS"]
+        return app.AppConfig(app.Spec(calls_component.Config(calls_component.Spec(calls_storage, ingress))))
 
 
 class TestAppConfig:
 
     def test_a_config_carries_the_calls_config(self) -> None:
-        spec = app.Spec(calls_component.Config(calls_component.Spec("postgres://a@b/calls")))
+        spec = app.Spec(calls_component.Config(calls_component.Spec("postgres://a@b/calls", "http://localhost:8080")))
 
         app_config = app.AppConfig(spec)
 
@@ -33,6 +34,7 @@ class TestEnvConfigRepository:
         app_config = app.EnvConfigRepository().get()
 
         assert app_config.calls.storage == os.environ["CALLS_STORAGE"]
+        assert app_config.calls.ingress == os.environ["RESTATE_INGRESS"]
 
 
 class TestAppLoader:

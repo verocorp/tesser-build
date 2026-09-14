@@ -7,7 +7,19 @@ import tesser.testing as ts
 
 import calls.application as application
 import calls.application.ports as ports
+import calls.application.relays as relays
 import calls.client as client
+
+
+@ts.fake
+class FakeCallOrchestratorRunner(relays.CallOrchestratorRunner):
+
+    def __init__(self) -> None:
+        self.placed: list[relays.PlaceCallRequest] = []
+
+    async def run_place_call(self, place_call_request: relays.PlaceCallRequest) -> relays.PlaceCallResponse:
+        self.placed.append(place_call_request)
+        return relays.PlaceCallResponse(call_id=place_call_request.call_id)
 
 
 @ts.fake
@@ -46,18 +58,20 @@ def place_call_request(person_name: str = "Ada", phone_number: str = "+155555501
 
 class TestCallsService:
 
-    async def test_a_placed_call_is_saved_under_the_call_id_it_answers(self) -> None:
-        fake_call_store = FakeCallStore()
-        calls_service = application.CallsService(fake_call_store)
+    async def test_placing_a_call_runs_the_orchestrator_with_the_person_it_was_placed_for(self) -> None:
+        fake_call_orchestrator_runner = FakeCallOrchestratorRunner()
+        calls_service = application.CallsService(fake_call_orchestrator_runner, FakeCallStore())
 
         place_call_response = await calls_service.place_call(place_call_request(person_name="Grace"))
 
-        assert fake_call_store.calls[place_call_response.call_id].person_name == "Grace"
+        assert [
+            (placed.call_id, placed.person_name) for placed in fake_call_orchestrator_runner.placed
+        ] == [(place_call_response.call_id, "Grace")]
 
     async def test_a_saved_call_is_read_back_by_its_call_id(self) -> None:
         fake_call_store = FakeCallStore()
         fake_call_store.calls["c1"] = ports.Call(call_id="c1", person_name="Grace", phone_number="+15555550100")
-        calls_service = application.CallsService(fake_call_store)
+        calls_service = application.CallsService(FakeCallOrchestratorRunner(), fake_call_store)
 
         get_call_response = await calls_service.get_call(client.GetCallRequest(call_id="c1"))
 
