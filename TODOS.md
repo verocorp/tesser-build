@@ -75,6 +75,55 @@ Accepted without follow-up: `has_key` / `slug_taken` stay as the tree's
 question-shaped words; the `verdict` / `presence` field renames to
 `outcome` stand.
 
+Three more the enactment left standing, verified against the source on
+2026-09-14 rather than taken from the round reports:
+
+- [ ] **serdepy's `ParcelWire.to_payload` fails rules 1 and 6.**
+  `examples/serdepy/parcel/application/ports/parcel_wire.py` declares one
+  port whose one method is `to_payload(ParcelRecord) -> PayloadResponse`.
+  "To" is a preposition and "payload" a transport word; the request is
+  named for a record and the response for a payload, neither derived from
+  an operation. The record IS a `ts.Request` (the round-2 report said
+  otherwise). The port was created on purpose by
+  `docs/design-application-ports-migration.md` option 1 and the
+  serialization skill cites the file, so the port stays and only the names
+  move: `publish_parcel` with `PublishParcelRequest` / `PublishParcelResponse`
+  (or `manifest_parcel` if the far side is to be a carrier manifest — the
+  tree does not say what consumes the wire, and that choice is Chris's).
+  Five files, all in the tree; the skill cites the path, not the classes.
+- [ ] **The transport-category errors still stand in errorspy and
+  python-app.** Both `campaign` clients declare `Rejected` / `Missing` /
+  `Conflict` / `Unavailable` / `Unreadable`; python-app's `linkpolicy`
+  client declares `Rejected` / `Unavailable` and `reports` declares
+  `Unavailable` / `Unreadable`. Six port modules declare an `Unavailable`
+  error (rule 7: a port declares none) and three cross-context gateways
+  re-raise a peer's `Unavailable` as their own port's. Counts: errorspy 13
+  raise sites, 4 handler matches, 1 port error; python-app 33 raise sites,
+  9 handler matches, 5 port errors. Rules 12 and 14 applied as
+  durable-execution applied them: `Unavailable` and `Unreadable` are faults
+  (class, service catch-and-translate, port error, gateway translation all
+  go; the host's catch-all turns the 503 into a 500); `Missing` becomes
+  `CampaignNotFound` / `LinkNotFound`; `Conflict` splits into the words the
+  tree already has (`SlugTaken` from the repository's `TAKEN`,
+  `DestinationBlocked` from the policy check, the aggregate transitions'
+  own codes); `Rejected` stays a situation named for the thing, its status
+  the open entry above. Nothing decided on 2026-09-14 blocks it; it is held
+  only for review size. The NEXT PR after the naming enactment merges, with
+  durable-execution's README section "Two failure classes, and nothing
+  else" as the brief.
+- [ ] **`scripts/install-dev` misses `specs-app`.** Its file list comes
+  from a hand-written `find examples layout tessercheck-py tesser-py`
+  line; `specs-app` has an `app` row and a `requirements-dev.txt`
+  (`playwright` among them) but is not on the line, so a fresh venv fails
+  that gate at mypy. `scripts/verify` already derives its tree list from
+  the manifest through `layout`'s `srv.cli.trees` host, which runs on the
+  stdlib plus tesser-py with nothing installed, so the installer can do the
+  same and the two scripts cannot disagree again. Sweeping the whole repo
+  for requirements files instead is wrong: `.claude/worktrees` holds full
+  copies. CI never uses the installer (each job installs its own file and
+  the specs-app job also fetches Chromium), so add a printed hint for the
+  browser step; pip cannot do it.
+
 ## Left open by the relay ruling (2026-09-11, Chris)
 
 The word "job" is gone: `ts.Job`, `ts.JobContext`, `adapters/jobs/`, and the
