@@ -249,16 +249,22 @@ run_specs_app() {
 
 # The voice example: one context (calls) whose root-tier test places a call
 # for a person through the client and reads the person's name back by the
-# call id. The tree starts from that test and its client; the app, the
-# component, and the hosts behind them are not built yet.
+# call id. Today the service is a shell: place_call saves the call and
+# get_call loads it, through an asyncpg repository behind a store, with no
+# agent and no engine yet. Like asyncpg, the gate needs a reachable Postgres
+# at CALLS_STORAGE and has no skip; locally the asyncpg container serves:
+#
+#   docker run -d --name tesser-asyncpg-pg -e POSTGRES_USER=tesser \
+#     -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=tesser -p 5434:5432 postgres:16
 run_voice() {
   cd "$ROOT/examples/voice" || return 1
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict calls tests conftest.py || return 1
-  step "pytest"
-  pytest -q || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict app calls pgdatabase tests conftest.py || return 1
+  step "pytest (against Postgres at CALLS_STORAGE)"
+  CALLS_STORAGE="${CALLS_STORAGE:-postgres://tesser@localhost:5434/tesser}" \
+    pytest -q || return 1
 }
 
 run_layout() {

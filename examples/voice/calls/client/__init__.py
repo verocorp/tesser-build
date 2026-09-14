@@ -1,3 +1,4 @@
+from calls.client.client import Call as Call
 from calls.client.client import CallsClient as CallsClient
 from calls.client.client import GetCallRequest as GetCallRequest
 from calls.client.client import GetCallResponse as GetCallResponse
