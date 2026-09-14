@@ -3,39 +3,29 @@ from __future__ import annotations
 import alpha.client as client
 
 
-class TestRejected:
+class TestWidgetRejected:
 
-    def test_a_rejection_carries_its_code_and_message(self) -> None:
-        rejected = client.Rejected("empty_name", "a name is never empty")
-        assert rejected.code == "empty_name"
-        assert rejected.message == "a name is never empty"
-        assert str(rejected) == "a name is never empty"
-
-
-class TestMissing:
-
-    def test_a_missing_carries_its_code_and_message(self) -> None:
-        missing = client.Missing("unknown_widget", "no widget 'p'")
-        assert missing.code == "unknown_widget"
-        assert missing.message == "no widget 'p'"
-        assert str(missing) == "no widget 'p'"
+    def test_a_rejected_widget_carries_its_code_and_message(self) -> None:
+        widget_rejected = client.WidgetRejected("empty_name", "a name is never empty")
+        assert widget_rejected.code == "empty_name"
+        assert widget_rejected.message == "a name is never empty"
+        assert str(widget_rejected) == "a name is never empty"
 
 
-class TestConflict:
+class TestWidgetNotFound:
 
-    def test_a_conflict_carries_its_code_and_message(self) -> None:
-        conflict = client.Conflict("widget_exists", "widget 'p' is already stored")
-        assert conflict.code == "widget_exists"
-        assert conflict.message == "widget 'p' is already stored"
-        assert str(conflict) == "widget 'p' is already stored"
+    def test_a_widget_that_was_not_found_carries_its_message(self) -> None:
+        widget_not_found = client.WidgetNotFound("no widget 'p'")
+        assert widget_not_found.message == "no widget 'p'"
+        assert str(widget_not_found) == "no widget 'p'"
 
 
-class TestUnavailable:
+class TestWidgetExists:
 
-    def test_an_unavailable_dependency_carries_its_message(self) -> None:
-        unavailable = client.Unavailable("the widget store is unavailable")
-        assert unavailable.message == "the widget store is unavailable"
-        assert str(unavailable) == "the widget store is unavailable"
+    def test_a_widget_that_exists_carries_its_message(self) -> None:
+        widget_exists = client.WidgetExists("widget 'p' is already stored")
+        assert widget_exists.message == "widget 'p' is already stored"
+        assert str(widget_exists) == "widget 'p' is already stored"
 
 
 class TestErrors:

@@ -76,15 +76,6 @@ class FakeCommittedWidgetStore(ports.WidgetStore):
 
 
 @ts.fake
-class FakeUnavailableWidgetStore(ports.WidgetStore):
-
-    @contextlib.asynccontextmanager
-    async def transaction(self) -> typing.AsyncIterator[ports.WidgetRepository]:
-        raise ports.StoreUnavailable("widget store unavailable")
-        yield FakeWidgetRepository({}, {}, [])
-
-
-@ts.fake
 class FakeOkBetaCheck(ports.BetaCheck):
 
     def __init__(self) -> None:
@@ -104,13 +95,6 @@ class FakeRefusedBetaCheck(ports.BetaCheck):
     async def check_name(self, check_name_request: ports.CheckNameRequest) -> ports.CheckNameResponse:
         self.checked.append(check_name_request.name)
         return ports.CheckNameResponse(outcome=ports.CheckNameOutcome.REFUSED)
-
-
-@ts.fake
-class FakeUnavailableBetaCheck(ports.BetaCheck):
-
-    async def check_name(self, check_name_request: ports.CheckNameRequest) -> ports.CheckNameResponse:
-        raise ports.BetaUnavailable("beta cannot be reached")
 
 
 class TestAlphaServiceOverACommittedTransaction:
@@ -181,20 +165,20 @@ class TestAlphaServiceOverACommittedTransaction:
         assert fake_committed_widget_store.part_by_name == {"a": "p"}
         assert fake_committed_widget_store.saved == ["a"]
 
-    async def test_take_of_an_unknown_widget_crosses_as_the_contexts_missing(self) -> None:
+    async def test_take_of_an_unknown_widget_crosses_as_widget_not_found(self) -> None:
         alpha_service = application.AlphaService(FakeCommittedWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(client.Missing) as caught:
+        with pytest.raises(client.WidgetNotFound) as caught:
             await alpha_service.take_part(client.TakePartRequest(name="x", part="q"))
-        assert caught.value.code == "unknown_widget"
+        assert caught.value.message == "no widget 'x'"
 
-    async def test_adding_a_stored_name_is_a_conflict_and_leaves_the_stored_widget_alone(self) -> None:
+    async def test_adding_a_stored_name_is_widget_exists_and_leaves_the_stored_widget_alone(self) -> None:
         fake_committed_widget_store = FakeCommittedWidgetStore()
         alpha_service = application.AlphaService(fake_committed_widget_store, FakeRefusedBetaCheck())
         add_part_response = await alpha_service.add_part(client.AddPartRequest(name="a", part="a"))
-        with pytest.raises(client.Conflict) as caught:
+        with pytest.raises(client.WidgetExists) as caught:
             await alpha_service.add_part(client.AddPartRequest(name="a", part="q"))
         assert add_part_response.standing == "released"
-        assert caught.value.code == "widget_exists"
+        assert caught.value.message == "widget 'a' is already stored"
         assert fake_committed_widget_store.part_by_name == {"a": "a"}
         assert fake_committed_widget_store.standing_by_name == {"a": "released"}
 
@@ -205,54 +189,6 @@ class TestAlphaServiceOverACommittedTransaction:
         missing = await alpha_service.find_widget(client.FindWidgetRequest(name="x"))
         assert found.found == "yes"
         assert missing.found == "no"
-
-
-class TestAlphaServiceOverAFailedTransaction:
-
-    async def test_add_crosses_as_the_contexts_unavailable(self) -> None:
-        alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(client.Unavailable) as caught:
-            await alpha_service.add_part(client.AddPartRequest(name="a", part="p"))
-        assert caught.value.message == "the widget store is unavailable"
-        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
-
-    async def test_take_crosses_as_the_contexts_unavailable(self) -> None:
-        alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(client.Unavailable) as caught:
-            await alpha_service.take_part(client.TakePartRequest(name="a", part="q"))
-        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
-
-    async def test_find_crosses_as_the_contexts_unavailable(self) -> None:
-        alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), FakeOkBetaCheck())
-        with pytest.raises(client.Unavailable) as caught:
-            await alpha_service.find_widget(client.FindWidgetRequest(name="a"))
-        assert isinstance(caught.value.__cause__, ports.StoreUnavailable)
-
-    async def test_a_held_part_reaches_beta_and_then_the_failed_save_crosses_as_unavailable(self) -> None:
-        fake_refused_beta_check = FakeRefusedBetaCheck()
-        alpha_service = application.AlphaService(FakeUnavailableWidgetStore(), fake_refused_beta_check)
-        with pytest.raises(client.Unavailable):
-            await alpha_service.add_part(client.AddPartRequest(name="a", part="a"))
-        assert fake_refused_beta_check.checked == ["a"]
-
-
-class TestAlphaServiceOverAnUnavailableBeta:
-
-    async def test_a_held_part_that_beta_cannot_judge_crosses_as_the_contexts_unavailable(self) -> None:
-        fake_committed_widget_store = FakeCommittedWidgetStore()
-        alpha_service = application.AlphaService(fake_committed_widget_store, FakeUnavailableBetaCheck())
-        with pytest.raises(client.Unavailable) as caught:
-            await alpha_service.add_part(client.AddPartRequest(name="a", part="a"))
-        assert caught.value.message == "the beta check is unavailable"
-        assert isinstance(caught.value.__cause__, ports.BetaUnavailable)
-        assert fake_committed_widget_store.saved == []
-
-    async def test_a_part_that_needs_no_beta_check_never_reaches_it(self) -> None:
-        fake_committed_widget_store = FakeCommittedWidgetStore()
-        alpha_service = application.AlphaService(fake_committed_widget_store, FakeUnavailableBetaCheck())
-        add_part_response = await alpha_service.add_part(client.AddPartRequest(name="a", part="p"))
-        assert add_part_response.standing == "kept"
-        assert fake_committed_widget_store.saved == ["a"]
 
 
 class TestAlphaServiceMappers:
@@ -283,13 +219,12 @@ class TestAlphaServiceMappers:
         assert widget_spec.part.id == "p"
         assert widget_spec.standing == "released"
 
-    def test_a_missing_lookup_is_the_contexts_missing_naming_the_widget(self) -> None:
-        with pytest.raises(client.Missing) as caught:
+    def test_a_lookup_that_is_not_found_is_widget_not_found_naming_the_widget(self) -> None:
+        with pytest.raises(client.WidgetNotFound) as caught:
             application.MapToLoadedWidgetSpec(
                 ports.LoadWidgetRequest(name="x"),
                 ports.LoadWidgetResponse(outcome=ports.LoadWidgetOutcome.NOT_FOUND, widgets=()),
             )
-        assert caught.value.code == "unknown_widget"
         assert caught.value.message == "no widget 'x'"
 
     def test_a_widget_maps_to_a_save_request_carrying_its_name_and_part(self) -> None:
@@ -326,14 +261,13 @@ class TestAlphaServiceMappers:
         assert application.MapToAddPartResponse(add_widget_response, widget).part == "a"
         assert application.MapToAddPartResponse(add_widget_response, widget).standing == "kept"
 
-    def test_a_name_the_store_already_holds_is_the_contexts_conflict(self) -> None:
+    def test_a_name_the_store_already_holds_is_widget_exists(self) -> None:
         widget = domain.Widget(
             application.MapToWidgetSpec(client.AddPartRequest(name="a", part="p"))
         )
         add_widget_response = ports.AddWidgetResponse(outcome=ports.AddWidgetOutcome.EXISTS, name="a")
-        with pytest.raises(client.Conflict) as caught:
+        with pytest.raises(client.WidgetExists) as caught:
             application.MapToAddPartResponse(add_widget_response, widget)
-        assert caught.value.code == "widget_exists"
         assert caught.value.message == "widget 'a' is already stored"
 
     def test_a_widget_maps_to_an_add_widget_request(self) -> None:

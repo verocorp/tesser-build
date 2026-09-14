@@ -55,7 +55,7 @@ class TestHandler:
 
     async def test_a_rejection_exits_two_and_prints_the_contexts_wording(self) -> None:
         handler = handlers.Handler(
-            FakeRefusingClient(client.Rejected("empty_name", "a name is never empty"))
+            FakeRefusingClient(client.WidgetRejected("empty_name", "a name is never empty"))
         )
         cli_response = await handler.add(protocol.CliRequest(args=("a", "p")))
         assert cli_response.exit_code == 2
@@ -63,27 +63,19 @@ class TestHandler:
 
     async def test_a_missing_widget_exits_one_and_prints_the_contexts_wording(self) -> None:
         handler = handlers.Handler(
-            FakeRefusingClient(client.Missing("unknown_widget", "no widget 'a'"))
+            FakeRefusingClient(client.WidgetNotFound("no widget 'a'"))
         )
         cli_response = await handler.add(protocol.CliRequest(args=("a", "p")))
         assert cli_response.exit_code == 1
         assert cli_response.line == protocol.Line(text="no widget 'a'")
 
-    async def test_a_conflict_exits_one_and_prints_the_contexts_wording(self) -> None:
+    async def test_an_existing_widget_exits_one_and_prints_the_contexts_wording(self) -> None:
         handler = handlers.Handler(
-            FakeRefusingClient(client.Conflict("widget_exists", "widget 'a' is already stored"))
+            FakeRefusingClient(client.WidgetExists("widget 'a' is already stored"))
         )
         cli_response = await handler.add(protocol.CliRequest(args=("a", "p")))
         assert cli_response.exit_code == 1
         assert cli_response.line == protocol.Line(text="widget 'a' is already stored")
-
-    async def test_an_unavailable_dependency_exits_one_and_prints_the_contexts_wording(self) -> None:
-        handler = handlers.Handler(
-            FakeRefusingClient(client.Unavailable("the widget store is unavailable"))
-        )
-        cli_response = await handler.add(protocol.CliRequest(args=("a", "p")))
-        assert cli_response.exit_code == 1
-        assert cli_response.line == protocol.Line(text="the widget store is unavailable")
 
     async def test_a_failure_the_context_never_declared_leaves_the_handler(self) -> None:
         handler = handlers.Handler(

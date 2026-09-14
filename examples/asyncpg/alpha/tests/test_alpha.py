@@ -69,7 +69,7 @@ class TestAlphaContext:
         assert taken.part == "q"
         assert retaken.part == "q"
 
-    async def test_adding_a_stored_name_conflicts_and_the_stored_standing_survives(self) -> None:
+    async def test_adding_a_stored_name_is_widget_exists_and_the_stored_standing_survives(self) -> None:
         config = component.Config(component.Spec(storage=os.environ["ALPHA_STORAGE"]))
         database = pgdatabase_database.Database(config.database)
         await database.open()
@@ -79,7 +79,7 @@ class TestAlphaContext:
         add_part_response = await alpha.client.add_part(
             client.AddPartRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
         )
-        with pytest.raises(client.Conflict) as caught:
+        with pytest.raises(client.WidgetExists) as caught:
             await alpha.client.add_part(client.AddPartRequest(name="ctx-alpha-twice", part="q"))
         take_part_response = await alpha.client.take_part(
             client.TakePartRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
@@ -87,5 +87,5 @@ class TestAlphaContext:
         await alpha.close()
         await database.close()
         assert add_part_response.standing == "released"
-        assert caught.value.code == "widget_exists"
+        assert caught.value.message == "widget 'ctx-alpha-twice' is already stored"
         assert take_part_response.standing == "released"

@@ -6,6 +6,7 @@ import tesser.testing as ts
 import campaign.application as application
 import campaign.application.ports as ports
 import campaign.client as client
+import tesser.errors as errors
 
 
 @ts.fake
@@ -87,7 +88,7 @@ def test_creating_a_campaign_stores_its_window_and_links() -> None:
 
 def test_creating_a_campaign_with_a_bad_slug_is_refused_before_anything_is_stored() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="c1",
@@ -103,7 +104,7 @@ def test_creating_a_campaign_with_a_bad_slug_is_refused_before_anything_is_store
 
 def test_creating_a_campaign_with_a_backwards_window_is_refused() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="c1",
@@ -118,7 +119,7 @@ def test_creating_a_campaign_with_a_backwards_window_is_refused() -> None:
 
 def test_creating_a_campaign_with_two_identical_slugs_is_refused() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="c1",
@@ -136,9 +137,8 @@ def test_creating_a_campaign_with_two_identical_slugs_is_refused() -> None:
 
 def test_getting_a_campaign_that_was_never_created_is_not_found() -> None:
     campaign_service = application.CampaignService(FakeCampaignRepository())
-    with pytest.raises(client.Missing) as ei:
+    with pytest.raises(client.CampaignNotFound) as ei:
         campaign_service.get_campaign(client.GetCampaignRequest(campaign_id="nope"))
-    assert ei.value.code == "campaign_missing"
     assert ei.value.message == "no campaign 'nope'"
 
 
@@ -186,7 +186,7 @@ def test_adding_a_link_answers_a_view_of_every_link_and_stores_it() -> None:
 
 def test_adding_a_link_with_two_bad_fields_reports_both_at_once() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).add_link(
             client.AddLinkRequest(campaign_id="c1", slug="BAD", target_url="ftp://nope")
         )
@@ -199,7 +199,7 @@ def test_adding_a_link_with_two_bad_fields_reports_both_at_once() -> None:
 
 def test_adding_a_link_validates_the_fields_before_the_repository_is_touched() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected):
+    with pytest.raises(client.CampaignRejected):
         application.CampaignService(fake_campaign_repository).add_link(
             client.AddLinkRequest(campaign_id="c1", slug="BAD", target_url="ftp://nope")
         )
@@ -209,17 +209,17 @@ def test_adding_a_link_validates_the_fields_before_the_repository_is_touched() -
 
 def test_adding_a_link_to_a_campaign_that_does_not_exist_is_not_found() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Missing) as ei:
+    with pytest.raises(client.CampaignNotFound) as ei:
         application.CampaignService(fake_campaign_repository).add_link(
             client.AddLinkRequest(
                 campaign_id="nope", slug="spring-sale", target_url="https://x.com"
             )
         )
-    assert ei.value.code == "campaign_missing"
+    assert ei.value.message == "no campaign 'nope'"
     assert fake_campaign_repository.saves == []
 
 
-def test_adding_a_link_whose_slug_is_already_taken_is_a_conflict() -> None:
+def test_adding_a_link_whose_slug_is_already_taken_is_a_link_not_added() -> None:
     fake_campaign_repository = FakeCampaignRepository()
     campaign_service = application.CampaignService(fake_campaign_repository)
     campaign_service.create_campaign(
@@ -230,7 +230,7 @@ def test_adding_a_link_whose_slug_is_already_taken_is_a_conflict() -> None:
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    with pytest.raises(client.Conflict) as ei:
+    with pytest.raises(client.LinkNotAdded) as ei:
         campaign_service.add_link(
             client.AddLinkRequest(
                 campaign_id="c1", slug="spring-sale", target_url="https://y.com"
@@ -254,7 +254,7 @@ def test_a_sixth_link_is_refused_at_the_cap() -> None:
             ),
         )
     )
-    with pytest.raises(client.Conflict) as ei:
+    with pytest.raises(client.LinkNotAdded) as ei:
         campaign_service.add_link(
             client.AddLinkRequest(campaign_id="c1", slug="link-9", target_url="https://x.com")
         )
@@ -291,7 +291,7 @@ def test_deactivating_a_link_that_is_not_in_the_campaign_is_not_found() -> None:
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    with pytest.raises(client.Missing) as ei:
+    with pytest.raises(client.LinkNotDeactivated) as ei:
         campaign_service.deactivate_link(
             client.DeactivateLinkRequest(campaign_id="c1", slug="ghost-link")
         )
@@ -300,11 +300,11 @@ def test_deactivating_a_link_that_is_not_in_the_campaign_is_not_found() -> None:
 
 def test_deactivating_a_link_on_a_campaign_that_does_not_exist_is_not_found() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Missing) as ei:
+    with pytest.raises(client.CampaignNotFound) as ei:
         application.CampaignService(fake_campaign_repository).deactivate_link(
             client.DeactivateLinkRequest(campaign_id="nope", slug="spring-sale")
         )
-    assert ei.value.code == "campaign_missing"
+    assert ei.value.message == "no campaign 'nope'"
 
 
 def test_deactivating_a_link_named_by_an_invalid_slug_is_a_validation_failure() -> None:
@@ -318,7 +318,7 @@ def test_deactivating_a_link_named_by_an_invalid_slug_is_a_validation_failure() 
             links=(client.LinkBody(slug="spring-sale", target_url="https://x.com"),),
         )
     )
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         campaign_service.deactivate_link(
             client.DeactivateLinkRequest(campaign_id="c1", slug="BAD")
         )
@@ -327,7 +327,7 @@ def test_deactivating_a_link_named_by_an_invalid_slug_is_a_validation_failure() 
 
 def test_an_empty_campaign_id_is_a_validation_failure_before_the_repository_is_read() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).get_campaign(
             client.GetCampaignRequest(campaign_id="")
         )
@@ -337,7 +337,7 @@ def test_an_empty_campaign_id_is_a_validation_failure_before_the_repository_is_r
 
 def test_deactivating_with_an_empty_campaign_id_is_a_validation_failure() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).deactivate_link(
             client.DeactivateLinkRequest(campaign_id="", slug="spring-sale")
         )
@@ -347,7 +347,7 @@ def test_deactivating_with_an_empty_campaign_id_is_a_validation_failure() -> Non
 
 def test_adding_a_link_collects_the_campaign_id_problem_with_its_siblings() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).add_link(
             client.AddLinkRequest(campaign_id="", slug="BAD", target_url="ftp://x")
         )
@@ -362,7 +362,7 @@ def test_adding_a_link_collects_the_campaign_id_problem_with_its_siblings() -> N
 
 def test_creating_a_campaign_with_an_empty_id_is_refused_before_anything_is_stored() -> None:
     fake_campaign_repository = FakeCampaignRepository()
-    with pytest.raises(client.Rejected) as ei:
+    with pytest.raises(client.CampaignRejected) as ei:
         application.CampaignService(fake_campaign_repository).create_campaign(
             client.CreateCampaignRequest(
                 campaign_id="",
@@ -375,48 +375,32 @@ def test_creating_a_campaign_with_an_empty_id_is_refused_before_anything_is_stor
     assert fake_campaign_repository.saves == []
 
 
-def test_a_stored_record_with_a_corrupt_slug_is_unreadable_not_a_rejection() -> None:
+def test_a_stored_record_with_a_corrupt_slug_is_a_fault_not_a_rejection() -> None:
     fake_campaign_repository = FakeCampaignRepository()
     fake_campaign_repository.rows["c1"] = ports.CampaignRecord(
         id="c1",
         window=ports.WindowRecord(start="2026-01-01", end="2026-02-01"),
         links=(ports.LinkRecord(slug="BAD SLUG", target_url="https://x.com"),),
     )
-    with pytest.raises(client.Unreadable) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         application.CampaignService(fake_campaign_repository).get_campaign(
             client.GetCampaignRequest(campaign_id="c1")
         )
-    assert str(ei.value).startswith("corrupted campaign record 'c1': ")
+    assert "bad_slug" in str(ei.value)
 
 
-def test_a_corrupt_stored_record_keeps_the_domain_complaint_as_its_cause() -> None:
-    fake_campaign_repository = FakeCampaignRepository()
-    fake_campaign_repository.rows["c1"] = ports.CampaignRecord(
-        id="c1",
-        window=ports.WindowRecord(start="2026-01-01", end="2026-02-01"),
-        links=(ports.LinkRecord(slug="BAD SLUG", target_url="https://x.com"),),
-    )
-    with pytest.raises(client.Unreadable) as ei:
-        application.CampaignService(fake_campaign_repository).get_campaign(
-            client.GetCampaignRequest(campaign_id="c1")
-        )
-    cause = ei.value.__cause__
-    assert isinstance(cause, Exception)
-    assert "bad_slug" in str(cause)
-
-
-def test_a_stored_record_with_a_backwards_window_is_unreadable() -> None:
+def test_a_stored_record_with_a_backwards_window_is_a_fault() -> None:
     fake_campaign_repository = FakeCampaignRepository()
     fake_campaign_repository.rows["c1"] = ports.CampaignRecord(
         id="c1",
         window=ports.WindowRecord(start="2026-02-01", end="2026-01-01"),
         links=(),
     )
-    with pytest.raises(client.Unreadable) as ei:
+    with pytest.raises(errors.DomainError) as ei:
         application.CampaignService(fake_campaign_repository).get_campaign(
             client.GetCampaignRequest(campaign_id="c1")
         )
-    assert str(ei.value).startswith("corrupted campaign record 'c1': ")
+    assert ei.value.code == "window_order"
 
 
 def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
@@ -450,12 +434,11 @@ def test_a_missing_outcome_is_a_not_found_naming_the_campaign() -> None:
     find_campaign_response = ports.FindCampaignResponse(
         outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
     )
-    with pytest.raises(client.Missing) as ei:
+    with pytest.raises(client.CampaignNotFound) as ei:
         application.MapToCampaignSpec(
             find_campaign_request=ports.FindCampaignRequest(campaign_id="c9"),
             find_campaign_response=find_campaign_response,
         )
-    assert ei.value.code == "campaign_missing"
     assert ei.value.message == "no campaign 'c9'"
 
 

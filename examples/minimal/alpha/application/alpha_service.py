@@ -76,7 +76,7 @@ class AlphaService(ts.ApplicationService):
             widget = domain.Widget(MapToWidgetSpec(add_part_request))
             taken = widget.take(MapToPartSpec(add_part_request))
         except errors.DomainError as domain_error:
-            raise client.Rejected(domain_error.code, domain_error.message) from domain_error
+            raise client.WidgetRejected(domain_error.code, domain_error.message) from domain_error
         match taken:
             case domain.Taken.TAKEN:
                 pass

@@ -34,10 +34,6 @@ class StorageCampaignRepository(ts.Repository):
             return ports.FindCampaignResponse(
                 outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
             )
-        except storage.StorageUnavailable as e:
-            raise ports.StorageUnavailable(
-                f"storage unavailable loading campaign {find_campaign_request.campaign_id!r}"
-            ) from e
         campaign_record = ports.CampaignRecord(
             id=find_campaign_request.campaign_id,
             window=ports.WindowRecord(

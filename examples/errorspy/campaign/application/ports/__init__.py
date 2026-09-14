@@ -16,7 +16,4 @@ from campaign.application.ports.campaign_repository import (
 from campaign.application.ports.campaign_repository import (
     SaveCampaignResponse as SaveCampaignResponse,
 )
-from campaign.application.ports.campaign_repository import (
-    StorageUnavailable as StorageUnavailable,
-)
 from campaign.application.ports.campaign_repository import WindowRecord as WindowRecord

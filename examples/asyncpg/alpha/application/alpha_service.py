@@ -31,9 +31,8 @@ class MapToLoadedWidgetSpec(ts.Mapper, domain.WidgetSpec):
             case ports.LoadWidgetOutcome.FOUND:
                 record = load_widget_response.widgets[0]
             case ports.LoadWidgetOutcome.NOT_FOUND:
-                raise client.Missing(
-                    code="unknown_widget",
-                    message=f"no widget {load_widget_request.name!r}",
+                raise client.WidgetNotFound(
+                    message=f"no widget {load_widget_request.name!r}"
                 )
             case _ as never:
                 typing.assert_never(never)
@@ -109,9 +108,8 @@ class MapToAddPartResponse(ts.Mapper, client.AddPartResponse):
             case ports.AddWidgetOutcome.ADDED:
                 pass
             case ports.AddWidgetOutcome.EXISTS:
-                raise client.Conflict(
-                    code="widget_exists",
-                    message=f"widget {add_widget_response.name!r} is already stored",
+                raise client.WidgetExists(
+                    message=f"widget {add_widget_response.name!r} is already stored"
                 )
             case _ as never:
                 typing.assert_never(never)
@@ -143,31 +141,23 @@ class AlphaService(ts.ApplicationService):
             widget = domain.Widget(MapToWidgetSpec(add_part_request))
             taken = widget.take(MapToPartSpec(add_part_request))
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.WidgetRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
         match taken:
             case domain.Taken.TAKEN:
                 pass
             case domain.Taken.HELD:
-                try:
-                    check_name_response = await self._beta_check.check_name(
-                        MapToCheckNameRequest(widget)
-                    )
-                except ports.BetaUnavailable as beta_error:
-                    raise client.Unavailable(
-                        message="the beta check is unavailable"
-                    ) from beta_error
+                check_name_response = await self._beta_check.check_name(
+                    MapToCheckNameRequest(widget)
+                )
                 widget.clear(MapToClearanceSpec(check_name_response))
             case _ as never:
                 typing.assert_never(never)
-        try:
-            async with self._widget_store.transaction() as widget_repository:
-                add_widget_response = await widget_repository.add_widget(
-                    MapToAddWidgetRequest(widget)
-                )
-        except ports.StoreUnavailable as store_error:
-            raise client.Unavailable(message="the widget store is unavailable") from store_error
+        async with self._widget_store.transaction() as widget_repository:
+            add_widget_response = await widget_repository.add_widget(
+                MapToAddWidgetRequest(widget)
+            )
         return MapToAddPartResponse(add_widget_response, widget)
 
     async def take_part(
@@ -176,26 +166,23 @@ class AlphaService(ts.ApplicationService):
         try:
             name = domain.Name(take_part_request.name)
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.WidgetRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        try:
-            async with self._widget_store.transaction() as widget_repository:
-                load_widget_request = MapToLoadWidgetRequest(name)
-                load_widget_response = await widget_repository.load_widget(load_widget_request)
-                widget = domain.Widget(
-                    MapToLoadedWidgetSpec(load_widget_request, load_widget_response)
-                )
-                taken = widget.take(MapToTakenPartSpec(take_part_request))
-                match taken:
-                    case domain.Taken.TAKEN:
-                        await widget_repository.save_widget(MapToSaveWidgetRequest(widget))
-                    case domain.Taken.HELD:
-                        pass
-                    case _ as never:
-                        typing.assert_never(never)
-        except ports.StoreUnavailable as store_error:
-            raise client.Unavailable(message="the widget store is unavailable") from store_error
+        async with self._widget_store.transaction() as widget_repository:
+            load_widget_request = MapToLoadWidgetRequest(name)
+            load_widget_response = await widget_repository.load_widget(load_widget_request)
+            widget = domain.Widget(
+                MapToLoadedWidgetSpec(load_widget_request, load_widget_response)
+            )
+            taken = widget.take(MapToTakenPartSpec(take_part_request))
+            match taken:
+                case domain.Taken.TAKEN:
+                    await widget_repository.save_widget(MapToSaveWidgetRequest(widget))
+                case domain.Taken.HELD:
+                    pass
+                case _ as never:
+                    typing.assert_never(never)
         return MapToTakePartResponse(widget)
 
     async def find_widget(
@@ -204,14 +191,11 @@ class AlphaService(ts.ApplicationService):
         try:
             name = domain.Name(find_widget_request.name)
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.WidgetRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        try:
-            async with self._widget_store.transaction() as widget_repository:
-                find_widget_response = await widget_repository.find_widget(
-                    MapToFindWidgetRequest(name)
-                )
-        except ports.StoreUnavailable as store_error:
-            raise client.Unavailable(message="the widget store is unavailable") from store_error
+        async with self._widget_store.transaction() as widget_repository:
+            find_widget_response = await widget_repository.find_widget(
+                MapToFindWidgetRequest(name)
+            )
         return client.FindWidgetResponse(found=find_widget_response.outcome.value)

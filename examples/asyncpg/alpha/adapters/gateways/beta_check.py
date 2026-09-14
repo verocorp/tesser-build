@@ -12,12 +12,9 @@ class BetaCheckGateway(ts.Gateway):
         self._beta_client = beta_client
 
     async def check_name(self, check_name_request: ports.CheckNameRequest) -> ports.CheckNameResponse:
-        try:
-            check_key_response = await self._beta_client.check_key(
-                beta_client.CheckKeyRequest(key=check_name_request.name)
-            )
-        except beta_client.Unavailable as beta_error:
-            raise ports.BetaUnavailable(beta_error.message) from beta_error
+        check_key_response = await self._beta_client.check_key(
+            beta_client.CheckKeyRequest(key=check_name_request.name)
+        )
         outcome = (
             ports.CheckNameOutcome.OK
             if check_key_response.held == "yes"

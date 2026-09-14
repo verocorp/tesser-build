@@ -29,7 +29,7 @@ class HoldKeyResponse(ts.Response):
         self.key = key
 
 
-class Rejected(ts.Error):
+class KeyRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -37,14 +37,7 @@ class Rejected(ts.Error):
         self.message = message
 
 
-class Unavailable(ts.Error):
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.message = message
-
-
-ERRORS: typing.Final[tuple[type[Rejected], type[Unavailable]]] = (Rejected, Unavailable)
+ERRORS: typing.Final[tuple[type[KeyRejected]]] = (KeyRejected,)
 
 
 class BetaClient(ts.Client, typing.Protocol):
