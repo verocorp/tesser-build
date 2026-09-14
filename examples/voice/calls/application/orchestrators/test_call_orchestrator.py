@@ -7,7 +7,7 @@ import calls.application.relays as relays
 
 
 @ts.fake
-class FakeCallActionsRunner(relays.CallActionsRunner):
+class FakeRecordCallRelay(relays.RecordCallRelay):
 
     def __init__(self) -> None:
         self.recorded: list[relays.RecordCallRequest] = []
@@ -18,27 +18,27 @@ class FakeCallActionsRunner(relays.CallActionsRunner):
 
 
 @ts.helper
-def place_call_request(
+def conduct_call_request(
     call_id: str = "c1", person_name: str = "Ada", phone_number: str = "+15555550100"
-) -> relays.PlaceCallRequest:
-    return relays.PlaceCallRequest(call_id=call_id, person_name=person_name, phone_number=phone_number)
+) -> relays.ConductCallRequest:
+    return relays.ConductCallRequest(call_id=call_id, person_name=person_name, phone_number=phone_number)
 
 
 class TestCallOrchestrator:
 
-    async def test_placing_a_call_runs_the_record_call_action_with_the_call(self) -> None:
-        fake_call_actions_runner = FakeCallActionsRunner()
-        call_orchestrator = orchestrators.CallOrchestrator(fake_call_actions_runner)
+    async def test_conducting_a_call_runs_the_record_call_action_with_the_call(self) -> None:
+        fake_record_call_relay = FakeRecordCallRelay()
+        call_orchestrator = orchestrators.CallOrchestrator(fake_record_call_relay)
 
-        await call_orchestrator.place_call(place_call_request(call_id="c7", person_name="Grace"))
+        await call_orchestrator.conduct_call(conduct_call_request(call_id="c7", person_name="Grace"))
 
         assert [
-            (recorded.call_id, recorded.person_name) for recorded in fake_call_actions_runner.recorded
+            (recorded.call_id, recorded.person_name) for recorded in fake_record_call_relay.recorded
         ] == [("c7", "Grace")]
 
-    async def test_placing_a_call_answers_the_call_id_the_action_recorded(self) -> None:
-        call_orchestrator = orchestrators.CallOrchestrator(FakeCallActionsRunner())
+    async def test_conducting_a_call_answers_the_call_id_the_action_recorded(self) -> None:
+        call_orchestrator = orchestrators.CallOrchestrator(FakeRecordCallRelay())
 
-        place_call_response = await call_orchestrator.place_call(place_call_request(call_id="c7"))
+        conduct_call_response = await call_orchestrator.conduct_call(conduct_call_request(call_id="c7"))
 
-        assert place_call_response.call_id == "c7"
+        assert conduct_call_response.call_id == "c7"

@@ -37,4 +37,4 @@ class TestCalls:
         }
         await calls.close()
 
-        assert registered == {"CallActions": ["record_call"], "CallOrchestrator": ["place_call"]}
+        assert registered == {"CallActions": ["record_call"], "CallOrchestrator": ["conduct_call"]}

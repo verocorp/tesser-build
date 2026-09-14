@@ -17,30 +17,30 @@ _RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationR
 )
 
 
-class RestatePlaceCallRequestSerde(ts.Serde, restate_serde.Serde[relays.PlaceCallRequest]):
+class RestateConductCallRequestSerde(ts.Serde, restate_serde.Serde[relays.ConductCallRequest]):
 
-    def serialize(self, place_call_request: relays.PlaceCallRequest | None) -> bytes:
-        if place_call_request is None:
+    def serialize(self, conduct_call_request: relays.ConductCallRequest | None) -> bytes:
+        if conduct_call_request is None:
             return b""
-        return relays.PlaceCallRequestSnapshot().serialize(place_call_request)
+        return relays.ConductCallRequestSnapshot().serialize(conduct_call_request)
 
-    def deserialize(self, buf: bytes) -> relays.PlaceCallRequest | None:
+    def deserialize(self, buf: bytes) -> relays.ConductCallRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.PlaceCallRequestSnapshot().deserialize(buf)
+        return relays.ConductCallRequestSnapshot().deserialize(buf)
 
 
-class RestatePlaceCallResponseSerde(ts.Serde, restate_serde.Serde[relays.PlaceCallResponse]):
+class RestateConductCallResponseSerde(ts.Serde, restate_serde.Serde[relays.ConductCallResponse]):
 
-    def serialize(self, place_call_response: relays.PlaceCallResponse | None) -> bytes:
-        if place_call_response is None:
+    def serialize(self, conduct_call_response: relays.ConductCallResponse | None) -> bytes:
+        if conduct_call_response is None:
             return b""
-        return relays.PlaceCallResponseSnapshot().serialize(place_call_response)
+        return relays.ConductCallResponseSnapshot().serialize(conduct_call_response)
 
-    def deserialize(self, buf: bytes) -> relays.PlaceCallResponse | None:
+    def deserialize(self, buf: bytes) -> relays.ConductCallResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.PlaceCallResponseSnapshot().deserialize(buf)
+        return relays.ConductCallResponseSnapshot().deserialize(buf)
 
 
 class RestateRecordCallRequestSerde(ts.Serde, restate_serde.Serde[relays.RecordCallRequest]):
@@ -85,15 +85,15 @@ class RestateCallRuntime(ts.Runtime):
             return await calls_application_client.record_call(record_call_request)
 
         @self.call_orchestrator_workflow.main(
-            input_serde=RestatePlaceCallRequestSerde(),
-            output_serde=RestatePlaceCallResponseSerde(),
+            input_serde=RestateConductCallRequestSerde(),
+            output_serde=RestateConductCallResponseSerde(),
         )
-        async def place_call(  # tesser:debt TB023
-            restate_workflow_context: restate.WorkflowContext, place_call_request: relays.PlaceCallRequest
-        ) -> relays.PlaceCallResponse:
+        async def conduct_call(  # tesser:debt TB023
+            restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
+        ) -> relays.ConductCallResponse:
             return await orchestrators.CallOrchestrator(
-                runners.RestateCallActionsRunner(restate_workflow_context, self)
-            ).place_call(place_call_request)
+                runners.RestateInvocationRecordCallRelay(restate_workflow_context, self)
+            ).conduct_call(conduct_call_request)
 
         self.record_call_handler = record_call
-        self.place_call_handler = place_call
+        self.conduct_call_handler = conduct_call

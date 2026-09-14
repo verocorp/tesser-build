@@ -7,7 +7,7 @@ import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
-class RestateCallActionsRunner(ts.Runner):
+class RestateInvocationRecordCallRelay(ts.Runner):
 
     def __init__(
         self,
