@@ -24,6 +24,57 @@ enactment surfaced that Chris deferred rather than ruled.
   a string, not a record, and it is the one field on every response in the
   tree. Deferred until a consumer needs to read it as more than text.
 
+## Left open by the enactment's second round (2026-09-14, Chris)
+
+Rulings on the eight places round 2 of `naming-enactment` did not apply
+cleanly. Two are high priority; the rest are deferred with a reason.
+
+- [ ] **HIGH: bias agents away from DRY where separation is the point.**
+  `LoadCampaignOutcome` and `LoadCampaignBySlugOutcome` both read
+  `FOUND / NOT_FOUND`, and that is intended: rule 6 derives one outcome
+  per operation, and two enums that look alike today are two things that
+  may diverge tomorrow. The same pull toward merging showed up before this
+  (the shared `CampaignView` across four operations, `BookingStateResponse`
+  across five, the two runners wanting one mapper). Chris: "a repeating
+  issue, and this outcome enum example is just the most recent". The
+  follow-up is a skill rule, and possibly an analyzer check, that says when
+  two abstractions that look the same must stay apart, in words an agent
+  will obey against its own instinct to deduplicate.
+- [ ] **HIGH: collections of things, and who may index one.** The happy
+  arms now read `xs[0]` on a zero-or-one tuple and fault with a bare
+  `IndexError` on an inconsistent payload. Accepted for now. The larger
+  item is that collections bite in many places (mappers, specs, the
+  zero-or-one response field) and there is no rule for them. Target
+  stated by Chris: indexing a list directly is not allowed outside a
+  domain aggregate. Needs the collection shape for a response, a spec, and
+  a mapper before the analyzer half can be written.
+- [ ] **Deferred: the empty `reasons` for `ALREADY_STARTED`.** Splitting
+  the parent's arm left both services saying "the order was already
+  started" in their own words and the engine's text unreachable from the
+  door, which was the intent, but the README can no longer document the
+  server's body. Chris: "not good, but we will defer further outcome and
+  reasons design". Folds into the reason-shape entry above.
+- [ ] **Deferred: `Campaign` collides with itself in python-app's ports.**
+  The repository's record and the queries port's record are both a picture
+  of a campaign in one package, so the read side is `Campaign` and the
+  write side stayed `CampaignRecord` / `LinkRecord` / `MoneyRecord`. Chris:
+  "a smell", deferred. The rule-6 "no word, just the thing" ruling meets
+  two things with one name here; the fix is probably that they are not the
+  same thing and one of them is misnamed, not a suffix.
+- [ ] **Deferred: `minimal`'s `FlowResponse` is a pattern name.** Deriving
+  it collides with the relay's response in the same module, because
+  whether an orchestrator returns its relay's response is not settled for
+  that tree. `WidgetFlow.run` became `quote_widget`; the response keeps its
+  name. Chris: a needed rename, deferred.
+- [ ] **Deferred: four declarations not renamed by design.**
+  `ToolSurface.instructions` / `begin` / `status` in llmport are the LLM's
+  tool vocabulary; `Host.run` in python-app is a lifecycle surface. Neither
+  takes a request. Chris: fine for now, investigate later.
+
+Accepted without follow-up: `has_key` / `slug_taken` stay as the tree's
+question-shaped words; the `verdict` / `presence` field renames to
+`outcome` stand.
+
 ## Left open by the relay ruling (2026-09-11, Chris)
 
 The word "job" is gone: `ts.Job`, `ts.JobContext`, `adapters/jobs/`, and the
