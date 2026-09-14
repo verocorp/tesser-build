@@ -61,11 +61,10 @@ cleanly. Two are high priority; the rest are deferred with a reason.
   "a smell", deferred. The rule-6 "no word, just the thing" ruling meets
   two things with one name here; the fix is probably that they are not the
   same thing and one of them is misnamed, not a suffix.
-- [ ] **Deferred: `minimal`'s `FlowResponse` is a pattern name.** Deriving
-  it collides with the relay's response in the same module, because
-  whether an orchestrator returns its relay's response is not settled for
-  that tree. `WidgetFlow.run` became `quote_widget`; the response keeps its
-  name. Chris: a needed rename, deferred.
+- [x] **`minimal`'s `FlowResponse` is a pattern name (resolved 2026-09-14).**
+  `WidgetFlow` became `WidgetOrchestrator.register_widget`, carried by its own
+  `RegisterWidgetRelay` and answering that relay's `RegisterWidgetResponse`;
+  the action it runs became `keep_widget`.
 - [ ] **Deferred: four declarations not renamed by design.**
   `ToolSurface.instructions` / `begin` / `status` in llmport are the LLM's
   tool vocabulary; `Host.run` in python-app is a lifecycle surface. Neither
@@ -148,11 +147,31 @@ yet reach, and the names they found that were deferred rather than renamed:
 - [ ] **Protocol-module ports are not operations to these checks.** llmport
   `ToolSurface.instructions / begin / status` and python-app `Host.run` sit
   in `protocol/`, take no request, and are the surfaces Chris deferred.
-- [ ] **Rules 3, 4, and 5 are the next build.** A runner's methods are its
-  relay's, a runtime handler is exposed as `<operation>_handler`, and one
-  name runs across the chain. They read across modules through the
-  registration binding, which nothing reads today, and need the TB023
-  carve-out for a runtime's nested handler first.
+- [x] **Rules 3, 4, and 5 are built (2026-09-14).** A relay is named for the
+  one operation it carries, a runner for its engine and its relay's class, a
+  runtime handler is `<operation>_handler` and invokes that operation, and no
+  two actions or orchestrator operations share a name (TB085); an actions
+  class mirrors its application client and services mirror the context
+  client (TB081). The pairing reads names, not the registration binding, so
+  the TB023 carve-out was not needed first.
+- [ ] **minimal's `RegisterWidgetRelay` has no caller.** Nothing holds it, so
+  `relays/__init__.py` cannot re-export it (TB042: a role `__init__`
+  re-exports only what a module outside the role reads). A service operation
+  that runs the orchestrator would give it one, at the cost of a new client
+  operation in minimal; the alternative is to rule that a relay's runner
+  counts as its reader.
+- [ ] **Confirm the uniqueness scope.** The check covers actions and
+  orchestrator operations in a context. A service's client word that
+  coincides with a workflow's (`PurchaseService.pay_for_order` and
+  `PurchaseOrchestrator.pay_for_order`) is left alone, on the reading that
+  the service is the same act seen through the client (rule 3). Taken as the
+  default, not ruled.
+- [ ] **Confirm minimal's words.** `keep_widget` (the action saves a kept
+  widget) and `register_widget` (the orchestrator's act) were taken as
+  defaults when Chris said `WidgetFlow` was poorly named.
+- [ ] **The TB023 carve-out for a runtime's nested handlers is still open.**
+  The four `# tesser:debt TB023` markers on durable-execution's registration
+  callbacks stand; the chain checks read those handlers without it.
 - [ ] **The transport-category client error names go with the error rework.**
   A check that a client error is not `Missing`, `Conflict`, `Unavailable`,
   `Unreadable`, or bare `Rejected` fires on 22 declarations; it lands with
@@ -160,7 +179,10 @@ yet reach, and the names they found that were deferred rather than renamed:
   proof arrive together.
 - [ ] **The skill does not yet teach these rules.** A finding's message is
   the only guidance an agent gets; the naming rows belong in
-  `skills/tesser-build/python.md` with a `skill-version` bump.
+  `skills/tesser-build/python.md` with a `skill-version` bump. Its
+  durable-execution walkthrough also still names relays and runners the old
+  way (`OrderActionsRunner`, `relays.OrderOrchestratorRequest`, `run`), so the
+  relay and runner naming rules go in with it.
 
 ## Left standing by the v0.1.1.0 adversarial passes (2026-09-14, PR #191)
 
@@ -546,11 +568,11 @@ domain modules out before removing them.
   result address on the ingress; the request body is read with no size cap and
   `json.loads` runs once per field; snapshots carry no version, so a field
   added or a rule tightened fails every in-flight journal terminally;
-  `RestateOrderOrchestratorRunner` opens a new `httpx.AsyncClient` per send
+  `RestateIngressConfirmOrderRelay` opens a new `httpx.AsyncClient` per send
   (stated in the README as the cost of nothing async outliving a request);
   `MemoryProductCatalogRepository.close()` clears a dict a live handler may
   still hold; `runtimes/restate_order_runtime.py` and
-  `runners/restate_order_actions_runner.py` import each other (the runtime
+  `runners/restate_invocation_price_product_relay.py` import each other (the runtime
   builds the runner per invocation, the runner names the runtime as a
   parameter type); `.importlinter` now carries three pairwise
   `ignore_imports` holes in the adapters→application contract.
@@ -1132,7 +1154,7 @@ response, its `add` transitions).
   reading it. Rule that, and `TB042` follows.
 - [ ] **A serde round-trip test compares bytes, not fields.** Chris, 2026-09-07,
   from the #172 thread. The proposal: replace the field-by-field assertions in
-  `examples/durable-execution/ordering/application/relays/test_order_orchestrator_runner.py`
+  `examples/durable-execution/ordering/application/relays/test_confirm_order_relay.py`
   (`:18`, `:50`) with `serialize(deserialize(serialize(x))) == serialize(x)`.
   It names no domain type, so `OrderId` and `Quantity` leave
   `ordering/domain/__init__.py` and the export list becomes exactly what real
@@ -1317,7 +1339,7 @@ where it lands.
   `SubmitOrderRequestSnapshot` beside the client DTO would move the field
   list and its messages out of `adapters/`, at the cost of `json` in
   `ordering/client/` — the `TB062` marker
-  `relays/order_orchestrator_runner.py` already carries — and a sibling test
+  `relays/confirm_order_relay.py` already carries — and a sibling test
   the package does not have today. Evidence: #172 counts 11 places a
   required field lands, and this handler is one of them. **Ruled in
   direction 2026-09-11, deferred to the aggregate-construction step:** the

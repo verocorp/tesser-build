@@ -42,7 +42,13 @@ no verb, a response is named for what it is) is assumed throughout.
    one name. Across the client the rule does not hold: the client is a
    published language, decoupled from what runs behind it, and chooses the
    caller's word. That the customer's `pay_for_order` and the workflow's
-   `pay_for_order` coincide is a fact about this domain, not a rule.
+   `pay_for_order` coincide is a fact about this domain, not a rule. The
+   relay itself is named for the one operation it carries, `ConfirmOrderRelay`,
+   so a relay carries exactly one operation, and a runner is its engine's
+   word, the side its call starts from, and the relay's class name:
+   `RestateIngressConfirmOrderRelay` from outside any invocation,
+   `RestateInvocationConfirmOrderRelay` from inside one. Two different
+   operations behind relays never share a name.
 
 4. **The calling-mode verb lives on the relay protocol and its runners.**
    `start_<operation>` accepts and returns; `run_<operation>` waits. The
@@ -62,12 +68,9 @@ no verb, a response is named for what it is) is assumed throughout.
    a handler is invoked by the engine: the runners pass the decorated
    function to `workflow_call`, `workflow_send`, or `ctx.service_call`, and
    the SDK reads the service name, the handler name, and the serdes off it.
-   Tests call the handlers directly, which the SDK's wrapper allows. An
-   operation name is unique within its owner, not within the runtime: the
-   engine registers `A/confirm_order` and `B/confirm_order` as two
-   handlers, so where two owners on one runtime share an operation the
-   attribute is qualified by the owner, `order_confirm_order_handler`.
-   Otherwise `<operation>_handler` stands.
+   Tests call the handlers directly, which the SDK's wrapper allows. Two
+   different operations never share a name, so no attribute is qualified by
+   its owner: `<operation>_handler` always stands.
 
 ## Messages and outcomes
 
@@ -337,7 +340,16 @@ application client, and relay protocol method, an operation has at least
 two segments, `start_` and `run_` appear only on a relay (where they are
 required), and the request, response, and the response's `outcome` field
 derive from the operation; on every public orchestrator method, the name is
-not `run`, carries no calling-mode prefix, and has two segments. An
+not `run`, carries no calling-mode prefix, and has two segments. Since the chain
+wave (2026-09-14) it also carries 3, 4, and 5: a relay is `<Operation>Relay`
+and carries one operation; a runner ends in its relay's class name, offers
+exactly its relay's methods, and each reaches `<operation>_handler`; a
+runtime exposes every handler as `<operation>_handler`, registers it under
+the operation, and the handler invokes that operation; and no two actions or
+orchestrator operations in a context share a name. `TB081` carries the two
+mirrors: an actions class offers exactly the calls of the application client
+in the module of its name, and every service method is on the context client
+while every context client method is on exactly one service. An
 enum-typed field on an operation's own response is its outcome: there is at
 most one, it is named `outcome`, and a data enum rides inside a record
 rather than on the response (Chris, 2026-09-14; whether every response must
@@ -353,9 +365,10 @@ carry exactly one is an open follow-up). Which layer would carry the rest:
   inward of an adapter (12, by placement). Placement cannot judge
   vocabulary: whether a word is transport's or the domain's is review, and
   a lexical ban on "status" would flag scheduling's `StatusRequest`, which
-  is about a booking. Proving the relay-to-handler chain needs the
-  registration binding, including a decorator's `name=` override, which
-  base-class classification does not see. Beyond naming checks, the
+  is about a booking. The relay-to-handler chain is read through
+  names: a runner pairs with its relay by class name and reaches the
+  handler attribute, and a runtime's handler, registered under its own
+  name or a decorator's `name=`, invokes the operation. Beyond naming checks, the
   outcome-on-response shape needs three analyzer changes: admit a plain
   enum in a relay module, where placement rejects it today; recognise a
   `match` on a response's outcome field the way `TB084` recognises one on a
@@ -451,3 +464,32 @@ Recorded, not reopened: `submit_order` and `place_order` are two client
 words for one act, differing only in whether the caller waits. The
 calling-mode norm chose them deliberately as the caller's words for what
 comes back.
+
+## Rulings, 2026-09-14
+
+- **A relay is named for the one operation it carries.** `ConfirmOrderRelay`,
+  `PayForOrderRelay`, `PriceProductRelay`, `TakePaymentRelay`. The earlier
+  `OrderOrchestratorRunner` named the class behind the relay and the kind that
+  implements it, never what the relay carries, which is a pattern name in the
+  same family as `WidgetFlow`, `FlowResponse`, and `*View`.
+- **A runner pairs with its relay by class name.** Its name is the relay's
+  class name after a prefix of the engine and the side its call starts from:
+  `RestateIngress…` from outside any invocation, `RestateInvocation…` from
+  inside one, `Inline…` in minimal. Pairing by module name was rejected: the
+  second implementation of one relay broke it. `RestateOrderOrchestratorChildRunner`
+  was rejected too: "child" names the workflow being called, not the runner.
+- **Two different things never share a name.** This retires rule 5's
+  owner-qualified handler attribute. Taken as the default and not yet ruled:
+  the check covers actions and orchestrator operations, not a service whose
+  client word coincides with a workflow's, like `pay_for_order`.
+- **The two mirrors.** An actions class and the application client in the
+  module of its name offer the same calls, one protocol per actions class, so
+  no composing class is needed there. The context client may sit in front of
+  several services, as durable-execution's two do, so the rule is that every
+  service method is on the client and every client method is on exactly one
+  service.
+- **minimal's orchestrator gets a relay.** `WidgetFlow` became
+  `WidgetOrchestrator.register_widget`, carried by `RegisterWidgetRelay` and
+  answering `RegisterWidgetResponse`, and the action it runs became
+  `keep_widget`, since it keeps a widget rather than quoting one. Taken as the
+  defaults, not ruled: the words `keep_widget` and `register_widget`.

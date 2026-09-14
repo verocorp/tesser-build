@@ -5,6 +5,48 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.4.0] - 2026-09-14
+
+One operation now carries one name the whole way across a relay: the relay
+protocol, the runner that implements it, the runtime handler, and the action
+or orchestrator it runs. Relays and runners are renamed to say what they
+carry, and the analyzer checks that an actions class, a service, and the
+clients in front of them offer the same calls.
+
+### Added
+- **The relay chain carries one name, under TB085.** A relay is
+  `<Operation>Relay` and carries one operation. A runner is its engine's word
+  followed by its relay's class name, and each of its methods reaches the
+  handler of the operation it carries. A runtime exposes every handler as
+  `<operation>_handler`, registers it under that operation, and the handler
+  invokes it. No two actions or orchestrator operations in a context share a
+  name.
+- **The mirrors, under TB081.** A runner's public methods are exactly its
+  relay's. An actions class offers exactly the calls of the application
+  client in the module of its name. Every service method is on the context
+  client, and every context client method is on exactly one service, so one
+  client may still sit in front of several services.
+
+### Changed
+- **durable-execution's relays are named for their operations:**
+  `ConfirmOrderRelay`, `PayForOrderRelay`, `PriceProductRelay`,
+  `TakePaymentRelay` (were `OrderOrchestratorRunner`,
+  `PurchaseOrchestratorRunner`, `OrderActionsRunner`,
+  `PurchaseActionsRunner`).
+- **Its runners say where their call starts:**
+  `RestateIngressConfirmOrderRelay`, `RestateIngressPayForOrderRelay`,
+  `RestateInvocationConfirmOrderRelay` (was
+  `RestateOrderOrchestratorChildRunner`),
+  `RestateInvocationPriceProductRelay`, `RestateInvocationTakePaymentRelay`.
+- **minimal's chain has its words.** The action is `keep_widget` (it keeps
+  a widget; nothing was quoted), carried by `KeepWidgetRelay` and
+  `InlineKeepWidgetRelay`. `WidgetFlow` is `WidgetOrchestrator` with the
+  operation `register_widget`, carried by its own `RegisterWidgetRelay` and
+  `InlineRegisterWidgetRelay` and answering `RegisterWidgetResponse`. The
+  runtime exposes `keep_widget_handler` and `register_widget_handler`.
+- **Rule 5 no longer qualifies a handler by its owner.** Two different
+  operations never share a name, so `<operation>_handler` always stands.
+
 ## [0.1.3.0] - 2026-09-14
 
 An operation's response now says its answer in one place: an enum on the
