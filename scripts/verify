@@ -249,22 +249,54 @@ run_specs_app() {
 
 # The voice example: one context (calls) whose root-tier test places a call
 # for a person through the client and reads the person's name back by the
-# call id. Today the service is a shell: place_call saves the call and
-# get_call loads it, through an asyncpg repository behind a store, with no
-# agent and no engine yet. Like asyncpg, the gate needs a reachable Postgres
-# at CALLS_STORAGE and has no skip; locally the asyncpg container serves:
+# call id. place_call runs the CallOrchestrator workflow on Restate, and its
+# record_call action writes the call through an asyncpg repository; get_call
+# reads it back directly. The gate needs a reachable Postgres at
+# CALLS_STORAGE and a Restate server at RESTATE_INGRESS / RESTATE_ADMIN, and
+# has no skip. It serves the tree's Restate endpoint itself, registers it
+# with the server at VOICE_DEPLOYMENT (the address the server dials back),
+# and stops it after pytest. Locally:
 #
 #   docker run -d --name tesser-asyncpg-pg -e POSTGRES_USER=tesser \
 #     -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=tesser -p 5434:5432 postgres:16
+#   docker run -d --name tesser-voice-restate -p 28080:8080 -p 29070:9070 \
+#     --add-host=host.docker.internal:host-gateway restatedev/restate:1.7
 run_voice() {
   cd "$ROOT/examples/voice" || return 1
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict app calls pgdatabase tests conftest.py || return 1
-  step "pytest (against Postgres at CALLS_STORAGE)"
-  CALLS_STORAGE="${CALLS_STORAGE:-postgres://tesser@localhost:5434/tesser}" \
-    pytest -q || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict app calls pgdatabase srv tests conftest.py || return 1
+  local storage="${CALLS_STORAGE:-postgres://tesser@localhost:5434/tesser}"
+  local ingress="${RESTATE_INGRESS:-http://localhost:28080}"
+  local admin="${RESTATE_ADMIN:-http://localhost:29070}"
+  local port="${VOICE_DEPLOYMENT_PORT:-9080}"
+  local deployment="${VOICE_DEPLOYMENT:-http://host.docker.internal:$port}"
+  step "serve the Restate endpoint on :$port and register it at $admin"
+  CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" PYTHONPATH=.:../../tesser-py \
+    python3 -m srv.restate.main "0.0.0.0:$port" &
+  local host=$!
+  local registered=1
+  for _ in $(seq 1 50); do
+    if curl -sf -X POST "$admin/deployments" -H 'content-type: application/json' \
+      -d "{\"uri\": \"$deployment\", \"force\": true}" >/dev/null; then
+      registered=0
+      break
+    fi
+    sleep 0.2
+  done
+  if [ "$registered" -ne 0 ]; then
+    echo "voice: could not register $deployment with $admin" >&2
+    kill "$host" 2>/dev/null
+    wait "$host" 2>/dev/null
+    return 1
+  fi
+  step "pytest (against Postgres at CALLS_STORAGE and Restate at RESTATE_INGRESS)"
+  CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" pytest -q
+  local status=$?
+  kill -INT "$host" 2>/dev/null
+  wait "$host" 2>/dev/null
+  return "$status"
 }
 
 run_layout() {

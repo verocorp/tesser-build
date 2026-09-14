@@ -47,7 +47,12 @@ class EnvConfigRepository(AppConfigRepository):
         calls_storage = os.environ.get("CALLS_STORAGE")
         if calls_storage is None:
             raise errors.invalid("missing_env", "CALLS_STORAGE is required")
-        return AppConfig(Spec(calls=calls_component.Config(calls_component.Spec(storage=calls_storage))))
+        ingress = os.environ.get("RESTATE_INGRESS")
+        if ingress is None:
+            raise errors.invalid("missing_env", "RESTATE_INGRESS is required")
+        return AppConfig(
+            Spec(calls=calls_component.Config(calls_component.Spec(storage=calls_storage, ingress=ingress)))
+        )
 
 
 class AppLoader(ts.Loader):
