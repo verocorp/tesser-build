@@ -41,7 +41,7 @@ class TestRestateCallRuntime:
             ),
         }
 
-        assert registered == {"CallActions": ["record_call"], "CallOrchestrator": ["place_call"]}
+        assert registered == {"CallActions": ["record_call"], "CallOrchestrator": ["conduct_call"]}
 
     def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(FakeCallsApplicationClient())
@@ -66,11 +66,11 @@ class TestRestateCallRuntime:
 
         assert fake_calls_application_client.recorded == [record_call_request]
 
-    async def test_the_place_call_handler_runs_the_orchestrator_inside_this_invocation(self) -> None:
-        place_call_request = relays.PlaceCallRequest(call_id="c7", person_name="Ada", phone_number="+15555550100")
+    async def test_the_conduct_call_handler_runs_the_orchestrator_inside_this_invocation(self) -> None:
+        conduct_call_request = relays.ConductCallRequest(call_id="c7", person_name="Ada", phone_number="+15555550100")
 
-        place_call_response = await runtimes.RestateCallRuntime(FakeCallsApplicationClient()).place_call_handler(  # tesser:debt TB085
-            typing.cast(restate.WorkflowContext, FakeRestateWorkflowContext()), place_call_request
+        conduct_call_response = await runtimes.RestateCallRuntime(FakeCallsApplicationClient()).conduct_call_handler(  # tesser:debt TB085
+            typing.cast(restate.WorkflowContext, FakeRestateWorkflowContext()), conduct_call_request
         )
 
-        assert place_call_response.call_id == "c7"
+        assert conduct_call_response.call_id == "c7"

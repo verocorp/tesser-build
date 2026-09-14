@@ -65,24 +65,24 @@ class FakeRestateIngress:  # tesser:debt TB072
 
 
 @ts.helper
-def place_call_request(
+def conduct_call_request(
     call_id: str = "c1", person_name: str = "Ada", phone_number: str = "+15555550100"
-) -> relays.PlaceCallRequest:
-    return relays.PlaceCallRequest(call_id=call_id, person_name=person_name, phone_number=phone_number)
+) -> relays.ConductCallRequest:
+    return relays.ConductCallRequest(call_id=call_id, person_name=person_name, phone_number=phone_number)
 
 
-class TestRestateCallOrchestratorRunner:
+class TestRestateIngressConductCallRelay:
 
-    async def test_running_place_call_calls_the_workflow_keyed_by_the_call_id(self) -> None:
+    async def test_running_conduct_call_calls_the_workflow_keyed_by_the_call_id(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            relays.PlaceCallResponseSnapshot().serialize(relays.PlaceCallResponse(call_id="c7"))
+            relays.ConductCallResponseSnapshot().serialize(relays.ConductCallResponse(call_id="c7"))
         )
         fake_restate_ingress.start()
 
-        place_call_response = await runners.RestateCallOrchestratorRunner(
+        conduct_call_response = await runners.RestateIngressConductCallRelay(
             fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallsApplicationClient())
-        ).run_place_call(place_call_request(call_id="c7"))
+        ).run_conduct_call(conduct_call_request(call_id="c7"))
         fake_restate_ingress.close()
 
-        assert place_call_response.call_id == "c7"
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/place_call HTTP/1.1"
+        assert conduct_call_response.call_id == "c7"
+        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/conduct_call HTTP/1.1"

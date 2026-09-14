@@ -7,15 +7,15 @@ import calls.application.relays as relays
 
 class MapToRecordCallRequest(ts.Mapper, relays.RecordCallRequest):
 
-    def __init__(self, place_call_request: relays.PlaceCallRequest) -> None:
+    def __init__(self, conduct_call_request: relays.ConductCallRequest) -> None:
         super().__init__(
-            call_id=place_call_request.call_id,
-            person_name=place_call_request.person_name,
-            phone_number=place_call_request.phone_number,
+            call_id=conduct_call_request.call_id,
+            person_name=conduct_call_request.person_name,
+            phone_number=conduct_call_request.phone_number,
         )
 
 
-class MapToPlaceCallResponse(ts.Mapper, relays.PlaceCallResponse):
+class MapToConductCallResponse(ts.Mapper, relays.ConductCallResponse):
 
     def __init__(self, record_call_response: relays.RecordCallResponse) -> None:
         super().__init__(call_id=record_call_response.call_id)
@@ -23,11 +23,11 @@ class MapToPlaceCallResponse(ts.Mapper, relays.PlaceCallResponse):
 
 class CallOrchestrator(ts.Orchestrator):
 
-    def __init__(self, call_actions_runner: relays.CallActionsRunner) -> None:
-        self._call_actions_runner = call_actions_runner
+    def __init__(self, record_call_relay: relays.RecordCallRelay) -> None:
+        self._record_call_relay = record_call_relay
 
-    async def place_call(self, place_call_request: relays.PlaceCallRequest) -> relays.PlaceCallResponse:
-        record_call_response = await self._call_actions_runner.run_record_call(
-            MapToRecordCallRequest(place_call_request)
+    async def conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
+        record_call_response = await self._record_call_relay.run_record_call(
+            MapToRecordCallRequest(conduct_call_request)
         )
-        return MapToPlaceCallResponse(record_call_response)
+        return MapToConductCallResponse(record_call_response)

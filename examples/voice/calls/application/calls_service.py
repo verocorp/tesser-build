@@ -17,7 +17,7 @@ class MapToCallSpec(ts.Mapper, domain.CallSpec):
         )
 
 
-class MapToPlaceCallRequest(ts.Mapper, relays.PlaceCallRequest):
+class MapToConductCallRequest(ts.Mapper, relays.ConductCallRequest):
 
     def __init__(self, call: domain.Call) -> None:
         super().__init__(
@@ -29,8 +29,8 @@ class MapToPlaceCallRequest(ts.Mapper, relays.PlaceCallRequest):
 
 class MapToPlaceCallResponse(ts.Mapper, client.PlaceCallResponse):
 
-    def __init__(self, place_call_response: relays.PlaceCallResponse) -> None:
-        super().__init__(call_id=place_call_response.call_id)
+    def __init__(self, conduct_call_response: relays.ConductCallResponse) -> None:
+        super().__init__(call_id=conduct_call_response.call_id)
 
 
 class MapToLoadCallRequest(ts.Mapper, ports.LoadCallRequest):
@@ -53,14 +53,14 @@ class MapToGetCallResponse(ts.Mapper, client.GetCallResponse):
 
 class CallsService(ts.ApplicationService):
 
-    def __init__(self, call_orchestrator_runner: relays.CallOrchestratorRunner, call_store: ports.CallStore) -> None:
-        self._call_orchestrator_runner = call_orchestrator_runner
+    def __init__(self, conduct_call_relay: relays.ConductCallRelay, call_store: ports.CallStore) -> None:
+        self._conduct_call_relay = conduct_call_relay
         self._call_store = call_store
 
     async def place_call(self, place_call_request: client.PlaceCallRequest) -> client.PlaceCallResponse:
         call = domain.Call(MapToCallSpec(place_call_request))
-        place_call_response = await self._call_orchestrator_runner.run_place_call(MapToPlaceCallRequest(call))
-        return MapToPlaceCallResponse(place_call_response)
+        conduct_call_response = await self._conduct_call_relay.run_conduct_call(MapToConductCallRequest(call))
+        return MapToPlaceCallResponse(conduct_call_response)
 
     async def get_call(self, get_call_request: client.GetCallRequest) -> client.GetCallResponse:
         call_id = domain.CallId(get_call_request.call_id)

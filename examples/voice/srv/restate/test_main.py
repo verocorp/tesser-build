@@ -42,5 +42,5 @@ class TestRestateHost:
         assert isinstance(services, list)
         assert {s["name"]: sorted(h["name"] for h in s["handlers"]) for s in services} == {
             "CallActions": ["record_call"],
-            "CallOrchestrator": ["place_call"],
+            "CallOrchestrator": ["conduct_call"],
         }
