@@ -7140,7 +7140,8 @@ def test_an_operation_is_named_for_a_verb_and_the_thing_it_acts_on() -> None:
                 "    def start_saving_item(self, save_item_request: SaveItemRequest) -> SaveItemResponse: ...\n"
                 "    def save_item(self, save_item_request: SaveItemRequest) -> SaveItemResponse: ...\n"
                 "    def keep_item(self, save_item_request: SaveItemRequest) -> Record: ...\n"
-                "    def load_item(self, load_item_request: LoadItemRequest) -> LoadItemResponse: ...\n",
+                "    def load_item(self, load_item_request: LoadItemRequest) -> LoadItemResponse: ...\n"
+                "    def wrap_item(self, text: str) -> str: ...\n",
                 False,
             ),
         ))).violations()
@@ -7175,6 +7176,7 @@ def test_an_operation_is_named_for_a_verb_and_the_thing_it_acts_on() -> None:
         for f in findings
     ), findings
     assert not any("Sink.save_item " in f for f in findings), findings
+    assert not any("Sink.wrap_item takes a" in f or "Sink.wrap_item answers a" in f for f in findings), findings
 
 
 def test_a_relay_method_is_a_calling_mode_and_the_operation_it_carries() -> None:
@@ -8127,7 +8129,7 @@ def test_a_port_speaks_shapes_it_declares_itself() -> None:
                 "    def __init__(self) -> None:\n"
                 "        return None\n"
                 "class Sink(ts.Port, Protocol):\n"
-                "    def send_item(self, request: ts.Request | None) -> ts.Response | None: ...\n"
+                "    def send_item(self, request: ts.Request) -> ts.Response: ...\n"
                 "    def store_item(self, request: StoreItemRequest) -> StoreItemResponse: ...\n",
                 False,
             ),
@@ -11806,7 +11808,7 @@ def test_an_outcome_is_returned_and_matched_never_held() -> None:
                 "    def __init__(self, steps: int) -> None:\n"
                 "        self.steps = steps\n"
                 "class Runs(ts.Port, typing.Protocol):\n"
-                "    def save_run(self, request: SaveRunRequest) -> run.Advance | None: ...\n",
+                "    def save_run(self, request: SaveRunRequest) -> run.Advance: ...\n",
                 False,
             ),
         ))).violations()
@@ -12813,7 +12815,7 @@ def test_an_application_client_module_speaks_one_ports_module() -> None:
                 "import tesser.application as ts\n"
                 "import shop.domain.thing as thing\n"
                 "class Client(ts.Client, typing.Protocol):\n"
-                "    def quote_price(self, request: thing.Name | None) -> thing.Name | None: ...\n",
+                "    def quote_price(self, request: thing.Name) -> thing.Name: ...\n",
                 False,
             ),
         ))).violations()

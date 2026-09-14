@@ -154,6 +154,10 @@ RESPONSE_SUFFIX: typing.Final[str] = "Response"
 
 OUTCOME_SUFFIX: typing.Final[str] = "Outcome"
 
+MESSAGE_BLOCKS: typing.Final[frozenset[str]] = frozenset(
+    {"request", "response", "port_request", "port_response", "relay_request", "relay_response"}
+)
+
 RELAY_CALLERS: typing.Final[frozenset[str]] = frozenset({"service", "actions", "orchestrator"})
 
 PACKAGE_HOMES: typing.Final[frozenset[str]] = frozenset(
@@ -5938,7 +5942,13 @@ class ClassDecl(ts.Entity):
             asked = str(MessageName(operation))
             answered = str(MessageName(operation if mode in (None, RUN_MODE) else str(signature.name())))
             params = signature.params()
-            taken = params[0].symbol() if len(params) == 1 else None
+            taken = (
+                params[0].symbol()
+                if len(params) == 1 and str(params[0].block()) in MESSAGE_BLOCKS
+                else None
+            )
+            if taken is not None and str(taken.module()).split(".")[0] == TESSER:
+                taken = None
             if taken is not None and str(taken.name()) != asked + REQUEST_SUFFIX:
                 actual = str(taken.name())
                 derived = asked + REQUEST_SUFFIX
@@ -5953,7 +5963,13 @@ class ClassDecl(ts.Entity):
                     ))
                 )
             returned = signature.returns()
-            given = returned.symbol() if returned is not None else None
+            given = (
+                returned.symbol()
+                if returned is not None and str(returned.block()) in MESSAGE_BLOCKS
+                else None
+            )
+            if given is not None and str(given.module()).split(".")[0] == TESSER:
+                given = None
             if given is None:
                 continue
             if str(given.name()) != answered + RESPONSE_SUFFIX:
