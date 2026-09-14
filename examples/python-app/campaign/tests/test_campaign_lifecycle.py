@@ -48,9 +48,9 @@ def test_resolve_refuses_a_deactivated_link() -> None:
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
     assert campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo")).target_url == "https://ok.example/x"
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
-    with pytest.raises(client.Missing) as e:
+    with pytest.raises(client.LinkNotFound) as e:
         campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo"))
-    assert e.value.code == "link_missing"
+    assert e.value.message == "no active link for slug promo"
 
 
 def test_deactivate_link_rejects_an_unknown_slug() -> None:
@@ -58,9 +58,9 @@ def test_deactivate_link_rejects_an_unknown_slug() -> None:
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
     id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    with pytest.raises(client.Missing) as e:
+    with pytest.raises(client.LinkNotFound) as e:
         campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="nosuch"))
-    assert e.value.code == "link_missing"
+    assert e.value.message == "no short link with slug nosuch"
 
 
 def test_deactivate_link_rejects_an_unknown_campaign() -> None:
@@ -68,11 +68,11 @@ def test_deactivate_link_rejects_an_unknown_campaign() -> None:
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
     id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    with pytest.raises(client.Missing) as e:
+    with pytest.raises(client.CampaignNotFound) as e:
         campaign_service.deactivate_link(
             client.DeactivateLinkRequest(campaign_id="fedcba9876543210", slug="promo")
         )
-    assert e.value.code == "campaign_missing"
+    assert e.value.message == "no campaign with id 'fedcba9876543210'"
 
 
 def test_deactivate_link_endpoint_returns_the_campaign_payload() -> None:

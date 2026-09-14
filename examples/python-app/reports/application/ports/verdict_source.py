@@ -31,10 +31,6 @@ class ListVerdictsResponse(ts.Response):
         self.verdicts = verdicts
 
 
-class VerdictSourceUnavailable(ts.Error):
-    pass
-
-
 class VerdictSource(ts.Port, typing.Protocol):
 
     def list_verdicts(self, list_verdicts_request: ListVerdictsRequest) -> ListVerdictsResponse: ...

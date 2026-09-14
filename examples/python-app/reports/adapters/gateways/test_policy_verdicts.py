@@ -99,26 +99,3 @@ def test_a_failure_the_policy_context_never_declared_reaches_the_caller() -> Non
         gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
             ports.ListVerdictsRequest()
         )
-
-
-def test_a_policy_context_that_cannot_answer_is_the_ports_unavailable() -> None:
-    fake_link_policy_client = FakeLinkPolicyClient(
-        error=linkpolicy_client.Unavailable("the verdict store is unavailable")
-    )
-
-    with pytest.raises(ports.VerdictSourceUnavailable) as caught:
-        gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
-            ports.ListVerdictsRequest()
-        )
-    assert isinstance(caught.value.__cause__, linkpolicy_client.Unavailable)
-
-
-def test_a_verdict_decision_outside_the_recorded_set_is_refused() -> None:
-    fake_link_policy_client = FakeLinkPolicyClient(
-        linkpolicy_client.Verdict("https://a.example/s", "maybe", "unsure")
-    )
-
-    with pytest.raises(ports.VerdictSourceUnavailable):
-        gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
-            ports.ListVerdictsRequest()
-        )

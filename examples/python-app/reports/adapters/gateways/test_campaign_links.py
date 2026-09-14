@@ -89,16 +89,6 @@ def test_a_campaign_context_with_no_links_yields_no_records() -> None:
     assert list_links_response.links == ()
 
 
-def test_a_campaign_context_that_cannot_answer_is_the_ports_unavailable() -> None:
-    fake_campaign_client = FakeCampaignClient(
-        error=campaign_client.Unavailable("the campaign store is unavailable")
-    )
-
-    with pytest.raises(ports.LinkSourceUnavailable) as caught:
-        gateways.CampaignLinkGateway(fake_campaign_client).list_links(ports.ListLinksRequest())
-    assert isinstance(caught.value.__cause__, campaign_client.Unavailable)
-
-
 def test_a_failure_the_campaign_context_never_declared_reaches_the_caller() -> None:
     fake_campaign_client = FakeCampaignClient(error=RuntimeError("campaign store unreachable"))
 

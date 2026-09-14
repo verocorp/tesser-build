@@ -104,35 +104,12 @@ def test_the_gateway_asks_the_neighbour_once_per_check() -> None:
     assert recording_policy_client.asked == ["https://ok.example/a", "https://ok.example/b"]
 
 
-def test_a_neighbour_decision_the_gateway_knows_no_verdict_for_is_refused() -> None:
-    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
-        RecordingPolicyClient("maybe", "unsure")
-    )
-
-    with pytest.raises(ports.PolicyUnavailable):
-        link_policy_target_policy.check_target(
-            ports.CheckTargetRequest(target_url="https://ok.example/x")
-        )
-
-
-def test_a_neighbour_that_cannot_answer_is_the_ports_unavailable() -> None:
-    link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
-        RefusingPolicyClient(linkpolicy_client.Unavailable("the verdict store is unavailable"))
-    )
-
-    with pytest.raises(ports.PolicyUnavailable) as caught:
-        link_policy_target_policy.check_target(
-            ports.CheckTargetRequest(target_url="https://ok.example/x")
-        )
-    assert isinstance(caught.value.__cause__, linkpolicy_client.Unavailable)
-
-
 def test_a_neighbour_rejection_is_our_bug_and_leaves_the_gateway_untranslated() -> None:
     link_policy_target_policy = gateways.LinkPolicyTargetPolicy(
-        RefusingPolicyClient(linkpolicy_client.Rejected("invalid_target_url", "target url must be http(s)"))
+        RefusingPolicyClient(linkpolicy_client.TargetRejected("invalid_target_url", "target url must be http(s)"))
     )
 
-    with pytest.raises(linkpolicy_client.Rejected):
+    with pytest.raises(linkpolicy_client.TargetRejected):
         link_policy_target_policy.check_target(
             ports.CheckTargetRequest(target_url="https://ok.example/x")
         )

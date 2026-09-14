@@ -52,25 +52,15 @@ class LinkPolicyService(ts.ApplicationService):
         try:
             target_url = domain.TargetURL(check_target_request.target_url)
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.TargetRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
         verdict = self._policy.evaluate(target_url)
-        try:
-            self._verdict_repository.record_verdict(MapToRecordVerdictRequest(verdict))
-        except ports.StoreUnavailable as store_error:
-            raise client.Unavailable(
-                message="the verdict store is unavailable"
-            ) from store_error
+        self._verdict_repository.record_verdict(MapToRecordVerdictRequest(verdict))
         return MapToCheckTargetResponse(verdict)
 
     def list_verdicts(
         self, list_verdicts_request: client.ListVerdictsRequest
     ) -> client.ListVerdictsResponse:
-        try:
-            list_verdicts_response = self._verdict_repository.list_verdicts(ports.ListVerdictsRequest())
-        except ports.StoreUnavailable as store_error:
-            raise client.Unavailable(
-                message="the verdict store is unavailable"
-            ) from store_error
+        list_verdicts_response = self._verdict_repository.list_verdicts(ports.ListVerdictsRequest())
         return MapToListVerdictsResponse(list_verdicts_response=list_verdicts_response)

@@ -79,7 +79,7 @@ def test_a_missing_argument_raises_a_usage_error() -> None:
 
 
 def test_a_rejection_exits_two_and_names_the_contexts_code() -> None:
-    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Rejected("bad_amount", "must be positive")))
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.CampaignRejected("bad_amount", "must be positive")))
 
     cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
 
@@ -88,40 +88,42 @@ def test_a_rejection_exits_two_and_names_the_contexts_code() -> None:
     assert cli_response.stdout == ""
 
 
-def test_a_missing_campaign_exits_one_and_names_the_contexts_code() -> None:
-    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Missing("campaign_missing", "no campaign with id 'x'")))
+def test_a_campaign_not_found_exits_one_and_names_the_situation() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.CampaignNotFound("no campaign with id 'x'")))
 
     cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
 
     assert cli_response.exit_code == 1
-    assert cli_response.stderr == "[campaign_missing] no campaign with id 'x'"
+    assert cli_response.stderr == "[campaign_not_found] no campaign with id 'x'"
 
 
-def test_a_conflict_exits_one_and_names_the_contexts_code() -> None:
-    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Conflict("duplicate_slug", "slug 'promo' already exists")))
-
-    cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
-
-    assert cli_response.exit_code == 1
-    assert cli_response.stderr == "[duplicate_slug] slug 'promo' already exists"
-
-
-def test_an_unreadable_record_exits_one_and_leaks_nothing() -> None:
-    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Unreadable("stored campaign 'x' cannot be read back")))
+def test_a_taken_slug_exits_one_and_names_the_situation() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.SlugTaken("slug 'promo' already exists")))
 
     cli_response = cli_handler.create_campaign(protocol.CliRequest(("-5", "USD")))
 
     assert cli_response.exit_code == 1
-    assert cli_response.stderr == "a dependency is unavailable; please retry"
+    assert cli_response.stderr == "[slug_taken] slug 'promo' already exists"
 
 
-def test_an_unavailable_dependency_exits_one_in_the_contexts_words() -> None:
-    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.Unavailable("the campaign store is unavailable")))
+def test_a_link_not_found_exits_one_and_names_the_situation() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.LinkNotFound("no short link with slug nosuch")))
 
-    cli_response = cli_handler.create_campaign(protocol.CliRequest(("100.00", "USD")))
+    cli_response = cli_handler.deactivate_link(protocol.CliRequest(("0123456789abcdef", "nosuch")))
 
     assert cli_response.exit_code == 1
-    assert cli_response.stderr == "the campaign store is unavailable"
+    assert cli_response.stderr == "[link_not_found] no short link with slug nosuch"
+
+
+def test_a_blocked_target_exits_one_and_names_the_situation() -> None:
+    cli_handler = handlers.CliHandler(FakeCampaignClientScripted(error=client.TargetBlocked("destination not allowed: on the deny-list")))
+
+    cli_response = cli_handler.add_link(
+        protocol.CliRequest(("0123456789abcdef", "promo", "https://bad.example/x"))
+    )
+
+    assert cli_response.exit_code == 1
+    assert cli_response.stderr == "[target_blocked] destination not allowed: on the deny-list"
 
 
 def test_a_failure_the_context_never_declared_leaves_the_handler() -> None:

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 import campaign.adapters.repositories as repositories
 import campaign.application.ports as ports
 
@@ -161,27 +159,6 @@ def test_every_saved_campaign_is_listed() -> None:
     list_campaigns_response = in_memory_campaign_repository.list_campaigns(ports.ListCampaignsRequest())
 
     assert sorted(row.id for row in list_campaigns_response.campaigns) == ["0123456789abcdef", "fedcba9876543210"]
-
-
-def test_an_unavailable_store_fails_closed_on_every_read_and_write() -> None:
-    in_memory_campaign_repository = repositories.InMemoryCampaignRepository(down=True)
-
-    with pytest.raises(ports.StoreUnavailable):
-        in_memory_campaign_repository.save_campaign(
-            ports.SaveCampaignRequest(
-                id="0123456789abcdef",
-                budget=ports.MoneyRecord(amount="100.00", currency="USD"),
-                links=(),
-            )
-        )
-    with pytest.raises(ports.StoreUnavailable):
-        in_memory_campaign_repository.load_campaign(ports.LoadCampaignRequest(campaign_id="0123456789abcdef"))
-    with pytest.raises(ports.StoreUnavailable):
-        in_memory_campaign_repository.load_campaign_by_slug(ports.LoadCampaignBySlugRequest(slug="promo"))
-    with pytest.raises(ports.StoreUnavailable):
-        in_memory_campaign_repository.slug_taken(ports.SlugTakenRequest(slug="promo"))
-    with pytest.raises(ports.StoreUnavailable):
-        in_memory_campaign_repository.list_campaigns(ports.ListCampaignsRequest())
 
 
 def test_closing_the_store_is_counted() -> None:

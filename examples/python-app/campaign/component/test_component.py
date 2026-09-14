@@ -106,7 +106,7 @@ def test_a_component_hands_the_policy_it_was_given_to_the_service() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(client.Conflict) as caught:
+    with pytest.raises(client.TargetBlocked) as caught:
         campaign.client.add_link(
             client.AddLinkRequest(
                 campaign_id=create_campaign_response.campaign.campaign_id,
@@ -115,7 +115,7 @@ def test_a_component_hands_the_policy_it_was_given_to_the_service() -> None:
             )
         )
 
-    assert caught.value.code == "destination_blocked"
+    assert caught.value.message.startswith("destination not allowed: ")
 
 
 def test_two_components_do_not_share_a_store() -> None:
@@ -129,12 +129,14 @@ def test_two_components_do_not_share_a_store() -> None:
         client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")
     )
 
-    with pytest.raises(client.Missing) as caught:
+    with pytest.raises(client.CampaignNotFound) as caught:
         second.client.get_campaign(
             client.GetCampaignRequest(campaign_id=create_campaign_response.campaign.campaign_id)
         )
 
-    assert caught.value.code == "campaign_missing"
+    assert caught.value.message == (
+        f"no campaign with id {create_campaign_response.campaign.campaign_id!r}"
+    )
 
 
 def test_a_component_closes_what_it_built() -> None:
@@ -144,5 +146,5 @@ def test_a_component_closes_what_it_built() -> None:
 
     campaign.close()
 
-    with pytest.raises(client.Missing):
+    with pytest.raises(client.CampaignNotFound):
         campaign.client.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))

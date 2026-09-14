@@ -7,16 +7,13 @@ import campaign.application.ports as ports
 
 class InMemoryCampaignRepository(ts.Repository):
 
-    def __init__(self, *, down: bool = False) -> None:
+    def __init__(self) -> None:
         self._rows: dict[str, ports.CampaignRecord] = {}
-        self._down = down
         self.close_count = 0
 
     def save_campaign(
         self, save_campaign_request: ports.SaveCampaignRequest
     ) -> ports.SaveCampaignResponse:
-        if self._down:
-            raise ports.StoreUnavailable("campaign store unavailable")
         self._rows[save_campaign_request.id] = ports.CampaignRecord(
             id=save_campaign_request.id, budget=save_campaign_request.budget, links=save_campaign_request.links
         )
@@ -25,8 +22,6 @@ class InMemoryCampaignRepository(ts.Repository):
     def find_campaign(
         self, find_campaign_request: ports.FindCampaignRequest
     ) -> ports.FindCampaignResponse:
-        if self._down:
-            raise ports.StoreUnavailable("campaign store unavailable")
         row = self._rows.get(find_campaign_request.campaign_id)
         if row is None:
             return ports.FindCampaignResponse(
@@ -52,8 +47,6 @@ class InMemoryCampaignRepository(ts.Repository):
     def load_campaign(
         self, load_campaign_request: ports.LoadCampaignRequest
     ) -> ports.LoadCampaignResponse:
-        if self._down:
-            raise ports.StoreUnavailable("campaign store unavailable")
         row = self._rows.get(load_campaign_request.campaign_id)
         if row is None:
             return ports.LoadCampaignResponse(
@@ -66,8 +59,6 @@ class InMemoryCampaignRepository(ts.Repository):
     def load_campaign_by_slug(
         self, load_campaign_by_slug_request: ports.LoadCampaignBySlugRequest
     ) -> ports.LoadCampaignBySlugResponse:
-        if self._down:
-            raise ports.StoreUnavailable("campaign store unavailable")
         for row in self._rows.values():
             if any(link.slug == load_campaign_by_slug_request.slug for link in row.links):
                 return ports.LoadCampaignBySlugResponse(
@@ -80,8 +71,6 @@ class InMemoryCampaignRepository(ts.Repository):
     def slug_taken(
         self, slug_taken_request: ports.SlugTakenRequest
     ) -> ports.SlugTakenResponse:
-        if self._down:
-            raise ports.StoreUnavailable("campaign store unavailable")
         taken = any(link.slug == slug_taken_request.slug for row in self._rows.values() for link in row.links)
         return ports.SlugTakenResponse(
             outcome=ports.SlugTakenOutcome.TAKEN
@@ -92,8 +81,6 @@ class InMemoryCampaignRepository(ts.Repository):
     def list_campaigns(
         self, list_campaigns_request: ports.ListCampaignsRequest
     ) -> ports.ListCampaignsResponse:
-        if self._down:
-            raise ports.StoreUnavailable("campaign store unavailable")
         return ports.ListCampaignsResponse(campaigns=tuple(self._rows.values()))
 
     def close(self) -> None:
