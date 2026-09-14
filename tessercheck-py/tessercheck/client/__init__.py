@@ -7,7 +7,7 @@ from tessercheck.client.client import CheckWriteRequest as CheckWriteRequest
 from tessercheck.client.client import CheckWriteResponse as CheckWriteResponse
 from tessercheck.client.client import MarkDebtRequest as MarkDebtRequest
 from tessercheck.client.client import MarkDebtResponse as MarkDebtResponse
-from tessercheck.client.client import Rejected as Rejected
+from tessercheck.client.client import RulebookNotRendered as RulebookNotRendered
 from tessercheck.client.client import ApplyRenamesRequest as ApplyRenamesRequest
 from tessercheck.client.client import ApplyRenamesResponse as ApplyRenamesResponse
 from tessercheck.client.client import RenderRulebookRequest as RenderRulebookRequest

@@ -42,44 +42,29 @@ class FakeCheckClient(client.TessercheckClient):
 
 
 @ts.fake
-class FakeRejectingClient(client.TessercheckClient):
+class FakeRulebookNotRenderedClient(client.TessercheckClient):
 
     def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
-        raise client.Rejected("unreadable", "checks.py cannot be read")
+        raise client.RulebookNotRendered("rulebook_unreadable", "checks.py cannot be read")
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
-        raise client.Rejected("unreadable", "checks.py cannot be read")
+        raise client.RulebookNotRendered("rulebook_unreadable", "checks.py cannot be read")
 
     def check_write(self, check_write_request: client.CheckWriteRequest) -> client.CheckWriteResponse:
-        raise client.Rejected("unreadable", "checks.py cannot be read")
+        raise client.RulebookNotRendered("rulebook_unreadable", "checks.py cannot be read")
 
     def mark_debt(self, mark_debt_request: client.MarkDebtRequest) -> client.MarkDebtResponse:
-        raise client.Rejected("unreadable", "checks.py cannot be read")
+        raise client.RulebookNotRendered("rulebook_unreadable", "checks.py cannot be read")
 
     def apply_renames(self, apply_renames_request: client.ApplyRenamesRequest) -> client.ApplyRenamesResponse:
-        raise client.Rejected("unreadable", "checks.py cannot be read")
+        raise client.RulebookNotRendered("rulebook_unreadable", "checks.py cannot be read")
 
     def render_rulebook(self, render_rulebook_request: client.RenderRulebookRequest) -> client.RenderRulebookResponse:
-        raise client.Rejected("unreadable", "checks.py cannot be read")
+        raise client.RulebookNotRendered("rulebook_unreadable", "checks.py cannot be read")
 
 
-def test_a_rejected_check_exits_two_with_the_context_s_message() -> None:
-    cli_response = handlers.Handler(FakeRejectingClient()).check(protocol.CliRequest(("tree",)))
-    assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
-
-
-def test_a_rejected_mark_exits_two_with_the_context_s_message() -> None:
-    cli_response = handlers.Handler(FakeRejectingClient()).mark(protocol.CliRequest(("tree",)))
-    assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
-
-
-def test_a_rejected_rename_exits_two_with_the_context_s_message() -> None:
-    cli_response = handlers.Handler(FakeRejectingClient()).rename(protocol.CliRequest(("tree",)))
-    assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
-
-
-def test_a_rejected_rulebook_exits_two_with_the_context_s_message() -> None:
-    cli_response = handlers.Handler(FakeRejectingClient()).rulebook(protocol.CliRequest(("tree",)))
+def test_a_rulebook_not_rendered_exits_two_with_the_context_s_message() -> None:
+    cli_response = handlers.Handler(FakeRulebookNotRenderedClient()).rulebook(protocol.CliRequest(("tree",)))
     assert cli_response == protocol.CliResponse(2, stdout="", stderr="checks.py cannot be read")
 
 

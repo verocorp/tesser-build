@@ -24,7 +24,6 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Actions"): "actions",
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
-    ("tesser.application", "Error"): "port_error",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -100,7 +99,7 @@ PORTS_HOME: typing.Final[str] = "application/ports"
 PORTS_IMPORT_PATH: typing.Final[str] = "application.ports"
 
 PORTS_KINDS: typing.Final[frozenset[str]] = frozenset(
-    {"port", "store", "port_request", "port_response", "port_error"}
+    {"port", "store", "port_request", "port_response"}
 )
 
 APPLICATION_CLIENT_PACKAGE: typing.Final[str] = "client"
@@ -145,6 +144,10 @@ RUN_MODE: typing.Final[str] = "run_"
 RUN_METHOD: typing.Final[str] = "run"
 
 OPERATION_SEGMENTS: typing.Final[int] = 2
+
+CATEGORY_ERROR_NAMES: typing.Final[frozenset[str]] = frozenset(
+    {"Conflict", "Missing", "Rejected", "Unavailable", "Unreadable"}
+)
 
 OUTCOME_FIELD: typing.Final[str] = "outcome"
 
@@ -333,7 +336,6 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "store": PORTS_HOME,
     "port_request": PORTS_HOME,
     "port_response": PORTS_HOME,
-    "port_error": PORTS_HOME,
     "request": "client",
     "response": "client",
     "client": "client",
@@ -377,7 +379,6 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "store": "a store",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
-    "port_error": "a port error",
     "request": "a request DTO",
     "response": "a response DTO",
     "client": "a client",
@@ -6073,6 +6074,20 @@ class ClassDecl(ts.Entity):
                     ))
                 )
         return tuple(found)
+
+    def error_name_violations(self) -> tuple[Violation, ...]:
+        if str(self._name) not in CATEGORY_ERROR_NAMES:
+            return ()
+        return (
+            Violation(ViolationSpec(
+                str(self._path),
+                int(self._lineno),
+                "TB085",
+                f"{self._module}.{self._name} is named for a status category; a context "
+                "error is named for the situation its caller acts on, because a category "
+                "says only how a transport answers",
+            )),
+        )
 
     def orchestrator_name_violations(self) -> tuple[Violation, ...]:
         found: list[Violation] = []
@@ -13096,6 +13111,9 @@ class Codebase(ts.AggregateRoot):
                         found.extend(CLIENT_METHOD.violations(signature))
                     if str(module.place()) not in TEST_TIER:
                         found.extend(decl.operation_name_violations())
+                elif block == "error":
+                    if str(module.place()) not in TEST_TIER:
+                        found.extend(decl.error_name_violations())
                 elif block in ("repository", "gateway", "handler"):
                     found.extend(ADAPTER_RECORDS.violations(decl))
                 elif block == "port":

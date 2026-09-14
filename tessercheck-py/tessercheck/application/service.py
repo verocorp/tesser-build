@@ -340,5 +340,5 @@ class TessercheckService(ts.ApplicationService):
         try:
             rulebook = domain.Rulebook(MapToRulebookSpec(read_rulebook_response))
         except errors.DomainError as domain_error:
-            raise client.Rejected(domain_error.code, domain_error.message) from domain_error
+            raise client.RulebookNotRendered(domain_error.code, domain_error.message) from domain_error
         return MapToRenderRulebookResponse(rulebook)

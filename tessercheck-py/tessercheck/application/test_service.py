@@ -351,11 +351,11 @@ def test_the_rulebook_answer_carries_the_rendered_rules_and_contracts() -> None:
     assert "| pure | domain stays pure |" in render_rulebook_response.rendered
 
 
-def test_a_rulebook_that_cannot_be_read_is_rejected_in_the_context_s_own_words() -> None:
+def test_a_rulebook_that_cannot_be_read_is_not_rendered_in_the_context_s_own_words() -> None:
     tessercheck_service = application.TessercheckService(
         FakeSourceReader(ports.ReadSourcesOutcome.APP), FakeSourceWriter(), FakeRulebookSources("")
     )
-    with pytest.raises(client.Rejected) as raised:
+    with pytest.raises(client.RulebookNotRendered) as raised:
         tessercheck_service.render_rulebook(client.RenderRulebookRequest(tree="."))
     assert raised.value.code == "rulebook_unreadable"
     assert raised.value.message == "TS_NAME_BY_BLOCK not found in checks.py"

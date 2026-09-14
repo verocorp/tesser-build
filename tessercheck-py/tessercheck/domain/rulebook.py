@@ -180,6 +180,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "ClassDecl.store_violations": "store protocol method",
     "ClassDecl.operation_name_violations": "client, port, application client, or relay protocol method",
     "ClassDecl.orchestrator_name_violations": "public orchestrator method",
+    "ClassDecl.error_name_violations": "context error class",
     "Module.role_violations": "context role module",
     "Module.adapter_violations": "context role module",
     "Module.import_violations": "context role module",

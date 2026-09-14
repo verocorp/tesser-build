@@ -19263,3 +19263,50 @@ def test_no_two_services_actions_orchestrators_or_relays_share_a_method_name() -
     ), findings
     assert not any("Pricing.settle_price shares its name with shop.application.relays" in f for f in findings), findings
     assert not any("QuotePriceRelay.run_quote_price shares" in f for f in findings), findings
+
+
+def test_a_context_error_is_named_for_its_situation_and_never_for_a_status_category() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/client/refusals.py",
+                "shop.client.refusals",
+                "import tesser.context as ts\n"
+                "class Missing(ts.Error):\n"
+                "    def __init__(self, message: str) -> None:\n"
+                "        super().__init__(message)\n"
+                "        self.message = message\n"
+                "class Rejected(ts.Error):\n"
+                "    def __init__(self, message: str) -> None:\n"
+                "        super().__init__(message)\n"
+                "        self.message = message\n"
+                "class QuoteRejected(ts.Error):\n"
+                "    def __init__(self, message: str) -> None:\n"
+                "        super().__init__(message)\n"
+                "        self.message = message\n",
+                False,
+            ),
+            (
+                "shop/application/ports/quote_store.py",
+                "shop.application.ports.quote_store",
+                "import tesser.application as ts\n"
+                "class QuoteStoreUnavailable(ts.Error):\n"
+                "    def __init__(self, message: str) -> None:\n"
+                "        super().__init__(message)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.client.refusals.Missing is named for a status category; a context error is "
+        "named for the situation its caller acts on, because a category says only how a "
+        "transport answers" in f
+        for f in findings
+    ), findings
+    assert any("shop.client.refusals.Rejected is named for a status category" in f for f in findings), findings
+    assert not any("QuoteRejected is named for a status category" in f for f in findings), findings
+    assert any(
+        "shop.application.ports.quote_store.QuoteStoreUnavailable declares no ts.* base" in f
+        for f in findings
+    ), findings

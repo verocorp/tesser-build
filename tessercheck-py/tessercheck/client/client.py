@@ -95,7 +95,7 @@ class ApplyRenamesResponse(ts.Response):
         self.remaining = remaining
 
 
-class Rejected(ts.Error):
+class RulebookNotRendered(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -103,7 +103,7 @@ class Rejected(ts.Error):
         self.message = message
 
 
-ERRORS: typing.Final[tuple[type[Rejected]]] = (Rejected,)
+ERRORS: typing.Final[tuple[type[RulebookNotRendered]]] = (RulebookNotRendered,)
 
 
 class TessercheckClient(ts.Client, typing.Protocol):
