@@ -90,6 +90,14 @@ class TestPurchaseActions:
         assert take_payment_response.payments == ()
         assert "declined the charge" in take_payment_response.reasons[0]
 
+    def test_an_empty_payment_method_is_a_fault_and_the_processor_is_never_asked(self) -> None:
+        fake_payment_processor = FakePaymentProcessor()
+        with pytest.raises(errors.DomainError):
+            application.PurchaseActions(fake_payment_processor).take_payment(
+                take_payment_request(payment_method="")
+            )
+        assert fake_payment_processor.charged == []
+
     def test_a_negative_amount_is_a_fault_and_the_processor_is_never_asked(self) -> None:
         fake_payment_processor = FakePaymentProcessor()
         with pytest.raises(errors.DomainError):

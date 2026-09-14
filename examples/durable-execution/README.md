@@ -197,7 +197,11 @@ adapters mapper (`MapToReceipt`) so the method reads as store-then-map
 the way every gateway in the tree reads as call-then-map. It does decide one
 thing a real processor decides: a payment method of `"declined"` comes back
 as `ChargePaymentMethodOutcome.DECLINED`, which is the stand-in's way of
-being a vendor that refuses. A repeat for
+being a vendor that refuses. The receipt wins over the refusal: an order
+already charged answers its receipt whatever method asks again, so a
+replay can never report a paid order as declined. The method is a plain
+string the engine journals in clear, so a real integration puts an opaque
+processor token there, never card data. A repeat for
 another amount gets the original receipt too, and it is `Purchase.paid` that
 refuses it as `payment_mismatch`, because whether a receipt settles a
 purchase is the domain's rule and not the processor's. An earlier version of
