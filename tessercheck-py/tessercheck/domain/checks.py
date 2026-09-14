@@ -11349,6 +11349,7 @@ class Module(ts.Entity):
                             if (
                                 keyword.arg == "name"
                                 and isinstance(keyword.value, ast.Constant)
+                                and isinstance(keyword.value.value, str)
                                 and keyword.value.value != fn.name
                             ):
                                 registered = keyword.value.value
