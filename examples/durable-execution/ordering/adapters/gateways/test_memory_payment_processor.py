@@ -53,6 +53,15 @@ class TestMemoryPaymentProcessor:
         assert charge_payment_method_response.receipts == ()
         assert "declined the charge" in charge_payment_method_response.reasons[0]
 
+    def test_an_order_already_charged_answers_its_receipt_even_by_a_refused_method(self) -> None:
+        memory_payment_processor = gateways.MemoryPaymentProcessor()
+        first = memory_payment_processor.charge_payment_method(charge_payment_method_request())
+        again = memory_payment_processor.charge_payment_method(
+            charge_payment_method_request(payment_method="declined")
+        )
+        assert again == first
+        assert again.outcome is ports.ChargePaymentMethodOutcome.CHARGED
+
     def test_a_closed_processor_forgets_what_it_charged(self) -> None:
         memory_payment_processor = gateways.MemoryPaymentProcessor()
         memory_payment_processor.charge_payment_method(charge_payment_method_request())

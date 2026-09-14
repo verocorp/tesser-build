@@ -50,7 +50,10 @@ class MemoryPaymentProcessor(ts.Gateway):
     def charge_payment_method(
         self, charge_payment_method_request: ports.ChargePaymentMethodRequest
     ) -> ports.ChargePaymentMethodResponse:
-        if charge_payment_method_request.payment_method == _DECLINED_PAYMENT_METHOD:
+        if (
+            charge_payment_method_request.order_id not in self._receipts
+            and charge_payment_method_request.payment_method == _DECLINED_PAYMENT_METHOD
+        ):
             return MapToChargePaymentMethodResponseFromRefusal(charge_payment_method_request.order_id)
         return MapToChargePaymentMethodResponseFromReceipt(
             charge_payment_method_request.order_id,
