@@ -66,7 +66,7 @@ def _spec(
             "import tesser.application as ts\n"
             "import shop.client.client as client\n"
             "class AskService(ts.ApplicationService):\n"
-            "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
+            "    def ask_question(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
             "        return client.AskResponse(text=ask_request.text)\n",
             False,
         ),
@@ -1675,14 +1675,38 @@ def test_an_application_client_reports_each_class_before_the_count() -> None:
                 "shop.application.client.pair",
                 "import typing\n"
                 "import tesser.application as ts\n"
-                "import shop.application.ports.quotes as quotes\n"
+                "import shop.application.ports as ports\n"
                 "class First(ts.Client, typing.Protocol):\n"
                 "    HELD = len('x')\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest)"
-                " -> quotes.QuotePriceResponse: ...\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest)"
+                " -> ports.FindItemResponse: ...\n"
                 "class Second(ts.Client, typing.Protocol):\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest)"
-                " -> quotes.QuotePriceResponse: ...\n",
+                "    def find_item(self, find_item_request: ports.FindItemRequest)"
+                " -> ports.FindItemResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/pair.py",
+                "shop.application.pair",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToFindItemRequest(ts.Mapper, ports.FindItemRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class Pair(ts.Actions):\n"
+                "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+                "        self._catalog = catalog\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse:\n"
+                "        name = thing.Name(find_item_request.text)\n"
+                "        return self._catalog.find_item(MapToFindItemRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/test_pair.py",
+                "shop.application.test_pair",
+                "def test_pair_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -7197,15 +7221,17 @@ def test_a_relay_method_is_a_calling_mode_and_the_operation_it_carries() -> None
                 "class StartConfirmOrderResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class OrdersRunner(ts.Relay, typing.Protocol):\n"
+                "class ConfirmOrderRelay(ts.Relay, typing.Protocol):\n"
                 "    async def confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
                 " -> ConfirmOrderResponse: ...\n"
                 "    async def start_confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
                 " -> StartConfirmOrderResponse: ...\n"
                 "    async def run_confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
                 " -> ConfirmOrderResponse: ...\n"
+                "class CancelOrderRelay(ts.Relay, typing.Protocol):\n"
                 "    async def start_cancel_order(self, confirm_order_request: ConfirmOrderRequest)"
                 " -> ConfirmOrderResponse: ...\n"
+                "class ShipRelay(ts.Relay, typing.Protocol):\n"
                 "    async def run_ship(self, confirm_order_request: ConfirmOrderRequest)"
                 " -> ConfirmOrderResponse: ...\n",
                 False,
@@ -7213,30 +7239,30 @@ def test_a_relay_method_is_a_calling_mode_and_the_operation_it_carries() -> None
         ))).violations()
     )
     assert any(
-        "shop.application.relays.orders.OrdersRunner.confirm_order names no calling mode; a "
+        "shop.application.relays.orders.ConfirmOrderRelay.confirm_order names no calling mode; a "
         "relay method is start_ or run_ followed by the operation it carries, because the "
         "verb says how its caller waits" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.relays.orders.OrdersRunner.start_cancel_order takes a "
+        "shop.application.relays.orders.CancelOrderRelay.start_cancel_order takes a "
         "ConfirmOrderRequest, not a CancelOrderRequest; a request is named for the "
         "operation it carries" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.relays.orders.OrdersRunner.start_cancel_order answers a "
+        "shop.application.relays.orders.CancelOrderRelay.start_cancel_order answers a "
         "ConfirmOrderResponse, not a StartCancelOrderResponse; a response is named for the "
         "operation it carries" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.relays.orders.OrdersRunner.run_ship names the operation ship; an "
+        "shop.application.relays.orders.ShipRelay.run_ship names the operation ship; an "
         "operation is a verb and the business thing it acts on" in f
         for f in findings
     ), findings
-    assert not any("OrdersRunner.start_confirm_order " in f for f in findings), findings
-    assert not any("OrdersRunner.run_confirm_order " in f for f in findings), findings
+    assert not any("ConfirmOrderRelay.start_confirm_order " in f for f in findings), findings
+    assert not any("ConfirmOrderRelay.run_confirm_order " in f for f in findings), findings
 
 
 def test_an_orchestrator_method_is_named_for_its_operation_and_never_run() -> None:
@@ -7249,16 +7275,16 @@ def test_an_orchestrator_method_is_named_for_its_operation_and_never_run() -> No
                 "import tesser.application as ts\n"
                 "import shop.application.relays as relays\n"
                 "class Named(ts.Orchestrator):\n"
-                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
-                "        self._quotes_runner = quotes_runner\n"
+                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
+                "        self._quote_price_relay = quote_price_relay\n"
                 "    async def run(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quotes_runner.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
                 "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quotes_runner.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
                 "    async def price(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quotes_runner.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
                 "    async def price_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quotes_runner.run_quote_price(quote_price_request)\n",
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n",
                 False,
             ),
         ))).violations()
@@ -7300,6 +7326,23 @@ def test_a_client_names_its_operations_and_a_fake_of_it_is_not_asked_to() -> Non
                 "        self.text = text\n"
                 "class OtherClient(ts.Client, typing.Protocol):\n"
                 "    def look(self, look_request: LookRequest) -> LookResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/look.py",
+                "shop.application.look",
+                "import tesser.application as ts\n"
+                "import shop.client.other as other\n"
+                "class LookService(ts.ApplicationService):\n"
+                "    def look(self, look_request: other.LookRequest) -> other.LookResponse:\n"
+                "        return other.LookResponse(text=look_request.text)\n",
+                False,
+            ),
+            (
+                "shop/application/test_look.py",
+                "shop.application.test_look",
+                "def test_look_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
             (
@@ -12352,14 +12395,14 @@ def _kinds_spec(
         (
             "shop/application/relays/__init__.py",
             "shop.application.relays",
-            "from shop.application.relays.quotes_runner import QuotesRunner as QuotesRunner\n"
-            "from shop.application.relays.quotes_runner import QuotePriceRequest as QuotePriceRequest\n"
-            "from shop.application.relays.quotes_runner import QuotePriceResponse as QuotePriceResponse\n",
+            "from shop.application.relays.quote_price_relay import QuotePriceRelay as QuotePriceRelay\n"
+            "from shop.application.relays.quote_price_relay import QuotePriceRequest as QuotePriceRequest\n"
+            "from shop.application.relays.quote_price_relay import QuotePriceResponse as QuotePriceResponse\n",
             True,
         ),
         (
-            "shop/application/relays/quotes_runner.py",
-            "shop.application.relays.quotes_runner",
+            "shop/application/relays/quote_price_relay.py",
+            "shop.application.relays.quote_price_relay",
             "import typing\n"
             "import tesser.application as ts\n"
             "class QuotePriceRequest(ts.Request):\n"
@@ -12368,7 +12411,7 @@ def _kinds_spec(
             "class QuotePriceResponse(ts.Response):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
-            "class QuotesRunner(ts.Relay, typing.Protocol):\n"
+            "class QuotePriceRelay(ts.Relay, typing.Protocol):\n"
             "    async def run_quote_price(self, quote_price_request: QuotePriceRequest)"
             " -> QuotePriceResponse: ...\n",
             False,
@@ -12441,7 +12484,7 @@ def _kinds_spec(
             "shop/application/orchestrators/__init__.py",
             "shop.application.orchestrators",
             "from shop.application.orchestrators.flow import Flow as Flow\n"
-            "from shop.application.orchestrators.flow import FlowResponse as FlowResponse\n",
+            "from shop.application.orchestrators.flow import IssueQuoteResponse as IssueQuoteResponse\n",
             True,
         ),
         (
@@ -12450,22 +12493,22 @@ def _kinds_spec(
             "import tesser.application as ts\n"
             "import shop.application.relays as relays\n"
             "import shop.domain.thing as thing\n"
-            "class FlowResponse(ts.Response):\n"
+            "class IssueQuoteResponse(ts.Response):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
             "class MapToQuotePriceRequest(ts.Mapper, relays.QuotePriceRequest):\n"
             "    def __init__(self, name: thing.Name) -> None:\n"
             "        super().__init__(text=str(name))\n"
-            "class MapToFlowResponse(ts.Mapper, FlowResponse):\n"
+            "class MapToIssueQuoteResponse(ts.Mapper, IssueQuoteResponse):\n"
             "    def __init__(self, quote_price_response: relays.QuotePriceResponse) -> None:\n"
             "        super().__init__(text=quote_price_response.text)\n"
             "class Flow(ts.Orchestrator):\n"
-            "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
-            "        self._quotes_runner = quotes_runner\n"
-            "    async def quote_price(self, quote_price_request: relays.QuotePriceRequest) -> FlowResponse:\n"
+            "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
+            "        self._quote_price_relay = quote_price_relay\n"
+            "    async def issue_quote(self, quote_price_request: relays.QuotePriceRequest) -> IssueQuoteResponse:\n"
             "        name = thing.Name(quote_price_request.text)\n"
-            "        quote_price_response = await self._quotes_runner.run_quote_price(MapToQuotePriceRequest(name))\n"
-            "        return MapToFlowResponse(quote_price_response)\n",
+            "        quote_price_response = await self._quote_price_relay.run_quote_price(MapToQuotePriceRequest(name))\n"
+            "        return MapToIssueQuoteResponse(quote_price_response)\n",
             False,
         ),
         (
@@ -12475,7 +12518,7 @@ def _kinds_spec(
             "import shop.application.orchestrators as orchestrators\n"
             "import shop.application.relays as relays\n"
             "@ts.fake\n"
-            "class FakeQuotesRunner(relays.QuotesRunner):\n"
+            "class FakeQuotePriceRelay(relays.QuotePriceRelay):\n"
             "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
             " -> relays.QuotePriceResponse:\n"
             "        return relays.QuotePriceResponse(text=quote_price_request.text)\n"
@@ -12541,16 +12584,16 @@ def _kinds_spec(
         (
             "shop/adapters/runners/__init__.py",
             "shop.adapters.runners",
-            "from shop.adapters.runners.inline import InlineRunner as InlineRunner\n",
+            "from shop.adapters.runners.inline_quote_price_relay import InlineQuotePriceRelay as InlineQuotePriceRelay\n",
             True,
         ),
         (
-            "shop/adapters/runners/inline.py",
-            "shop.adapters.runners.inline",
+            "shop/adapters/runners/inline_quote_price_relay.py",
+            "shop.adapters.runners.inline_quote_price_relay",
             "import tesser.adapters as ts\n"
             "import shop.adapters.runtimes as runtimes\n"
             "import shop.application.relays as relays\n"
-            "class InlineRunner(ts.Runner):\n"
+            "class InlineQuotePriceRelay(ts.Runner):\n"
             "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
             "        self._engine_runtime = engine_runtime\n"
             "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
@@ -12559,9 +12602,9 @@ def _kinds_spec(
             False,
         ),
         (
-            "shop/adapters/runners/test_inline.py",
-            "shop.adapters.runners.test_inline",
-            "def test_inline_exists() -> None:\n"
+            "shop/adapters/runners/test_inline_quote_price_relay.py",
+            "shop.adapters.runners.test_inline_quote_price_relay",
+            "def test_inline_quote_price_relay_exists() -> None:\n"
             "    assert True\n",
             False,
         ),
@@ -12585,10 +12628,10 @@ def _kinds_spec(
             "    def quote_price_handler(self, quote_price_request: relays.QuotePriceRequest)"
             " -> relays.QuotePriceResponse:\n"
             "        return self._shop_application_client.quote_price(quote_price_request)\n"
-            "    async def run(self, quote_price_request: relays.QuotePriceRequest)"
-            " -> orchestrators.FlowResponse:\n"
-            "        return await orchestrators.Flow(runners.InlineRunner(self))"
-            ".quote_price(quote_price_request)\n",
+            "    async def issue_quote_handler(self, quote_price_request: relays.QuotePriceRequest)"
+            " -> orchestrators.IssueQuoteResponse:\n"
+            "        return await orchestrators.Flow(runners.InlineQuotePriceRelay(self))"
+            ".issue_quote(quote_price_request)\n",
             False,
         ),
         (
@@ -12759,9 +12802,33 @@ def test_an_application_client_module_imports_tesser_application_once_as_ts() ->
                 "import tesser.application as ts\n"
                 "import tesser.application as again\n"
                 "import tesser.domain as domain\n"
-                "import shop.application.ports.quotes as quotes\n"
+                "import shop.application.ports as ports\n"
                 "class Client(ts.Client, typing.Protocol):\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse: ...\n",
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/twice.py",
+                "shop.application.twice",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToFindItemRequest(ts.Mapper, ports.FindItemRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class Twice(ts.Actions):\n"
+                "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+                "        self._catalog = catalog\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse:\n"
+                "        name = thing.Name(find_item_request.text)\n"
+                "        return self._catalog.find_item(MapToFindItemRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/test_twice.py",
+                "shop.application.test_twice",
+                "def test_twice_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -12805,7 +12872,7 @@ def test_an_application_client_module_speaks_one_ports_module() -> None:
                 "import shop.application.ports as quotes\n"
                 "import shop.application.ports.other as other\n"
                 "class Client(ts.Client, typing.Protocol):\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse: ...\n",
+                "    def find_item(self, find_item_request: quotes.FindItemRequest) -> quotes.FindItemResponse: ...\n",
                 False,
             ),
             (
@@ -12815,7 +12882,68 @@ def test_an_application_client_module_speaks_one_ports_module() -> None:
                 "import tesser.application as ts\n"
                 "import shop.domain.thing as thing\n"
                 "class Client(ts.Client, typing.Protocol):\n"
-                "    def quote_price(self, request: thing.Name) -> thing.Name: ...\n",
+                "    def check_stock(self, name: thing.Name) -> thing.Name: ...\n",
+                False,
+            ),
+            (
+                "shop/application/two_ports.py",
+                "shop.application.two_ports",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToFindItemRequest(ts.Mapper, ports.FindItemRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class TwoPorts(ts.Actions):\n"
+                "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+                "        self._catalog = catalog\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse:\n"
+                "        name = thing.Name(find_item_request.text)\n"
+                "        return self._catalog.find_item(MapToFindItemRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/test_two_ports.py",
+                "shop.application.test_two_ports",
+                "def test_two_ports_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "from shop.application.ports.catalog import Catalog as Catalog\n"
+                "from shop.application.ports.catalog import FindItemRequest as FindItemRequest\n"
+                "from shop.application.ports.catalog import FindItemResponse as FindItemResponse\n"
+                "from shop.application.ports.other import CheckStockRequest as CheckStockRequest\n"
+                "from shop.application.ports.other import CheckStockResponse as CheckStockResponse\n"
+                "from shop.application.ports.other import Other as Other\n"
+                "from shop.application.ports.quotes import QuotePriceRequest as QuotePriceRequest\n"
+                "from shop.application.ports.quotes import QuotePriceResponse as QuotePriceResponse\n",
+                True,
+            ),
+            (
+                "shop/application/reaching.py",
+                "shop.application.reaching",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToCheckStockRequest(ts.Mapper, ports.CheckStockRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class Reaching(ts.Actions):\n"
+                "    def __init__(self, other: ports.Other) -> None:\n"
+                "        self._other = other\n"
+                "    def check_stock(self, check_stock_request: ports.CheckStockRequest) -> ports.CheckStockResponse:\n"
+                "        name = thing.Name(check_stock_request.text)\n"
+                "        return self._other.check_stock(MapToCheckStockRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/test_reaching.py",
+                "shop.application.test_reaching",
+                "def test_reaching_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -12848,21 +12976,45 @@ def test_an_application_client_module_holds_only_imports_and_one_protocol() -> N
                 "import os\n"
                 "import typing\n"
                 "import tesser.application as ts\n"
-                "import shop.application.ports.quotes as quotes\n"
+                "import shop.application.ports as ports\n"
                 "TABLE = {}\n"
                 "@typing.runtime_checkable\n"
                 "class Client(ts.Client, typing.Protocol):\n"
                 "    LIMIT: int = 3\n"
                 "    class Inner:\n"
                 "        pass\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse: ...\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse: ...\n"
                 "class Second(ts.Client, typing.Protocol):\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse: ...\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse: ...\n"
                 "class Bare:\n"
                 "    pass\n"
-                "class Mapped(ts.Mapper, quotes.QuotePriceRequest):\n"
+                "class Mapped(ts.Mapper, ports.FindItemRequest):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        super().__init__(text=text)\n",
+                False,
+            ),
+            (
+                "shop/application/loose.py",
+                "shop.application.loose",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToFindItemRequest(ts.Mapper, ports.FindItemRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class Loose(ts.Actions):\n"
+                "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+                "        self._catalog = catalog\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse:\n"
+                "        name = thing.Name(find_item_request.text)\n"
+                "        return self._catalog.find_item(MapToFindItemRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/test_loose.py",
+                "shop.application.test_loose",
+                "def test_loose_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
@@ -12920,10 +13072,10 @@ def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
                 "shop.application.ports.pricing",
                 "import typing\n"
                 "import tesser.application as ts\n"
-                "class QuotePriceRequest(ts.Request):\n"
+                "class PriceQuoteRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class QuotePriceResponse(ts.Response):\n"
+                "class PriceQuoteResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
                 "class CompareQuotesResponse(ts.Response):\n"
@@ -12933,8 +13085,8 @@ def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
                 "class Pricing(ts.Port, typing.Protocol):\n"
-                "    def quote_price(self, quote_price_request: QuotePriceRequest)"
-                " -> QuotePriceResponse: ...\n",
+                "    def price_quote(self, price_quote_request: PriceQuoteRequest)"
+                " -> PriceQuoteResponse: ...\n",
                 False,
             ),
             (
@@ -12944,18 +13096,61 @@ def test_an_application_client_declares_shapes_its_ports_module_owns() -> None:
                 "import tesser.application as ts\n"
                 "import shop.application.ports.pricing as pricing\n"
                 "class Client(ts.Client, typing.Protocol):\n"
-                "    def quote_price(self, request: pricing.QuotePriceRequest) -> pricing.QuotePriceResponse:\n"
-                "        return pricing.QuotePriceResponse(text=request.text)\n"
-                "    def _hidden(self, request: pricing.QuotePriceRequest) -> pricing.QuotePriceResponse: ...\n"
-                "    def compare_quotes(self, a: pricing.QuotePriceRequest, b: pricing.QuotePriceRequest)"
+                "    def price_quote(self, request: pricing.PriceQuoteRequest) -> pricing.PriceQuoteResponse:\n"
+                "        return pricing.PriceQuoteResponse(text=request.text)\n"
+                "    def _hidden(self, request: pricing.PriceQuoteRequest) -> pricing.PriceQuoteResponse: ...\n"
+                "    def compare_quotes(self, a: pricing.PriceQuoteRequest, b: pricing.PriceQuoteRequest)"
                 " -> pricing.CompareQuotesResponse: ...\n"
                 "    def check_quote(self, request: pricing.CheckQuoteRequest) -> int: ...\n",
+                False,
+            ),
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "from shop.application.ports.catalog import Catalog as Catalog\n"
+                "from shop.application.ports.catalog import FindItemRequest as FindItemRequest\n"
+                "from shop.application.ports.catalog import FindItemResponse as FindItemResponse\n"
+                "from shop.application.ports.pricing import PriceQuoteRequest as PriceQuoteRequest\n"
+                "from shop.application.ports.pricing import PriceQuoteResponse as PriceQuoteResponse\n"
+                "from shop.application.ports.pricing import Pricing as Pricing\n"
+                "from shop.application.ports.quotes import QuotePriceRequest as QuotePriceRequest\n"
+                "from shop.application.ports.quotes import QuotePriceResponse as QuotePriceResponse\n",
+                True,
+            ),
+            (
+                "shop/application/wide.py",
+                "shop.application.wide",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToPriceQuoteRequest(ts.Mapper, ports.PriceQuoteRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class Wide(ts.Actions):\n"
+                "    def __init__(self, pricing: ports.Pricing) -> None:\n"
+                "        self._pricing = pricing\n"
+                "    def price_quote(self, price_quote_request: ports.PriceQuoteRequest) -> ports.PriceQuoteResponse:\n"
+                "        name = thing.Name(price_quote_request.text)\n"
+                "        return self._pricing.price_quote(MapToPriceQuoteRequest(name))\n"
+                "    def compare_quotes(self, price_quote_request: ports.PriceQuoteRequest) -> ports.PriceQuoteResponse:\n"
+                "        name = thing.Name(price_quote_request.text)\n"
+                "        return self._pricing.price_quote(MapToPriceQuoteRequest(name))\n"
+                "    def check_quote(self, price_quote_request: ports.PriceQuoteRequest) -> ports.PriceQuoteResponse:\n"
+                "        name = thing.Name(price_quote_request.text)\n"
+                "        return self._pricing.price_quote(MapToPriceQuoteRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/test_wide.py",
+                "shop.application.test_wide",
+                "def test_wide_exists() -> None:\n"
+                "    assert True\n",
                 False,
             ),
         ))).violations()
     )
     assert any(
-        "shop.application.client.wide.Client.quote_price carries a body; an application "
+        "shop.application.client.wide.Client.price_quote carries a body; an application "
         "client method declares a shape and never a body, because a runtime imports "
         "it for the shape" in f
         for f in findings
@@ -13413,8 +13608,15 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
                 "class CheckStockResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
+                "class HoldStockRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class HoldStockResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
                 "class Other(ts.Port, typing.Protocol):\n"
-                "    def check_stock(self, request: CheckStockRequest) -> CheckStockResponse: ...\n",
+                "    def check_stock(self, request: CheckStockRequest) -> CheckStockResponse: ...\n"
+                "    def hold_stock(self, hold_stock_request: HoldStockRequest) -> HoldStockResponse: ...\n",
                 False,
             ),
             (
@@ -13427,7 +13629,7 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
                 "    def __init__(self, quoting: quotes.Quotes, second: other.Other) -> None:\n"
                 "        self._quoting = quoting\n"
                 "        self._second = second\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse:\n"
+                "    def check_stock(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse:\n"
                 "        self._quoting.quote_price(request)\n"
                 "        return self._quoting.quote_price(request)\n",
                 False,
@@ -13440,7 +13642,7 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
                 "class Plain(ts.Actions):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self._text = text\n"
-                "    def quote_price(self, a: quotes.QuotePriceRequest, b: quotes.QuotePriceRequest) -> int:\n"
+                "    def hold_stock(self, a: quotes.QuotePriceRequest, b: quotes.QuotePriceRequest) -> int:\n"
                 "        return 0\n",
                 False,
             ),
@@ -13460,8 +13662,62 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
                 "class Public(ts.Actions):\n"
                 "    def __init__(self, quoting: quotes.Quotes) -> None:\n"
                 "        self.quoting = quoting\n"
-                "    def quote_price(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse:\n"
+                "    def find_item(self, request: quotes.QuotePriceRequest) -> quotes.QuotePriceResponse:\n"
                 "        return self.quoting.quote_price(request)\n",
+                False,
+            ),
+            (
+                "shop/application/client/bare_actions.py",
+                "shop.application.client.bare_actions",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class BareApplicationClient(ts.Client, typing.Protocol):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "from shop.application.ports.catalog import Catalog as Catalog\n"
+                "from shop.application.ports.catalog import FindItemRequest as FindItemRequest\n"
+                "from shop.application.ports.catalog import FindItemResponse as FindItemResponse\n"
+                "from shop.application.ports.other import CheckStockRequest as CheckStockRequest\n"
+                "from shop.application.ports.other import CheckStockResponse as CheckStockResponse\n"
+                "from shop.application.ports.other import HoldStockRequest as HoldStockRequest\n"
+                "from shop.application.ports.other import HoldStockResponse as HoldStockResponse\n"
+                "from shop.application.ports.quotes import QuotePriceRequest as QuotePriceRequest\n"
+                "from shop.application.ports.quotes import QuotePriceResponse as QuotePriceResponse\n",
+                True,
+            ),
+            (
+                "shop/application/client/twice_actions.py",
+                "shop.application.client.twice_actions",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class TwiceApplicationClient(ts.Client, typing.Protocol):\n"
+                "    def check_stock(self, check_stock_request: ports.CheckStockRequest) -> ports.CheckStockResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/client/plain_actions.py",
+                "shop.application.client.plain_actions",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class PlainApplicationClient(ts.Client, typing.Protocol):\n"
+                "    def hold_stock(self, hold_stock_request: ports.HoldStockRequest) -> ports.HoldStockResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/client/public_actions.py",
+                "shop.application.client.public_actions",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class PublicApplicationClient(ts.Client, typing.Protocol):\n"
+                "    def find_item(self, find_item_request: ports.FindItemRequest) -> ports.FindItemResponse: ...\n",
                 False,
             ),
         ))).violations()
@@ -13477,12 +13733,12 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
         for f in findings
     )
     assert any(
-        "shop.application.twice_actions.Twice.quote_price makes 2 calls on its port; "
+        "shop.application.twice_actions.Twice.check_stock makes 2 calls on its port; "
         "an action makes exactly one call on its port" in f
         for f in findings
     )
     assert any(
-        "shop.application.twice_actions.Twice.quote_price sends its request itself "
+        "shop.application.twice_actions.Twice.check_stock sends its request itself "
         "straight to a port; a value crossing into a port has passed through "
         "a domain type" in f
         for f in findings
@@ -13493,17 +13749,17 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
         for f in findings
     )
     assert any(
-        "shop.application.plain_actions.Plain.quote_price takes 2 parameters; "
+        "shop.application.plain_actions.Plain.hold_stock takes 2 parameters; "
         "an actions method takes exactly one ts.Request" in f
         for f in findings
     )
     assert any(
-        "shop.application.plain_actions.Plain.quote_price does not return a ts.Response; "
+        "shop.application.plain_actions.Plain.hold_stock does not return a ts.Response; "
         "an actions method returns a ts.Response" in f
         for f in findings
     )
     assert any(
-        "shop.application.public_actions.Public.quote_price sends its request itself "
+        "shop.application.public_actions.Public.find_item sends its request itself "
         "straight to a port; a value crossing into a port has passed through "
         "a domain type" in f
         for f in findings
@@ -13628,8 +13884,8 @@ def test_a_relay_is_held_only_by_a_service_or_an_orchestrator() -> None:
                 "import tesser.adapters as ts\n"
                 "import shop.application.relays as relays\n"
                 "class HoldingGateway(ts.Gateway):\n"
-                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
-                "        self._quotes_runner = quotes_runner\n",
+                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
+                "        self._quote_price_relay = quote_price_relay\n",
                 False,
             ),
             (
@@ -13645,8 +13901,8 @@ def test_a_relay_is_held_only_by_a_service_or_an_orchestrator() -> None:
                 "import tesser.application as ts\n"
                 "import shop.application.relays as relays\n"
                 "class Relaying(ts.Actions):\n"
-                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
-                "        self._quotes_runner = quotes_runner\n",
+                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
+                "        self._quote_price_relay = quote_price_relay\n",
                 False,
             ),
             (
@@ -13656,17 +13912,27 @@ def test_a_relay_is_held_only_by_a_service_or_an_orchestrator() -> None:
                 "    assert True\n",
                 False,
             ),
+            (
+                "shop/application/client/relaying.py",
+                "shop.application.client.relaying",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class RelayingApplicationClient(ts.Client, typing.Protocol):\n"
+                "    pass\n",
+                False,
+            ),
         ))).violations()
     )
     assert any(
         "shop.adapters.gateways.holding.HoldingGateway.__init__ parameter "
-        "'quotes_runner' is a ts.Relay; a relay is invoked only by a service, "
+        "'quote_price_relay' is a ts.Relay; a relay is invoked only by a service, "
         "through an ingress runner, or by an orchestrator, through an "
         "in-invocation runner" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.relaying.Relaying.__init__ parameter 'quotes_runner' is "
+        "shop.application.relaying.Relaying.__init__ parameter 'quote_price_relay' is "
         "not a ts.Port or a ts.Store; a class of actions depends only on ports and "
         "the stores that yield them" in f
         for f in findings
@@ -13686,12 +13952,12 @@ def test_a_service_and_an_orchestrator_may_hold_a_relay() -> None:
                 "shop.application.running",
                 "import tesser.application as ts\n"
                 "import shop.application.relays as relays\n"
-                "import shop.client.client as client\n"
+                "import shop.client.holding as holding\n"
                 "class RunService(ts.ApplicationService):\n"
-                "    def __init__(self, quotes_runner: relays.QuotesRunner) -> None:\n"
-                "        self._quotes_runner = quotes_runner\n"
-                "    def ask(self, ask_request: client.AskRequest) -> client.AskResponse:\n"
-                "        return client.AskResponse(text=ask_request.text)\n",
+                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
+                "        self._quote_price_relay = quote_price_relay\n"
+                "    def hold_quote(self, hold_quote_request: holding.HoldQuoteRequest) -> holding.HoldQuoteResponse:\n"
+                "        return holding.HoldQuoteResponse(text=hold_quote_request.text)\n",
                 False,
             ),
             (
@@ -13699,6 +13965,21 @@ def test_a_service_and_an_orchestrator_may_hold_a_relay() -> None:
                 "shop.application.test_running",
                 "def test_running_exists() -> None:\n"
                 "    assert True\n",
+                False,
+            ),
+            (
+                "shop/client/holding.py",
+                "shop.client.holding",
+                "import typing\n"
+                "import tesser.context as ts\n"
+                "class HoldQuoteRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class HoldQuoteResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class HoldingClient(ts.Client, typing.Protocol):\n"
+                "    def hold_quote(self, hold_quote_request: HoldQuoteRequest) -> HoldQuoteResponse: ...\n",
                 False,
             ),
         ))).violations()
@@ -14371,6 +14652,16 @@ def test_a_public_call_is_read_like_any_other_actions_or_orchestrator_method() -
                 "        self._quoting = quoting\n"
                 "    def __call__(self, a: quotes.QuotePriceRequest, b: quotes.QuotePriceRequest) -> int:\n"
                 "        return 0\n",
+                False,
+            ),
+            (
+                "shop/application/client/calling_actions.py",
+                "shop.application.client.calling_actions",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class CallingApplicationClient(ts.Client, typing.Protocol):\n"
+                "    def __call__(self, quote_price_request: ports.QuotePriceRequest) -> ports.QuotePriceResponse: ...\n",
                 False,
             ),
             (
@@ -15743,6 +16034,46 @@ def _ports_sources(
                 "    def quote_price(self, quote_price_request: ports.QuotePriceRequest) -> ports.QuotePriceResponse: ...\n",
                 False,
             ),
+            (
+                "mod/application/actions.py",
+                "mod.application.actions",
+                "import tesser.application as ts\n"
+                "import mod.application.ports as ports\n"
+                "import mod.domain as domain\n"
+                "class MapToPartSpec(ts.Mapper, domain.PartSpec):\n"
+                "    def __init__(self, quote_price_request: ports.QuotePriceRequest) -> None:\n"
+                "        super().__init__(code=quote_price_request.value)\n"
+                "class MapToTagSpec(ts.Mapper, domain.TagSpec):\n"
+                "    def __init__(self, quote_price_request: ports.QuotePriceRequest) -> None:\n"
+                "        super().__init__(value=quote_price_request.value, part=MapToPartSpec(quote_price_request))\n"
+                "class MapToQuotePriceRequest(ts.Mapper, ports.QuotePriceRequest):\n"
+                "    def __init__(self, tag: domain.Tag) -> None:\n"
+                "        super().__init__(value=str(tag))\n"
+                "class Pricing(ts.Actions):\n"
+                "    def __init__(self, quotes: ports.Quotes) -> None:\n"
+                "        self._quotes = quotes\n"
+                "    def quote_price(self, quote_price_request: ports.QuotePriceRequest) -> ports.QuotePriceResponse:\n"
+                "        tag = domain.Tag(MapToTagSpec(quote_price_request))\n"
+                "        return self._quotes.quote_price(MapToQuotePriceRequest(tag))\n",
+                False,
+            ),
+            (
+                "mod/application/test_actions.py",
+                "mod.application.test_actions",
+                "def test_actions_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def ask_question(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "        return client.AskQuestionResponse(value=ask_question_request.value)\n",
+                False,
+            ),
             ("mod/application/client/__init__.py", "mod.application.client", "", True),
             (
                 "mod/application/orchestrators/test_flow.py",
@@ -15782,7 +16113,7 @@ def test_an_outcome_match_reads_through_a_re_export() -> None:
                 "    def __init__(self, request: client.AskQuestionRequest) -> None:\n"
                 "        super().__init__(value=request.value, part=MapToPartSpec(request))\n"
                 "class AskService(ts.ApplicationService):\n"
-                "    def ask(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "    def ask_question(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
                 "        tag = domain.Tag(MapToTagSpec(request))\n"
                 "        match tag.decide():\n"
                 "            case domain.Verdict.OK:\n"
@@ -15810,7 +16141,7 @@ def test_an_outcome_match_reads_through_a_re_export() -> None:
                 "import mod.client as client\n"
                 "import mod.domain as domain\n"
                 "class AskService(ts.ApplicationService):\n"
-                "    def ask(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "    def ask_question(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
                 "        match request.value:\n"
                 "            case 'y':\n"
                 "                return client.AskQuestionResponse(value='y')\n"
@@ -15821,7 +16152,7 @@ def test_an_outcome_match_reads_through_a_re_export() -> None:
         ))).violations()
     )
     assert any(
-        "mod.application.service.AskService.ask match subject is not a call on a "
+        "mod.application.service.AskService.ask_question match subject is not a call on a "
         "domain object; a service method matches the outcome a domain object "
         "handed back" in f
         for f in stray
@@ -15839,7 +16170,7 @@ def test_an_outcome_member_read_through_a_re_export_is_a_finding() -> None:
                 "import mod.client as client\n"
                 "import mod.domain as domain\n"
                 "class AskService(ts.ApplicationService):\n"
-                "    def ask(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "    def ask_question(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
                 "        answer = domain.Verdict.OK\n"
                 "        return client.AskQuestionResponse(value=str(answer))\n",
                 False,
@@ -15864,7 +16195,7 @@ def test_a_spec_read_through_a_re_export_is_a_finding() -> None:
                 "import mod.client as client\n"
                 "import mod.domain as domain\n"
                 "class AskService(ts.ApplicationService):\n"
-                "    def ask(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "    def ask_question(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
                 "        part = domain.PartSpec(code=request.value)\n"
                 "        return client.AskQuestionResponse(value=part.code)\n",
                 False,
@@ -15872,7 +16203,7 @@ def test_a_spec_read_through_a_re_export_is_a_finding() -> None:
         ))).violations()
     )
     assert any(
-        "mod.application.service.AskService.ask reads 'code' of the spec 'part'; "
+        "mod.application.service.AskService.ask_question reads 'code' of the spec 'part'; "
         "a spec is only read where it initializes its own object" in f
         for f in findings
     ), findings
@@ -15893,7 +16224,7 @@ def test_a_mapper_target_read_through_a_re_export_is_a_finding() -> None:
                 "        super().__init__(code=request.value)\n"
                 "        self.extra = request.value\n"
                 "class AskService(ts.ApplicationService):\n"
-                "    def ask(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "    def ask_question(self, request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
                 "        return client.AskQuestionResponse(value=request.value)\n",
                 False,
             ),
@@ -15927,6 +16258,16 @@ def test_a_value_object_read_through_a_re_export_is_a_finding() -> None:
                 False,
             ),
             ("mod/adapters/repositories/__init__.py", "mod.adapters.repositories", "", True),
+            (
+                "mod/application/service.py",
+                "mod.application.service",
+                "import tesser.application as ts\n"
+                "import mod.client as client\n"
+                "class AskService(ts.ApplicationService):\n"
+                "    def ask_question(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "        return client.AskQuestionResponse(value=ask_question_request.value)\n",
+                False,
+            ),
         ))).violations()
     )
     assert any(
@@ -15948,7 +16289,7 @@ def test_an_action_port_read_through_a_re_export() -> None:
                 "class Flow(ts.Orchestrator):\n"
                 "    def __init__(self, quoting: ports.Quotes) -> None:\n"
                 "        self._quoting = quoting\n"
-                "    def quote_price(self, request: ports.QuotePriceRequest) -> ports.QuotePriceResponse:\n"
+                "    def issue_quote(self, request: ports.QuotePriceRequest) -> ports.QuotePriceResponse:\n"
                 "        return self._quoting.quote_price(request)\n",
                 False,
             ),
@@ -17613,7 +17954,7 @@ def test_a_relay_speaks_messages_that_carry_the_domain_and_snapshots_that_hold_n
             (
                 "shop/application/relays/__init__.py",
                 "shop.application.relays",
-                "from shop.application.relays.orders import OrderRelay as OrderRelay\n"
+                "from shop.application.relays.orders import PlaceOrderRelay as PlaceOrderRelay\n"
                 "from shop.application.relays.orders import PlaceOrderRequest as PlaceOrderRequest\n"
                 "from shop.application.relays.orders import PlaceOrderRequestSnapshot as PlaceOrderRequestSnapshot\n"
                 "from shop.application.relays.orders import PlaceOrderResponse as PlaceOrderResponse\n",
@@ -17637,7 +17978,7 @@ def test_a_relay_speaks_messages_that_carry_the_domain_and_snapshots_that_hold_n
                 "        return json.dumps({'name': str(place_order_request.name)}).encode()\n"
                 "    def deserialize(self, buf: bytes) -> PlaceOrderRequest:\n"
                 "        return PlaceOrderRequest(name=thing.Name(json.loads(buf)['name']))\n"
-                "class OrderRelay(ts.Relay, typing.Protocol):\n"
+                "class PlaceOrderRelay(ts.Relay, typing.Protocol):\n"
                 "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n",
                 False,
             ),
@@ -17646,7 +17987,7 @@ def test_a_relay_speaks_messages_that_carry_the_domain_and_snapshots_that_hold_n
                 "shop.application.relays.test_orders",
                 "import shop.application.relays as relays\n"
                 "def test_orders_exists() -> None:\n"
-                "    assert relays.OrderRelay is not None\n",
+                "    assert relays.PlaceOrderRelay is not None\n",
                 False,
             ),
         ))).violations()
@@ -17763,7 +18104,7 @@ def test_a_gateway_a_repository_and_a_runner_inline_their_logic() -> None:
                 "shop.adapters.runners.split",
                 "import tesser.adapters as ts\n"
                 "import shop.application.relays as relays\n"
-                "class SplitRunner(ts.Runner):\n"
+                "class SplitQuotePriceRelay(ts.Runner):\n"
                 "    def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
                 " -> relays.QuotePriceResponse:\n"
                 "        return relays.QuotePriceResponse(text=self._answer(quote_price_request))\n"
@@ -17788,7 +18129,7 @@ def test_a_gateway_a_repository_and_a_runner_inline_their_logic() -> None:
         for f in findings
     ), findings
     assert any(
-        "shop.adapters.runners.split.SplitRunner.run_quote_price delegates to self._answer; "
+        "shop.adapters.runners.split.SplitQuotePriceRelay.run_quote_price delegates to self._answer; "
         "a gateway, a repository, and a runner inline their logic" in f
         for f in findings
     ), findings
@@ -17976,7 +18317,7 @@ def test_a_snapshot_composes_another_snapshot() -> None:
                 "class WrapNameResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class Wrapping(ts.Relay, typing.Protocol):\n"
+                "class WrapNameRelay(ts.Relay, typing.Protocol):\n"
                 "    async def run_wrap_name(self, wrap_name_request: WrapNameRequest) -> WrapNameResponse: ...\n",
                 False,
             ),
@@ -18036,7 +18377,7 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
             (
                 "shop/application/relays/__init__.py",
                 "shop.application.relays",
-                "from shop.application.relays.orders import OrderRelay as OrderRelay\n"
+                "from shop.application.relays.orders import PlaceOrderRelay as PlaceOrderRelay\n"
                 "from shop.application.relays.orders import PlaceOrderRequest as PlaceOrderRequest\n"
                 "from shop.application.relays.orders import PlaceOrderResponse as PlaceOrderResponse\n",
                 True,
@@ -18052,7 +18393,7 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
                 "class PlaceOrderResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class OrderRelay(ts.Relay, typing.Protocol):\n"
+                "class PlaceOrderRelay(ts.Relay, typing.Protocol):\n"
                 "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n",
                 False,
             ),
@@ -18790,6 +19131,59 @@ def test_two_operations_behind_a_relay_never_share_a_name() -> None:
                 "    def settle_price(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
                 "        return client.AskQuestionResponse(text=ask_question_request.text)\n",
                 False,
+            ),
+            (
+                "shop/application/ports/settlements.py",
+                "shop.application.ports.settlements",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class SettlePriceRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SettlePriceResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Settlements(ts.Port, typing.Protocol):\n"
+                "    def settle_price(self, settle_price_request: SettlePriceRequest) -> SettlePriceResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/client/pricing.py",
+                "shop.application.client.pricing",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class PricingApplicationClient(ts.Client, typing.Protocol):\n"
+                "    def settle_price(self, settle_price_request: ports.SettlePriceRequest)"
+                " -> ports.SettlePriceResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/client/settle.py",
+                "shop.client.settle",
+                "import typing\n"
+                "import tesser.context as ts\n"
+                "class SettlePriceRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SettlePriceResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class SettleClient(ts.Client, typing.Protocol):\n"
+                "    def settle_price(self, settle_price_request: SettlePriceRequest) -> SettlePriceResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "from shop.application.ports.catalog import Catalog as Catalog\n"
+                "from shop.application.ports.catalog import FindItemRequest as FindItemRequest\n"
+                "from shop.application.ports.catalog import FindItemResponse as FindItemResponse\n"
+                "from shop.application.ports.quotes import QuotePriceRequest as QuotePriceRequest\n"
+                "from shop.application.ports.quotes import QuotePriceResponse as QuotePriceResponse\n"
+                "from shop.application.ports.settlements import SettlePriceRequest as SettlePriceRequest\n"
+                "from shop.application.ports.settlements import SettlePriceResponse as SettlePriceResponse\n",
+                True,
             ),
         ))).violations()
     )
