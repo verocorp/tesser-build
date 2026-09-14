@@ -109,9 +109,16 @@ no verb, a response is named for what it is) is assumed throughout.
    way on two members is not the test: `ItemLookup.ARCHIVED / MISSING` are
    two catalog facts even where one reader answers both with an empty
    tuple. A field only some members can fill is a tuple of zero or one,
-   `GetProductPriceResponse.prices`, and the snapshot checks the count per
-   member, so a response carries an outcome beside fields that are truthful
-   for every member. The kinds seen so far, a catalog and
+   `GetProductPriceResponse.prices`, so a response carries an outcome beside
+   fields that are truthful for every member. The snapshot checks shape
+   only, each element's shape included, and never the count against the
+   outcome: a snapshot decides once (the 2026-09-11 ruling), and the
+   consistency between two fields is the consumer's, whose happy arm reads
+   the one record and faults on a payload that lacks it. Both ends of the
+   wire are ours, so nothing is lost by refusing it one hop later. (The
+   count-per-member check was an addition of mine under Codex's finding 4,
+   never ruled, and it cost 59 markers in the enactment before Chris struck
+   it on 2026-09-13.) The kinds seen so far, a catalog and
    not a closed set: the act done, sometimes in more than one way
    (`Taken.TAKEN / HELD`); the step or reason it stopped; the answer to a
    question (`SlugAvailability.TAKEN / FREE`); and what the engine crossing
@@ -124,7 +131,20 @@ no verb, a response is named for what it is) is assumed throughout.
    runner raises, and a member for cancellation waits for the compensation
    scenario to give it a meaning. The `start_` outcome is `STARTED` alone,
    because a repeat send is a 202 dedup on the server and the refusal is
-   unobservable there (measured on restate-server 1.7.2, 2026-09-08).
+   unobservable there (measured on restate-server 1.7.2, 2026-09-08). The
+   member is the application's word for its own once-only rule, which the
+   engine's key dedup merely enforces, so it belongs in the act's outcome
+   and not in a response of the crossing's own (Chris, 2026-09-13). The
+   runner produces it by constructing the relay response directly inside
+   the except that recognised the refusal, with an empty reason, because a
+   mapper maps from something and the runner has nothing to map from but
+   the key it already reads, and because the engine's message text is not
+   the application's word. Two implementations of one relay each write
+   that construction, as two repositories each construct their port's
+   response. The property that survives is precise: a runner never reads
+   or names the payload, the order's fields, which cross only through the
+   snapshot; constructing the relay's own response is the adapter
+   fulfilling its protocol.
 
 9. **An outcome names what the act itself observed one hop down.** A parent
    workflow names which of its own steps did not complete,
@@ -381,6 +401,19 @@ The four questions the review left open, and how Chris ruled on each.
   goes the same way. `find` / `find_by_slug` sharing one response is an
   operation-naming question under rule 1, either one operation with two
   keys or two operations with two responses, and is left to enactment.
+
+- **The rule 1 migration is in scope now.** The enactment counted 54
+  protocol operation declarations across the eleven Python trees that are
+  a bare verb or name a non-business object, `find`, `get`, `save`,
+  `check`, `find_view`, and Codex counted 62 messages not derivable from an
+  operation. Chris (2026-09-13): rename them as part of this work, verb and
+  the thing, then derive their messages and outcomes. That is what
+  retires `find_view`, `CampaignRow`, and `CampaignRowLookup`: a
+  repository lookup and a read-side lookup of a campaign are two acts,
+  `find_campaign` and `find_campaign_by_slug`, each with its own derived
+  response and outcome, and the record inside is `Campaign`. A collision
+  between two derived names inside one package is resolved by naming the
+  acts apart, never by a suffix word.
 
 - **A cancellation 409 is a fault, for now.** The SDK surfaces a cancelled
   invocation as `TerminalError("cancelled", 409)`, in the same shape as the
