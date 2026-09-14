@@ -5,6 +5,119 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.1.0] - 2026-09-14
+
+An operation is named for what it does to a business thing, and what it
+can come to is a member on its response. `docs/design-operation-naming.md`
+sets out the fourteen conventions, and every example tree now follows
+them: the durable-execution tree end to end, and the rule-1 renames across
+the rest.
+
+### Added
+- **`docs/design-operation-naming.md`** — the fourteen conventions in four
+  groups: an operation is a verb plus the business thing it acts on and an
+  orchestrator method is never `run`; across a relay one name on all four
+  hops while the client chooses the caller's word; the calling-mode verb
+  (`start_` / `run_`) lives on the relay protocol and its runners only,
+  and a runtime handler is the bare operation exposed as
+  `<operation>_handler`; `<Operation>Request` / `Response` / `Outcome`
+  derive from the operation and the record inside a response is named for
+  the thing with no suffix; expected alternatives are outcome members on
+  the response and a port or relay declares no errors; a member reads as a
+  sentence after the act; a parent names its own step and carries the
+  deeper reason as data; one word from the port inward with the subject
+  growing as a prefix (`NOT_FOUND` → `PRODUCT_PRICE_NOT_FOUND`); adapters
+  translate at the port; the handler's exhaustive match over
+  `client.ERRORS` is the one place a situation becomes a status; and two
+  failure classes only, situations and faults, with two hosts each owning
+  its fault policy. The worked path is `POST /purchases`:
+  `pay_for_order` → `run_confirm_order` → `confirm_order` →
+  `run_price_product` → `get_product_price`, then `run_take_payment` →
+  `charge_payment_method`. The names that were tried and failed are
+  recorded so they are not re-derived.
+- **A `PaymentMethod` value object** in durable-execution, threaded from
+  the client through the relay to the payment port; the memory processor
+  declines the method named `declined` so the branch is demonstrable.
+
+### Changed
+- **durable-execution speaks the conventions.** `purchase_order` /
+  `price_order` / `run` became `pay_for_order`, `confirm_order`,
+  `price_product`, `take_payment`; outcomes are `PayForOrderOutcome.PAID /
+  ORDER_NOT_CONFIRMED / PAYMENT_DECLINED / ALREADY_STARTED`,
+  `ConfirmOrderOutcome.CONFIRMED / PRODUCT_PRICE_NOT_FOUND /
+  ALREADY_STARTED`, `PriceProductOutcome.PRICED / PRICE_NOT_FOUND`,
+  `TakePaymentOutcome.TAKEN / DECLINED`, `GetProductPriceOutcome.FOUND /
+  NOT_FOUND`, `ChargePaymentMethodOutcome.CHARGED / DECLINED`. An unknown
+  sku now rides `NOT_FOUND` up through `PRODUCT_PRICE_NOT_FOUND` to
+  `ORDER_NOT_CONFIRMED` as data in a successful invocation; the engine
+  never sees a failure for it. The client's situations are business
+  words: `OrderRejected`, `ProductPriceNotFound`, `OrderNotConfirmed`,
+  `PaymentDeclined`, `OrderAlreadyStarted`.
+- **A runner recognises exactly one refusal.** On `workflow_call`, a 409
+  whose body says the workflow method was already invoked is
+  `ALREADY_STARTED`, constructed by the runner as its relay's response;
+  every other status, a cancelled invocation included, is a fault and is
+  re-raised. The `start_` path maps nothing, because a repeat send is a
+  202 dedup.
+- **Two hosts, each with a fault policy.** The engine runtime registers
+  every `Service` and `Workflow` with a bounded
+  `InvocationRetryPolicy(max_attempts=5, on_max_attempts="pause")`, so a
+  permanent fault no longer replays forever; the sync ingress runners
+  read with a 30-second timeout so a stuck workflow frees the connection.
+  The HTTP host keeps `except Exception → 500`, and the ingress being down
+  is now a 500 where it used to be a 503.
+- **A snapshot decides once, and only about shape.** The relay response
+  snapshots check that each field has the right type and rebuild it;
+  they no longer count records per outcome member. A response's optional
+  record is a tuple of zero or one.
+- **An orchestrator matches once per relay it depends on**, so
+  `PurchaseOrchestrator.pay_for_order` matches the order relay's outcome
+  and then the payment relay's; a service still matches once.
+- **There is no View, and no word.** The record inside a response is
+  named for the thing: `client.Campaign`, `client.Link`, `ports.Price`,
+  `ports.Booking`, `client.Item`. Eight `*View` classes across five trees
+  and `PriceRecord` are gone, and every operation derives its own
+  response around the thing (`CreateCampaignResponse(.campaign)`,
+  `BeginResponse(.booking)`, and so on) where `CampaignView` used to be
+  shared by four operations and `BookingStateResponse` by five.
+- **Rule 1 across every example tree.** Fifty-four single-word operations
+  became verb plus thing, with their messages and outcomes derived:
+  asyncpg `add_part` / `take_part` / `find_widget` / `check_key` /
+  `hold_key` / `check_name`; llmport `find_booking` / `save_booking` /
+  `list_available_slots` / `reserve_slot` / `begin_booking` /
+  `confirm_booking` / `get_booking`; python-app `load_campaign` /
+  `load_campaign_by_slug` / `list_campaigns` / `find_campaign` /
+  `resolve_slug` / `issue_campaign_identity` / `check_target` /
+  `record_verdict` / `list_verdicts` / `list_links`; ports `save_item` /
+  `find_item` / `list_items` / `add_item` / `get_item`; minimal
+  `save_widget` / `quote_widget`. `FOUND / NOT_FOUND` replaces `Loaded`,
+  `Priced`, and `CampaignLookup` everywhere; `find_view`, `CampaignRow`,
+  `LinkRow`, and `CampaignRowLookup` are gone. Fields named `verdict` or
+  `presence` whose enum became an `<Operation>Outcome` are now `outcome`.
+- **The durable-execution README** describes the tree the rulings made:
+  the flow, the two failure classes, the one refusal a runner recognises,
+  the two hosts, and the 113 debt markers that are the analyzer's work
+  list (TB082 60, of which 43 are whitelist widening in the four relay
+  snapshots, 8 the serde wrappers' `try`, 6 a `match` on a response's
+  outcome field, 3 `OrderSnapshot`).
+
+### Removed
+- **`ordering/application/ports/engine.py`** and its four engine errors,
+  **`ports.ChargeDeclined`**, and durable-execution's
+  `client.Rejected` / `Missing` / `Conflict` / `Unavailable`: HTTP statuses
+  wearing class names, saying the same nothing at five hops. With them go
+  the four `except ports.Engine*` arms in the runtime handlers, the
+  status-to-class `match` in five runners, and the twelve `except` arms in
+  the two services.
+- **`MapToAlreadyStartedConfirmOrderResponse`** and its twin: a mapper maps
+  from something, and a relay is a protocol only; the runner constructs the
+  response itself.
+
+### Fixed
+- The memory payment processor answers an order's existing receipt before
+  it evaluates a refused payment method, so a replay never reports a paid
+  order as declined.
+
 ## [0.1.0.0] - 2026-09-11
 
 The analyzer gets into the loop after every Python write. A consumer's Claude

@@ -1164,6 +1164,12 @@ where it lands.
   removes them, not ruled).
 - [ ] **A port's error set is closed the way a client's is: one `ERRORS`
   tuple on the port module, caught and matched with `assert_never`.**
+  **Superseded in direction 2026-09-13 by rule 7 of
+  `docs/design-operation-naming.md`: a port or relay declares no errors at
+  all; expected alternatives are outcome members on the response and the
+  rest are faults. durable-execution is migrated (`ports/engine.py` and
+  the 27 markers are gone); errorspy and python-app still carry port
+  errors and are the next PR (see the 2026-09-14 section above).**
   Chris, 2026-09-11, ruled in direction on #184, deferred to a follow-up
   wave so the boundary PR ships as it is. The gap: a service catches a
   port error by class name, so a second error a port declares later
