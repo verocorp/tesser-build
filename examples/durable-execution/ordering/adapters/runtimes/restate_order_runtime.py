@@ -183,7 +183,7 @@ class RestateOrderRuntime(ts.Runtime):
             confirm_order_request: relays.ConfirmOrderRequest,
         ) -> relays.ConfirmOrderResponse:
             return await orchestrators.OrderOrchestrator(
-                runners.RestateOrderActionsRunner(restate_workflow_context, self)
+                runners.RestateInvocationPriceProductRelay(restate_workflow_context, self)
             ).confirm_order(confirm_order_request)
 
         @self.purchase_actions_service.handler(
@@ -204,8 +204,8 @@ class RestateOrderRuntime(ts.Runtime):
             pay_for_order_request: relays.PayForOrderRequest,
         ) -> relays.PayForOrderResponse:
             return await orchestrators.PurchaseOrchestrator(
-                runners.RestatePurchaseActionsRunner(restate_workflow_context, self),
-                runners.RestateOrderOrchestratorChildRunner(restate_workflow_context, self),
+                runners.RestateInvocationTakePaymentRelay(restate_workflow_context, self),
+                runners.RestateInvocationConfirmOrderRelay(restate_workflow_context, self),
             ).pay_for_order(pay_for_order_request)
 
         self.price_product_handler = price_product

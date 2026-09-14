@@ -128,7 +128,7 @@ class TakePaymentResponseSnapshot(ts.Serde):
         )
 
 
-class PurchaseActionsRunner(ts.Relay, typing.Protocol):
+class TakePaymentRelay(ts.Relay, typing.Protocol):
 
     async def run_take_payment(
         self, take_payment_request: TakePaymentRequest

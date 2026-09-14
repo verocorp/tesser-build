@@ -96,6 +96,14 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "read": "⟨name⟩",
     "mode": "⟨prefix⟩",
     "count": "⟨count⟩",
+    "expected": "⟨class⟩",
+    "relay_name": "⟨class⟩",
+    "reached": "⟨attribute⟩",
+    "invoked": "⟨method⟩",
+    "registered": "⟨name⟩",
+    "paired": "⟨module⟩",
+    "owner": "⟨module.Class⟩",
+    "handler.name": "⟨function⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -201,6 +209,12 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.stray_import_violations": "role, srv/app, or test module",
     "Helper.violations": "@ts.helper function",
     "Module.pairing_violations": "implementation module and its sibling test file",
+    "Module.relay_name_violations": "relay protocol",
+    "Module.runner_violations": "runner class",
+    "Module.runtime_handler_violations": "runtime class",
+    "Module.actions_mirror_violations": "actions class or application client",
+    "Module.service_mirror_violations": "service or context client method",
+    "Module.operation_unique_violations": "public actions or orchestrator method",
     "ClassDecl.valueobject_violations": "value object `__init__`",
     "ClassDecl.component_violations": "component class",
     "ClassDecl.mapper_violations": "mapper class",

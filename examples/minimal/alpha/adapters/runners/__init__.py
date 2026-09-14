@@ -1,1 +1,2 @@
-from alpha.adapters.runners.inline_widget_actions_runner import InlineWidgetActionsRunner as InlineWidgetActionsRunner
+from alpha.adapters.runners.inline_keep_widget_relay import InlineKeepWidgetRelay as InlineKeepWidgetRelay
+from alpha.adapters.runners.inline_register_widget_relay import InlineRegisterWidgetRelay as InlineRegisterWidgetRelay

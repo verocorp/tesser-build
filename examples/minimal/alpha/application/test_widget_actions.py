@@ -20,18 +20,18 @@ class FakeWidgetRepository(ports.WidgetRepository):
 
 class TestWidgetActions:
 
-    def test_quote_answers_the_named_widget(self) -> None:
-        quote_widget_response = application.WidgetActions(FakeWidgetRepository()).quote_widget(
-            relays.QuoteWidgetRequest(name="a")
+    def test_keeping_answers_the_named_widget(self) -> None:
+        keep_widget_response = application.WidgetActions(FakeWidgetRepository()).keep_widget(
+            relays.KeepWidgetRequest(name="a")
         )
-        assert quote_widget_response.name == "a"
+        assert keep_widget_response.name == "a"
 
-    def test_quote_calls_its_port_once(self) -> None:
+    def test_keeping_calls_its_port_once(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
-        application.WidgetActions(fake_widget_repository).quote_widget(relays.QuoteWidgetRequest(name="a"))
+        application.WidgetActions(fake_widget_repository).keep_widget(relays.KeepWidgetRequest(name="a"))
         assert [name for name, _ in fake_widget_repository.saved] == ["a"]
 
-    def test_a_quoted_widget_is_saved_standing_kept(self) -> None:
+    def test_a_kept_widget_is_saved_standing_kept(self) -> None:
         fake_widget_repository = FakeWidgetRepository()
-        application.WidgetActions(fake_widget_repository).quote_widget(relays.QuoteWidgetRequest(name="a"))
+        application.WidgetActions(fake_widget_repository).keep_widget(relays.KeepWidgetRequest(name="a"))
         assert fake_widget_repository.saved == [("a", "kept")]

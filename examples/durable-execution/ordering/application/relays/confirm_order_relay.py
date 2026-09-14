@@ -114,7 +114,7 @@ class ConfirmOrderResponseSnapshot(ts.Serde):
         )
 
 
-class OrderOrchestratorRunner(ts.Relay, typing.Protocol):
+class ConfirmOrderRelay(ts.Relay, typing.Protocol):
 
     async def start_confirm_order(
         self, confirm_order_request: ConfirmOrderRequest

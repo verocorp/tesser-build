@@ -13,8 +13,12 @@ class InlineWidgetRuntime(ts.Runtime):
     def __init__(self, alpha_application_client: client.AlphaApplicationClient) -> None:
         self._alpha_application_client = alpha_application_client
 
-    def quote_handler(self, quote_widget_request: relays.QuoteWidgetRequest) -> relays.QuoteWidgetResponse:
-        return self._alpha_application_client.quote_widget(quote_widget_request)
+    def keep_widget_handler(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
+        return self._alpha_application_client.keep_widget(keep_widget_request)
 
-    def widget_flow_handler(self, quote_widget_request: relays.QuoteWidgetRequest) -> orchestrators.FlowResponse:
-        return orchestrators.WidgetFlow(runners.InlineWidgetActionsRunner(self)).quote_widget(quote_widget_request)
+    def register_widget_handler(
+        self, register_widget_request: relays.RegisterWidgetRequest
+    ) -> relays.RegisterWidgetResponse:
+        return orchestrators.WidgetOrchestrator(runners.InlineKeepWidgetRelay(self)).register_widget(
+            register_widget_request
+        )

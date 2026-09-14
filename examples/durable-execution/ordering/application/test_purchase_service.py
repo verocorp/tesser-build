@@ -11,7 +11,7 @@ import ordering.client as client
 
 
 @ts.fake
-class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
+class FakePayForOrderRelay(relays.PayForOrderRelay):
 
     def __init__(self) -> None:
         self.ran: list[relays.PayForOrderRequest] = []
@@ -34,7 +34,7 @@ class FakePurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
 
 
 @ts.fake
-class FakeUnconfirmedPurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
+class FakeUnconfirmedPayForOrderRelay(relays.PayForOrderRelay):
 
     async def run_pay_for_order(
         self, pay_for_order_request: relays.PayForOrderRequest
@@ -48,7 +48,7 @@ class FakeUnconfirmedPurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunne
 
 
 @ts.fake
-class FakeDecliningPurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
+class FakeDecliningPayForOrderRelay(relays.PayForOrderRelay):
 
     async def run_pay_for_order(
         self, pay_for_order_request: relays.PayForOrderRequest
@@ -62,7 +62,7 @@ class FakeDecliningPurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner)
 
 
 @ts.fake
-class FakeStartedPurchaseOrchestratorRunner(relays.PurchaseOrchestratorRunner):
+class FakeStartedPayForOrderRelay(relays.PayForOrderRelay):
 
     async def run_pay_for_order(
         self, pay_for_order_request: relays.PayForOrderRequest
@@ -91,7 +91,7 @@ class TestPurchaseService:
 
     def test_paying_answers_the_order_id_the_total_and_the_payment_reference(self) -> None:
         pay_for_order_response = asyncio.run(
-            application.PurchaseService(FakePurchaseOrchestratorRunner()).pay_for_order(
+            application.PurchaseService(FakePayForOrderRelay()).pay_for_order(
                 pay_for_order_request(quantity=3)
             )
         )
@@ -100,44 +100,44 @@ class TestPurchaseService:
         assert pay_for_order_response.payment_reference == "pay-o1"
 
     def test_paying_runs_the_orchestrator_for_the_order_it_built_and_waits(self) -> None:
-        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()
+        fake_pay_for_order_relay = FakePayForOrderRelay()
         asyncio.run(
-            application.PurchaseService(fake_purchase_orchestrator_runner).pay_for_order(
+            application.PurchaseService(fake_pay_for_order_relay).pay_for_order(
                 pay_for_order_request(order_id="o2", sku="gadget", quantity=3)
             )
         )
         assert [
             (str(r.order.identity), str(r.order.sku), int(r.order.quantity))
-            for r in fake_purchase_orchestrator_runner.ran
+            for r in fake_pay_for_order_relay.ran
         ] == [("o2", "gadget", 3)]
 
     def test_paying_carries_the_payment_method_the_caller_named(self) -> None:
-        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()
+        fake_pay_for_order_relay = FakePayForOrderRelay()
         asyncio.run(
-            application.PurchaseService(fake_purchase_orchestrator_runner).pay_for_order(
+            application.PurchaseService(fake_pay_for_order_relay).pay_for_order(
                 pay_for_order_request(payment_method="card-1234")
             )
         )
-        assert [str(r.payment_method) for r in fake_purchase_orchestrator_runner.ran] == [
+        assert [str(r.payment_method) for r in fake_pay_for_order_relay.ran] == [
             "card-1234"
         ]
 
     def test_an_empty_payment_method_is_refused_before_the_engine(self) -> None:
-        fake_purchase_orchestrator_runner = FakePurchaseOrchestratorRunner()
+        fake_pay_for_order_relay = FakePayForOrderRelay()
         with pytest.raises(client.OrderRejected) as excinfo:
             asyncio.run(
-                application.PurchaseService(fake_purchase_orchestrator_runner).pay_for_order(
+                application.PurchaseService(fake_pay_for_order_relay).pay_for_order(
                     pay_for_order_request(payment_method="")
                 )
             )
         assert excinfo.value.message == "a payment method is never empty"
-        assert fake_purchase_orchestrator_runner.ran == []
+        assert fake_pay_for_order_relay.ran == []
 
     def test_an_order_that_was_not_confirmed_is_the_situation_of_that_name(self) -> None:
         with pytest.raises(client.OrderNotConfirmed) as excinfo:
             asyncio.run(
                 application.PurchaseService(
-                    FakeUnconfirmedPurchaseOrchestratorRunner()
+                    FakeUnconfirmedPayForOrderRelay()
                 ).pay_for_order(pay_for_order_request(sku="nothing"))
             )
         assert excinfo.value.message == "no price for sku nothing"
@@ -146,7 +146,7 @@ class TestPurchaseService:
         with pytest.raises(client.PaymentDeclined) as excinfo:
             asyncio.run(
                 application.PurchaseService(
-                    FakeDecliningPurchaseOrchestratorRunner()
+                    FakeDecliningPayForOrderRelay()
                 ).pay_for_order(pay_for_order_request())
             )
         assert excinfo.value.message == "the processor declined the charge"
@@ -155,7 +155,7 @@ class TestPurchaseService:
         with pytest.raises(client.OrderAlreadyStarted) as excinfo:
             asyncio.run(
                 application.PurchaseService(
-                    FakeStartedPurchaseOrchestratorRunner()
+                    FakeStartedPayForOrderRelay()
                 ).pay_for_order(pay_for_order_request())
             )
         assert excinfo.value.message == "the order was already started"

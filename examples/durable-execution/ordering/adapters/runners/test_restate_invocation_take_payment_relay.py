@@ -74,7 +74,7 @@ def take_payment_request(
     )
 
 
-class TestRestatePurchaseActionsRunner:
+class TestRestateInvocationTakePaymentRelay:
 
     def test_running_take_payment_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
@@ -85,7 +85,7 @@ class TestRestatePurchaseActionsRunner:
             order_id="o1", cents=750, payment_method="card-4242"
         )
         take_payment_response = asyncio.run(
-            runners.RestatePurchaseActionsRunner(
+            runners.RestateInvocationTakePaymentRelay(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
             ).run_take_payment(take_payment_request)
@@ -103,7 +103,7 @@ class TestRestatePurchaseActionsRunner:
         for status_code in (404, 409, 422, 500):
             with pytest.raises(restate.TerminalError) as excinfo:
                 asyncio.run(
-                    runners.RestatePurchaseActionsRunner(
+                    runners.RestateInvocationTakePaymentRelay(
                         typing.cast(
                             restate.WorkflowContext,
                             FakeRestateWorkflowContext(refusal="refused", status_code=status_code),

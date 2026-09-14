@@ -13,7 +13,7 @@ class MapToSaveWidgetRequest(ts.Mapper, ports.SaveWidgetRequest):
         super().__init__(name=str(name), standing="kept")
 
 
-class MapToQuoteWidgetResponse(ts.Mapper, relays.QuoteWidgetResponse):
+class MapToKeepWidgetResponse(ts.Mapper, relays.KeepWidgetResponse):
 
     def __init__(self, save_widget_response: ports.SaveWidgetResponse) -> None:
         super().__init__(name=save_widget_response.name)
@@ -24,7 +24,7 @@ class WidgetActions(ts.Actions):
     def __init__(self, widget_repository: ports.WidgetRepository) -> None:
         self._widget_repository = widget_repository
 
-    def quote_widget(self, quote_widget_request: relays.QuoteWidgetRequest) -> relays.QuoteWidgetResponse:
-        name = domain.Name(quote_widget_request.name)
+    def keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
+        name = domain.Name(keep_widget_request.name)
         save_widget_response = self._widget_repository.save_widget(MapToSaveWidgetRequest(name))
-        return MapToQuoteWidgetResponse(save_widget_response)
+        return MapToKeepWidgetResponse(save_widget_response)

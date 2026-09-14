@@ -136,7 +136,7 @@ def unreachable_ingress() -> str:  # tesser:debt TB073
         return f"http://127.0.0.1:{closed.getsockname()[1]}"
 
 
-class TestRestateOrderOrchestratorRunnerStarting:
+class TestRestateIngressConfirmOrderRelayStarting:
 
     def test_starting_sends_the_workflow_keyed_by_the_orders_id(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
@@ -145,7 +145,7 @@ class TestRestateOrderOrchestratorRunnerStarting:
         fake_restate_ingress.start()
         try:
             start_confirm_order_response = asyncio.run(
-                runners.RestateOrderOrchestratorRunner(
+                runners.RestateIngressConfirmOrderRelay(
                     fake_restate_ingress.base_url, restate_order_runtime()
                 ).start_confirm_order(confirm_order_request())
             )
@@ -169,7 +169,7 @@ class TestRestateOrderOrchestratorRunnerStarting:
         fake_restate_ingress.start()
         try:
             start_confirm_order_response = asyncio.run(
-                runners.RestateOrderOrchestratorRunner(
+                runners.RestateIngressConfirmOrderRelay(
                     fake_restate_ingress.base_url, restate_order_runtime()
                 ).start_confirm_order(confirm_order_request(order_id="../admin?x=1#f"))
             )
@@ -186,7 +186,7 @@ class TestRestateOrderOrchestratorRunnerStarting:
         try:
             with pytest.raises(restate.HttpError):
                 asyncio.run(
-                    runners.RestateOrderOrchestratorRunner(
+                    runners.RestateIngressConfirmOrderRelay(
                         fake_restate_ingress.base_url, restate_order_runtime()
                     ).start_confirm_order(confirm_order_request())
                 )
@@ -196,20 +196,20 @@ class TestRestateOrderOrchestratorRunnerStarting:
     def test_an_unreachable_ingress_is_a_fault(self) -> None:
         with pytest.raises(httpx.TransportError):
             asyncio.run(
-                runners.RestateOrderOrchestratorRunner(
+                runners.RestateIngressConfirmOrderRelay(
                     unreachable_ingress(), restate_order_runtime()
                 ).start_confirm_order(confirm_order_request())
             )
 
 
-class TestRestateOrderOrchestratorRunnerRunning:
+class TestRestateIngressConfirmOrderRelayRunning:
 
     def test_running_calls_the_workflow_and_answers_with_its_result(self) -> None:
         fake_restate_ingress = FakeRestateIngress(confirmed())  # tesser:debt TB085
         fake_restate_ingress.start()
         try:
             confirm_order_response = asyncio.run(
-                runners.RestateOrderOrchestratorRunner(
+                runners.RestateIngressConfirmOrderRelay(
                     fake_restate_ingress.base_url, restate_order_runtime()
                 ).run_confirm_order(confirm_order_request())
             )
@@ -233,7 +233,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
         fake_restate_ingress.start()
         try:
             confirm_order_response = asyncio.run(
-                runners.RestateOrderOrchestratorRunner(
+                runners.RestateIngressConfirmOrderRelay(
                     fake_restate_ingress.base_url, restate_order_runtime()
                 ).run_confirm_order(confirm_order_request())
             )
@@ -252,7 +252,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
         try:
             with pytest.raises(restate.HttpError) as excinfo:
                 asyncio.run(
-                    runners.RestateOrderOrchestratorRunner(
+                    runners.RestateIngressConfirmOrderRelay(
                         fake_restate_ingress.base_url, restate_order_runtime()
                     ).run_confirm_order(confirm_order_request())
                 )
@@ -280,7 +280,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
             try:
                 with pytest.raises(restate.HttpError) as excinfo:
                     asyncio.run(
-                        runners.RestateOrderOrchestratorRunner(
+                        runners.RestateIngressConfirmOrderRelay(
                             fake_restate_ingress.base_url, restate_order_runtime()
                         ).run_confirm_order(confirm_order_request())
                     )
@@ -299,7 +299,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
             try:
                 with pytest.raises(restate.TerminalError) as excinfo:
                     asyncio.run(
-                        runners.RestateOrderOrchestratorRunner(
+                        runners.RestateIngressConfirmOrderRelay(
                             fake_restate_ingress.base_url, restate_order_runtime()
                         ).run_confirm_order(confirm_order_request())
                     )
@@ -315,7 +315,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
         try:
             with pytest.raises(restate.HttpError):
                 asyncio.run(
-                    runners.RestateOrderOrchestratorRunner(
+                    runners.RestateIngressConfirmOrderRelay(
                         fake_restate_ingress.base_url, restate_order_runtime()
                     ).run_confirm_order(confirm_order_request())
                 )
@@ -330,7 +330,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
         try:
             with pytest.raises(restate.HttpError):
                 asyncio.run(
-                    runners.RestateOrderOrchestratorRunner(
+                    runners.RestateIngressConfirmOrderRelay(
                         fake_restate_ingress.base_url, restate_order_runtime()
                     ).run_confirm_order(confirm_order_request())
                 )
@@ -340,7 +340,7 @@ class TestRestateOrderOrchestratorRunnerRunning:
     def test_an_unreachable_ingress_is_a_fault_when_running(self) -> None:
         with pytest.raises(httpx.TransportError):
             asyncio.run(
-                runners.RestateOrderOrchestratorRunner(
+                runners.RestateIngressConfirmOrderRelay(
                     unreachable_ingress(), restate_order_runtime()
                 ).run_confirm_order(confirm_order_request())
             )

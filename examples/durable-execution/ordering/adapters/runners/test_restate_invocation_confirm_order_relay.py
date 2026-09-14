@@ -79,7 +79,7 @@ def confirm_order_request(
     )
 
 
-class TestRestateOrderOrchestratorChildRunner:
+class TestRestateInvocationConfirmOrderRelay:
 
     def test_running_journals_a_call_to_the_order_workflow_keyed_by_the_orders_id(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
@@ -87,7 +87,7 @@ class TestRestateOrderOrchestratorChildRunner:
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         confirm_order_response = asyncio.run(
-            runners.RestateOrderOrchestratorChildRunner(
+            runners.RestateInvocationConfirmOrderRelay(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
             ).run_confirm_order(confirm_order_request(order_id="o5"))
@@ -103,7 +103,7 @@ class TestRestateOrderOrchestratorChildRunner:
     def test_the_key_is_the_id_as_it_is_because_no_path_is_formed_inside_the_engine(self) -> None:
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         asyncio.run(
-            runners.RestateOrderOrchestratorChildRunner(
+            runners.RestateInvocationConfirmOrderRelay(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -118,7 +118,7 @@ class TestRestateOrderOrchestratorChildRunner:
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         start_confirm_order_response = asyncio.run(
-            runners.RestateOrderOrchestratorChildRunner(
+            runners.RestateInvocationConfirmOrderRelay(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
             ).start_confirm_order(confirm_order_request(order_id="o6"))
@@ -134,7 +134,7 @@ class TestRestateOrderOrchestratorChildRunner:
 
     def test_the_already_invoked_conflict_is_the_outcome_the_engine_crossing_adds(self) -> None:
         confirm_order_response = asyncio.run(
-            runners.RestateOrderOrchestratorChildRunner(
+            runners.RestateInvocationConfirmOrderRelay(
                 typing.cast(
                     restate.WorkflowContext,
                     FakeRestateWorkflowContext(
@@ -163,7 +163,7 @@ class TestRestateOrderOrchestratorChildRunner:
         ):
             with pytest.raises(restate.TerminalError) as excinfo:
                 asyncio.run(
-                    runners.RestateOrderOrchestratorChildRunner(
+                    runners.RestateInvocationConfirmOrderRelay(
                         typing.cast(
                             restate.WorkflowContext,
                             FakeRestateWorkflowContext(

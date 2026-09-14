@@ -128,14 +128,14 @@ def paid() -> bytes:  # tesser:debt TB073
     )
 
 
-class TestRestatePurchaseOrchestratorRunner:
+class TestRestateIngressPayForOrderRelay:
 
     def test_running_calls_the_workflow_and_answers_with_its_result(self) -> None:
         fake_restate_ingress = FakeRestateIngress(paid())  # tesser:debt TB085
         fake_restate_ingress.start()
         try:
             pay_for_order_response = asyncio.run(
-                runners.RestatePurchaseOrchestratorRunner(
+                runners.RestateIngressPayForOrderRelay(
                     fake_restate_ingress.base_url, restate_order_runtime()
                 ).run_pay_for_order(pay_for_order_request())
             )
@@ -160,7 +160,7 @@ class TestRestatePurchaseOrchestratorRunner:
         fake_restate_ingress.start()
         try:
             pay_for_order_response = asyncio.run(
-                runners.RestatePurchaseOrchestratorRunner(
+                runners.RestateIngressPayForOrderRelay(
                     fake_restate_ingress.base_url, restate_order_runtime()
                 ).run_pay_for_order(pay_for_order_request())
             )
@@ -192,7 +192,7 @@ class TestRestatePurchaseOrchestratorRunner:
             try:
                 with pytest.raises(restate.HttpError) as excinfo:
                     asyncio.run(
-                        runners.RestatePurchaseOrchestratorRunner(
+                        runners.RestateIngressPayForOrderRelay(
                             fake_restate_ingress.base_url, restate_order_runtime()
                         ).run_pay_for_order(pay_for_order_request())
                     )
@@ -211,7 +211,7 @@ class TestRestatePurchaseOrchestratorRunner:
             try:
                 with pytest.raises(restate.TerminalError) as excinfo:
                     asyncio.run(
-                        runners.RestatePurchaseOrchestratorRunner(
+                        runners.RestateIngressPayForOrderRelay(
                             fake_restate_ingress.base_url, restate_order_runtime()
                         ).run_pay_for_order(pay_for_order_request())
                     )
@@ -225,7 +225,7 @@ class TestRestatePurchaseOrchestratorRunner:
             unreachable = f"http://127.0.0.1:{closed.getsockname()[1]}"
         with pytest.raises(httpx.TransportError):
             asyncio.run(
-                runners.RestatePurchaseOrchestratorRunner(
+                runners.RestateIngressPayForOrderRelay(
                     unreachable, restate_order_runtime()
                 ).run_pay_for_order(pay_for_order_request())
             )

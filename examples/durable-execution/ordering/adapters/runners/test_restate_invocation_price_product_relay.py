@@ -64,14 +64,14 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         )
 
 
-class TestRestateOrderActionsRunner:
+class TestRestateInvocationPriceProductRelay:
 
     def test_running_price_product_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient())
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         price_product_request = relays.PriceProductRequest(sku="widget")
         price_product_response = asyncio.run(
-            runners.RestateOrderActionsRunner(
+            runners.RestateInvocationPriceProductRelay(
                 typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
                 restate_order_runtime,
             ).run_price_product(price_product_request)
@@ -86,7 +86,7 @@ class TestRestateOrderActionsRunner:
         for status_code in (404, 409, 422, 500):
             with pytest.raises(restate.TerminalError) as excinfo:
                 asyncio.run(
-                    runners.RestateOrderActionsRunner(
+                    runners.RestateInvocationPriceProductRelay(
                         typing.cast(
                             restate.WorkflowContext,
                             FakeRestateWorkflowContext(refusal="refused", status_code=status_code),

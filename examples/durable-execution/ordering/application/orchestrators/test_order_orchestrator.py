@@ -12,7 +12,7 @@ import tesser.errors as errors
 
 
 @ts.fake
-class FakeOrderActionsRunner(relays.OrderActionsRunner):
+class FakePriceProductRelay(relays.PriceProductRelay):
 
     def __init__(self, cents: int = 250) -> None:
         self._cents = cents
@@ -30,7 +30,7 @@ class FakeOrderActionsRunner(relays.OrderActionsRunner):
 
 
 @ts.fake
-class FakeUnpricedOrderActionsRunner(relays.OrderActionsRunner):
+class FakeUnpricedPriceProductRelay(relays.PriceProductRelay):
 
     async def run_price_product(
         self, price_product_request: relays.PriceProductRequest
@@ -55,7 +55,7 @@ class TestOrderOrchestrator:
 
     def test_confirming_totals_the_product_price_over_the_quantity(self) -> None:
         confirm_order_response = asyncio.run(
-            orchestrators.OrderOrchestrator(FakeOrderActionsRunner()).confirm_order(
+            orchestrators.OrderOrchestrator(FakePriceProductRelay()).confirm_order(
                 confirm_order_request()
             )
         )
@@ -64,17 +64,17 @@ class TestOrderOrchestrator:
         assert confirm_order_response.confirmed_orders[0].total_cents == 750
 
     def test_confirming_prices_the_ordered_product(self) -> None:
-        fake_order_actions_runner = FakeOrderActionsRunner()
+        fake_price_product_relay = FakePriceProductRelay()
         asyncio.run(
-            orchestrators.OrderOrchestrator(fake_order_actions_runner).confirm_order(
+            orchestrators.OrderOrchestrator(fake_price_product_relay).confirm_order(
                 confirm_order_request(sku="gadget")
             )
         )
-        assert fake_order_actions_runner.priced == ["gadget"]
+        assert fake_price_product_relay.priced == ["gadget"]
 
     def test_a_price_that_was_not_found_is_that_outcome_carrying_the_reason(self) -> None:
         confirm_order_response = asyncio.run(
-            orchestrators.OrderOrchestrator(FakeUnpricedOrderActionsRunner()).confirm_order(
+            orchestrators.OrderOrchestrator(FakeUnpricedPriceProductRelay()).confirm_order(
                 confirm_order_request(sku="nothing")
             )
         )
@@ -89,7 +89,7 @@ class TestOrderOrchestrator:
         with pytest.raises(errors.DomainError) as excinfo:
             asyncio.run(
                 orchestrators.OrderOrchestrator(
-                    FakeOrderActionsRunner(cents=10**12)
+                    FakePriceProductRelay(cents=10**12)
                 ).confirm_order(confirm_order_request())
             )
         assert "at most" in excinfo.value.message
