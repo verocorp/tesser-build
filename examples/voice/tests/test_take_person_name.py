@@ -2,20 +2,27 @@ from __future__ import annotations
 
 import random
 
+import tesser.testing as ts
+
 import app as app
-import calling.client as calling_client
+import calls.client as calls_client
 
 
-class TestTakePersonName:
+@ts.helper
+def place_call_request(person_name: str = "Ada", phone_number: str = "+15555550100") -> calls_client.PlaceCallRequest:
+    return calls_client.PlaceCallRequest(person_name=person_name, phone_number=phone_number)
 
-    async def test_a_call_holds_the_person_who_gave_their_name_on_it(self) -> None:
+
+class TestPlacingCalls:
+
+    async def test_a_call_is_successfully_made(self) -> None:
         voice_app = app.load()
-        person = calling_client.Person(name=random.choice(("Ada", "Grace", "Alan", "Barbara")))
+        person_name = random.choice(("Ada", "Grace", "Alan", "Barbara"))
 
-        place_call_response = await voice_app.calling.client.place_call(calling_client.PlaceCallRequest(person=person))
-        get_call_response = await voice_app.calling.client.get_call(
-            calling_client.GetCallRequest(call_id=place_call_response.call_id)
+        place_call_response = await voice_app.calls.client.place_call(place_call_request(person_name=person_name))
+        get_call_response = await voice_app.calls.client.get_call(
+            calls_client.GetCallRequest(call_id=place_call_response.call_id)
         )
         voice_app.close()
 
-        assert get_call_response.call.person == person
+        assert get_call_response.call.person_name == person_name
