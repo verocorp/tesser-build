@@ -27,7 +27,7 @@ class CallActions(ts.Actions):
     def __init__(self, call_store: ports.CallStore) -> None:
         self._call_store = call_store
 
-    async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:  # tesser:debt TB082
+    async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
         async with self._call_store.transaction() as call_repository:
             save_call_response = await call_repository.save_call(MapToSaveCallRequest(record_call_request))
         return MapToRecordCallResponse(save_call_response)
