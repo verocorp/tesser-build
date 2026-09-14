@@ -169,10 +169,24 @@ jobs:
     # Gates the voice example at the same bar: tessercheck zero findings +
     # mypy --strict + pytest. One context, calls, whose root-tier test places
     # a call for a person through the client and reads the person's name back
-    # by the call id; the app, component, and hosts behind it are not built
-    # yet.
-    name: voice example (tessercheck + mypy --strict + pytest)
+    # by the call id. The service is a shell over an asyncpg repository; the
+    # service container is the database CALLS_STORAGE points at.
+    name: voice example (tessercheck + mypy --strict + pytest against Postgres)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tesser
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: tesser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tesser"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
@@ -181,6 +195,8 @@ jobs:
       - name: Install dev tooling
         run: pip install -r examples/voice/requirements-dev.txt
       - name: examples/voice — tessercheck + mypy --strict + pytest
+        env:
+          CALLS_STORAGE: postgres://tesser@localhost:5432/tesser
         run: scripts/verify voice
 
   asyncpg-example:
