@@ -1125,7 +1125,10 @@ is scope, reach, and what each may depend on.
   action is the engine's retry unit, and one side effect per unit is what keeps
   a retry safe. It depends only on ports and the stores that yield them —
   **never on a relay**, because a relay inside an action is the engine calling
-  the engine. It is **not on the public `Client`**.
+  the engine. An action holding a store makes its one call on the repository
+  that `async with self._store.transaction() as repository` binds; the
+  `transaction()` call opens the unit and is not a second call. It is **not on
+  the public `Client`**.
 - **An application client** (`tesser.application.Client`, in
   `application/client/`, one protocol per module named for the actions it
   fronts) is how a runtime reaches a class of actions — the inbound twin of a
