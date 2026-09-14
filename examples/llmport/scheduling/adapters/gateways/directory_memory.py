@@ -10,20 +10,20 @@ class MemorySlotDirectory(ts.Gateway):
         self.slots = list(slots)
         self.reserved: list[tuple[str, str]] = []
 
-    def available(
-        self, available_slots_request: ports.AvailableSlotsRequest
-    ) -> ports.AvailableSlotsResponse:
-        return ports.AvailableSlotsResponse(slots=tuple(self.slots))
+    def list_available_slots(
+        self, list_available_slots_request: ports.ListAvailableSlotsRequest
+    ) -> ports.ListAvailableSlotsResponse:
+        return ports.ListAvailableSlotsResponse(slots=tuple(self.slots))
 
-    def reserve(
+    def reserve_slot(
         self, reserve_slot_request: ports.ReserveSlotRequest
     ) -> ports.ReserveSlotResponse:
         if reserve_slot_request.slot not in self.slots:
             return ports.ReserveSlotResponse(
-                outcome=ports.ReservationOutcome.SLOT_TAKEN, available=tuple(self.slots)
+                outcome=ports.ReserveSlotOutcome.SLOT_TAKEN, available=tuple(self.slots)
             )
         self.slots.remove(reserve_slot_request.slot)
         self.reserved.append((reserve_slot_request.slot, reserve_slot_request.name))
         return ports.ReserveSlotResponse(
-            outcome=ports.ReservationOutcome.RESERVED, available=()
+            outcome=ports.ReserveSlotOutcome.RESERVED, available=()
         )

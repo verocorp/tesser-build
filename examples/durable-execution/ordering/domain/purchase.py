@@ -20,6 +20,19 @@ class PaymentReference(ts.ValueObject):
         return serialization.canonical_str(self._value)
 
 
+class PaymentMethod(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise errors.invalid("empty_payment_method", "a payment method is never empty")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
 class PaymentSpec(ts.Spec):
 
     def __init__(self, order_id: str, reference: str, cents: int) -> None:

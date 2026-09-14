@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
-import ordering.application.ports as ports
 import ordering.application.relays as relays
 import ordering.client as client
 import ordering.domain as domain
 import tesser.errors as errors
+
+_ALREADY_STARTED: typing.Final[str] = "the order was already started"
 
 
 class MapToOrderSpecFromSubmitOrderRequest(ts.Mapper, domain.OrderSpec):
@@ -31,18 +34,16 @@ class MapToOrderSpecFromPlaceOrderRequest(ts.Mapper, domain.OrderSpec):
 
 class MapToSubmitOrderResponse(ts.Mapper, client.SubmitOrderResponse):
 
-    def __init__(
-        self, start_order_orchestrator_response: relays.StartOrderOrchestratorResponse
-    ) -> None:
-        super().__init__(order_id=start_order_orchestrator_response.order_id)
+    def __init__(self, start_confirm_order_response: relays.StartConfirmOrderResponse) -> None:
+        super().__init__(order_id=start_confirm_order_response.order_id)
 
 
 class MapToPlaceOrderResponse(ts.Mapper, client.PlaceOrderResponse):
 
-    def __init__(self, order_orchestrator_response: relays.OrderOrchestratorResponse) -> None:
+    def __init__(self, confirm_order_response: relays.ConfirmOrderResponse) -> None:
         super().__init__(
-            order_id=order_orchestrator_response.order_id,
-            total_cents=order_orchestrator_response.total_cents,
+            order_id=confirm_order_response.order_id,
+            total_cents=confirm_order_response.confirmed_orders[0].total_cents,
         )
 
 
@@ -57,32 +58,19 @@ class OrderService(ts.ApplicationService):
         try:
             order = domain.Order(MapToOrderSpecFromSubmitOrderRequest(submit_order_request))
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.OrderRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        try:
-            start_order_orchestrator_response = (
-                await self._order_orchestrator_runner.start_order_orchestrator(
-                    relays.OrderOrchestratorRequest(order=order)
-                )
+        start_confirm_order_response = (
+            await self._order_orchestrator_runner.start_confirm_order(
+                relays.ConfirmOrderRequest(order=order)
             )
-        except ports.EngineRejected as engine_error:
-            raise client.Rejected(
-                code="order_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineMissing as engine_error:
-            raise client.Missing(
-                code="order_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineConflict as engine_error:
-            raise client.Conflict(
-                code="order_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineUnavailable as engine_error:
-            raise client.Unavailable(
-                message="the ordering engine is unavailable"
-            ) from engine_error
-        return MapToSubmitOrderResponse(start_order_orchestrator_response)
+        )
+        match start_confirm_order_response.outcome:  # tesser:debt TB082
+            case relays.StartConfirmOrderOutcome.STARTED:
+                return MapToSubmitOrderResponse(start_confirm_order_response)
+            case _ as never:
+                typing.assert_never(never)
 
     async def place_order(
         self, place_order_request: client.PlaceOrderRequest
@@ -90,29 +78,18 @@ class OrderService(ts.ApplicationService):
         try:
             order = domain.Order(MapToOrderSpecFromPlaceOrderRequest(place_order_request))
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.OrderRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        try:
-            order_orchestrator_response = (
-                await self._order_orchestrator_runner.run_order_orchestrator(
-                    relays.OrderOrchestratorRequest(order=order)
-                )
-            )
-        except ports.EngineRejected as engine_error:
-            raise client.Rejected(
-                code="order_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineMissing as engine_error:
-            raise client.Missing(
-                code="order_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineConflict as engine_error:
-            raise client.Conflict(
-                code="order_rejected", message=engine_error.message
-            ) from engine_error
-        except ports.EngineUnavailable as engine_error:
-            raise client.Unavailable(
-                message="the ordering engine is unavailable"
-            ) from engine_error
-        return MapToPlaceOrderResponse(order_orchestrator_response)
+        confirm_order_response = await self._order_orchestrator_runner.run_confirm_order(
+            relays.ConfirmOrderRequest(order=order)
+        )
+        match confirm_order_response.outcome:  # tesser:debt TB082
+            case relays.ConfirmOrderOutcome.CONFIRMED:
+                return MapToPlaceOrderResponse(confirm_order_response)
+            case relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND:
+                raise client.ProductPriceNotFound(confirm_order_response.reasons[0])
+            case relays.ConfirmOrderOutcome.ALREADY_STARTED:
+                raise client.OrderAlreadyStarted(_ALREADY_STARTED)
+            case _ as never:
+                typing.assert_never(never)

@@ -12,7 +12,7 @@ class InMemoryVerdictRepository(ts.Repository):
         self._down = down
         self.close_count = 0
 
-    def record(
+    def record_verdict(
         self, record_verdict_request: ports.RecordVerdictRequest
     ) -> ports.RecordVerdictResponse:
         if self._down:
@@ -24,7 +24,7 @@ class InMemoryVerdictRepository(ts.Repository):
         )
         return ports.RecordVerdictResponse()
 
-    def all(
+    def list_verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
         if self._down:

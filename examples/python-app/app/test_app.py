@@ -65,11 +65,13 @@ def test_an_app_builds_one_component_per_slice() -> None:
 def test_an_app_wires_its_components_to_each_other() -> None:
     python_app = app.PythonApp(app.AppConfig(_app_spec()))
 
-    campaign_view = python_app.campaign.client.create_campaign(
+    create_campaign_response = python_app.campaign.client.create_campaign(
         campaign_client.CreateCampaignRequest("100.00", "USD")
     )
     python_app.campaign.client.add_link(
-        campaign_client.AddLinkRequest(campaign_view.campaign_id, "a", "https://ok.example/a")
+        campaign_client.AddLinkRequest(
+            create_campaign_response.campaign.campaign_id, "a", "https://ok.example/a"
+        )
     )
 
     rows = python_app.reports.client.links_by_verdict(

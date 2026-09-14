@@ -60,4 +60,4 @@ class TestAppLoader:
             ]
         finally:
             durable_execution_app.close()
-        assert declared == [["price_product"], ["run"]]
+        assert declared == [["price_product"], ["confirm_order"]]

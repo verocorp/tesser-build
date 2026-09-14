@@ -11,7 +11,7 @@ import protocol as protocol
 @ts.fake
 class FakeCampaignClientScripted(client.CampaignClient):
     def __init__(
-        self, *views: client.CampaignView, error: Exception | None = None
+        self, *views: client.Campaign, error: Exception | None = None
     ) -> None:
         self.pending = list(views)
         self.error = error
@@ -19,36 +19,36 @@ class FakeCampaignClientScripted(client.CampaignClient):
 
     def create_campaign(
         self, create_campaign_request: client.CreateCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.CreateCampaignResponse:
         self.requests.append(create_campaign_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.CreateCampaignResponse(campaign=self.pending.pop(0))
 
-    def add_link(self, add_link_request: client.AddLinkRequest) -> client.CampaignView:
+    def add_link(self, add_link_request: client.AddLinkRequest) -> client.AddLinkResponse:
         self.requests.append(add_link_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.AddLinkResponse(campaign=self.pending.pop(0))
 
     def deactivate_link(
         self, deactivate_link_request: client.DeactivateLinkRequest
-    ) -> client.CampaignView:
+    ) -> client.DeactivateLinkResponse:
         self.requests.append(deactivate_link_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.DeactivateLinkResponse(campaign=self.pending.pop(0))
 
     def get_campaign(
         self, get_campaign_request: client.GetCampaignRequest
-    ) -> client.CampaignView:
+    ) -> client.GetCampaignResponse:
         self.requests.append(get_campaign_request)
         if self.error is not None:
             raise self.error
-        return self.pending.pop(0)
+        return client.GetCampaignResponse(campaign=self.pending.pop(0))
 
-    def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
-        raise AssertionError("resolve is not part of the CLI surface")
+    def resolve_slug(self, resolve_slug_request: client.ResolveSlugRequest) -> client.ResolveSlugResponse:
+        raise AssertionError("resolve_slug is not part of the CLI surface")
 
     def list_links(
         self, list_links_request: client.ListLinksRequest
@@ -58,7 +58,7 @@ class FakeCampaignClientScripted(client.CampaignClient):
 
 def test_create_campaign_transforms_args_to_a_success_line() -> None:
     fake_campaign_client_scripted = FakeCampaignClientScripted(
-        client.CampaignView("0123456789abcdef", "100.00", "USD", ())
+        client.Campaign("0123456789abcdef", "100.00", "USD", ())
     )
     cli_response = handlers.CliHandler(fake_campaign_client_scripted).create_campaign(protocol.CliRequest(("100.00", "USD")))
     assert cli_response.exit_code == 0

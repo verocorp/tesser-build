@@ -21,14 +21,15 @@ class TestWiredApp:
             durable_execution_app.close()
         assert declared == ["OrderActions", "OrderOrchestrator"]
 
-    def test_submitting_an_order_with_no_ingress_is_unavailable(self) -> None:
+    def test_an_engine_that_does_not_answer_is_a_fault_and_no_declared_situation(self) -> None:
         durable_execution_app = app.load()
         try:
-            with pytest.raises(ordering_client.Unavailable):
+            with pytest.raises(Exception) as excinfo:
                 asyncio.run(
                     durable_execution_app.ordering.client.submit_order(
                         ordering_client.SubmitOrderRequest(order_id="o1", sku="widget", quantity=2)
                     )
                 )
+            assert not isinstance(excinfo.value, ordering_client.ERRORS)
         finally:
             durable_execution_app.close()

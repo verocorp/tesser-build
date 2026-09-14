@@ -5,25 +5,25 @@ import typing
 import tesser.context as ts
 
 
-class CheckRequest(ts.Request):
+class CheckKeyRequest(ts.Request):
 
     def __init__(self, key: str) -> None:
         self.key = key
 
 
-class CheckResponse(ts.Response):
+class CheckKeyResponse(ts.Response):
 
     def __init__(self, held: str) -> None:
         self.held = held
 
 
-class HoldRequest(ts.Request):
+class HoldKeyRequest(ts.Request):
 
     def __init__(self, key: str) -> None:
         self.key = key
 
 
-class HoldResponse(ts.Response):
+class HoldKeyResponse(ts.Response):
 
     def __init__(self, key: str) -> None:
         self.key = key
@@ -49,6 +49,6 @@ ERRORS: typing.Final[tuple[type[Rejected], type[Unavailable]]] = (Rejected, Unav
 
 class BetaClient(ts.Client, typing.Protocol):
 
-    async def check(self, check_request: CheckRequest) -> CheckResponse: ...
+    async def check_key(self, check_key_request: CheckKeyRequest) -> CheckKeyResponse: ...
 
-    async def hold(self, hold_request: HoldRequest) -> HoldResponse: ...
+    async def hold_key(self, hold_key_request: HoldKeyRequest) -> HoldKeyResponse: ...

@@ -38,25 +38,25 @@ def test_a_component_rejects_a_backend_it_does_not_support() -> None:
 def test_a_component_exposes_a_client_that_checks_a_url() -> None:
     link_policy = component.LinkPolicy(component.Config(component.Spec("memory")))
 
-    check_response = link_policy.client.check(client.CheckRequest("https://ok.example/x"))
+    check_target_response = link_policy.client.check_target(client.CheckTargetRequest("https://ok.example/x"))
 
-    assert check_response.decision == "allowed"
-    assert check_response.reason == "ok"
+    assert check_target_response.decision == "allowed"
+    assert check_target_response.reason == "ok"
 
 
 def test_a_component_exposes_a_client_that_denies_a_blocked_host() -> None:
     link_policy = component.LinkPolicy(component.Config(component.Spec("memory")))
 
-    check_response = link_policy.client.check(client.CheckRequest("https://evil.example/x"))
+    check_target_response = link_policy.client.check_target(client.CheckTargetRequest("https://evil.example/x"))
 
-    assert check_response.decision == "denied"
-    assert check_response.reason == "host 'evil.example' is blocked"
+    assert check_target_response.decision == "denied"
+    assert check_target_response.reason == "host 'evil.example' is blocked"
 
 
 def test_a_component_wires_its_service_to_the_repository_it_built() -> None:
     link_policy = component.LinkPolicy(component.Config(component.Spec("memory")))
 
-    link_policy.client.check(client.CheckRequest("https://ok.example/x"))
+    link_policy.client.check_target(client.CheckTargetRequest("https://ok.example/x"))
     list_verdicts_response = link_policy.client.list_verdicts(client.ListVerdictsRequest())
 
     assert [
@@ -68,7 +68,7 @@ def test_each_component_gets_its_own_repository() -> None:
     first = component.LinkPolicy(component.Config(component.Spec("memory")))
     second = component.LinkPolicy(component.Config(component.Spec("memory")))
 
-    first.client.check(client.CheckRequest("https://ok.example/x"))
+    first.client.check_target(client.CheckTargetRequest("https://ok.example/x"))
 
     assert second.client.list_verdicts(client.ListVerdictsRequest()).verdicts == ()
 

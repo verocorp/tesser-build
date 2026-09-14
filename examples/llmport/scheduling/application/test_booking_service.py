@@ -16,22 +16,22 @@ class FakeSlotDirectory(ports.SlotDirectory):
         self.slots = list(slots)
         self.reserved: list[tuple[str, str]] = []
 
-    def available(
-        self, available_slots_request: ports.AvailableSlotsRequest
-    ) -> ports.AvailableSlotsResponse:
-        return ports.AvailableSlotsResponse(slots=tuple(self.slots))
+    def list_available_slots(
+        self, list_available_slots_request: ports.ListAvailableSlotsRequest
+    ) -> ports.ListAvailableSlotsResponse:
+        return ports.ListAvailableSlotsResponse(slots=tuple(self.slots))
 
-    def reserve(
+    def reserve_slot(
         self, reserve_slot_request: ports.ReserveSlotRequest
     ) -> ports.ReserveSlotResponse:
         if reserve_slot_request.slot not in self.slots:
             return ports.ReserveSlotResponse(
-                outcome=ports.ReservationOutcome.SLOT_TAKEN, available=tuple(self.slots)
+                outcome=ports.ReserveSlotOutcome.SLOT_TAKEN, available=tuple(self.slots)
             )
         self.slots.remove(reserve_slot_request.slot)
         self.reserved.append((reserve_slot_request.slot, reserve_slot_request.name))
         return ports.ReserveSlotResponse(
-            outcome=ports.ReservationOutcome.RESERVED, available=()
+            outcome=ports.ReserveSlotOutcome.RESERVED, available=()
         )
 
 
@@ -39,24 +39,24 @@ class FakeSlotDirectory(ports.SlotDirectory):
 class FakeBookingRepository(ports.BookingRepository):
 
     def __init__(self) -> None:
-        self.stored: dict[str, ports.BookingView] = {}
+        self.stored: dict[str, ports.Booking] = {}
 
-    def find(
+    def find_booking(
         self, find_booking_request: ports.FindBookingRequest
     ) -> ports.FindBookingResponse:
         row = self.stored.get(find_booking_request.booking_id)
         if row is None:
             return ports.FindBookingResponse(
-                presence=ports.BookingPresence.ABSENT, bookings=()
+                outcome=ports.FindBookingOutcome.ABSENT, bookings=()
             )
         return ports.FindBookingResponse(
-            presence=ports.BookingPresence.PRESENT, bookings=(row,)
+            outcome=ports.FindBookingOutcome.PRESENT, bookings=(row,)
         )
 
-    def save(
+    def save_booking(
         self, save_booking_request: ports.SaveBookingRequest
     ) -> ports.SaveBookingResponse:
-        self.stored[save_booking_request.booking_id] = ports.BookingView(
+        self.stored[save_booking_request.booking_id] = ports.Booking(
             step=save_booking_request.step,
             name=save_booking_request.name,
             chosen=save_booking_request.chosen,
@@ -68,12 +68,12 @@ class FakeBookingRepository(ports.BookingRepository):
 @ts.fake
 class FakeSlotDirectoryDown(ports.SlotDirectory):
 
-    def available(
-        self, available_slots_request: ports.AvailableSlotsRequest
-    ) -> ports.AvailableSlotsResponse:
+    def list_available_slots(
+        self, list_available_slots_request: ports.ListAvailableSlotsRequest
+    ) -> ports.ListAvailableSlotsResponse:
         raise RuntimeError("slot directory unreachable")
 
-    def reserve(
+    def reserve_slot(
         self, reserve_slot_request: ports.ReserveSlotRequest
     ) -> ports.ReserveSlotResponse:
         raise RuntimeError("slot directory unreachable")
@@ -86,32 +86,32 @@ def test_the_full_booking_flow_through_the_client_surface() -> None:
         fake_slot_directory, fake_booking_repository
     )
 
-    booking_state_response = booking_service.begin(
+    begin_booking_response = booking_service.begin_booking(
         client.BeginBookingRequest(booking_id="b1")
     )
-    assert isinstance(booking_state_response, client.BookingStateResponse)
-    assert booking_state_response.step == "collect_name"
-    assert booking_state_response.reply == "ask the caller for their name"
+    assert isinstance(begin_booking_response, client.BeginBookingResponse)
+    assert begin_booking_response.booking.step == "collect_name"
+    assert begin_booking_response.booking.reply == "ask the caller for their name"
     assert fake_booking_repository.stored["b1"].name == ""
     assert fake_booking_repository.stored["b1"].chosen == ""
     assert fake_booking_repository.stored["b1"].offered == ()
 
-    booking_state_response = booking_service.provide_name(
+    provide_name_response = booking_service.provide_name(
         client.ProvideNameRequest(booking_id="b1", name="Ada Lovelace")
     )
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("mon-9am", "tue-2pm")
+    assert provide_name_response.booking.step == "choose_slot"
+    assert provide_name_response.booking.offered_slots == ("mon-9am", "tue-2pm")
 
-    booking_state_response = booking_service.choose_slot(
+    choose_slot_response = booking_service.choose_slot(
         client.ChooseSlotRequest(booking_id="b1", slot="mon-9am")
     )
-    assert booking_state_response.step == "confirm"
+    assert choose_slot_response.booking.step == "confirm"
 
-    booking_state_response = booking_service.confirm(
+    confirm_booking_response = booking_service.confirm_booking(
         client.ConfirmBookingRequest(booking_id="b1")
     )
-    assert booking_state_response.step == "booked"
-    assert booking_state_response.reply == "booked mon-9am for Ada Lovelace"
+    assert confirm_booking_response.booking.step == "booked"
+    assert confirm_booking_response.booking.reply == "booked mon-9am for Ada Lovelace"
     assert fake_slot_directory.reserved == [("mon-9am", "Ada Lovelace")]
     assert fake_booking_repository.stored["b1"].step == "booked"
     assert fake_booking_repository.stored["b1"].name == "Ada Lovelace"
@@ -124,7 +124,7 @@ def test_a_rejected_transition_persists_nothing() -> None:
     booking_service = application.BookingService(
         fake_slot_directory, fake_booking_repository
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
 
     with pytest.raises(ValueError):
@@ -142,20 +142,20 @@ def test_a_slot_taken_between_choice_and_confirm_comes_back_as_a_fresh_offer() -
     booking_service = application.BookingService(
         fake_slot_directory, fake_booking_repository
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
 
     fake_slot_directory.slots.remove("mon-9am")
-    booking_state_response = booking_service.confirm(
+    confirm_booking_response = booking_service.confirm_booking(
         client.ConfirmBookingRequest(booking_id="b1")
     )
 
-    assert booking_state_response.reply == (
+    assert confirm_booking_response.booking.reply == (
         "mon-9am was just taken; offer the caller the updated slots"
     )
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("tue-2pm",)
+    assert confirm_booking_response.booking.step == "choose_slot"
+    assert confirm_booking_response.booking.offered_slots == ("tue-2pm",)
     assert fake_booking_repository.stored["b1"].step == "choose_slot"
     assert fake_booking_repository.stored["b1"].offered == ("tue-2pm",)
 
@@ -165,13 +165,13 @@ def test_a_taken_slot_with_nothing_left_to_offer_is_an_error() -> None:
     booking_service = application.BookingService(
         fake_slot_directory, FakeBookingRepository()
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
 
     fake_slot_directory.slots.remove("mon-9am")
     with pytest.raises(ValueError) as excinfo:
-        booking_service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
+        booking_service.confirm_booking(client.ConfirmBookingRequest(booking_id="b1"))
 
     assert "no slots are available" in str(excinfo.value)
 
@@ -181,18 +181,18 @@ def test_the_fresh_offer_is_choosable_and_bookable() -> None:
     booking_service = application.BookingService(
         fake_slot_directory, FakeBookingRepository()
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
     fake_slot_directory.slots.remove("mon-9am")
-    booking_service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
+    booking_service.confirm_booking(client.ConfirmBookingRequest(booking_id="b1"))
 
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="tue-2pm"))
-    booking_state_response = booking_service.confirm(
+    confirm_booking_response = booking_service.confirm_booking(
         client.ConfirmBookingRequest(booking_id="b1")
     )
 
-    assert booking_state_response.step == "booked"
+    assert confirm_booking_response.booking.step == "booked"
     assert fake_slot_directory.reserved == [("tue-2pm", "Ada")]
 
 
@@ -202,13 +202,15 @@ def test_status_reads_without_mutating() -> None:
     booking_service = application.BookingService(
         fake_slot_directory, fake_booking_repository
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
 
-    booking_state_response = booking_service.status(client.StatusRequest(booking_id="b1"))
+    get_booking_response = booking_service.get_booking(
+        client.GetBookingRequest(booking_id="b1")
+    )
 
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("mon-9am",)
+    assert get_booking_response.booking.step == "choose_slot"
+    assert get_booking_response.booking.offered_slots == ("mon-9am",)
     assert fake_booking_repository.stored["b1"].step == "choose_slot"
 
 
@@ -216,7 +218,7 @@ def test_an_infrastructure_failure_passes_through_untranslated() -> None:
     booking_service = application.BookingService(
         FakeSlotDirectoryDown(), FakeBookingRepository()
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
 
     with pytest.raises(RuntimeError):
         booking_service.provide_name(
@@ -230,16 +232,16 @@ def test_begin_resumes_an_in_flight_booking() -> None:
     booking_service = application.BookingService(
         fake_slot_directory, fake_booking_repository
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
 
-    booking_state_response = booking_service.begin(
+    begin_booking_response = booking_service.begin_booking(
         client.BeginBookingRequest(booking_id="b1")
     )
 
-    assert booking_state_response.step == "choose_slot"
-    assert booking_state_response.offered_slots == ("mon-9am",)
-    assert booking_state_response.reply == "continue the booking"
+    assert begin_booking_response.booking.step == "choose_slot"
+    assert begin_booking_response.booking.offered_slots == ("mon-9am",)
+    assert begin_booking_response.booking.reply == "continue the booking"
     assert fake_booking_repository.stored["b1"].name == "Ada"
 
 
@@ -249,16 +251,16 @@ def test_begin_resumes_a_booked_booking_without_touching_it() -> None:
     booking_service = application.BookingService(
         fake_slot_directory, fake_booking_repository
     )
-    booking_service.begin(client.BeginBookingRequest(booking_id="b1"))
+    booking_service.begin_booking(client.BeginBookingRequest(booking_id="b1"))
     booking_service.provide_name(client.ProvideNameRequest(booking_id="b1", name="Ada"))
     booking_service.choose_slot(client.ChooseSlotRequest(booking_id="b1", slot="mon-9am"))
-    booking_service.confirm(client.ConfirmBookingRequest(booking_id="b1"))
+    booking_service.confirm_booking(client.ConfirmBookingRequest(booking_id="b1"))
 
-    booking_state_response = booking_service.begin(
+    begin_booking_response = booking_service.begin_booking(
         client.BeginBookingRequest(booking_id="b1")
     )
 
-    assert booking_state_response.step == "booked"
+    assert begin_booking_response.booking.step == "booked"
     assert fake_booking_repository.stored["b1"].step == "booked"
     assert fake_slot_directory.reserved == [("mon-9am", "Ada")]
 
@@ -269,7 +271,7 @@ def test_an_unknown_booking_id_is_not_a_domain_rejection() -> None:
     )
 
     with pytest.raises(KeyError):
-        booking_service.status(client.StatusRequest(booking_id="ghost"))
+        booking_service.get_booking(client.GetBookingRequest(booking_id="ghost"))
 
 
 def test_an_empty_booking_id_is_refused_before_the_repository_is_read() -> None:
@@ -278,15 +280,15 @@ def test_an_empty_booking_id_is_refused_before_the_repository_is_read() -> None:
         FakeSlotDirectory(("mon-9am",)), fake_booking_repository
     )
     with pytest.raises(ValueError, match="booking id must be non-empty"):
-        booking_service.begin(client.BeginBookingRequest(booking_id=""))
+        booking_service.begin_booking(client.BeginBookingRequest(booking_id=""))
     assert fake_booking_repository.stored == {}
 
 
 def test_the_mapper_exposes_every_field_of_the_one_row_the_repository_found() -> None:
     find_booking_response = ports.FindBookingResponse(
-        presence=ports.BookingPresence.PRESENT,
+        outcome=ports.FindBookingOutcome.PRESENT,
         bookings=(
-            ports.BookingView(
+            ports.Booking(
                 step="confirm",
                 name="Ada Lovelace",
                 chosen="mon-9am",
@@ -305,7 +307,7 @@ def test_the_mapper_exposes_every_field_of_the_one_row_the_repository_found() ->
 
 def test_the_mapper_refuses_a_booking_the_repository_does_not_hold() -> None:
     find_booking_response = ports.FindBookingResponse(
-        presence=ports.BookingPresence.ABSENT, bookings=()
+        outcome=ports.FindBookingOutcome.ABSENT, bookings=()
     )
 
     with pytest.raises(KeyError):
@@ -314,7 +316,7 @@ def test_the_mapper_refuses_a_booking_the_repository_does_not_hold() -> None:
 
 def test_the_begun_mapper_opens_a_fresh_booking_when_none_is_stored() -> None:
     find_booking_response = ports.FindBookingResponse(
-        presence=ports.BookingPresence.ABSENT, bookings=()
+        outcome=ports.FindBookingOutcome.ABSENT, bookings=()
     )
 
     booking_spec = application.MapToBegunBookingSpec(find_booking_response)
@@ -327,9 +329,9 @@ def test_the_begun_mapper_opens_a_fresh_booking_when_none_is_stored() -> None:
 
 def test_the_begun_mapper_resumes_the_booking_already_stored() -> None:
     find_booking_response = ports.FindBookingResponse(
-        presence=ports.BookingPresence.PRESENT,
+        outcome=ports.FindBookingOutcome.PRESENT,
         bookings=(
-            ports.BookingView(
+            ports.Booking(
                 step="choose_slot", name="Ada", chosen="", offered=("mon-9am",)
             ),
         ),
@@ -345,9 +347,9 @@ def test_the_begun_mapper_resumes_the_booking_already_stored() -> None:
 
 def test_a_stored_booking_maps_to_a_resumption_that_resumes() -> None:
     find_booking_response = ports.FindBookingResponse(
-        presence=ports.BookingPresence.PRESENT,
+        outcome=ports.FindBookingOutcome.PRESENT,
         bookings=(
-            ports.BookingView(
+            ports.Booking(
                 step="choose_slot", name="Ada", chosen="", offered=("mon-9am",)
             ),
         ),
@@ -362,7 +364,7 @@ def test_a_stored_booking_maps_to_a_resumption_that_resumes() -> None:
 
 def test_a_booking_the_repository_does_not_hold_maps_to_a_resumption_that_starts() -> None:
     find_booking_response = ports.FindBookingResponse(
-        presence=ports.BookingPresence.ABSENT, bookings=()
+        outcome=ports.FindBookingOutcome.ABSENT, bookings=()
     )
 
     resumption = domain.Resumption(
@@ -374,7 +376,7 @@ def test_a_booking_the_repository_does_not_hold_maps_to_a_resumption_that_starts
 
 def test_a_reserved_slot_hands_the_booking_no_reoffer_at_all() -> None:
     reserve_slot_response = ports.ReserveSlotResponse(
-        outcome=ports.ReservationOutcome.RESERVED, available=()
+        outcome=ports.ReserveSlotOutcome.RESERVED, available=()
     )
 
     reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
@@ -384,7 +386,7 @@ def test_a_reserved_slot_hands_the_booking_no_reoffer_at_all() -> None:
 
 def test_a_taken_slot_hands_the_booking_one_reoffer_of_the_slots_still_open() -> None:
     reserve_slot_response = ports.ReserveSlotResponse(
-        outcome=ports.ReservationOutcome.SLOT_TAKEN, available=("tue-2pm",)
+        outcome=ports.ReserveSlotOutcome.SLOT_TAKEN, available=("tue-2pm",)
     )
 
     reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
@@ -394,7 +396,7 @@ def test_a_taken_slot_hands_the_booking_one_reoffer_of_the_slots_still_open() ->
 
 def test_a_taken_slot_with_nothing_open_still_hands_the_booking_a_reoffer() -> None:
     reserve_slot_response = ports.ReserveSlotResponse(
-        outcome=ports.ReservationOutcome.SLOT_TAKEN, available=()
+        outcome=ports.ReserveSlotOutcome.SLOT_TAKEN, available=()
     )
 
     reoffers_spec = application.MapToReoffersSpec(reserve_slot_response)
@@ -432,7 +434,7 @@ def test_a_reserved_slot_settles_the_booking_as_booked() -> None:
         )
     )
     reserve_slot_response = ports.ReserveSlotResponse(
-        outcome=ports.ReservationOutcome.RESERVED, available=()
+        outcome=ports.ReserveSlotOutcome.RESERVED, available=()
     )
 
     settled = booking.settle(
@@ -449,7 +451,7 @@ def test_a_taken_slot_settles_the_booking_as_reoffered() -> None:
         )
     )
     reserve_slot_response = ports.ReserveSlotResponse(
-        outcome=ports.ReservationOutcome.SLOT_TAKEN, available=("tue-2pm",)
+        outcome=ports.ReserveSlotOutcome.SLOT_TAKEN, available=("tue-2pm",)
     )
 
     settled = booking.settle(
@@ -462,7 +464,7 @@ def test_a_taken_slot_settles_the_booking_as_reoffered() -> None:
 def test_a_provide_name_request_maps_to_a_naming_of_the_slots_still_open() -> None:
     naming_spec = application.MapToNamingSpec(
         client.ProvideNameRequest(booking_id="b-1", name="Ada"),
-        ports.AvailableSlotsResponse(slots=("mon-9am", "tue-2pm")),
+        ports.ListAvailableSlotsResponse(slots=("mon-9am", "tue-2pm")),
     )
 
     assert naming_spec.name == "Ada"

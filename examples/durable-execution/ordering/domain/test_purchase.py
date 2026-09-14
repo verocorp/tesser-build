@@ -30,6 +30,20 @@ class TestPayment:
         assert payment.order_id == domain.OrderId("o1")
 
 
+class TestPaymentMethod:
+
+    def test_a_payment_method_constructs_from_its_value(self) -> None:
+        assert str(domain.PaymentMethod("card-4242")) == "card-4242"
+
+    def test_a_payment_method_equals_by_value(self) -> None:
+        assert domain.PaymentMethod("card-4242") == domain.PaymentMethod("card-4242")
+        assert domain.PaymentMethod("card-4242") != domain.PaymentMethod("card-1234")
+
+    def test_a_payment_method_is_never_empty(self) -> None:
+        with pytest.raises(errors.DomainError):
+            domain.PaymentMethod("")
+
+
 class TestPurchase:
 
     def test_a_purchase_constructs_from_its_spec(self) -> None:

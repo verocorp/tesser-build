@@ -9,7 +9,7 @@ import memoryclient.client as memoryclient_client
 class MapToHasKeyResponse(ts.Mapper, ports.HasKeyResponse):
 
     def __init__(self, result: bool) -> None:
-        super().__init__(held=ports.Held.YES if result else ports.Held.NO)
+        super().__init__(held=ports.HasKeyOutcome.YES if result else ports.HasKeyOutcome.NO)
 
 
 class MemoryKeyRepository(ts.Repository):
@@ -17,7 +17,7 @@ class MemoryKeyRepository(ts.Repository):
     def __init__(self) -> None:
         self._memory_client = memoryclient_client.MemoryClient()
 
-    def has(self, has_key_request: ports.HasKeyRequest) -> ports.HasKeyResponse:
+    def has_key(self, has_key_request: ports.HasKeyRequest) -> ports.HasKeyResponse:
         result = self._memory_client.exists(has_key_request.key)
         return MapToHasKeyResponse(result)
 

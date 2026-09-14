@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import tesser.testing as ts
+import pytest
 
 import ordering.application as application
 import ordering.application.relays as relays
@@ -13,24 +14,75 @@ import ordering.client as client
 class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
     def __init__(self) -> None:
-        self.started: list[relays.OrderOrchestratorRequest] = []
-        self.ran: list[relays.OrderOrchestratorRequest] = []
+        self.started: list[relays.ConfirmOrderRequest] = []
+        self.ran: list[relays.ConfirmOrderRequest] = []
 
-    async def start_order_orchestrator(
-        self, order_orchestrator_request: relays.OrderOrchestratorRequest
-    ) -> relays.StartOrderOrchestratorResponse:
-        self.started.append(order_orchestrator_request)
-        return relays.StartOrderOrchestratorResponse(
-            order_id=str(order_orchestrator_request.order.identity)
+    async def start_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.StartConfirmOrderResponse:
+        self.started.append(confirm_order_request)
+        return relays.StartConfirmOrderResponse(
+            outcome=relays.StartConfirmOrderOutcome.STARTED,
+            order_id=str(confirm_order_request.order.identity),
         )
 
-    async def run_order_orchestrator(
-        self, order_orchestrator_request: relays.OrderOrchestratorRequest
-    ) -> relays.OrderOrchestratorResponse:
-        self.ran.append(order_orchestrator_request)
-        return relays.OrderOrchestratorResponse(
-            order_id=str(order_orchestrator_request.order.identity),
-            total_cents=250 * int(order_orchestrator_request.order.quantity),
+    async def run_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse:
+        self.ran.append(confirm_order_request)
+        return relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id=str(confirm_order_request.order.identity),
+            confirmed_orders=(
+                relays.ConfirmedOrder(
+                    total_cents=250 * int(confirm_order_request.order.quantity)
+                ),
+            ),
+            reasons=(),
+        )
+
+
+@ts.fake
+class FakeUnpricedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
+
+    async def start_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.StartConfirmOrderResponse:
+        return relays.StartConfirmOrderResponse(
+            outcome=relays.StartConfirmOrderOutcome.STARTED,
+            order_id=str(confirm_order_request.order.identity),
+        )
+
+    async def run_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse:
+        return relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND,
+            order_id=str(confirm_order_request.order.identity),
+            confirmed_orders=(),
+            reasons=(f"no price for sku {confirm_order_request.order.sku!s}",),
+        )
+
+
+@ts.fake
+class FakeStartedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
+
+    async def start_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.StartConfirmOrderResponse:
+        return relays.StartConfirmOrderResponse(
+            outcome=relays.StartConfirmOrderOutcome.STARTED,
+            order_id=str(confirm_order_request.order.identity),
+        )
+
+    async def run_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse:
+        return relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
+            order_id=str(confirm_order_request.order.identity),
+            confirmed_orders=(),
+            reasons=(),
         )
 
 
@@ -58,7 +110,7 @@ class TestOrderService:
         )
         assert submit_order_response.order_id == "o1"
 
-    def test_submitting_starts_the_orchestrator_for_the_order_it_built(self) -> None:
+    def test_submitting_starts_confirming_the_order_it_built(self) -> None:
         fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
         asyncio.run(
             application.OrderService(fake_order_orchestrator_runner).submit_order(
@@ -70,6 +122,17 @@ class TestOrderService:
             for s in fake_order_orchestrator_runner.started
         ] == [("o2", "gadget", 3)]
 
+    def test_an_order_the_domain_refuses_never_reaches_the_engine(self) -> None:
+        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
+        with pytest.raises(client.OrderRejected) as excinfo:
+            asyncio.run(
+                application.OrderService(fake_order_orchestrator_runner).submit_order(
+                    submit_order_request(quantity=0)
+                )
+            )
+        assert excinfo.value.message == "an order is for at least one unit"
+        assert fake_order_orchestrator_runner.started == []
+
     def test_placing_answers_the_order_id_and_the_total(self) -> None:
         place_order_response = asyncio.run(
             application.OrderService(FakeOrderOrchestratorRunner()).place_order(
@@ -79,7 +142,7 @@ class TestOrderService:
         assert place_order_response.order_id == "o1"
         assert place_order_response.total_cents == 750
 
-    def test_placing_runs_the_orchestrator_for_the_order_it_built_and_waits(self) -> None:
+    def test_placing_runs_confirming_the_order_it_built_and_waits(self) -> None:
         fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
         asyncio.run(
             application.OrderService(fake_order_orchestrator_runner).place_order(
@@ -91,3 +154,21 @@ class TestOrderService:
             for r in fake_order_orchestrator_runner.ran
         ] == [("o2", "gadget", 3)]
         assert fake_order_orchestrator_runner.started == []
+
+    def test_a_product_price_that_was_not_found_is_the_situation_of_that_name(self) -> None:
+        with pytest.raises(client.ProductPriceNotFound) as excinfo:
+            asyncio.run(
+                application.OrderService(FakeUnpricedOrderOrchestratorRunner()).place_order(
+                    place_order_request(sku="nothing")
+                )
+            )
+        assert excinfo.value.message == "no price for sku nothing"
+
+    def test_an_order_already_started_is_the_situation_of_that_name(self) -> None:
+        with pytest.raises(client.OrderAlreadyStarted) as excinfo:
+            asyncio.run(
+                application.OrderService(FakeStartedOrderOrchestratorRunner()).place_order(
+                    place_order_request()
+                )
+            )
+        assert excinfo.value.message == "the order was already started"

@@ -18,7 +18,7 @@ class CliHost(ts.Host):
             try:
                 handler = alpha_handlers.Handler(minimal_app.alpha.client)
                 try:
-                    cli_response = handler.add(protocol.CliRequest(args=tuple(argv)))
+                    cli_response = handler.add_part(protocol.CliRequest(args=tuple(argv)))
                 except protocol.UsageError as e:
                     cli_response = protocol.CliResponse(exit_code=2, line=protocol.Line(text=str(e)))
                 sys.stdout.write(cli_response.line.text + "\n")

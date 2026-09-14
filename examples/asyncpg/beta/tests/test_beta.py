@@ -14,11 +14,11 @@ class TestBetaContext:
         database = pgdatabase_database.Database(config.database)
         await database.open()
         beta = component.Beta(config, database)
-        hold_response = await beta.client.hold(client.HoldRequest(key="ctx-beta"))
-        checked = await beta.client.check(client.CheckRequest(key="ctx-beta"))
-        unknown = await beta.client.check(client.CheckRequest(key="ctx-beta-never-held"))
+        hold_key_response = await beta.client.hold_key(client.HoldKeyRequest(key="ctx-beta"))
+        checked = await beta.client.check_key(client.CheckKeyRequest(key="ctx-beta"))
+        unknown = await beta.client.check_key(client.CheckKeyRequest(key="ctx-beta-never-held"))
         await beta.close()
         await database.close()
-        assert hold_response.key == "ctx-beta"
+        assert hold_key_response.key == "ctx-beta"
         assert checked.held == "yes"
         assert unknown.held == "no"

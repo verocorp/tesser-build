@@ -8,5 +8,5 @@ class TestMemoryKeyRepository:
 
     def test_the_stored_key_is_held(self) -> None:
         memory_key_repository = repositories.MemoryKeyRepository()
-        has_key_response = memory_key_repository.has(ports.HasKeyRequest(key="k"))
-        assert has_key_response.held is ports.Held.YES
+        has_key_response = memory_key_repository.has_key(ports.HasKeyRequest(key="k"))
+        assert has_key_response.held is ports.HasKeyOutcome.YES

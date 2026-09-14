@@ -6,18 +6,18 @@ import typing
 import tesser.application as ts
 
 
-class ReservationOutcome(enum.Enum):
+class ReserveSlotOutcome(enum.Enum):
     RESERVED = "reserved"
     SLOT_TAKEN = "slot_taken"
 
 
-class AvailableSlotsRequest(ts.Request):
+class ListAvailableSlotsRequest(ts.Request):
 
     def __init__(self) -> None:
         return None
 
 
-class AvailableSlotsResponse(ts.Response):
+class ListAvailableSlotsResponse(ts.Response):
 
     def __init__(self, slots: tuple[str, ...]) -> None:
         self.slots = slots
@@ -32,13 +32,15 @@ class ReserveSlotRequest(ts.Request):
 
 class ReserveSlotResponse(ts.Response):
 
-    def __init__(self, outcome: ReservationOutcome, available: tuple[str, ...]) -> None:
+    def __init__(self, outcome: ReserveSlotOutcome, available: tuple[str, ...]) -> None:
         self.outcome = outcome
         self.available = available
 
 
 class SlotDirectory(ts.Port, typing.Protocol):
 
-    def available(self, available_slots_request: AvailableSlotsRequest) -> AvailableSlotsResponse: ...
+    def list_available_slots(
+        self, list_available_slots_request: ListAvailableSlotsRequest
+    ) -> ListAvailableSlotsResponse: ...
 
-    def reserve(self, reserve_slot_request: ReserveSlotRequest) -> ReserveSlotResponse: ...
+    def reserve_slot(self, reserve_slot_request: ReserveSlotRequest) -> ReserveSlotResponse: ...

@@ -60,9 +60,9 @@ class HttpHost(ts.Host):
                 )
 
             @router.post("/purchases")
-            async def purchase(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
+            async def pay_for_order(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
                 try:
-                    http_response = await handler.purchase(
+                    http_response = await handler.pay_for_order(
                         protocol.HttpRequest(body=await request.body())
                     )
                 except protocol.BadRequest as e:

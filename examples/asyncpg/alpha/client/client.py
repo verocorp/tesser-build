@@ -5,14 +5,14 @@ import typing
 import tesser.context as ts
 
 
-class AddRequest(ts.Request):
+class AddPartRequest(ts.Request):
 
     def __init__(self, name: str, part: str) -> None:
         self.name = name
         self.part = part
 
 
-class AddResponse(ts.Response):
+class AddPartResponse(ts.Response):
 
     def __init__(self, name: str, part: str, standing: str) -> None:
         self.name = name
@@ -20,14 +20,14 @@ class AddResponse(ts.Response):
         self.standing = standing
 
 
-class TakeRequest(ts.Request):
+class TakePartRequest(ts.Request):
 
     def __init__(self, name: str, part: str) -> None:
         self.name = name
         self.part = part
 
 
-class TakeResponse(ts.Response):
+class TakePartResponse(ts.Response):
 
     def __init__(self, name: str, part: str, standing: str) -> None:
         self.name = name
@@ -35,13 +35,13 @@ class TakeResponse(ts.Response):
         self.standing = standing
 
 
-class FindRequest(ts.Request):
+class FindWidgetRequest(ts.Request):
 
     def __init__(self, name: str) -> None:
         self.name = name
 
 
-class FindResponse(ts.Response):
+class FindWidgetResponse(ts.Response):
 
     def __init__(self, found: str) -> None:
         self.found = found
@@ -85,8 +85,8 @@ ERRORS: typing.Final[
 
 class AlphaClient(ts.Client, typing.Protocol):
 
-    async def add(self, add_request: AddRequest) -> AddResponse: ...
+    async def add_part(self, add_part_request: AddPartRequest) -> AddPartResponse: ...
 
-    async def take(self, take_request: TakeRequest) -> TakeResponse: ...
+    async def take_part(self, take_part_request: TakePartRequest) -> TakePartResponse: ...
 
-    async def find(self, find_request: FindRequest) -> FindResponse: ...
+    async def find_widget(self, find_widget_request: FindWidgetRequest) -> FindWidgetResponse: ...

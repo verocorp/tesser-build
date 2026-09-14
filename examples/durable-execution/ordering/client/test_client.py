@@ -3,39 +3,49 @@ from __future__ import annotations
 import ordering.client as client
 
 
-class TestRejected:
+class TestOrderRejected:
 
-    def test_a_rejection_carries_its_code_and_message(self) -> None:
-        rejected = client.Rejected("order_rejected", "an order is for at least one unit")
-        assert rejected.code == "order_rejected"
-        assert rejected.message == "an order is for at least one unit"
-        assert str(rejected) == "an order is for at least one unit"
-
-
-class TestMissing:
-
-    def test_a_missing_carries_its_code_and_message(self) -> None:
-        missing = client.Missing("order_rejected", "no price for sku 'nope'")
-        assert missing.code == "order_rejected"
-        assert missing.message == "no price for sku 'nope'"
-        assert str(missing) == "no price for sku 'nope'"
+    def test_a_rejected_order_carries_its_code_and_message(self) -> None:
+        order_rejected = client.OrderRejected(
+            "quantity_below_one", "an order is for at least one unit"
+        )
+        assert order_rejected.code == "quantity_below_one"
+        assert order_rejected.message == "an order is for at least one unit"
+        assert str(order_rejected) == "an order is for at least one unit"
 
 
-class TestConflict:
+class TestProductPriceNotFound:
 
-    def test_a_conflict_carries_its_code_and_message(self) -> None:
-        conflict = client.Conflict("order_rejected", "the order is already running")
-        assert conflict.code == "order_rejected"
-        assert conflict.message == "the order is already running"
-        assert str(conflict) == "the order is already running"
+    def test_a_price_that_was_not_found_carries_its_message(self) -> None:
+        product_price_not_found = client.ProductPriceNotFound("no price for sku 'nope'")
+        assert product_price_not_found.message == "no price for sku 'nope'"
+        assert str(product_price_not_found) == "no price for sku 'nope'"
 
 
-class TestUnavailable:
+class TestOrderNotConfirmed:
 
-    def test_an_unavailable_engine_carries_its_message(self) -> None:
-        unavailable = client.Unavailable("the ordering engine is unavailable")
-        assert unavailable.message == "the ordering engine is unavailable"
-        assert str(unavailable) == "the ordering engine is unavailable"
+    def test_an_order_that_was_not_confirmed_carries_its_message(self) -> None:
+        order_not_confirmed = client.OrderNotConfirmed("no price for sku 'nope'")
+        assert order_not_confirmed.message == "no price for sku 'nope'"
+        assert str(order_not_confirmed) == "no price for sku 'nope'"
+
+
+class TestPaymentDeclined:
+
+    def test_a_declined_payment_carries_its_message(self) -> None:
+        payment_declined = client.PaymentDeclined("the processor declined the charge")
+        assert payment_declined.message == "the processor declined the charge"
+        assert str(payment_declined) == "the processor declined the charge"
+
+
+class TestOrderAlreadyStarted:
+
+    def test_an_order_already_started_carries_its_message(self) -> None:
+        order_already_started = client.OrderAlreadyStarted(
+            "the workflow method was already invoked"
+        )
+        assert order_already_started.message == "the workflow method was already invoked"
+        assert str(order_already_started) == "the workflow method was already invoked"
 
 
 class TestErrors:

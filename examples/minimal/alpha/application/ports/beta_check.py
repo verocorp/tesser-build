@@ -6,23 +6,23 @@ import typing
 import tesser.application as ts
 
 
-class Verdict(enum.Enum):
+class CheckNameOutcome(enum.Enum):
     OK = "ok"
     REFUSED = "refused"
 
 
-class CheckRequest(ts.Request):
+class CheckNameRequest(ts.Request):
 
     def __init__(self, name: str) -> None:
         self.name = name
 
 
-class CheckResponse(ts.Response):
+class CheckNameResponse(ts.Response):
 
-    def __init__(self, verdict: Verdict) -> None:
-        self.verdict = verdict
+    def __init__(self, outcome: CheckNameOutcome) -> None:
+        self.outcome = outcome
 
 
 class BetaCheck(ts.Port, typing.Protocol):
 
-    def check(self, check_request: CheckRequest) -> CheckResponse: ...
+    def check_name(self, check_name_request: CheckNameRequest) -> CheckNameResponse: ...

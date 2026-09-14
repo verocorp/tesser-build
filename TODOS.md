@@ -2,6 +2,188 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the operation-naming enactment (2026-09-13, Chris)
+
+The conventions are `docs/design-operation-naming.md`; the enactment is
+branch `naming-enactment` (off `naming-conventions`). Two things the
+enactment surfaced that Chris deferred rather than ruled.
+
+- **Two domain refusals lost their status.** `payment_mismatch` and
+  `priced_another_order` were 409s through `EngineConflict`. With
+  `ports/engine.py` gone and `PayForOrderOutcome` closed at four members,
+  neither names an invariant the aggregate broke, so both are faults now: a
+  500 at the door and a paused invocation in the engine. Arguably right,
+  they are bugs rather than caller errors, but it is a behaviour change the
+  ruling did not discuss. Decide whether an aggregate's own invariant
+  breaking mid-workflow is a fault, a situation, or an outcome member.
+- **The shape of a deeper reason on a response.** Rule 9 says the reason
+  below a parent's summarised step travels as data. The enactment used
+  `reasons: tuple[str, ...]` on four relay responses, empty when there is
+  none, carrying the child's member name for `ORDER_NOT_CONFIRMED` and the
+  engine's own message text for `ALREADY_STARTED`. It is flexible and it is
+  a string, not a record, and it is the one field on every response in the
+  tree. Deferred until a consumer needs to read it as more than text.
+
+## Left open by the enactment's second round (2026-09-14, Chris)
+
+Rulings on the eight places round 2 of `naming-enactment` did not apply
+cleanly. Two are high priority; the rest are deferred with a reason.
+
+- [ ] **HIGH: bias agents away from DRY where separation is the point.**
+  `LoadCampaignOutcome` and `LoadCampaignBySlugOutcome` both read
+  `FOUND / NOT_FOUND`, and that is intended: rule 6 derives one outcome
+  per operation, and two enums that look alike today are two things that
+  may diverge tomorrow. The same pull toward merging showed up before this
+  (the shared `CampaignView` across four operations, `BookingStateResponse`
+  across five, the two runners wanting one mapper). Chris: "a repeating
+  issue, and this outcome enum example is just the most recent". The
+  follow-up is a skill rule, and possibly an analyzer check, that says when
+  two abstractions that look the same must stay apart, in words an agent
+  will obey against its own instinct to deduplicate.
+- [ ] **HIGH: collections of things, and who may index one.** The happy
+  arms now read `xs[0]` on a zero-or-one tuple and fault with a bare
+  `IndexError` on an inconsistent payload. Accepted for now. The larger
+  item is that collections bite in many places (mappers, specs, the
+  zero-or-one response field) and there is no rule for them. Target
+  stated by Chris: indexing a list directly is not allowed outside a
+  domain aggregate. Needs the collection shape for a response, a spec, and
+  a mapper before the analyzer half can be written.
+- [ ] **Deferred: the empty `reasons` for `ALREADY_STARTED`.** Splitting
+  the parent's arm left both services saying "the order was already
+  started" in their own words and the engine's text unreachable from the
+  door, which was the intent, but the README can no longer document the
+  server's body. Chris: "not good, but we will defer further outcome and
+  reasons design". Folds into the reason-shape entry above.
+- [ ] **Deferred: `Campaign` collides with itself in python-app's ports.**
+  The repository's record and the queries port's record are both a picture
+  of a campaign in one package, so the read side is `Campaign` and the
+  write side stayed `CampaignRecord` / `LinkRecord` / `MoneyRecord`. Chris:
+  "a smell", deferred. The rule-6 "no word, just the thing" ruling meets
+  two things with one name here; the fix is probably that they are not the
+  same thing and one of them is misnamed, not a suffix.
+- [ ] **Deferred: `minimal`'s `FlowResponse` is a pattern name.** Deriving
+  it collides with the relay's response in the same module, because
+  whether an orchestrator returns its relay's response is not settled for
+  that tree. `WidgetFlow.run` became `quote_widget`; the response keeps its
+  name. Chris: a needed rename, deferred.
+- [ ] **Deferred: four declarations not renamed by design.**
+  `ToolSurface.instructions` / `begin` / `status` in llmport are the LLM's
+  tool vocabulary; `Host.run` in python-app is a lifecycle surface. Neither
+  takes a request. Chris: fine for now, investigate later.
+
+Accepted without follow-up: `has_key` / `slug_taken` stay as the tree's
+question-shaped words; the `verdict` / `presence` field renames to
+`outcome` stand.
+
+Three more the enactment left standing, verified against the source on
+2026-09-14 rather than taken from the round reports:
+
+- [ ] **serdepy's `ParcelWire.to_payload` fails rules 1 and 6.**
+  `examples/serdepy/parcel/application/ports/parcel_wire.py` declares one
+  port whose one method is `to_payload(ParcelRecord) -> PayloadResponse`.
+  "To" is a preposition and "payload" a transport word; the request is
+  named for a record and the response for a payload, neither derived from
+  an operation. The record IS a `ts.Request` (the round-2 report said
+  otherwise). The port was created on purpose by
+  `docs/design-application-ports-migration.md` option 1 and the
+  serialization skill cites the file, so the port stays and only the names
+  move: `publish_parcel` with `PublishParcelRequest` / `PublishParcelResponse`
+  (or `manifest_parcel` if the far side is to be a carrier manifest — the
+  tree does not say what consumes the wire, and that choice is Chris's).
+  Five files, all in the tree; the skill cites the path, not the classes.
+- [ ] **The transport-category errors still stand in errorspy and
+  python-app.** Both `campaign` clients declare `Rejected` / `Missing` /
+  `Conflict` / `Unavailable` / `Unreadable`; python-app's `linkpolicy`
+  client declares `Rejected` / `Unavailable` and `reports` declares
+  `Unavailable` / `Unreadable`. Six port modules declare an `Unavailable`
+  error (rule 7: a port declares none) and three cross-context gateways
+  re-raise a peer's `Unavailable` as their own port's. Counts: errorspy 13
+  raise sites, 4 handler matches, 1 port error; python-app 33 raise sites,
+  9 handler matches, 5 port errors. Rules 12 and 14 applied as
+  durable-execution applied them: `Unavailable` and `Unreadable` are faults
+  (class, service catch-and-translate, port error, gateway translation all
+  go; the host's catch-all turns the 503 into a 500); `Missing` becomes
+  `CampaignNotFound` / `LinkNotFound`; `Conflict` splits into the words the
+  tree already has (`SlugTaken` from the repository's `TAKEN`,
+  `DestinationBlocked` from the policy check, the aggregate transitions'
+  own codes); `Rejected` stays a situation named for the thing, its status
+  the open entry above. Nothing decided on 2026-09-14 blocks it; it is held
+  only for review size. The NEXT PR after the naming enactment merges, with
+  durable-execution's README section "Two failure classes, and nothing
+  else" as the brief.
+- [ ] **`scripts/install-dev` misses `specs-app`.** Its file list comes
+  from a hand-written `find examples layout tessercheck-py tesser-py`
+  line; `specs-app` has an `app` row and a `requirements-dev.txt`
+  (`playwright` among them) but is not on the line, so a fresh venv fails
+  that gate at mypy. `scripts/verify` already derives its tree list from
+  the manifest through `layout`'s `srv.cli.trees` host, which runs on the
+  stdlib plus tesser-py with nothing installed, so the installer can do the
+  same and the two scripts cannot disagree again. Sweeping the whole repo
+  for requirements files instead is wrong: `.claude/worktrees` holds full
+  copies. CI never uses the installer (each job installs its own file and
+  the specs-app job also fetches Chromium), so add a printed hint for the
+  browser step; pip cannot do it.
+
+## Left standing by the v0.1.1.0 adversarial passes (2026-09-14, PR #191)
+
+Two adversarial reviewers (Codex and a Claude subagent) ran on the naming
+enactment before Chris stopped the ship run. Nothing below was acted on;
+each is a candidate for a later wave, most serious first.
+
+- [ ] **A response carrying more than one record passes the snapshot and
+  only the first is read.** `purchase_orchestrator.py` and
+  `purchase_actions.py` read `payments[0]`; a payload with two receipts
+  deserializes, and the amount check sees one of them, so a duplicated
+  charge from a faulty adapter hides behind a `PAID`. The zero-or-one
+  tuple has no rule enforcing "zero or one" anywhere. This is the
+  collections item above, arriving as a concrete hole: settle the
+  collection shape, then either the snapshot or the consumer enforces the
+  count. (Codex P1.)
+- [ ] **A declined payment with an empty `reasons` is a 500, not a
+  situation.** `purchase_service.py` raises `PaymentDeclined(reasons[0])`
+  and `order_service.py` does the same for `PRODUCT_PRICE_NOT_FOUND`;
+  nothing requires a `DECLINED` or `NOT_FOUND` response to carry a reason
+  string, so an adapter that declines with a bare code produces an
+  `IndexError`. Same root as the `reasons` shape entry above: decide
+  whether a reason is required per member, or make the empty case a
+  defined message. (Claude, confidence 9.)
+- [ ] **The 30-second read timeout leaves an accepted purchase with no
+  recovery path.** After the timeout the host answers 500 while the
+  workflow finishes; a retry with the same order answers `ALREADY_STARTED`
+  with no purchase, so a caller cannot tell a completed charge from an
+  unfinished one and retrying under another id risks a second charge.
+  Restate has `/attach` for exactly this; nothing in the tree exposes it.
+  Decide whether accepted-but-pending is an outcome the client speaks.
+  (Codex P2, Claude finding 5.)
+- [ ] **The retry policy's unset intervals retry within about a second.**
+  `InvocationRetryPolicy(max_attempts=5, on_max_attempts="pause")` leaves
+  `initial_interval`, `exponentiation_factor`, and `max_interval` at the
+  server defaults, and applies to the two action Services as well as the
+  Workflows, so a two-second processor outage exhausts `take_payment`,
+  pauses the invocation, hangs the parent's `service_call`, and leaves the
+  order key claimed. The bounded policy is right; these numbers make a
+  transient outage indistinguishable from a permanent fault. Set the
+  intervals, or set them per Service and Workflow. (Claude, confidence 7;
+  the performance specialist raised the same interaction from the caller's
+  side.)
+- [ ] **A concurrent confirm is 422 down one path and 409 down the other.**
+  The child's `ALREADY_STARTED` becomes the parent's `ORDER_NOT_CONFIRMED`,
+  which the handler answers 422 (invalid, do not retry), while the same
+  condition on the parent leg is `ALREADY_STARTED` and 409 (retry). Rule 9
+  settles the name; the status consequence was never ruled. (Claude,
+  confidence 8.)
+- [ ] **The README still documents the struck count check.**
+  `examples/durable-execution/README.md` (around line 789) says a `PRICED`
+  response carrying no price is refused; that check was struck on
+  2026-09-13 and the snapshots no longer do it. One sentence to delete.
+  (Claude, confidence 10.)
+- [ ] **Advisory: the eight serde guard blocks in
+  `restate_order_runtime.py` are one helper.** Empty body → terminal 400,
+  `ValueError` → terminal 400, repeated verbatim on every `deserialize`;
+  a module-level helper removes about 32 lines and eight TB082 markers.
+  Left because it changes the shape the work list counts. (Simplification
+  specialist.)
+
 ## Left open by the relay ruling (2026-09-11, Chris)
 
 The word "job" is gone: `ts.Job`, `ts.JobContext`, `adapters/jobs/`, and the
@@ -1042,6 +1224,12 @@ where it lands.
   removes them, not ruled).
 - [ ] **A port's error set is closed the way a client's is: one `ERRORS`
   tuple on the port module, caught and matched with `assert_never`.**
+  **Superseded in direction 2026-09-13 by rule 7 of
+  `docs/design-operation-naming.md`: a port or relay declares no errors at
+  all; expected alternatives are outcome members on the response and the
+  rest are faults. durable-execution is migrated (`ports/engine.py` and
+  the 27 markers are gone); errorspy and python-app still carry port
+  errors and are the next PR (see the 2026-09-14 section above).**
   Chris, 2026-09-11, ruled in direction on #184, deferred to a follow-up
   wave so the boundary PR ships as it is. The gap: a service catches a
   port error by class name, so a second error a port declares later

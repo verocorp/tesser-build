@@ -26,14 +26,14 @@ def campaign_spec(slug: str = "promo") -> domain.CampaignSpec:
 
 @ts.fake
 class FakeTargetPolicyAllowAll(ports.TargetPolicy):
-    def check(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
-        return ports.CheckTargetResponse(verdict=ports.PolicyVerdict.ALLOWED, reason="ok")
+    def check_target(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
+        return ports.CheckTargetResponse(outcome=ports.CheckTargetOutcome.ALLOWED, reason="ok")
 
 
 def test_row_golden_locks_the_storage_shape() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign = domain.Campaign(campaign_spec())
-    in_memory_campaign_repository.save(ports.SaveCampaignRequest(
+    in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(
             amount=str(campaign.budget.amount), currency=str(campaign.budget.currency)
@@ -59,7 +59,7 @@ def test_row_golden_locks_the_storage_shape() -> None:
 def test_wire_golden_locks_the_campaign_payload() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign = domain.Campaign(campaign_spec())
-    in_memory_campaign_repository.save(ports.SaveCampaignRequest(
+    in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(
             amount=str(campaign.budget.amount), currency=str(campaign.budget.currency)
@@ -84,7 +84,7 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign = domain.Campaign(campaign_spec())
-    in_memory_campaign_repository.save(ports.SaveCampaignRequest(
+    in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(
             amount=str(campaign.budget.amount), currency=str(campaign.budget.currency)
@@ -97,7 +97,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
         ),
     ))
     http_handler = handlers.HttpHandler(application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository))
-    http_response = http_handler.resolve(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    http_response = http_handler.resolve_slug(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     assert http_response.status_code == 302
     assert http_response.body == b""
     assert http_response.headers == {"Location": "https://ok.example/x"}
@@ -106,7 +106,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
 def test_load_reconstructs_value_equal_non_identical() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     original = domain.Campaign(campaign_spec())
-    in_memory_campaign_repository.save(ports.SaveCampaignRequest(
+    in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(original.id),
         budget=ports.MoneyRecord(
             amount=str(original.budget.amount), currency=str(original.budget.currency)
@@ -118,11 +118,11 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
             for link in original.links
         ),
     ))
-    find_campaign_response = in_memory_campaign_repository.find(ports.FindCampaignRequest(campaign_id="0123456789abcdef"))
-    match find_campaign_response.outcome:
-        case ports.CampaignLookup.FOUND:
-            record = find_campaign_response.campaigns[0]
-        case ports.CampaignLookup.MISSING:
+    load_campaign_response = in_memory_campaign_repository.load_campaign(ports.LoadCampaignRequest(campaign_id="0123456789abcdef"))
+    match load_campaign_response.outcome:
+        case ports.LoadCampaignOutcome.FOUND:
+            record = load_campaign_response.campaigns[0]
+        case ports.LoadCampaignOutcome.NOT_FOUND:
             raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -165,7 +165,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
 def test_store_holds_rows_not_live_objects() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     original = domain.Campaign(campaign_spec())
-    in_memory_campaign_repository.save(ports.SaveCampaignRequest(
+    in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(original.id),
         budget=ports.MoneyRecord(
             amount=str(original.budget.amount), currency=str(original.budget.currency)
@@ -177,11 +177,11 @@ def test_store_holds_rows_not_live_objects() -> None:
             for link in original.links
         ),
     ))
-    find_campaign_response = in_memory_campaign_repository.find(ports.FindCampaignRequest(campaign_id="0123456789abcdef"))
-    match find_campaign_response.outcome:
-        case ports.CampaignLookup.FOUND:
-            record = find_campaign_response.campaigns[0]
-        case ports.CampaignLookup.MISSING:
+    load_campaign_response = in_memory_campaign_repository.load_campaign(ports.LoadCampaignRequest(campaign_id="0123456789abcdef"))
+    match load_campaign_response.outcome:
+        case ports.LoadCampaignOutcome.FOUND:
+            record = load_campaign_response.campaigns[0]
+        case ports.LoadCampaignOutcome.NOT_FOUND:
             raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -196,11 +196,11 @@ def test_store_holds_rows_not_live_objects() -> None:
         )),
     ))
     loaded.add_short_link(domain.ShortLinkSpec(slug="extra", target_url="https://ok.example/e", active=True))
-    find_campaign_response = in_memory_campaign_repository.find(ports.FindCampaignRequest(campaign_id="0123456789abcdef"))
-    match find_campaign_response.outcome:
-        case ports.CampaignLookup.FOUND:
-            record = find_campaign_response.campaigns[0]
-        case ports.CampaignLookup.MISSING:
+    load_campaign_response = in_memory_campaign_repository.load_campaign(ports.LoadCampaignRequest(campaign_id="0123456789abcdef"))
+    match load_campaign_response.outcome:
+        case ports.LoadCampaignOutcome.FOUND:
+            record = load_campaign_response.campaigns[0]
+        case ports.LoadCampaignOutcome.NOT_FOUND:
             raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
         case _ as unreachable:
             typing.assert_never(unreachable)
@@ -242,7 +242,7 @@ def test_store_holds_rows_not_live_objects() -> None:
 def test_load_reruns_invariants_on_stale_rows() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
     campaign = domain.Campaign(campaign_spec())
-    in_memory_campaign_repository.save(ports.SaveCampaignRequest(
+    in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(
             amount=str(campaign.budget.amount), currency=str(campaign.budget.currency)
@@ -262,11 +262,11 @@ def test_load_reruns_invariants_on_stale_rows() -> None:
     )
     in_memory_campaign_repository._rows["0123456789abcdef"] = campaign_record
     with pytest.raises(errors.DomainError):
-        find_campaign_response = in_memory_campaign_repository.find(ports.FindCampaignRequest(campaign_id="0123456789abcdef"))
-        match find_campaign_response.outcome:
-            case ports.CampaignLookup.FOUND:
-                record = find_campaign_response.campaigns[0]
-            case ports.CampaignLookup.MISSING:
+        load_campaign_response = in_memory_campaign_repository.load_campaign(ports.LoadCampaignRequest(campaign_id="0123456789abcdef"))
+        match load_campaign_response.outcome:
+            case ports.LoadCampaignOutcome.FOUND:
+                record = load_campaign_response.campaigns[0]
+            case ports.LoadCampaignOutcome.NOT_FOUND:
                 raise errors.not_found("campaign_missing", "no campaign with id '0123456789abcdef'")
             case _ as unreachable:
                 typing.assert_never(unreachable)

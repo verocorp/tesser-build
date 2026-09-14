@@ -20,9 +20,9 @@ TOOLS_FOR_STEP: typing.Final[dict[str, tuple[str, ...]]] = {
 
 class MapToToolTurn(ts.Mapper, protocol.ToolTurn):
 
-    def __init__(self, booking_state_response: client.BookingStateResponse) -> None:
+    def __init__(self, booking: client.Booking) -> None:
         tools: list[protocol.Tool] = []
-        for name in TOOLS_FOR_STEP[booking_state_response.step]:
+        for name in TOOLS_FOR_STEP[booking.step]:
             if name == PROVIDE_NAME:
                 description = "Record the caller's full name."
                 parameters: dict[str, object] = {
@@ -38,7 +38,7 @@ class MapToToolTurn(ts.Mapper, protocol.ToolTurn):
                     "properties": {
                         "slot": {
                             "type": "string",
-                            "enum": list(booking_state_response.offered_slots),
+                            "enum": list(booking.offered_slots),
                         }
                     },
                     "required": ["slot"],
@@ -56,7 +56,7 @@ class MapToToolTurn(ts.Mapper, protocol.ToolTurn):
             tools.append(
                 protocol.Tool(name=name, description=description, parameters=parameters)
             )
-        super().__init__(reply=booking_state_response.reply, tools=tuple(tools))
+        super().__init__(reply=booking.reply, tools=tuple(tools))
 
 
 class LlmToolHandler(ts.Handler):
@@ -72,35 +72,35 @@ class LlmToolHandler(ts.Handler):
         )
 
     def begin(self) -> protocol.ToolTurn:
-        booking_state_response = self._scheduling_client.begin(
+        begin_booking_response = self._scheduling_client.begin_booking(
             client.BeginBookingRequest(booking_id=self._booking_id)
         )
-        return MapToToolTurn(booking_state_response)
+        return MapToToolTurn(begin_booking_response.booking)
 
     def status(self) -> protocol.ToolTurn:
-        booking_state_response = self._scheduling_client.status(
-            client.StatusRequest(booking_id=self._booking_id)
+        get_booking_response = self._scheduling_client.get_booking(
+            client.GetBookingRequest(booking_id=self._booking_id)
         )
-        return MapToToolTurn(booking_state_response)
+        return MapToToolTurn(get_booking_response.booking)
 
     def provide_name(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
-        booking_state_response = self._scheduling_client.provide_name(
+        provide_name_response = self._scheduling_client.provide_name(
             client.ProvideNameRequest(
                 booking_id=self._booking_id, name=tool_call.text("name")
             )
         )
-        return MapToToolTurn(booking_state_response)
+        return MapToToolTurn(provide_name_response.booking)
 
     def choose_slot(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
-        booking_state_response = self._scheduling_client.choose_slot(
+        choose_slot_response = self._scheduling_client.choose_slot(
             client.ChooseSlotRequest(
                 booking_id=self._booking_id, slot=tool_call.text("slot")
             )
         )
-        return MapToToolTurn(booking_state_response)
+        return MapToToolTurn(choose_slot_response.booking)
 
     def confirm(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
-        booking_state_response = self._scheduling_client.confirm(
+        confirm_booking_response = self._scheduling_client.confirm_booking(
             client.ConfirmBookingRequest(booking_id=self._booking_id)
         )
-        return MapToToolTurn(booking_state_response)
+        return MapToToolTurn(confirm_booking_response.booking)

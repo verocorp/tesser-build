@@ -2,7 +2,7 @@ from campaign.application.service import CampaignService as CampaignService
 from campaign.application.service import MapToCampaignSpec as MapToCampaignSpec
 from campaign.application.service import MapToCampaignSpecFromRecord as MapToCampaignSpecFromRecord
 from campaign.application.service import MapToCampaignSpecFromSlugLookup as MapToCampaignSpecFromSlugLookup
-from campaign.application.service import MapToCampaignView as MapToCampaignView
+from campaign.application.service import MapToCampaign as MapToCampaign
 from campaign.application.service import MapToLinkRecord as MapToLinkRecord
-from campaign.application.service import MapToLinkView as MapToLinkView
+from campaign.application.service import MapToLink as MapToLink
 from campaign.application.service import MapToSaveCampaignRequest as MapToSaveCampaignRequest

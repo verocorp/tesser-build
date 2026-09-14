@@ -5,13 +5,13 @@ import typing
 import tesser.application as ts
 
 
-class QuoteRequest(ts.Request):
+class QuoteWidgetRequest(ts.Request):
 
     def __init__(self, name: str) -> None:
         self.name = name
 
 
-class QuoteResponse(ts.Response):
+class QuoteWidgetResponse(ts.Response):
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -19,4 +19,4 @@ class QuoteResponse(ts.Response):
 
 class WidgetActionsRunner(ts.Relay, typing.Protocol):
 
-    def run_quote(self, quote_request: QuoteRequest) -> QuoteResponse: ...
+    def run_quote_widget(self, quote_widget_request: QuoteWidgetRequest) -> QuoteWidgetResponse: ...

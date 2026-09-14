@@ -11,5 +11,5 @@ class InlineWidgetActionsRunner(ts.Runner):
     def __init__(self, inline_widget_runtime: runtimes.InlineWidgetRuntime) -> None:
         self._inline_widget_runtime = inline_widget_runtime
 
-    def run_quote(self, quote_request: relays.QuoteRequest) -> relays.QuoteResponse:
-        return self._inline_widget_runtime.quote_handler(quote_request)
+    def run_quote_widget(self, quote_widget_request: relays.QuoteWidgetRequest) -> relays.QuoteWidgetResponse:
+        return self._inline_widget_runtime.quote_handler(quote_widget_request)

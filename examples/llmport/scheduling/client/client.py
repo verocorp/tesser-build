@@ -31,13 +31,13 @@ class ConfirmBookingRequest(ts.Request):
         self.booking_id = booking_id
 
 
-class StatusRequest(ts.Request):
+class GetBookingRequest(ts.Request):
 
     def __init__(self, booking_id: str) -> None:
         self.booking_id = booking_id
 
 
-class BookingStateResponse(ts.Response):
+class Booking(ts.Response):
 
     def __init__(self, step: str, offered_slots: tuple[str, ...], reply: str) -> None:
         self.step = step
@@ -45,14 +45,46 @@ class BookingStateResponse(ts.Response):
         self.reply = reply
 
 
+class BeginBookingResponse(ts.Response):
+
+    def __init__(self, booking: Booking) -> None:
+        self.booking = booking
+
+
+class ProvideNameResponse(ts.Response):
+
+    def __init__(self, booking: Booking) -> None:
+        self.booking = booking
+
+
+class ChooseSlotResponse(ts.Response):
+
+    def __init__(self, booking: Booking) -> None:
+        self.booking = booking
+
+
+class ConfirmBookingResponse(ts.Response):
+
+    def __init__(self, booking: Booking) -> None:
+        self.booking = booking
+
+
+class GetBookingResponse(ts.Response):
+
+    def __init__(self, booking: Booking) -> None:
+        self.booking = booking
+
+
 class SchedulingClient(ts.Client, typing.Protocol):
 
-    def begin(self, begin_booking_request: BeginBookingRequest) -> BookingStateResponse: ...
+    def begin_booking(self, begin_booking_request: BeginBookingRequest) -> BeginBookingResponse: ...
 
-    def provide_name(self, provide_name_request: ProvideNameRequest) -> BookingStateResponse: ...
+    def provide_name(self, provide_name_request: ProvideNameRequest) -> ProvideNameResponse: ...
 
-    def choose_slot(self, choose_slot_request: ChooseSlotRequest) -> BookingStateResponse: ...
+    def choose_slot(self, choose_slot_request: ChooseSlotRequest) -> ChooseSlotResponse: ...
 
-    def confirm(self, confirm_booking_request: ConfirmBookingRequest) -> BookingStateResponse: ...
+    def confirm_booking(
+        self, confirm_booking_request: ConfirmBookingRequest
+    ) -> ConfirmBookingResponse: ...
 
-    def status(self, status_request: StatusRequest) -> BookingStateResponse: ...
+    def get_booking(self, get_booking_request: GetBookingRequest) -> GetBookingResponse: ...

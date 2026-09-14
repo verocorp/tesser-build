@@ -11,7 +11,7 @@ class LinksByVerdictRequest(ts.Request):
         return None
 
 
-class LinkVerdictView(ts.Response):
+class LinkVerdict(ts.Response):
 
     def __init__(self, slug: str, target_url: str, decision: str, reason: str) -> None:
         self.slug = slug
@@ -22,7 +22,7 @@ class LinkVerdictView(ts.Response):
 
 class LinksByVerdictResponse(ts.Response):
 
-    def __init__(self, links: tuple[LinkVerdictView, ...]) -> None:
+    def __init__(self, links: tuple[LinkVerdict, ...]) -> None:
         self.links = links
 
 

@@ -16,5 +16,5 @@ class TestBeta:
 
     def test_the_wired_client_checks_the_configured_key(self) -> None:
         beta = component.Beta(component.Config(component.Spec(key="k")))
-        check_response = beta.client.check(client.CheckRequest(key="k"))
-        assert check_response.held == "yes"
+        check_key_response = beta.client.check_key(client.CheckKeyRequest(key="k"))
+        assert check_key_response.held == "yes"

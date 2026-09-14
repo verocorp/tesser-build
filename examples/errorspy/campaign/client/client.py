@@ -48,7 +48,7 @@ class DeactivateLinkRequest(ts.Request):
         self.slug = slug
 
 
-class CampaignView(ts.Response):
+class Campaign(ts.Response):
 
     def __init__(self, campaign_id: str, links: tuple[str, ...]) -> None:
         self.campaign_id = campaign_id
@@ -122,16 +122,42 @@ ERRORS: typing.Final[
 ] = (Rejected, Missing, Conflict, Unavailable, Unreadable)
 
 
+class CreateCampaignResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
+class GetCampaignResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
+class AddLinkResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
+class DeactivateLinkResponse(ts.Response):
+
+    def __init__(self, campaign: Campaign) -> None:
+        self.campaign = campaign
+
+
 class CampaignClient(ts.Client, typing.Protocol):
 
     def create_campaign(
         self, create_campaign_request: CreateCampaignRequest
-    ) -> CampaignView: ...
+    ) -> CreateCampaignResponse: ...
 
-    def get_campaign(self, get_campaign_request: GetCampaignRequest) -> CampaignView: ...
+    def get_campaign(
+        self, get_campaign_request: GetCampaignRequest
+    ) -> GetCampaignResponse: ...
 
-    def add_link(self, add_link_request: AddLinkRequest) -> CampaignView: ...
+    def add_link(self, add_link_request: AddLinkRequest) -> AddLinkResponse: ...
 
     def deactivate_link(
         self, deactivate_link_request: DeactivateLinkRequest
-    ) -> CampaignView: ...
+    ) -> DeactivateLinkResponse: ...

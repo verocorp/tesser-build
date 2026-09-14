@@ -27,7 +27,7 @@ class HttpHost(ts.Host):
             protocol.Route("POST", "/links", campaign_http_handler.add_link),
             protocol.Route("POST", "/links/deactivate", campaign_http_handler.deactivate_link),
             protocol.Route("GET", "/campaigns/{campaign_id}", campaign_http_handler.get_campaign),
-            protocol.Route("GET", "/r/{slug}", campaign_http_handler.resolve),
+            protocol.Route("GET", "/r/{slug}", campaign_http_handler.resolve_slug),
             protocol.Route("GET", "/reports/links-by-verdict", reports_http_handler.links_by_verdict),
         )
         router = protocol.Router(routes)
