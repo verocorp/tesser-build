@@ -21,10 +21,6 @@ class LoadWidgetOutcome(enum.Enum):
     NOT_FOUND = "not_found"
 
 
-class StoreUnavailable(ts.Error):
-    pass
-
-
 class AddWidgetRequest(ts.Request):
 
     def __init__(self, name: str, part: str, standing: str) -> None:

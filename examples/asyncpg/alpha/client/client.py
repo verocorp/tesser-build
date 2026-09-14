@@ -47,7 +47,7 @@ class FindWidgetResponse(ts.Response):
         self.found = found
 
 
-class Rejected(ts.Error):
+class WidgetRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -55,23 +55,14 @@ class Rejected(ts.Error):
         self.message = message
 
 
-class Missing(ts.Error):
+class WidgetNotFound(ts.Error):
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, message: str) -> None:
         super().__init__(message)
-        self.code = code
         self.message = message
 
 
-class Conflict(ts.Error):
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
-class Unavailable(ts.Error):
+class WidgetExists(ts.Error):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -79,8 +70,8 @@ class Unavailable(ts.Error):
 
 
 ERRORS: typing.Final[
-    tuple[type[Rejected], type[Missing], type[Conflict], type[Unavailable]]
-] = (Rejected, Missing, Conflict, Unavailable)
+    tuple[type[WidgetRejected], type[WidgetNotFound], type[WidgetExists]]
+] = (WidgetRejected, WidgetNotFound, WidgetExists)
 
 
 class AlphaClient(ts.Client, typing.Protocol):

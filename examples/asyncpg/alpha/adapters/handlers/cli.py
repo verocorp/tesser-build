@@ -24,19 +24,15 @@ class Handler(ts.Handler):
             )
         except client.ERRORS as error:
             match error:
-                case client.Rejected():
+                case client.WidgetRejected():
                     return protocol.CliResponse(
                         exit_code=2, line=protocol.Line(text=error.message)
                     )
-                case client.Missing():
+                case client.WidgetNotFound():
                     return protocol.CliResponse(
                         exit_code=1, line=protocol.Line(text=error.message)
                     )
-                case client.Conflict():
-                    return protocol.CliResponse(
-                        exit_code=1, line=protocol.Line(text=error.message)
-                    )
-                case client.Unavailable():
+                case client.WidgetExists():
                     return protocol.CliResponse(
                         exit_code=1, line=protocol.Line(text=error.message)
                     )

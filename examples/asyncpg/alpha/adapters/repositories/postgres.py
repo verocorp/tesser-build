@@ -37,29 +37,20 @@ class PostgresWidgetRepository(ts.Repository):
         self._connection = connection
 
     async def add_widget(self, add_widget_request: ports.AddWidgetRequest) -> ports.AddWidgetResponse:
-        try:
-            added = await self._connection.fetchval(
-                _ADD, add_widget_request.name, add_widget_request.part, add_widget_request.standing
-            )
-        except (asyncpg.PostgresError, OSError) as e:
-            raise ports.StoreUnavailable("the widget store cannot answer") from e
+        added = await self._connection.fetchval(
+            _ADD, add_widget_request.name, add_widget_request.part, add_widget_request.standing
+        )
         outcome = ports.AddWidgetOutcome.EXISTS if added is None else ports.AddWidgetOutcome.ADDED
         return ports.AddWidgetResponse(outcome=outcome, name=add_widget_request.name)
 
     async def save_widget(self, save_widget_request: ports.SaveWidgetRequest) -> ports.SaveWidgetResponse:
-        try:
-            await self._connection.execute(
-                _SAVE, save_widget_request.name, save_widget_request.part, save_widget_request.standing
-            )
-        except (asyncpg.PostgresError, OSError) as e:
-            raise ports.StoreUnavailable("the widget store cannot answer") from e
+        await self._connection.execute(
+            _SAVE, save_widget_request.name, save_widget_request.part, save_widget_request.standing
+        )
         return ports.SaveWidgetResponse(name=save_widget_request.name)
 
     async def load_widget(self, load_widget_request: ports.LoadWidgetRequest) -> ports.LoadWidgetResponse:
-        try:
-            row = await self._connection.fetchrow(_LOAD_FOR_UPDATE, load_widget_request.name)
-        except (asyncpg.PostgresError, OSError) as e:
-            raise ports.StoreUnavailable("the widget store cannot answer") from e
+        row = await self._connection.fetchrow(_LOAD_FOR_UPDATE, load_widget_request.name)
         if row is None:
             return ports.LoadWidgetResponse(outcome=ports.LoadWidgetOutcome.NOT_FOUND, widgets=())
         return ports.LoadWidgetResponse(
@@ -72,10 +63,7 @@ class PostgresWidgetRepository(ts.Repository):
         )
 
     async def find_widget(self, find_widget_request: ports.FindWidgetRequest) -> ports.FindWidgetResponse:
-        try:
-            row = await self._connection.fetchrow(_FIND, find_widget_request.name)
-        except (asyncpg.PostgresError, OSError) as e:
-            raise ports.StoreUnavailable("the widget store cannot answer") from e
+        row = await self._connection.fetchrow(_FIND, find_widget_request.name)
         outcome = ports.FindWidgetOutcome.NO if row is None else ports.FindWidgetOutcome.YES
         return ports.FindWidgetResponse(outcome=outcome)
 
@@ -90,11 +78,8 @@ class PostgresWidgetStore(ts.Repository):
     async def transaction(self) -> typing.AsyncIterator[ports.WidgetRepository]:
         async with self._database.acquire() as connection:
             if not self._schema_ready:
-                try:
-                    await connection.execute(_SCHEMA)
-                    await connection.execute(_SCHEMA_STANDING)
-                except (asyncpg.PostgresError, OSError) as e:
-                    raise ports.StoreUnavailable("the widget store cannot answer") from e
+                await connection.execute(_SCHEMA)
+                await connection.execute(_SCHEMA_STANDING)
                 self._schema_ready = True
             async with connection.transaction():
                 yield PostgresWidgetRepository(connection)

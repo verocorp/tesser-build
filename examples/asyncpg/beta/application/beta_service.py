@@ -29,26 +29,20 @@ class BetaService(ts.ApplicationService):
         try:
             key = domain.Key(check_key_request.key)
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.KeyRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        try:
-            async with self._key_store.transaction() as key_repository:
-                has_key_response = await key_repository.has_key(MapToHasKeyRequest(key))
-        except ports.StoreUnavailable as store_error:
-            raise client.Unavailable(message="the key store is unavailable") from store_error
+        async with self._key_store.transaction() as key_repository:
+            has_key_response = await key_repository.has_key(MapToHasKeyRequest(key))
         return client.CheckKeyResponse(held=has_key_response.outcome.value)
 
     async def hold_key(self, hold_key_request: client.HoldKeyRequest) -> client.HoldKeyResponse:
         try:
             key = domain.Key(hold_key_request.key)
         except errors.DomainError as domain_error:
-            raise client.Rejected(
+            raise client.KeyRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        try:
-            async with self._key_store.transaction() as key_repository:
-                put_key_response = await key_repository.put_key(MapToPutKeyRequest(key))
-        except ports.StoreUnavailable as store_error:
-            raise client.Unavailable(message="the key store is unavailable") from store_error
+        async with self._key_store.transaction() as key_repository:
+            put_key_response = await key_repository.put_key(MapToPutKeyRequest(key))
         return client.HoldKeyResponse(key=put_key_response.key)

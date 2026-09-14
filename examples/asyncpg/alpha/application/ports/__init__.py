@@ -1,5 +1,4 @@
 from alpha.application.ports.beta_check import BetaCheck as BetaCheck
-from alpha.application.ports.beta_check import BetaUnavailable as BetaUnavailable
 from alpha.application.ports.beta_check import CheckNameOutcome as CheckNameOutcome
 from alpha.application.ports.beta_check import CheckNameRequest as CheckNameRequest
 from alpha.application.ports.beta_check import CheckNameResponse as CheckNameResponse
@@ -14,7 +13,6 @@ from alpha.application.ports.widget_repository import LoadWidgetResponse as Load
 from alpha.application.ports.widget_repository import LoadWidgetOutcome as LoadWidgetOutcome
 from alpha.application.ports.widget_repository import SaveWidgetRequest as SaveWidgetRequest
 from alpha.application.ports.widget_repository import SaveWidgetResponse as SaveWidgetResponse
-from alpha.application.ports.widget_repository import StoreUnavailable as StoreUnavailable
 from alpha.application.ports.widget_repository import WidgetRecord as WidgetRecord
 from alpha.application.ports.widget_repository import WidgetRepository as WidgetRepository
 from alpha.application.ports.widget_repository import WidgetStore as WidgetStore
