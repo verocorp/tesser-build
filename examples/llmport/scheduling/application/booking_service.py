@@ -18,10 +18,10 @@ class MapToFindBookingRequest(ts.Mapper, ports.FindBookingRequest):
 class MapToBookingSpec(ts.Mapper, domain.BookingSpec):
 
     def __init__(self, find_booking_response: ports.FindBookingResponse) -> None:
-        match find_booking_response.presence:
-            case ports.BookingPresence.PRESENT:
+        match find_booking_response.outcome:
+            case ports.FindBookingOutcome.PRESENT:
                 view = find_booking_response.bookings[0]
-            case ports.BookingPresence.ABSENT:
+            case ports.FindBookingOutcome.ABSENT:
                 raise KeyError("booking not found")
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -37,11 +37,11 @@ class MapToBegunBookingSpec(ts.Mapper, domain.BookingSpec):
         name = ""
         chosen = ""
         offered: tuple[str, ...] = ()
-        match find_booking_response.presence:
-            case ports.BookingPresence.PRESENT:
+        match find_booking_response.outcome:
+            case ports.FindBookingOutcome.PRESENT:
                 view = find_booking_response.bookings[0]
                 step, name, chosen, offered = view.step, view.name, view.chosen, view.offered
-            case ports.BookingPresence.ABSENT:
+            case ports.FindBookingOutcome.ABSENT:
                 pass
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -51,7 +51,7 @@ class MapToBegunBookingSpec(ts.Mapper, domain.BookingSpec):
 class MapToResumptionSpec(ts.Mapper, domain.ResumptionSpec):
 
     def __init__(self, find_booking_response: ports.FindBookingResponse) -> None:
-        super().__init__(presence=find_booking_response.presence.value)
+        super().__init__(presence=find_booking_response.outcome.value)
 
 
 class MapToNamingSpec(ts.Mapper, domain.NamingSpec):
@@ -59,11 +59,11 @@ class MapToNamingSpec(ts.Mapper, domain.NamingSpec):
     def __init__(
         self,
         provide_name_request: client.ProvideNameRequest,
-        available_slots_response: ports.AvailableSlotsResponse,
+        list_available_slots_response: ports.ListAvailableSlotsResponse,
     ) -> None:
         super().__init__(
             name=provide_name_request.name,
-            offered=domain.OfferSpec(labels=available_slots_response.slots),
+            offered=domain.OfferSpec(labels=list_available_slots_response.slots),
         )
 
 
@@ -86,9 +86,9 @@ class MapToReoffersSpec(ts.Mapper, domain.ReoffersSpec):
     def __init__(self, reserve_slot_response: ports.ReserveSlotResponse) -> None:
         offered: tuple[tuple[str, ...], ...] = ()
         match reserve_slot_response.outcome:
-            case ports.ReservationOutcome.RESERVED:
+            case ports.ReserveSlotOutcome.RESERVED:
                 pass
-            case ports.ReservationOutcome.SLOT_TAKEN:
+            case ports.ReserveSlotOutcome.SLOT_TAKEN:
                 offered = (reserve_slot_response.available,)
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -165,7 +165,7 @@ class MapToBookingReoffered(ts.Mapper, client.Booking):
         )
 
 
-class MapToBeginResponse(ts.Mapper, client.BeginResponse):
+class MapToBeginBookingResponse(ts.Mapper, client.BeginBookingResponse):
 
     def __init__(self, booking: client.Booking) -> None:
         super().__init__(booking=booking)
@@ -183,13 +183,13 @@ class MapToChooseSlotResponse(ts.Mapper, client.ChooseSlotResponse):
         super().__init__(booking=booking)
 
 
-class MapToConfirmResponse(ts.Mapper, client.ConfirmResponse):
+class MapToConfirmBookingResponse(ts.Mapper, client.ConfirmBookingResponse):
 
     def __init__(self, booking: client.Booking) -> None:
         super().__init__(booking=booking)
 
 
-class MapToStatusResponse(ts.Mapper, client.StatusResponse):
+class MapToGetBookingResponse(ts.Mapper, client.GetBookingResponse):
 
     def __init__(self, booking: client.Booking) -> None:
         super().__init__(booking=booking)
@@ -203,21 +203,21 @@ class BookingService(ts.ApplicationService):
         self._slot_directory = slot_directory
         self._booking_repository = booking_repository
 
-    def begin(
+    def begin_booking(
         self, begin_booking_request: client.BeginBookingRequest
-    ) -> client.BeginResponse:
+    ) -> client.BeginBookingResponse:
         booking_id = domain.BookingID(begin_booking_request.booking_id)
-        find_booking_response = self._booking_repository.find(
+        find_booking_response = self._booking_repository.find_booking(
             MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBegunBookingSpec(find_booking_response))
-        self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
+        self._booking_repository.save_booking(MapToSaveBookingRequest(booking, booking_id))
         resumption = domain.Resumption(MapToResumptionSpec(find_booking_response))
         match resumption.resumed():
             case domain.Resumed.RESUMED:
-                return MapToBeginResponse(MapToBookingContinuing(booking))
+                return MapToBeginBookingResponse(MapToBookingContinuing(booking))
             case domain.Resumed.STARTED:
-                return MapToBeginResponse(MapToBookingAskingName(booking))
+                return MapToBeginBookingResponse(MapToBookingAskingName(booking))
             case _ as unreachable:
                 typing.assert_never(unreachable)
 
@@ -225,61 +225,63 @@ class BookingService(ts.ApplicationService):
         self, provide_name_request: client.ProvideNameRequest
     ) -> client.ProvideNameResponse:
         booking_id = domain.BookingID(provide_name_request.booking_id)
-        find_booking_response = self._booking_repository.find(
+        find_booking_response = self._booking_repository.find_booking(
             MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
-        available_slots_response = self._slot_directory.available(
-            ports.AvailableSlotsRequest()
+        list_available_slots_response = self._slot_directory.list_available_slots(
+            ports.ListAvailableSlotsRequest()
         )
         booking.provide_name(
-            MapToNamingSpec(provide_name_request, available_slots_response)
+            MapToNamingSpec(provide_name_request, list_available_slots_response)
         )
-        self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
+        self._booking_repository.save_booking(MapToSaveBookingRequest(booking, booking_id))
         return MapToProvideNameResponse(MapToBookingOfferingSlots(booking))
 
     def choose_slot(
         self, choose_slot_request: client.ChooseSlotRequest
     ) -> client.ChooseSlotResponse:
         booking_id = domain.BookingID(choose_slot_request.booking_id)
-        find_booking_response = self._booking_repository.find(
+        find_booking_response = self._booking_repository.find_booking(
             MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
         booking.choose_slot(domain.Slot(choose_slot_request.slot))
-        self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
+        self._booking_repository.save_booking(MapToSaveBookingRequest(booking, booking_id))
         return MapToChooseSlotResponse(MapToBookingAwaitingConfirmation(booking))
 
-    def confirm(
+    def confirm_booking(
         self, confirm_booking_request: client.ConfirmBookingRequest
-    ) -> client.ConfirmResponse:
+    ) -> client.ConfirmBookingResponse:
         booking_id = domain.BookingID(confirm_booking_request.booking_id)
-        find_booking_response = self._booking_repository.find(
+        find_booking_response = self._booking_repository.find_booking(
             MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
         booking.confirm()
         chosen_slot = booking.chosen()
         customer_name = booking.name()
-        reserve_slot_response = self._slot_directory.reserve(
+        reserve_slot_response = self._slot_directory.reserve_slot(
             MapToReserveSlotRequest(chosen_slot, customer_name)
         )
         settled = booking.settle(domain.Reoffers(MapToReoffersSpec(reserve_slot_response)))
-        self._booking_repository.save(MapToSaveBookingRequest(booking, booking_id))
+        self._booking_repository.save_booking(MapToSaveBookingRequest(booking, booking_id))
         match settled:
             case domain.Settled.BOOKED:
-                return MapToConfirmResponse(
+                return MapToConfirmBookingResponse(
                     MapToBookingBooked(booking, chosen_slot, customer_name)
                 )
             case domain.Settled.REOFFERED:
-                return MapToConfirmResponse(MapToBookingReoffered(booking, chosen_slot))
+                return MapToConfirmBookingResponse(MapToBookingReoffered(booking, chosen_slot))
             case _ as unreachable:
                 typing.assert_never(unreachable)
 
-    def status(self, status_request: client.StatusRequest) -> client.StatusResponse:
-        booking_id = domain.BookingID(status_request.booking_id)
-        find_booking_response = self._booking_repository.find(
+    def get_booking(
+        self, get_booking_request: client.GetBookingRequest
+    ) -> client.GetBookingResponse:
+        booking_id = domain.BookingID(get_booking_request.booking_id)
+        find_booking_response = self._booking_repository.find_booking(
             MapToFindBookingRequest(booking_id)
         )
         booking = domain.Booking(MapToBookingSpec(find_booking_response))
-        return MapToStatusResponse(MapToBookingContinuing(booking))
+        return MapToGetBookingResponse(MapToBookingContinuing(booking))

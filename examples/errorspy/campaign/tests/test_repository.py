@@ -13,7 +13,7 @@ def test_save_then_find_roundtrip() -> None:
     storage_campaign_repository = repositories.StorageCampaignRepository(
         storage.FakeStorage()
     )
-    storage_campaign_repository.save(
+    storage_campaign_repository.save_campaign(
         ports.SaveCampaignRequest(
             id="c1",
             window=ports.WindowRecord(start="2026-01-01", end="2026-02-01"),
@@ -21,7 +21,7 @@ def test_save_then_find_roundtrip() -> None:
         )
     )
     find_campaign_request = ports.FindCampaignRequest(campaign_id="c1")
-    find_campaign_response = storage_campaign_repository.find(find_campaign_request)
+    find_campaign_response = storage_campaign_repository.find_campaign(find_campaign_request)
     campaign_spec = application.MapToCampaignSpec(
         find_campaign_request=find_campaign_request,
         find_campaign_response=find_campaign_response,
@@ -35,7 +35,7 @@ def test_missing_is_the_contexts_missing() -> None:
         storage.FakeStorage()
     )
     find_campaign_request = ports.FindCampaignRequest(campaign_id="nope")
-    find_campaign_response = storage_campaign_repository.find(find_campaign_request)
+    find_campaign_response = storage_campaign_repository.find_campaign(find_campaign_request)
     with pytest.raises(client.Missing) as ei:
         application.MapToCampaignSpec(
             find_campaign_request=find_campaign_request,
@@ -49,7 +49,7 @@ def test_outage_is_the_port_error_not_the_vendors() -> None:
         storage.FakeStorage(down=True)
     )
     with pytest.raises(ports.StorageUnavailable) as ei:
-        storage_campaign_repository.find(ports.FindCampaignRequest(campaign_id="c1"))
+        storage_campaign_repository.find_campaign(ports.FindCampaignRequest(campaign_id="c1"))
     assert not isinstance(ei.value, storage.StorageError)
 
 

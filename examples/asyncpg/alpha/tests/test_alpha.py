@@ -17,15 +17,15 @@ import protocol
 @ts.fake
 class FakeBetaCheck(ports.BetaCheck):
 
-    async def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
-        return ports.CheckResponse(verdict=ports.Verdict.OK)
+    async def check_name(self, check_name_request: ports.CheckNameRequest) -> ports.CheckNameResponse:
+        return ports.CheckNameResponse(outcome=ports.CheckNameOutcome.OK)
 
 
 @ts.fake
 class FakeRefusingBetaCheck(ports.BetaCheck):
 
-    async def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
-        return ports.CheckResponse(verdict=ports.Verdict.REFUSED)
+    async def check_name(self, check_name_request: ports.CheckNameRequest) -> ports.CheckNameResponse:
+        return ports.CheckNameResponse(outcome=ports.CheckNameOutcome.REFUSED)
 
 
 class TestAlphaContext:
@@ -40,8 +40,10 @@ class TestAlphaContext:
         cli_response = await handlers.Handler(alpha.client).add(
             protocol.CliRequest(args=("ctx-alpha", "p"))
         )
-        found = await alpha.client.find(client.FindRequest(name="ctx-alpha"))
-        missing = await alpha.client.find(client.FindRequest(name="ctx-alpha-never-added"))
+        found = await alpha.client.find_widget(client.FindWidgetRequest(name="ctx-alpha"))
+        missing = await alpha.client.find_widget(
+            client.FindWidgetRequest(name="ctx-alpha-never-added")
+        )
         await alpha.close()
         await database.close()
         assert cli_response.line.text == "ctx-alpha p kept"
@@ -55,9 +57,13 @@ class TestAlphaContext:
         async with database.acquire() as connection:
             await connection.execute("DROP TABLE IF EXISTS widgets")
         alpha = component.Alpha(config, database, FakeBetaCheck())
-        await alpha.client.add(client.AddRequest(name="ctx-alpha-taken", part="p"))
-        taken = await alpha.client.take(client.TakeRequest(name="ctx-alpha-taken", part="q"))
-        retaken = await alpha.client.take(client.TakeRequest(name="ctx-alpha-taken", part="q"))
+        await alpha.client.add_part(client.AddPartRequest(name="ctx-alpha-taken", part="p"))
+        taken = await alpha.client.take_part(
+            client.TakePartRequest(name="ctx-alpha-taken", part="q")
+        )
+        retaken = await alpha.client.take_part(
+            client.TakePartRequest(name="ctx-alpha-taken", part="q")
+        )
         await alpha.close()
         await database.close()
         assert taken.part == "q"
@@ -70,16 +76,16 @@ class TestAlphaContext:
         async with database.acquire() as connection:
             await connection.execute("DROP TABLE IF EXISTS widgets")
         alpha = component.Alpha(config, database, FakeRefusingBetaCheck())
-        add_response = await alpha.client.add(
-            client.AddRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
+        add_part_response = await alpha.client.add_part(
+            client.AddPartRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
         )
         with pytest.raises(client.Conflict) as caught:
-            await alpha.client.add(client.AddRequest(name="ctx-alpha-twice", part="q"))
-        take_response = await alpha.client.take(
-            client.TakeRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
+            await alpha.client.add_part(client.AddPartRequest(name="ctx-alpha-twice", part="q"))
+        take_part_response = await alpha.client.take_part(
+            client.TakePartRequest(name="ctx-alpha-twice", part="ctx-alpha-twice")
         )
         await alpha.close()
         await database.close()
-        assert add_response.standing == "released"
+        assert add_part_response.standing == "released"
         assert caught.value.code == "widget_exists"
-        assert take_response.standing == "released"
+        assert take_part_response.standing == "released"

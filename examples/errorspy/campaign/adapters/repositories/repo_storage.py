@@ -11,8 +11,7 @@ class StorageCampaignRepository(ts.Repository):
     def __init__(self, backend: storage.FakeStorage) -> None:
         self._backend = backend
 
-    def save(
-        self, save_campaign_request: ports.SaveCampaignRequest
+    def save_campaign(self, save_campaign_request: ports.SaveCampaignRequest
     ) -> ports.SaveCampaignResponse:
         record: storage.Record = {
             "window": {
@@ -27,14 +26,13 @@ class StorageCampaignRepository(ts.Repository):
         self._backend.put(save_campaign_request.id, record)
         return ports.SaveCampaignResponse()
 
-    def find(
-        self, find_campaign_request: ports.FindCampaignRequest
+    def find_campaign(self, find_campaign_request: ports.FindCampaignRequest
     ) -> ports.FindCampaignResponse:
         try:
             row = self._backend.load(find_campaign_request.campaign_id)
         except storage.StorageMiss:
             return ports.FindCampaignResponse(
-                outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
+                outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
             )
         except storage.StorageUnavailable as e:
             raise ports.StorageUnavailable(
@@ -51,6 +49,6 @@ class StorageCampaignRepository(ts.Repository):
             ),
         )
         return ports.FindCampaignResponse(
-            outcome=ports.CampaignLookup.FOUND,
+            outcome=ports.FindCampaignOutcome.FOUND,
             campaigns=(campaign_record,),
         )

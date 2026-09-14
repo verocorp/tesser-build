@@ -17,7 +17,7 @@ class FakeLinkSource(ports.LinkSource):
         self.error = error
         self.requests: list[ports.ListLinksRequest] = []
 
-    def links(self, list_links_request: ports.ListLinksRequest) -> ports.ListLinksResponse:
+    def list_links(self, list_links_request: ports.ListLinksRequest) -> ports.ListLinksResponse:
         self.requests.append(list_links_request)
         if self.error is not None:
             raise self.error
@@ -33,7 +33,7 @@ class FakeVerdictSource(ports.VerdictSource):
         self.error = error
         self.requests: list[ports.ListVerdictsRequest] = []
 
-    def verdicts(
+    def list_verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
         self.requests.append(list_verdicts_request)

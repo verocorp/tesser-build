@@ -12,7 +12,7 @@ class FlowResponse(ts.Response):
         self.name = name
 
 
-class MapToQuoteRequest(ts.Mapper, relays.QuoteRequest):
+class MapToQuoteWidgetRequest(ts.Mapper, relays.QuoteWidgetRequest):
 
     def __init__(self, name: domain.Name) -> None:
         super().__init__(name=str(name))
@@ -20,8 +20,8 @@ class MapToQuoteRequest(ts.Mapper, relays.QuoteRequest):
 
 class MapToFlowResponse(ts.Mapper, FlowResponse):
 
-    def __init__(self, quote_response: relays.QuoteResponse) -> None:
-        super().__init__(name=quote_response.name)
+    def __init__(self, quote_widget_response: relays.QuoteWidgetResponse) -> None:
+        super().__init__(name=quote_widget_response.name)
 
 
 class WidgetFlow(ts.Orchestrator):
@@ -29,7 +29,7 @@ class WidgetFlow(ts.Orchestrator):
     def __init__(self, widget_actions_runner: relays.WidgetActionsRunner) -> None:
         self._widget_actions_runner = widget_actions_runner
 
-    def run(self, quote_request: relays.QuoteRequest) -> FlowResponse:
-        name = domain.Name(quote_request.name)
-        quote_response = self._widget_actions_runner.run_quote(MapToQuoteRequest(name))
-        return MapToFlowResponse(quote_response)
+    def quote_widget(self, quote_widget_request: relays.QuoteWidgetRequest) -> FlowResponse:
+        name = domain.Name(quote_widget_request.name)
+        quote_widget_response = self._widget_actions_runner.run_quote_widget(MapToQuoteWidgetRequest(name))
+        return MapToFlowResponse(quote_widget_response)

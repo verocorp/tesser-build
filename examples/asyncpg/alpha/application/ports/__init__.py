@@ -1,8 +1,8 @@
 from alpha.application.ports.beta_check import BetaCheck as BetaCheck
 from alpha.application.ports.beta_check import BetaUnavailable as BetaUnavailable
-from alpha.application.ports.beta_check import CheckRequest as CheckRequest
-from alpha.application.ports.beta_check import CheckResponse as CheckResponse
-from alpha.application.ports.beta_check import Verdict as Verdict
+from alpha.application.ports.beta_check import CheckNameOutcome as CheckNameOutcome
+from alpha.application.ports.beta_check import CheckNameRequest as CheckNameRequest
+from alpha.application.ports.beta_check import CheckNameResponse as CheckNameResponse
 from alpha.application.ports.widget_repository import AddWidgetRequest as AddWidgetRequest
 from alpha.application.ports.widget_repository import AddWidgetResponse as AddWidgetResponse
 from alpha.application.ports.widget_repository import Added as Added

@@ -52,11 +52,11 @@ class FakeCampaignClientScripted(client.CampaignClient):
             raise self.error
         return client.GetCampaignResponse(campaign=self.pending.pop(0))
 
-    def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
-        self.requests.append(resolve_request)
+    def resolve_slug(self, resolve_slug_request: client.ResolveSlugRequest) -> client.ResolveSlugResponse:
+        self.requests.append(resolve_slug_request)
         if self.error is not None:
             raise self.error
-        return client.ResolveResponse(target_url=self.resolved)
+        return client.ResolveSlugResponse(target_url=self.resolved)
 
     def list_links(
         self, list_links_request: client.ListLinksRequest
@@ -281,7 +281,7 @@ def test_get_campaign_refuses_a_request_with_no_campaign_id_on_the_path() -> Non
 def test_resolve_answers_a_redirect_to_the_target() -> None:
     http_handler = handlers.HttpHandler(FakeCampaignClientScripted(resolved="https://ok.example/x"))
 
-    http_response = http_handler.resolve(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+    http_response = http_handler.resolve_slug(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
 
     assert http_response.status_code == 302
     assert http_response.headers["Location"] == "https://ok.example/x"
@@ -294,7 +294,7 @@ def test_resolve_refuses_a_target_carrying_a_control_character() -> None:
     )
 
     with pytest.raises(protocol.BadRequest):
-        http_handler.resolve(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+        http_handler.resolve_slug(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
 
 
 def test_resolve_refuses_a_request_with_no_slug_on_the_path() -> None:
@@ -302,7 +302,7 @@ def test_resolve_refuses_a_request_with_no_slug_on_the_path() -> None:
     http_handler = handlers.HttpHandler(fake_campaign_client_scripted)
 
     with pytest.raises(protocol.BadRequest):
-        http_handler.resolve(protocol.HttpRequest("GET", "/", {}, {}, {}, b""))
+        http_handler.resolve_slug(protocol.HttpRequest("GET", "/", {}, {}, {}, b""))
 
     assert fake_campaign_client_scripted.requests == []
 

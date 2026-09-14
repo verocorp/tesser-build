@@ -23,9 +23,9 @@ scheduling/
   application/
     ports/
       slot_directory.py     SlotDirectory port + its Request/Response DTOs,
-                             ReservationOutcome (RESERVED / SLOT_TAKEN)
+                             ReserveSlotOutcome (RESERVED / SLOT_TAKEN)
       booking_repository.py BookingRepository port + its Request/Response
-                             DTOs, BookingPresence (PRESENT / ABSENT)
+                             DTOs, FindBookingOutcome (PRESENT / ABSENT)
     booking_service.py  BookingService, depending on the two ports above, and
                   the MapTo* mappers its bodies are written in, each one its
                   target spec or port DTO — MapToBookingSpec,
@@ -57,10 +57,11 @@ srv/
 The division of labor the checkers enforce:
 
 - **The service speaks only Requests and Responses** — one `ts.Request` in,
-  one `ts.Response` out, per use case (`begin`, `provide_name`, `choose_slot`,
-  `confirm`, `status`), each body inline. Each use case has a response of its
-  own — `BeginResponse`, `ProvideNameResponse`, `ChooseSlotResponse`,
-  `ConfirmResponse`, `StatusResponse` — and each holds one `client.Booking`,
+  one `ts.Response` out, per use case (`begin_booking`, `provide_name`,
+  `choose_slot`, `confirm_booking`, `get_booking`), each body inline. Each use
+  case has a response of its own — `BeginBookingResponse`,
+  `ProvideNameResponse`, `ChooseSlotResponse`, `ConfirmBookingResponse`,
+  `GetBookingResponse` — and each holds one `client.Booking`,
   the record named for the thing the act hands back. One response shared by
   five operations said which shape came back and never which act produced
   it.
@@ -71,9 +72,9 @@ The division of labor the checkers enforce:
 - **Ports speak records, never domain objects** — `SlotDirectory` and
   `BookingRepository` live in `application/ports/`, one port per module, and
   their DTOs carry strings and `ports.Booking` only. `BookingRepository` used
-  to expose a check-then-get pair (`has` / `get`); it is now a single `find`
-  returning a `BookingPresence` outcome plus payload, closing the
-  time-of-check-to-time-of-use gap between the two calls.
+  to expose a check-then-get pair (`has` / `get`); it is now a single
+  `find_booking` returning a `FindBookingOutcome` outcome plus payload,
+  closing the time-of-check-to-time-of-use gap between the two calls.
 - **The handler translates; the host routes.** `handlers.py` owns the tool
   names, the JSON schemas (the choose-slot schema embeds the *current* offered
   slots as an enum, rebuilt from every response), and the raw-argument
@@ -81,14 +82,15 @@ The division of labor the checkers enforce:
   one method per route. The name→endpoint table is handed to the host, which
   walks it inline, because routing is the host's job in every other srv. The
   context below the handler never hears the word "tool".
-- **A taken slot is an outcome, not an error.** `SlotDirectory.reserve`
-  returns a `ReservationOutcome` enum (`RESERVED` / `SLOT_TAKEN`) plus payload
+- **A taken slot is an outcome, not an error.** `SlotDirectory.reserve_slot`
+  returns a `ReserveSlotOutcome` enum (`RESERVED` / `SLOT_TAKEN`) plus payload
   rather than raising or returning a union. The service does not read that
   enum: `MapToReoffersSpec` carries it into `Reoffers`, `Booking.settle`
-  answers a `Settled` outcome (`BOOKED` / `REOFFERED`), and `confirm` matches
-  that one answer with `typing.assert_never` for exhaustiveness — reserved
-  books, taken re-offers the slots that are free now and persists that.
-  `begin` does the same with the repository's `BookingPresence`, through
+  answers a `Settled` outcome (`BOOKED` / `REOFFERED`), and `confirm_booking`
+  matches that one answer with `typing.assert_never` for exhaustiveness —
+  reserved books, taken re-offers the slots that are free now and persists
+  that. `begin_booking` does the same with the repository's
+  `FindBookingOutcome`, through
   `Resumption.resumed()`. One call, one turn — the caller is told what happened and what to do
   next in the same response, and the state it is told about is the state that
   was saved. This was edge choreography until 2026-08-08 (the adapter caught
@@ -228,11 +230,11 @@ they are copied knowingly or not at all:
   directory that raises `ValueError` on a driver fault would be misrouted
   to the model as correctable. The error-shell ruling (`ts.Error`) replaces
   this contract-by-convention with types.
-- **`confirm` reserves before it saves.** A `save` failure after a
-  successful `reserve` leaves the reservation held with the booking at
-  `confirm` — an operator-recoverable window, not silent loss, but real.
-  The outbox/idempotency-key answer is out of scope here.
-- **`save` carries no concurrency token.** Concurrent tool calls could
+- **`confirm_booking` reserves before it saves.** A `save_booking` failure
+  after a successful `reserve_slot` leaves the reservation held with the
+  booking at `confirm_booking` — an operator-recoverable window, not silent
+  loss, but real. The outbox/idempotency-key answer is out of scope here.
+- **`save_booking` carries no concurrency token.** Concurrent tool calls could
   interleave read-modify-write. The agent serializes per session with a
   lock; cross-session writers need an expected-version parameter on the
   port.

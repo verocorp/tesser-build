@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class BookingPresence(enum.Enum):
+class FindBookingOutcome(enum.Enum):
     PRESENT = "present"
     ABSENT = "absent"
 
@@ -28,8 +28,8 @@ class FindBookingRequest(ts.Request):
 
 class FindBookingResponse(ts.Response):
 
-    def __init__(self, presence: BookingPresence, bookings: tuple[Booking, ...]) -> None:
-        self.presence = presence
+    def __init__(self, outcome: FindBookingOutcome, bookings: tuple[Booking, ...]) -> None:
+        self.outcome = outcome
         self.bookings = bookings
 
 
@@ -53,6 +53,6 @@ class SaveBookingResponse(ts.Response):
 
 class BookingRepository(ts.Port, typing.Protocol):
 
-    def find(self, find_booking_request: FindBookingRequest) -> FindBookingResponse: ...
+    def find_booking(self, find_booking_request: FindBookingRequest) -> FindBookingResponse: ...
 
-    def save(self, save_booking_request: SaveBookingRequest) -> SaveBookingResponse: ...
+    def save_booking(self, save_booking_request: SaveBookingRequest) -> SaveBookingResponse: ...

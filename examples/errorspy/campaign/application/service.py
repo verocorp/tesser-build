@@ -24,9 +24,9 @@ class MapToCampaignSpec(ts.Mapper, domain.CampaignSpec):
         find_campaign_response: ports.FindCampaignResponse,
     ) -> None:
         match find_campaign_response.outcome:
-            case ports.CampaignLookup.FOUND:
+            case ports.FindCampaignOutcome.FOUND:
                 record = find_campaign_response.campaigns[0]
-            case ports.CampaignLookup.NOT_FOUND:
+            case ports.FindCampaignOutcome.NOT_FOUND:
                 raise client.Missing(
                     code="campaign_missing",
                     message=f"no campaign {find_campaign_request.campaign_id!r}",
@@ -155,7 +155,7 @@ class CampaignService(ts.ApplicationService):
         except errors.DomainError as domain_error:
             rejection = MapToRejection(domain_error)
             raise client.Rejected(rejection) from domain_error
-        self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
+        self._campaign_repository.save_campaign(MapToSaveCampaignRequest(campaign))
         return MapToCreateCampaignResponse(MapToCampaign(campaign))
 
     def get_campaign(
@@ -168,7 +168,7 @@ class CampaignService(ts.ApplicationService):
             raise client.Rejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
         try:
-            find_campaign_response = self._campaign_repository.find(find_campaign_request)
+            find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
         except ports.StorageUnavailable as port_error:
             raise client.Unavailable(
                 message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
@@ -198,7 +198,7 @@ class CampaignService(ts.ApplicationService):
             raise client.Rejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
         try:
-            find_campaign_response = self._campaign_repository.find(find_campaign_request)
+            find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
         except ports.StorageUnavailable as port_error:
             raise client.Unavailable(
                 message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
@@ -223,7 +223,7 @@ class CampaignService(ts.ApplicationService):
             raise client.Conflict(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
+        self._campaign_repository.save_campaign(MapToSaveCampaignRequest(campaign))
         return MapToAddLinkResponse(MapToCampaign(campaign))
 
     def deactivate_link(
@@ -236,7 +236,7 @@ class CampaignService(ts.ApplicationService):
             raise client.Rejected(rejection) from domain_error
         find_campaign_request = MapToFindCampaignRequest(campaign_id)
         try:
-            find_campaign_response = self._campaign_repository.find(find_campaign_request)
+            find_campaign_response = self._campaign_repository.find_campaign(find_campaign_request)
         except ports.StorageUnavailable as port_error:
             raise client.Unavailable(
                 message=f"campaign storage cannot answer for {find_campaign_request.campaign_id!r}"
@@ -262,5 +262,5 @@ class CampaignService(ts.ApplicationService):
             raise client.Missing(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        self._campaign_repository.save(MapToSaveCampaignRequest(campaign))
+        self._campaign_repository.save_campaign(MapToSaveCampaignRequest(campaign))
         return MapToDeactivateLinkResponse(MapToCampaign(campaign))

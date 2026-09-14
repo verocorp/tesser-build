@@ -16,11 +16,11 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.pending = list(bookings)
         self.requests: list[object] = []
 
-    def begin(
+    def begin_booking(
         self, begin_booking_request: client.BeginBookingRequest
-    ) -> client.BeginResponse:
+    ) -> client.BeginBookingResponse:
         self.requests.append(begin_booking_request)
-        return client.BeginResponse(self.pending.pop(0))
+        return client.BeginBookingResponse(self.pending.pop(0))
 
     def provide_name(
         self, provide_name_request: client.ProvideNameRequest
@@ -34,17 +34,17 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.requests.append(choose_slot_request)
         return client.ChooseSlotResponse(self.pending.pop(0))
 
-    def confirm(
+    def confirm_booking(
         self, confirm_booking_request: client.ConfirmBookingRequest
-    ) -> client.ConfirmResponse:
+    ) -> client.ConfirmBookingResponse:
         self.requests.append(confirm_booking_request)
-        return client.ConfirmResponse(self.pending.pop(0))
+        return client.ConfirmBookingResponse(self.pending.pop(0))
 
-    def status(
-        self, status_request: client.StatusRequest
-    ) -> client.StatusResponse:
-        self.requests.append(status_request)
-        return client.StatusResponse(self.pending.pop(0))
+    def get_booking(
+        self, get_booking_request: client.GetBookingRequest
+    ) -> client.GetBookingResponse:
+        self.requests.append(get_booking_request)
+        return client.GetBookingResponse(self.pending.pop(0))
 
 
 def test_the_tool_map_covers_exactly_the_domain_steps() -> None:
@@ -320,8 +320,8 @@ def test_the_flow_through_the_tool_surface() -> None:
     tool_turn = llm_tool_handler.confirm(protocol.ToolCall(handlers.CONFIRM_BOOKING, {}))
     assert tool_turn.reply == "booked mon-9am for Ada Lovelace"
     assert tool_turn.tools == ()
-    status_response = booking_service.status(client.StatusRequest(booking_id="b1"))
-    assert status_response.booking.step == "booked"
+    get_booking_response = booking_service.get_booking(client.GetBookingRequest(booking_id="b1"))
+    assert get_booking_response.booking.step == "booked"
     assert memory_slot_directory.reserved == [("mon-9am", "Ada Lovelace")]
 
 
@@ -358,9 +358,9 @@ def test_a_confirm_at_the_wrong_step_keeps_its_own_error_and_mutates_nothing() -
 
     assert "choose_slot" in str(excinfo.value)
     assert "now available" not in str(excinfo.value)
-    status_response = booking_service.status(client.StatusRequest(booking_id="b1"))
-    assert status_response.booking.step == "choose_slot"
-    assert status_response.booking.offered_slots == ("mon-9am", "tue-2pm")
+    get_booking_response = booking_service.get_booking(client.GetBookingRequest(booking_id="b1"))
+    assert get_booking_response.booking.step == "choose_slot"
+    assert get_booking_response.booking.offered_slots == ("mon-9am", "tue-2pm")
 
 
 def test_a_choose_slot_before_any_offer_is_rejected_cleanly() -> None:
@@ -395,8 +395,8 @@ def test_a_taken_slot_comes_back_as_one_turn_offering_the_fresh_slots() -> None:
     tool_turn = llm_tool_handler.confirm(protocol.ToolCall(handlers.CONFIRM_BOOKING, {}))
 
     assert tool_turn.reply == "mon-9am was just taken; offer the caller the updated slots"
-    status_response = booking_service.status(client.StatusRequest(booking_id="b1"))
-    assert status_response.booking.step == "choose_slot"
+    get_booking_response = booking_service.get_booking(client.GetBookingRequest(booking_id="b1"))
+    assert get_booking_response.booking.step == "choose_slot"
     assert [tool.name for tool in tool_turn.tools] == [handlers.CHOOSE_SLOT]
     tool = tool_turn.tools[0]
     properties = tool.parameters["properties"]

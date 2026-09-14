@@ -47,8 +47,8 @@ class FakeCampaignClientScripted(client.CampaignClient):
             raise self.error
         return client.GetCampaignResponse(campaign=self.pending.pop(0))
 
-    def resolve(self, resolve_request: client.ResolveRequest) -> client.ResolveResponse:
-        raise AssertionError("resolve is not part of the CLI surface")
+    def resolve_slug(self, resolve_slug_request: client.ResolveSlugRequest) -> client.ResolveSlugResponse:
+        raise AssertionError("resolve_slug is not part of the CLI surface")
 
     def list_links(
         self, list_links_request: client.ListLinksRequest

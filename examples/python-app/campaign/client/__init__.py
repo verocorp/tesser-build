@@ -15,7 +15,7 @@ from campaign.client.client import ListLinksRequest as ListLinksRequest
 from campaign.client.client import ListLinksResponse as ListLinksResponse
 from campaign.client.client import Missing as Missing
 from campaign.client.client import Rejected as Rejected
-from campaign.client.client import ResolveRequest as ResolveRequest
-from campaign.client.client import ResolveResponse as ResolveResponse
+from campaign.client.client import ResolveSlugRequest as ResolveSlugRequest
+from campaign.client.client import ResolveSlugResponse as ResolveSlugResponse
 from campaign.client.client import Unavailable as Unavailable
 from campaign.client.client import Unreadable as Unreadable

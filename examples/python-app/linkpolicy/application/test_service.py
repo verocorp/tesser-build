@@ -18,7 +18,7 @@ class FakeVerdictRepository(ports.VerdictRepository):
         self.records = list(records)
         self.error = error
 
-    def record(
+    def record_verdict(
         self, record_verdict_request: ports.RecordVerdictRequest
     ) -> ports.RecordVerdictResponse:
         if self.error is not None:
@@ -32,7 +32,7 @@ class FakeVerdictRepository(ports.VerdictRepository):
         )
         return ports.RecordVerdictResponse()
 
-    def all(
+    def list_verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
         if self.error is not None:
@@ -43,35 +43,35 @@ class FakeVerdictRepository(ports.VerdictRepository):
 def test_check_allows_a_url_the_policy_permits() -> None:
     link_policy_service = application.LinkPolicyService(FakeVerdictRepository())
 
-    check_response = link_policy_service.check(client.CheckRequest("https://ok.example/x"))
+    check_target_response = link_policy_service.check_target(client.CheckTargetRequest("https://ok.example/x"))
 
-    assert check_response.decision == "allowed"
-    assert check_response.reason == "ok"
+    assert check_target_response.decision == "allowed"
+    assert check_target_response.reason == "ok"
 
 
 def test_check_denies_a_url_whose_scheme_is_not_allowed() -> None:
     link_policy_service = application.LinkPolicyService(FakeVerdictRepository())
 
-    check_response = link_policy_service.check(client.CheckRequest("http://ok.example/x"))
+    check_target_response = link_policy_service.check_target(client.CheckTargetRequest("http://ok.example/x"))
 
-    assert check_response.decision == "denied"
-    assert check_response.reason == "scheme 'http' not allowed"
+    assert check_target_response.decision == "denied"
+    assert check_target_response.reason == "scheme 'http' not allowed"
 
 
 def test_check_denies_a_url_on_a_blocked_host() -> None:
     link_policy_service = application.LinkPolicyService(FakeVerdictRepository())
 
-    check_response = link_policy_service.check(client.CheckRequest("https://evil.example/x"))
+    check_target_response = link_policy_service.check_target(client.CheckTargetRequest("https://evil.example/x"))
 
-    assert check_response.decision == "denied"
-    assert check_response.reason == "host 'evil.example' is blocked"
+    assert check_target_response.decision == "denied"
+    assert check_target_response.reason == "host 'evil.example' is blocked"
 
 
 def test_check_records_the_allowed_verdict_it_returned() -> None:
     fake_verdict_repository = FakeVerdictRepository()
 
-    application.LinkPolicyService(fake_verdict_repository).check(
-        client.CheckRequest("https://ok.example/x")
+    application.LinkPolicyService(fake_verdict_repository).check_target(
+        client.CheckTargetRequest("https://ok.example/x")
     )
 
     assert len(fake_verdict_repository.records) == 1
@@ -83,8 +83,8 @@ def test_check_records_the_allowed_verdict_it_returned() -> None:
 def test_check_records_a_denial_as_the_denied_decision() -> None:
     fake_verdict_repository = FakeVerdictRepository()
 
-    application.LinkPolicyService(fake_verdict_repository).check(
-        client.CheckRequest("https://evil.example/x")
+    application.LinkPolicyService(fake_verdict_repository).check_target(
+        client.CheckTargetRequest("https://evil.example/x")
     )
 
     assert fake_verdict_repository.records[0].decision is ports.VerdictDecision.DENIED
@@ -97,8 +97,8 @@ def test_check_crosses_a_repository_failure_as_the_contexts_unavailable() -> Non
     )
 
     with pytest.raises(client.Unavailable):
-        application.LinkPolicyService(fake_verdict_repository).check(
-            client.CheckRequest("https://ok.example/x")
+        application.LinkPolicyService(fake_verdict_repository).check_target(
+            client.CheckTargetRequest("https://ok.example/x")
         )
 
 
@@ -136,7 +136,7 @@ def test_list_verdicts_returns_what_check_recorded() -> None:
     fake_verdict_repository = FakeVerdictRepository()
     link_policy_service = application.LinkPolicyService(fake_verdict_repository)
 
-    link_policy_service.check(client.CheckRequest("https://ok.example/x"))
+    link_policy_service.check_target(client.CheckTargetRequest("https://ok.example/x"))
     list_verdicts_response = link_policy_service.list_verdicts(client.ListVerdictsRequest())
 
     assert [(v.target_url, v.decision) for v in list_verdicts_response.verdicts] == [
@@ -158,6 +158,6 @@ def test_list_verdicts_crosses_a_repository_failure_as_the_contexts_unavailable(
 def test_check_refuses_an_empty_url_and_records_nothing() -> None:
     fake_verdict_repository = FakeVerdictRepository()
     with pytest.raises(client.Rejected) as ei:
-        application.LinkPolicyService(fake_verdict_repository).check(client.CheckRequest(""))
+        application.LinkPolicyService(fake_verdict_repository).check_target(client.CheckTargetRequest(""))
     assert ei.value.code == "invalid_target_url"
     assert fake_verdict_repository.records == []

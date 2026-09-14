@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class CampaignLookup(enum.Enum):
+class FindCampaignOutcome(enum.Enum):
     FOUND = "found"
     NOT_FOUND = "not_found"
 
@@ -55,7 +55,7 @@ class FindCampaignRequest(ts.Request):
 
 class FindCampaignResponse(ts.Response):
 
-    def __init__(self, outcome: CampaignLookup, campaigns: tuple[CampaignRecord, ...]) -> None:
+    def __init__(self, outcome: FindCampaignOutcome, campaigns: tuple[CampaignRecord, ...]) -> None:
         self.outcome = outcome
         self.campaigns = campaigns
 
@@ -66,10 +66,10 @@ class StorageUnavailable(ts.Error):
 
 class CampaignRepository(ts.Port, typing.Protocol):
 
-    def save(
+    def save_campaign(
         self, save_campaign_request: SaveCampaignRequest
     ) -> SaveCampaignResponse: ...
 
-    def find(
+    def find_campaign(
         self, find_campaign_request: FindCampaignRequest
     ) -> FindCampaignResponse: ...

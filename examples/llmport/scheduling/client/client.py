@@ -31,7 +31,7 @@ class ConfirmBookingRequest(ts.Request):
         self.booking_id = booking_id
 
 
-class StatusRequest(ts.Request):
+class GetBookingRequest(ts.Request):
 
     def __init__(self, booking_id: str) -> None:
         self.booking_id = booking_id
@@ -45,7 +45,7 @@ class Booking(ts.Response):
         self.reply = reply
 
 
-class BeginResponse(ts.Response):
+class BeginBookingResponse(ts.Response):
 
     def __init__(self, booking: Booking) -> None:
         self.booking = booking
@@ -63,13 +63,13 @@ class ChooseSlotResponse(ts.Response):
         self.booking = booking
 
 
-class ConfirmResponse(ts.Response):
+class ConfirmBookingResponse(ts.Response):
 
     def __init__(self, booking: Booking) -> None:
         self.booking = booking
 
 
-class StatusResponse(ts.Response):
+class GetBookingResponse(ts.Response):
 
     def __init__(self, booking: Booking) -> None:
         self.booking = booking
@@ -77,12 +77,14 @@ class StatusResponse(ts.Response):
 
 class SchedulingClient(ts.Client, typing.Protocol):
 
-    def begin(self, begin_booking_request: BeginBookingRequest) -> BeginResponse: ...
+    def begin_booking(self, begin_booking_request: BeginBookingRequest) -> BeginBookingResponse: ...
 
     def provide_name(self, provide_name_request: ProvideNameRequest) -> ProvideNameResponse: ...
 
     def choose_slot(self, choose_slot_request: ChooseSlotRequest) -> ChooseSlotResponse: ...
 
-    def confirm(self, confirm_booking_request: ConfirmBookingRequest) -> ConfirmResponse: ...
+    def confirm_booking(
+        self, confirm_booking_request: ConfirmBookingRequest
+    ) -> ConfirmBookingResponse: ...
 
-    def status(self, status_request: StatusRequest) -> StatusResponse: ...
+    def get_booking(self, get_booking_request: GetBookingRequest) -> GetBookingResponse: ...

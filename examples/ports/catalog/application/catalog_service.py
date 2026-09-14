@@ -26,13 +26,13 @@ class MapToGetItemResponse(ts.Mapper, client.GetItemResponse):
     def __init__(self, find_item_response: ports.FindItemResponse) -> None:
         items: tuple[client.Item, ...]
         match find_item_response.outcome:
-            case ports.ItemLookup.FOUND:
+            case ports.FindItemOutcome.FOUND:
                 items = tuple(
                     MapToItem(item=item) for item in find_item_response.items
                 )
-            case ports.ItemLookup.ARCHIVED:
+            case ports.FindItemOutcome.ARCHIVED:
                 items = ()
-            case ports.ItemLookup.NOT_FOUND:
+            case ports.FindItemOutcome.NOT_FOUND:
                 items = ()
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -43,10 +43,10 @@ class MapToAddItemResponse(ts.Mapper, client.AddItemResponse):
 
     def __init__(self, item: domain.Item, check_name_response: ports.CheckNameResponse) -> None:
         items: tuple[client.Item, ...]
-        match check_name_response.verdict:
-            case ports.NameVerdict.ALLOWED:
+        match check_name_response.outcome:
+            case ports.CheckNameOutcome.ALLOWED:
                 items = (MapToAddedItem(item=item),)
-            case ports.NameVerdict.RESERVED:
+            case ports.CheckNameOutcome.RESERVED:
                 items = ()
             case _ as unreachable:
                 typing.assert_never(unreachable)
@@ -77,22 +77,22 @@ class CatalogService(ts.ApplicationService):
         self._item_repository = item_repository
         self._name_policy = name_policy
 
-    def add(self, add_item_request: client.AddItemRequest) -> client.AddItemResponse:
+    def add_item(self, add_item_request: client.AddItemRequest) -> client.AddItemResponse:
         item = domain.Item(domain.ItemSpec(id=add_item_request.id, name=add_item_request.name))
         name_text = item.name()
-        check_name_response = self._name_policy.check(ports.CheckNameRequest(name=name_text))
+        check_name_response = self._name_policy.check_name(ports.CheckNameRequest(name=name_text))
         item_id_text = item.id()
         item_name_text = item.name()
         save_item_request = ports.SaveItemRequest(id=item_id_text, name=item_name_text)
-        self._item_repository.save(save_item_request)
+        self._item_repository.save_item(save_item_request)
         return MapToAddItemResponse(item=item, check_name_response=check_name_response)
 
-    def get(self, get_item_request: client.GetItemRequest) -> client.GetItemResponse:
+    def get_item(self, get_item_request: client.GetItemRequest) -> client.GetItemResponse:
         item_id = domain.ItemID(get_item_request.id)
         find_item_request = MapToFindItemRequest(item_id=item_id)
-        find_item_response = self._item_repository.find(find_item_request)
+        find_item_response = self._item_repository.find_item(find_item_request)
         return MapToGetItemResponse(find_item_response=find_item_response)
 
-    def list(self, list_items_request: client.ListItemsRequest) -> client.ListItemsResponse:
-        list_items_response = self._item_repository.all(ports.ListItemsRequest())
+    def list_items(self, list_items_request: client.ListItemsRequest) -> client.ListItemsResponse:
+        list_items_response = self._item_repository.list_items(ports.ListItemsRequest())
         return MapToListItemsResponse(list_items_response=list_items_response)

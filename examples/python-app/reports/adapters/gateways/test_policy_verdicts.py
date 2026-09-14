@@ -17,7 +17,7 @@ class FakeLinkPolicyClient(linkpolicy_client.LinkPolicyClient):
         self.error = error
         self.requests: list[linkpolicy_client.ListVerdictsRequest] = []
 
-    def check(self, check_request: linkpolicy_client.CheckRequest) -> linkpolicy_client.CheckResponse:
+    def check_target(self, check_target_request: linkpolicy_client.CheckTargetRequest) -> linkpolicy_client.CheckTargetResponse:
         raise AssertionError("check is not part of the reports surface")
 
     def list_verdicts(
@@ -34,7 +34,7 @@ def test_an_allowed_verdict_arrives_as_the_allowed_member() -> None:
         linkpolicy_client.Verdict("https://a.example/s", "allowed", "on the allowlist")
     )
 
-    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
         ports.ListVerdictsRequest()
     )
 
@@ -48,7 +48,7 @@ def test_a_denied_verdict_arrives_as_the_denied_member() -> None:
         linkpolicy_client.Verdict("https://a.example/s", "denied", "host blocked")
     )
 
-    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
         ports.ListVerdictsRequest()
     )
 
@@ -61,7 +61,7 @@ def test_every_verdict_the_policy_context_serves_crosses_the_boundary() -> None:
         linkpolicy_client.Verdict("https://a.example/w", "denied", "host blocked"),
     )
 
-    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
         ports.ListVerdictsRequest()
     )
 
@@ -74,7 +74,7 @@ def test_every_verdict_the_policy_context_serves_crosses_the_boundary() -> None:
 def test_the_gateway_asks_the_policy_context_for_its_whole_verdict_list() -> None:
     fake_link_policy_client = FakeLinkPolicyClient()
 
-    gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+    gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
         ports.ListVerdictsRequest()
     )
 
@@ -85,7 +85,7 @@ def test_the_gateway_asks_the_policy_context_for_its_whole_verdict_list() -> Non
 def test_a_policy_context_with_no_verdicts_yields_no_records() -> None:
     fake_link_policy_client = FakeLinkPolicyClient()
 
-    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+    list_verdicts_response = gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
         ports.ListVerdictsRequest()
     )
 
@@ -96,7 +96,7 @@ def test_a_failure_the_policy_context_never_declared_reaches_the_caller() -> Non
     fake_link_policy_client = FakeLinkPolicyClient(error=RuntimeError("policy store unreachable"))
 
     with pytest.raises(RuntimeError):
-        gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+        gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
             ports.ListVerdictsRequest()
         )
 
@@ -107,7 +107,7 @@ def test_a_policy_context_that_cannot_answer_is_the_ports_unavailable() -> None:
     )
 
     with pytest.raises(ports.VerdictSourceUnavailable) as caught:
-        gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+        gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
             ports.ListVerdictsRequest()
         )
     assert isinstance(caught.value.__cause__, linkpolicy_client.Unavailable)
@@ -119,6 +119,6 @@ def test_a_verdict_decision_outside_the_recorded_set_is_refused() -> None:
     )
 
     with pytest.raises(ports.VerdictSourceUnavailable):
-        gateways.PolicyVerdictGateway(fake_link_policy_client).verdicts(
+        gateways.PolicyVerdictGateway(fake_link_policy_client).list_verdicts(
             ports.ListVerdictsRequest()
         )

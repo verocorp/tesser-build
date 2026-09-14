@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class Held(enum.Enum):
+class HasKeyOutcome(enum.Enum):
     YES = "yes"
     NO = "no"
 
@@ -19,10 +19,10 @@ class HasKeyRequest(ts.Request):
 
 class HasKeyResponse(ts.Response):
 
-    def __init__(self, held: Held) -> None:
+    def __init__(self, held: HasKeyOutcome) -> None:
         self.held = held
 
 
 class KeyRepository(ts.Port, typing.Protocol):
 
-    def has(self, has_key_request: HasKeyRequest) -> HasKeyResponse: ...
+    def has_key(self, has_key_request: HasKeyRequest) -> HasKeyResponse: ...

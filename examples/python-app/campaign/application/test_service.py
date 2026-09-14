@@ -16,7 +16,7 @@ class FakeCampaignStore(ports.CampaignRepository):
         self.rows: dict[str, ports.CampaignRecord] = {}
         self.saved: list[ports.SaveCampaignRequest] = []
 
-    def save(
+    def save_campaign(
         self, save_campaign_request: ports.SaveCampaignRequest
     ) -> ports.SaveCampaignResponse:
         self.saved.append(save_campaign_request)
@@ -25,28 +25,28 @@ class FakeCampaignStore(ports.CampaignRepository):
         )
         return ports.SaveCampaignResponse()
 
-    def find(
-        self, find_campaign_request: ports.FindCampaignRequest
-    ) -> ports.FindCampaignResponse:
-        row = self.rows.get(find_campaign_request.campaign_id)
+    def load_campaign(
+        self, load_campaign_request: ports.LoadCampaignRequest
+    ) -> ports.LoadCampaignResponse:
+        row = self.rows.get(load_campaign_request.campaign_id)
         if row is None:
-            return ports.FindCampaignResponse(
-                outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
+            return ports.LoadCampaignResponse(
+                outcome=ports.LoadCampaignOutcome.NOT_FOUND, campaigns=()
             )
-        return ports.FindCampaignResponse(
-            outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
+        return ports.LoadCampaignResponse(
+            outcome=ports.LoadCampaignOutcome.FOUND, campaigns=(row,)
         )
 
-    def find_by_slug(
-        self, find_campaign_by_slug_request: ports.FindCampaignBySlugRequest
-    ) -> ports.FindCampaignResponse:
+    def load_campaign_by_slug(
+        self, load_campaign_by_slug_request: ports.LoadCampaignBySlugRequest
+    ) -> ports.LoadCampaignBySlugResponse:
         for row in self.rows.values():
-            if any(link.slug == find_campaign_by_slug_request.slug for link in row.links):
-                return ports.FindCampaignResponse(
-                    outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
+            if any(link.slug == load_campaign_by_slug_request.slug for link in row.links):
+                return ports.LoadCampaignBySlugResponse(
+                    outcome=ports.LoadCampaignBySlugOutcome.FOUND, campaigns=(row,)
                 )
-        return ports.FindCampaignResponse(
-            outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
+        return ports.LoadCampaignBySlugResponse(
+            outcome=ports.LoadCampaignBySlugOutcome.NOT_FOUND, campaigns=()
         )
 
     def slug_taken(
@@ -61,51 +61,51 @@ class FakeCampaignStore(ports.CampaignRepository):
             else ports.SlugAvailability.FREE
         )
 
-    def all(
+    def list_campaigns(
         self, list_campaigns_request: ports.ListCampaignsRequest
     ) -> ports.ListCampaignsResponse:
         return ports.ListCampaignsResponse(campaigns=tuple(self.rows.values()))
 
-    def find_view(
-        self, find_campaign_view_request: ports.FindCampaignViewRequest
-    ) -> ports.FindCampaignViewResponse:
-        row = self.rows.get(find_campaign_view_request.campaign_id)
+    def find_campaign(
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
+        row = self.rows.get(find_campaign_request.campaign_id)
         if row is None:
-            return ports.FindCampaignViewResponse(
-                outcome=ports.CampaignRowLookup.NOT_FOUND, campaigns=()
+            return ports.FindCampaignResponse(
+                outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
             )
-        links: list[ports.LinkRow] = []
+        links: list[ports.Link] = []
         for link in row.links:
-            links.append(ports.LinkRow(
+            links.append(ports.Link(
                 slug=link.slug, target_url=link.target_url, status=link.status
             ))
-        campaign_row = ports.CampaignRow(
+        campaign = ports.Campaign(
             campaign_id=row.id,
             budget_amount=row.budget.amount,
             budget_currency=row.budget.currency,
             links=tuple(links),
         )
-        return ports.FindCampaignViewResponse(
-            outcome=ports.CampaignRowLookup.FOUND, campaigns=(campaign_row,)
+        return ports.FindCampaignResponse(
+            outcome=ports.FindCampaignOutcome.FOUND, campaigns=(campaign,)
         )
 
 
 @ts.fake
 class FakeCampaignStoreDown(ports.CampaignRepository):
 
-    def save(
+    def save_campaign(
         self, save_campaign_request: ports.SaveCampaignRequest
     ) -> ports.SaveCampaignResponse:
         raise ports.StoreUnavailable("campaign store unavailable")
 
-    def find(
-        self, find_campaign_request: ports.FindCampaignRequest
-    ) -> ports.FindCampaignResponse:
+    def load_campaign(
+        self, load_campaign_request: ports.LoadCampaignRequest
+    ) -> ports.LoadCampaignResponse:
         raise ports.StoreUnavailable("campaign store unavailable")
 
-    def find_by_slug(
-        self, find_campaign_by_slug_request: ports.FindCampaignBySlugRequest
-    ) -> ports.FindCampaignResponse:
+    def load_campaign_by_slug(
+        self, load_campaign_by_slug_request: ports.LoadCampaignBySlugRequest
+    ) -> ports.LoadCampaignBySlugResponse:
         raise ports.StoreUnavailable("campaign store unavailable")
 
     def slug_taken(
@@ -113,14 +113,14 @@ class FakeCampaignStoreDown(ports.CampaignRepository):
     ) -> ports.SlugTakenResponse:
         raise ports.StoreUnavailable("campaign store unavailable")
 
-    def all(
+    def list_campaigns(
         self, list_campaigns_request: ports.ListCampaignsRequest
     ) -> ports.ListCampaignsResponse:
         raise ports.StoreUnavailable("campaign store unavailable")
 
-    def find_view(
-        self, find_campaign_view_request: ports.FindCampaignViewRequest
-    ) -> ports.FindCampaignViewResponse:
+    def find_campaign(
+        self, find_campaign_request: ports.FindCampaignRequest
+    ) -> ports.FindCampaignResponse:
         raise ports.StoreUnavailable("campaign store unavailable")
 
 
@@ -130,7 +130,7 @@ class FakeCampaignIdentity(ports.CampaignIdentity):
     def __init__(self) -> None:
         self.issued = 0
 
-    def issue(
+    def issue_campaign_identity(
         self, issue_campaign_identity_request: ports.IssueCampaignIdentityRequest
     ) -> ports.IssueCampaignIdentityResponse:
         self.issued += 1
@@ -144,30 +144,30 @@ class FakeTargetPolicyAllowing(ports.TargetPolicy):
     def __init__(self) -> None:
         self.checked: list[str] = []
 
-    def check(
+    def check_target(
         self, check_target_request: ports.CheckTargetRequest
     ) -> ports.CheckTargetResponse:
         self.checked.append(check_target_request.target_url)
         return ports.CheckTargetResponse(
-            verdict=ports.PolicyVerdict.ALLOWED, reason="clean"
+            outcome=ports.CheckTargetOutcome.ALLOWED, reason="clean"
         )
 
 
 @ts.fake
 class FakeTargetPolicyBlocking(ports.TargetPolicy):
 
-    def check(
+    def check_target(
         self, check_target_request: ports.CheckTargetRequest
     ) -> ports.CheckTargetResponse:
         return ports.CheckTargetResponse(
-            verdict=ports.PolicyVerdict.BLOCKED, reason="on the deny-list"
+            outcome=ports.CheckTargetOutcome.BLOCKED, reason="on the deny-list"
         )
 
 
 @ts.fake
 class FakeTargetPolicyDown(ports.TargetPolicy):
 
-    def check(
+    def check_target(
         self, check_target_request: ports.CheckTargetRequest
     ) -> ports.CheckTargetResponse:
         raise ports.PolicyUnavailable("linkpolicy unavailable")
@@ -332,7 +332,7 @@ def test_a_store_that_is_down_crosses_as_the_contexts_unavailable_on_every_path(
     with pytest.raises(client.Unavailable) as fetched:
         campaign_service.get_campaign(client.GetCampaignRequest(campaign_id="0123456789abcdef"))
     with pytest.raises(client.Unavailable) as resolved:
-        campaign_service.resolve(client.ResolveRequest(slug="promo"))
+        campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo"))
     with pytest.raises(client.Unavailable) as listed:
         campaign_service.list_links(client.ListLinksRequest())
 
@@ -479,9 +479,9 @@ def test_resolve_hands_back_the_target_of_an_active_link() -> None:
         )
     )
 
-    resolve_response = campaign_service.resolve(client.ResolveRequest(slug="promo"))
+    resolve_slug_response = campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo"))
 
-    assert resolve_response.target_url == "https://ok.example/x"
+    assert resolve_slug_response.target_url == "https://ok.example/x"
 
 
 def test_resolve_refuses_a_slug_nobody_registered() -> None:
@@ -489,7 +489,7 @@ def test_resolve_refuses_a_slug_nobody_registered() -> None:
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
 
     with pytest.raises(client.Missing) as caught:
-        campaign_service.resolve(client.ResolveRequest(slug="nosuch"))
+        campaign_service.resolve_slug(client.ResolveSlugRequest(slug="nosuch"))
 
     assert caught.value.code == "link_missing"
 
@@ -499,7 +499,7 @@ def test_resolve_refuses_a_malformed_slug() -> None:
     campaign_service = application.CampaignService(fake_campaign_store, FakeTargetPolicyAllowing(), FakeCampaignIdentity(), fake_campaign_store)
 
     with pytest.raises(client.Rejected) as caught:
-        campaign_service.resolve(client.ResolveRequest(slug="BAD SLUG"))
+        campaign_service.resolve_slug(client.ResolveSlugRequest(slug="BAD SLUG"))
 
     assert caught.value.code == "invalid_slug"
 
@@ -568,14 +568,14 @@ def _found_campaign_view(
     slug: str = "promo",
     target_url: str = "https://ok.example/x",
     status: str = "inactive",
-) -> ports.FindCampaignViewResponse:
-    return ports.FindCampaignViewResponse(
-        outcome=ports.CampaignRowLookup.FOUND,
-        campaigns=(ports.CampaignRow(
+) -> ports.FindCampaignResponse:
+    return ports.FindCampaignResponse(
+        outcome=ports.FindCampaignOutcome.FOUND,
+        campaigns=(ports.Campaign(
             campaign_id=campaign_id,
             budget_amount=budget_amount,
             budget_currency=budget_currency,
-            links=(ports.LinkRow(
+            links=(ports.Link(
                 slug=slug, target_url=target_url, status=status
             ),),
         ),),
@@ -583,18 +583,18 @@ def _found_campaign_view(
 
 
 @ts.helper
-def _missing_campaign_view() -> ports.FindCampaignViewResponse:
-    return ports.FindCampaignViewResponse(
-        outcome=ports.CampaignRowLookup.NOT_FOUND, campaigns=()
+def _missing_campaign_view() -> ports.FindCampaignResponse:
+    return ports.FindCampaignResponse(
+        outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
     )
 
 
 def test_the_campaign_mapper_is_the_campaign_built_from_the_row() -> None:
     campaign = application.MapToCampaign(
-        find_campaign_view_request=ports.FindCampaignViewRequest(
+        find_campaign_request=ports.FindCampaignRequest(
             campaign_id="0123456789abcdef"
         ),
-        find_campaign_view_response=_found_campaign_view(),
+        find_campaign_response=_found_campaign_view(),
     )
     assert isinstance(campaign, client.Campaign)
     assert campaign.campaign_id == "0123456789abcdef"
@@ -605,7 +605,7 @@ def test_the_campaign_mapper_is_the_campaign_built_from_the_row() -> None:
 
 
 def test_the_link_mapper_is_the_link_built_from_the_row() -> None:
-    link = application.MapToLink(link_row=ports.LinkRow(
+    link = application.MapToLink(link=ports.Link(
         slug="promo", target_url="https://ok.example/x", status="inactive"
     ))
     assert isinstance(link, client.Link)
@@ -617,10 +617,10 @@ def test_the_link_mapper_is_the_link_built_from_the_row() -> None:
 def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
     with pytest.raises(client.Missing) as caught:
         application.MapToCampaign(
-            find_campaign_view_request=ports.FindCampaignViewRequest(
+            find_campaign_request=ports.FindCampaignRequest(
                 campaign_id="0123456789abcdef"
             ),
-            find_campaign_view_response=_missing_campaign_view(),
+            find_campaign_response=_missing_campaign_view(),
         )
     assert caught.value.code == "campaign_missing"
 
@@ -699,7 +699,7 @@ def test_the_link_record_mapper_stringifies_the_entity() -> None:
 
 
 def test_the_campaign_spec_mapper_from_a_record_rebuilds_the_links_it_was_given() -> None:
-    find_campaign_request = ports.FindCampaignRequest(campaign_id="0123456789abcdef")
+    load_campaign_request = ports.LoadCampaignRequest(campaign_id="0123456789abcdef")
     campaign_record = ports.CampaignRecord(
         id="0123456789abcdef",
         budget=ports.MoneyRecord(amount="10.00", currency="USD"),
@@ -707,11 +707,11 @@ def test_the_campaign_spec_mapper_from_a_record_rebuilds_the_links_it_was_given(
             slug="promo", target_url="https://ok.example/x", status="inactive"
         ),),
     )
-    find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.FOUND, campaigns=(campaign_record,)
+    load_campaign_response = ports.LoadCampaignResponse(
+        outcome=ports.LoadCampaignOutcome.FOUND, campaigns=(campaign_record,)
     )
     campaign_spec = application.MapToCampaignSpecFromRecord(
-        find_campaign_request=find_campaign_request, find_campaign_response=find_campaign_response
+        load_campaign_request=load_campaign_request, load_campaign_response=load_campaign_response
     )
     assert isinstance(campaign_spec, domain.CampaignSpec)
     assert campaign_spec.id == "0123456789abcdef"
@@ -730,8 +730,8 @@ def test_deactivate_link_refuses_a_malformed_campaign_id_before_the_repository_i
 
 
 def test_a_found_slug_lookup_is_the_spec_the_campaign_is_rebuilt_from() -> None:
-    find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.FOUND,
+    load_campaign_by_slug_response = ports.LoadCampaignBySlugResponse(
+        outcome=ports.LoadCampaignBySlugOutcome.FOUND,
         campaigns=(
             ports.CampaignRecord(
                 id="0123456789abcdef",
@@ -746,10 +746,10 @@ def test_a_found_slug_lookup_is_the_spec_the_campaign_is_rebuilt_from() -> None:
     )
 
     campaign_spec = application.MapToCampaignSpecFromSlugLookup(
-        find_campaign_by_slug_request=ports.FindCampaignBySlugRequest(
+        load_campaign_by_slug_request=ports.LoadCampaignBySlugRequest(
             slug="promo"
         ),
-        find_campaign_response=find_campaign_response,
+        load_campaign_by_slug_response=load_campaign_by_slug_response,
     )
 
     assert campaign_spec.id == "0123456789abcdef"
@@ -760,16 +760,16 @@ def test_a_found_slug_lookup_is_the_spec_the_campaign_is_rebuilt_from() -> None:
 
 
 def test_a_missing_slug_lookup_is_refused_before_anything_is_rebuilt() -> None:
-    find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
+    load_campaign_by_slug_response = ports.LoadCampaignBySlugResponse(
+        outcome=ports.LoadCampaignBySlugOutcome.NOT_FOUND, campaigns=()
     )
 
     with pytest.raises(client.Missing) as caught:
         application.MapToCampaignSpecFromSlugLookup(
-            find_campaign_by_slug_request=ports.FindCampaignBySlugRequest(
+            load_campaign_by_slug_request=ports.LoadCampaignBySlugRequest(
                 slug="promo"
             ),
-            find_campaign_response=find_campaign_response,
+            load_campaign_by_slug_response=load_campaign_by_slug_response,
         )
 
     assert caught.value.code == "link_missing"
@@ -777,8 +777,8 @@ def test_a_missing_slug_lookup_is_refused_before_anything_is_rebuilt() -> None:
 
 
 def test_a_deactivated_link_still_reaches_the_mapper_because_the_store_does_not_judge() -> None:
-    find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.FOUND,
+    load_campaign_by_slug_response = ports.LoadCampaignBySlugResponse(
+        outcome=ports.LoadCampaignBySlugOutcome.FOUND,
         campaigns=(
             ports.CampaignRecord(
                 id="0123456789abcdef",
@@ -795,10 +795,10 @@ def test_a_deactivated_link_still_reaches_the_mapper_because_the_store_does_not_
     )
 
     campaign_spec = application.MapToCampaignSpecFromSlugLookup(
-        find_campaign_by_slug_request=ports.FindCampaignBySlugRequest(
+        load_campaign_by_slug_request=ports.LoadCampaignBySlugRequest(
             slug="promo"
         ),
-        find_campaign_response=find_campaign_response,
+        load_campaign_by_slug_response=load_campaign_by_slug_response,
     )
 
     assert campaign_spec.links.links[0].active is False

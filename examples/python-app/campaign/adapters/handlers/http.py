@@ -159,10 +159,10 @@ class HttpHandler(ts.Handler):
             ],
         })
 
-    def resolve(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
+    def resolve_slug(self, http_request: protocol.HttpRequest) -> protocol.HttpResponse:
         try:
-            resolve_response = self._campaign_client.resolve(
-                client.ResolveRequest(slug=http_request.path_param("slug"))
+            resolve_slug_response = self._campaign_client.resolve_slug(
+                client.ResolveSlugRequest(slug=http_request.path_param("slug"))
             )
         except client.ERRORS as error:
             match error:
@@ -180,4 +180,4 @@ class HttpHandler(ts.Handler):
                     return protocol.HttpResponse.problem(503, "unavailable", error.message)
                 case _ as never:
                     typing.assert_never(never)
-        return protocol.HttpResponse.redirect(resolve_response.target_url)
+        return protocol.HttpResponse.redirect(resolve_slug_response.target_url)

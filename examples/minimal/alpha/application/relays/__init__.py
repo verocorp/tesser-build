@@ -1,3 +1,3 @@
-from alpha.application.relays.widget_actions_runner import QuoteRequest as QuoteRequest
-from alpha.application.relays.widget_actions_runner import QuoteResponse as QuoteResponse
+from alpha.application.relays.widget_actions_runner import QuoteWidgetRequest as QuoteWidgetRequest
+from alpha.application.relays.widget_actions_runner import QuoteWidgetResponse as QuoteWidgetResponse
 from alpha.application.relays.widget_actions_runner import WidgetActionsRunner as WidgetActionsRunner

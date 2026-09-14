@@ -33,13 +33,13 @@ class GetCampaignRequest(ts.Request):
         self.campaign_id = campaign_id
 
 
-class ResolveRequest(ts.Request):
+class ResolveSlugRequest(ts.Request):
 
     def __init__(self, slug: str) -> None:
         self.slug = slug
 
 
-class ResolveResponse(ts.Response):
+class ResolveSlugResponse(ts.Response):
 
     def __init__(self, target_url: str) -> None:
         self.target_url = target_url
@@ -163,6 +163,6 @@ class CampaignClient(ts.Client, typing.Protocol):
         self, get_campaign_request: GetCampaignRequest
     ) -> GetCampaignResponse: ...
 
-    def resolve(self, resolve_request: ResolveRequest) -> ResolveResponse: ...
+    def resolve_slug(self, resolve_slug_request: ResolveSlugRequest) -> ResolveSlugResponse: ...
 
     def list_links(self, list_links_request: ListLinksRequest) -> ListLinksResponse: ...

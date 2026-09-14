@@ -72,16 +72,16 @@ class LlmToolHandler(ts.Handler):
         )
 
     def begin(self) -> protocol.ToolTurn:
-        begin_response = self._scheduling_client.begin(
+        begin_booking_response = self._scheduling_client.begin_booking(
             client.BeginBookingRequest(booking_id=self._booking_id)
         )
-        return MapToToolTurn(begin_response.booking)
+        return MapToToolTurn(begin_booking_response.booking)
 
     def status(self) -> protocol.ToolTurn:
-        status_response = self._scheduling_client.status(
-            client.StatusRequest(booking_id=self._booking_id)
+        get_booking_response = self._scheduling_client.get_booking(
+            client.GetBookingRequest(booking_id=self._booking_id)
         )
-        return MapToToolTurn(status_response.booking)
+        return MapToToolTurn(get_booking_response.booking)
 
     def provide_name(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
         provide_name_response = self._scheduling_client.provide_name(
@@ -100,7 +100,7 @@ class LlmToolHandler(ts.Handler):
         return MapToToolTurn(choose_slot_response.booking)
 
     def confirm(self, tool_call: protocol.ToolCall, /) -> protocol.ToolTurn:
-        confirm_response = self._scheduling_client.confirm(
+        confirm_booking_response = self._scheduling_client.confirm_booking(
             client.ConfirmBookingRequest(booking_id=self._booking_id)
         )
-        return MapToToolTurn(confirm_response.booking)
+        return MapToToolTurn(confirm_booking_response.booking)

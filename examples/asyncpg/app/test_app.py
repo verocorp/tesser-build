@@ -53,12 +53,12 @@ class TestApp:
         )
         asyncpg_app = app.AsyncpgApp(app.AppConfig(spec))
         await asyncpg_app.open()
-        await asyncpg_app.beta.client.hold(beta_client.HoldRequest(key="shared"))
-        add_response = await asyncpg_app.alpha.client.add(
-            alpha_client.AddRequest(name="shared", part="p")
+        await asyncpg_app.beta.client.hold_key(beta_client.HoldKeyRequest(key="shared"))
+        add_part_response = await asyncpg_app.alpha.client.add_part(
+            alpha_client.AddPartRequest(name="shared", part="p")
         )
         await asyncpg_app.close()
-        assert add_response.name == "shared"
+        assert add_part_response.name == "shared"
         assert len(asyncpg_app.databases) == 1
 
     async def test_two_dsns_give_two_databases(self) -> None:
@@ -76,8 +76,8 @@ class TestAppLoader:
     async def test_the_loader_builds_an_app_from_its_repository(self) -> None:
         asyncpg_app = app.AppLoader(FakeConfigRepository()).load()
         await asyncpg_app.open()
-        add_response = await asyncpg_app.alpha.client.add(
-            alpha_client.AddRequest(name="loader-a", part="p")
+        add_part_response = await asyncpg_app.alpha.client.add_part(
+            alpha_client.AddPartRequest(name="loader-a", part="p")
         )
         await asyncpg_app.close()
-        assert add_response.name == "loader-a"
+        assert add_part_response.name == "loader-a"

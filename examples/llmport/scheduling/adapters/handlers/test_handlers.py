@@ -18,13 +18,13 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         self.error = error
         self.requests: list[object] = []
 
-    def begin(
+    def begin_booking(
         self, begin_booking_request: client.BeginBookingRequest
-    ) -> client.BeginResponse:
+    ) -> client.BeginBookingResponse:
         self.requests.append(begin_booking_request)
         if self.error is not None:
             raise self.error
-        return client.BeginResponse(self.pending.pop(0))
+        return client.BeginBookingResponse(self.pending.pop(0))
 
     def provide_name(
         self, provide_name_request: client.ProvideNameRequest
@@ -42,21 +42,21 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
             raise self.error
         return client.ChooseSlotResponse(self.pending.pop(0))
 
-    def confirm(
+    def confirm_booking(
         self, confirm_booking_request: client.ConfirmBookingRequest
-    ) -> client.ConfirmResponse:
+    ) -> client.ConfirmBookingResponse:
         self.requests.append(confirm_booking_request)
         if self.error is not None:
             raise self.error
-        return client.ConfirmResponse(self.pending.pop(0))
+        return client.ConfirmBookingResponse(self.pending.pop(0))
 
-    def status(
-        self, status_request: client.StatusRequest
-    ) -> client.StatusResponse:
-        self.requests.append(status_request)
+    def get_booking(
+        self, get_booking_request: client.GetBookingRequest
+    ) -> client.GetBookingResponse:
+        self.requests.append(get_booking_request)
         if self.error is not None:
             raise self.error
-        return client.StatusResponse(self.pending.pop(0))
+        return client.GetBookingResponse(self.pending.pop(0))
 
 
 def test_the_handler_carries_the_instructions_the_model_opens_with() -> None:
@@ -94,7 +94,7 @@ def test_asking_for_status_reads_the_same_booking() -> None:
 
     assert tool_turn.reply == "continue the booking"
     request = fake_scheduling_client_scripted.requests[0]
-    assert isinstance(request, client.StatusRequest)
+    assert isinstance(request, client.GetBookingRequest)
     assert request.booking_id == "b7"
 
 

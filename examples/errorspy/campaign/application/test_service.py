@@ -16,8 +16,7 @@ class FakeCampaignRepository(ports.CampaignRepository):
         self.saves: list[str] = []
         self.finds: list[str] = []
 
-    def save(
-        self, save_campaign_request: ports.SaveCampaignRequest
+    def save_campaign(self, save_campaign_request: ports.SaveCampaignRequest
     ) -> ports.SaveCampaignResponse:
         self.saves.append(save_campaign_request.id)
         self.rows[save_campaign_request.id] = ports.CampaignRecord(
@@ -27,17 +26,16 @@ class FakeCampaignRepository(ports.CampaignRepository):
         )
         return ports.SaveCampaignResponse()
 
-    def find(
-        self, find_campaign_request: ports.FindCampaignRequest
+    def find_campaign(self, find_campaign_request: ports.FindCampaignRequest
     ) -> ports.FindCampaignResponse:
         self.finds.append(find_campaign_request.campaign_id)
         row = self.rows.get(find_campaign_request.campaign_id)
         if row is None:
             return ports.FindCampaignResponse(
-                outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
+                outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
             )
         return ports.FindCampaignResponse(
-            outcome=ports.CampaignLookup.FOUND, campaigns=(row,)
+            outcome=ports.FindCampaignOutcome.FOUND, campaigns=(row,)
         )
 
 
@@ -423,7 +421,7 @@ def test_a_stored_record_with_a_backwards_window_is_unreadable() -> None:
 
 def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
     find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.FOUND,
+        outcome=ports.FindCampaignOutcome.FOUND,
         campaigns=(
             ports.CampaignRecord(
                 id="c1",
@@ -450,7 +448,7 @@ def test_a_found_record_becomes_the_parts_a_campaign_is_rebuilt_from() -> None:
 
 def test_a_missing_outcome_is_a_not_found_naming_the_campaign() -> None:
     find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.NOT_FOUND, campaigns=()
+        outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
     )
     with pytest.raises(client.Missing) as ei:
         application.MapToCampaignSpec(
@@ -463,7 +461,7 @@ def test_a_missing_outcome_is_a_not_found_naming_the_campaign() -> None:
 
 def test_a_record_with_a_corrupt_slug_still_exposes_the_slug_the_repository_gave() -> None:
     find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.FOUND,
+        outcome=ports.FindCampaignOutcome.FOUND,
         campaigns=(
             ports.CampaignRecord(
                 id="c1",
@@ -481,7 +479,7 @@ def test_a_record_with_a_corrupt_slug_still_exposes_the_slug_the_repository_gave
 
 def test_a_sound_record_exposes_every_link_it_carried_in_order() -> None:
     find_campaign_response = ports.FindCampaignResponse(
-        outcome=ports.CampaignLookup.FOUND,
+        outcome=ports.FindCampaignOutcome.FOUND,
         campaigns=(
             ports.CampaignRecord(
                 id="c1",

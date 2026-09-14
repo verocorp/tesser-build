@@ -11,12 +11,16 @@ class BetaCheckGateway(ts.Gateway):
     def __init__(self, beta_client: beta_client.BetaClient) -> None:
         self._beta_client = beta_client
 
-    async def check(self, check_request: ports.CheckRequest) -> ports.CheckResponse:
+    async def check_name(self, check_name_request: ports.CheckNameRequest) -> ports.CheckNameResponse:
         try:
-            check_response = await self._beta_client.check(
-                beta_client.CheckRequest(key=check_request.name)
+            check_key_response = await self._beta_client.check_key(
+                beta_client.CheckKeyRequest(key=check_name_request.name)
             )
         except beta_client.Unavailable as beta_error:
             raise ports.BetaUnavailable(beta_error.message) from beta_error
-        verdict = ports.Verdict.OK if check_response.held == "yes" else ports.Verdict.REFUSED
-        return ports.CheckResponse(verdict=verdict)
+        outcome = (
+            ports.CheckNameOutcome.OK
+            if check_key_response.held == "yes"
+            else ports.CheckNameOutcome.REFUSED
+        )
+        return ports.CheckNameResponse(outcome=outcome)

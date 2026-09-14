@@ -38,9 +38,9 @@ class FakeCampaignClient(campaign_client.CampaignClient):
     ) -> campaign_client.GetCampaignResponse:
         raise AssertionError("get_campaign is not part of the reports surface")
 
-    def resolve(
-        self, resolve_request: campaign_client.ResolveRequest
-    ) -> campaign_client.ResolveResponse:
+    def resolve_slug(
+        self, resolve_slug_request: campaign_client.ResolveSlugRequest
+    ) -> campaign_client.ResolveSlugResponse:
         raise AssertionError("resolve is not part of the reports surface")
 
     def list_links(
@@ -56,9 +56,9 @@ class FakeLinkPolicyClient(linkpolicy_client.LinkPolicyClient):
     def __init__(self, *verdicts: linkpolicy_client.Verdict) -> None:
         self.verdicts = verdicts
 
-    def check(
-        self, check_request: linkpolicy_client.CheckRequest
-    ) -> linkpolicy_client.CheckResponse:
+    def check_target(
+        self, check_target_request: linkpolicy_client.CheckTargetRequest
+    ) -> linkpolicy_client.CheckTargetResponse:
         raise AssertionError("check is not part of the reports surface")
 
     def list_verdicts(

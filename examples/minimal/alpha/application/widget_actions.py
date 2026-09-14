@@ -7,16 +7,16 @@ import alpha.application.relays as relays
 import alpha.domain as domain
 
 
-class MapToSaveRequest(ts.Mapper, ports.SaveRequest):
+class MapToSaveWidgetRequest(ts.Mapper, ports.SaveWidgetRequest):
 
     def __init__(self, name: domain.Name) -> None:
         super().__init__(name=str(name), standing="kept")
 
 
-class MapToQuoteResponse(ts.Mapper, relays.QuoteResponse):
+class MapToQuoteWidgetResponse(ts.Mapper, relays.QuoteWidgetResponse):
 
-    def __init__(self, save_response: ports.SaveResponse) -> None:
-        super().__init__(name=save_response.name)
+    def __init__(self, save_widget_response: ports.SaveWidgetResponse) -> None:
+        super().__init__(name=save_widget_response.name)
 
 
 class WidgetActions(ts.Actions):
@@ -24,7 +24,7 @@ class WidgetActions(ts.Actions):
     def __init__(self, widget_repository: ports.WidgetRepository) -> None:
         self._widget_repository = widget_repository
 
-    def quote(self, quote_request: relays.QuoteRequest) -> relays.QuoteResponse:
-        name = domain.Name(quote_request.name)
-        save_response = self._widget_repository.save(MapToSaveRequest(name))
-        return MapToQuoteResponse(save_response)
+    def quote_widget(self, quote_widget_request: relays.QuoteWidgetRequest) -> relays.QuoteWidgetResponse:
+        name = domain.Name(quote_widget_request.name)
+        save_widget_response = self._widget_repository.save_widget(MapToSaveWidgetRequest(name))
+        return MapToQuoteWidgetResponse(save_widget_response)

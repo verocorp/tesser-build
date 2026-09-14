@@ -12,20 +12,20 @@ import tesser.errors as errors
 @ts.fake
 class FakeTargetPolicyAllowing(ports.TargetPolicy):
 
-    def check(
+    def check_target(
         self, check_target_request: ports.CheckTargetRequest
     ) -> ports.CheckTargetResponse:
-        return ports.CheckTargetResponse(verdict=ports.PolicyVerdict.ALLOWED, reason="clean")
+        return ports.CheckTargetResponse(outcome=ports.CheckTargetOutcome.ALLOWED, reason="clean")
 
 
 @ts.fake
 class FakeTargetPolicyBlocking(ports.TargetPolicy):
 
-    def check(
+    def check_target(
         self, check_target_request: ports.CheckTargetRequest
     ) -> ports.CheckTargetResponse:
         return ports.CheckTargetResponse(
-            verdict=ports.PolicyVerdict.BLOCKED, reason="on the deny-list"
+            outcome=ports.CheckTargetOutcome.BLOCKED, reason="on the deny-list"
         )
 
 
@@ -93,7 +93,7 @@ def test_a_component_serves_a_whole_campaign_round_trip() -> None:
     )
 
     assert (
-        campaign.client.resolve(client.ResolveRequest(slug="promo")).target_url
+        campaign.client.resolve_slug(client.ResolveSlugRequest(slug="promo")).target_url
         == "https://ok.example/x"
     )
 

@@ -19,7 +19,9 @@ class Handler(ts.Handler):
         name = cli_request.arg(0, "name", _ADD_USAGE)
         part = cli_request.arg(1, "part", _ADD_USAGE)
         try:
-            add_response = await self._alpha_client.add(client.AddRequest(name=name, part=part))
+            add_part_response = await self._alpha_client.add_part(
+                client.AddPartRequest(name=name, part=part)
+            )
         except client.ERRORS as error:
             match error:
                 case client.Rejected():
@@ -43,6 +45,9 @@ class Handler(ts.Handler):
         return protocol.CliResponse(
             exit_code=0,
             line=protocol.Line(
-                text=f"{add_response.name} {add_response.part} {add_response.standing}"
+                text=(
+                    f"{add_part_response.name} {add_part_response.part} "
+                    f"{add_part_response.standing}"
+                )
             ),
         )

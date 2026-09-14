@@ -18,7 +18,7 @@ class PolicyVerdictGateway(ts.Gateway):
     def __init__(self, link_policy_client: linkpolicy_client.LinkPolicyClient) -> None:
         self._link_policy_client = link_policy_client
 
-    def verdicts(
+    def list_verdicts(
         self, list_verdicts_request: ports.ListVerdictsRequest
     ) -> ports.ListVerdictsResponse:
         try:

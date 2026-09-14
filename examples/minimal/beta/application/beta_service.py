@@ -19,10 +19,10 @@ class BetaService(ts.ApplicationService):
     def __init__(self, key_repository: ports.KeyRepository) -> None:
         self._key_repository = key_repository
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+    def check_key(self, check_key_request: client.CheckKeyRequest) -> client.CheckKeyResponse:
         try:
-            key = domain.Key(check_request.key)
+            key = domain.Key(check_key_request.key)
         except errors.DomainError as domain_error:
             raise client.Rejected(domain_error.code, domain_error.message) from domain_error
-        has_key_response = self._key_repository.has(MapToHasKeyRequest(key))
-        return client.CheckResponse(held=has_key_response.held.value)
+        has_key_response = self._key_repository.has_key(MapToHasKeyRequest(key))
+        return client.CheckKeyResponse(held=has_key_response.held.value)

@@ -18,8 +18,8 @@ import tesser.errors as errors
 
 @ts.fake
 class FakeTargetPolicyAllowAll(ports.TargetPolicy):
-    def check(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
-        return ports.CheckTargetResponse(verdict=ports.PolicyVerdict.ALLOWED, reason="ok")
+    def check_target(self, check_target_request: ports.CheckTargetRequest) -> ports.CheckTargetResponse:
+        return ports.CheckTargetResponse(outcome=ports.CheckTargetOutcome.ALLOWED, reason="ok")
 
 
 def test_deactivate_link_flips_the_link_inactive() -> None:
@@ -46,10 +46,10 @@ def test_resolve_refuses_a_deactivated_link() -> None:
     campaign_service = application.CampaignService(in_memory_campaign_repository, FakeTargetPolicyAllowAll(), gateways.SecretsCampaignIdentity(), in_memory_campaign_repository)
     id = campaign_service.create_campaign(client.CreateCampaignRequest(budget_amount="100.00", budget_currency="USD")).campaign.campaign_id
     campaign_service.add_link(client.AddLinkRequest(campaign_id=id, slug="promo", target_url="https://ok.example/x"))
-    assert campaign_service.resolve(client.ResolveRequest(slug="promo")).target_url == "https://ok.example/x"
+    assert campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo")).target_url == "https://ok.example/x"
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
     with pytest.raises(client.Missing) as e:
-        campaign_service.resolve(client.ResolveRequest(slug="promo"))
+        campaign_service.resolve_slug(client.ResolveSlugRequest(slug="promo"))
     assert e.value.code == "link_missing"
 
 
@@ -119,7 +119,7 @@ def test_resolve_endpoint_maps_a_deactivated_link_to_404() -> None:
     http_handler = handlers.HttpHandler(campaign_service)
     campaign_service.deactivate_link(client.DeactivateLinkRequest(campaign_id=id, slug="promo"))
     try:
-        http_response = http_handler.resolve(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
+        http_response = http_handler.resolve_slug(protocol.HttpRequest("GET", "/", {"slug": "promo"}, {}, {}, b""))
     except protocol.BadRequest as e:
         http_response = protocol.HttpResponse.problem(400, "malformed_request", str(e))
     except protocol.PayloadTooLarge as e:
