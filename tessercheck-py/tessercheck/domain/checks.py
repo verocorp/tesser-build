@@ -3218,6 +3218,7 @@ class BodySpec(ts.Spec):
         path: str,
         class_methods: tuple[str, ...],
         held_ports: tuple[str, ...],
+        held_stores: tuple[str, ...],
         signature: SignatureSpec,
         scope: ScopeSpec,
         registry: RegistrySpec,
@@ -3227,6 +3228,7 @@ class BodySpec(ts.Spec):
         self.path = path
         self.class_methods = class_methods
         self.held_ports = held_ports
+        self.held_stores = held_stores
         self.signature = signature
         self.scope = scope
         self.registry = registry
@@ -3249,6 +3251,7 @@ class Body(ts.ValueObject):
         class_methods = frozenset(spec.class_methods)
         names = scope.functions()
         held_ports = frozenset(spec.held_ports)
+        held_stores = frozenset(spec.held_stores)
         facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
 
         def ref_of(node: ast.expr) -> str | None:  # tesser:debt TB023
@@ -3354,6 +3357,23 @@ class Body(ts.ValueObject):
             return (str(symbol.module()), str(symbol.name()))
 
         values, otherwise = bindings()
+        store_bound: set[str] = set()
+        for node in own_scope(fn):
+            if not isinstance(node, (ast.With, ast.AsyncWith)):
+                continue
+            for item in node.items:
+                opened = item.context_expr
+                if (
+                    isinstance(item.optional_vars, ast.Name)
+                    and isinstance(opened, ast.Call)
+                    and isinstance(opened.func, ast.Attribute)
+                    and opened.func.attr == STORE_METHOD
+                    and isinstance(opened.func.value, ast.Attribute)
+                    and isinstance(opened.func.value.value, ast.Name)
+                    and opened.func.value.value.id == "self"
+                    and opened.func.value.attr in held_stores
+                ):
+                    store_bound.add(item.optional_vars.id)
         domain_names: dict[str, tuple[str, str]] = {}
         for name, bound in values.items():
             if name in otherwise:
@@ -3468,6 +3488,7 @@ class Body(ts.ValueObject):
                     and callee.value.id not in domain_names
                 ):
                     facts.append((node.lineno, "operation", f".{callee.attr}", ()))
+                holder: str | None = None
                 if (
                     isinstance(callee, ast.Attribute)
                     and isinstance(callee.value, ast.Attribute)
@@ -3477,18 +3498,25 @@ class Body(ts.ValueObject):
                     holder = callee.value.attr
                     if holder in held_ports:
                         facts.append((node.lineno, "port_call", holder, ()))
-                    if request is not None:
-                        for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
-                            if isinstance(passed, ast.Name) and passed.id == request:
-                                facts.append((passed.lineno, "request", None, ()))
-                        for inner in ast.walk(node):
-                            if not isinstance(inner, ast.Attribute):
-                                continue
-                            current: ast.expr = inner
-                            while isinstance(current, ast.Attribute):
-                                current = current.value
-                            if isinstance(current, ast.Name) and current.id == request:
-                                facts.append((inner.lineno, "request_field", inner.attr, ()))
+                elif (
+                    isinstance(callee, ast.Attribute)
+                    and isinstance(callee.value, ast.Name)
+                    and callee.value.id in store_bound
+                ):
+                    holder = callee.value.id
+                    facts.append((node.lineno, "port_call", holder, ()))
+                if holder is not None and request is not None:
+                    for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
+                        if isinstance(passed, ast.Name) and passed.id == request:
+                            facts.append((passed.lineno, "request", None, ()))
+                    for inner in ast.walk(node):
+                        if not isinstance(inner, ast.Attribute):
+                            continue
+                        current: ast.expr = inner
+                        while isinstance(current, ast.Attribute):
+                            current = current.value
+                        if isinstance(current, ast.Name) and current.id == request:
+                            facts.append((inner.lineno, "request_field", inner.attr, ()))
             if isinstance(node, (ast.If, ast.While)) and not (
                 isinstance(node, ast.While) and isinstance(node.test, ast.Constant) and node.test.value is True
             ):
@@ -4845,6 +4873,7 @@ class ClassDecl(ts.Entity):
             return tuple(sorted(kept))
 
         held_ports = held("port")
+        held_stores = held("store")
         held_relays = held(RELAY_BLOCK)
         object.__setattr__(self, "_held_ports", Names(held_ports))
         object.__setattr__(self, "_held_relays", Names(held_relays))
@@ -5147,6 +5176,7 @@ class ClassDecl(ts.Entity):
                     spec.path,
                     class_methods,
                     held_ports,
+                    held_stores,
                     signature_spec(row),
                     spec.scope,
                     spec.registry,

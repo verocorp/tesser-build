@@ -13766,6 +13766,106 @@ def test_a_class_of_actions_takes_exactly_one_port_and_calls_it_once() -> None:
     )
 
 
+def test_a_call_on_the_repository_a_store_yields_is_an_actions_one_port_call() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/ports/stock.py",
+                "shop.application.ports.stock",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class HoldStockRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class HoldStockResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class Stock(ts.Port, typing.Protocol):\n"
+                "    async def hold_stock(self, hold_stock_request: HoldStockRequest) -> HoldStockResponse: ...\n"
+                "class StockStore(ts.Store, typing.Protocol):\n"
+                "    def transaction(self) -> typing.AsyncContextManager[Stock]: ...\n",
+                False,
+            ),
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "from shop.application.ports.catalog import Catalog as Catalog\n"
+                "from shop.application.ports.catalog import FindItemRequest as FindItemRequest\n"
+                "from shop.application.ports.catalog import FindItemResponse as FindItemResponse\n"
+                "from shop.application.ports.quotes import QuotePriceRequest as QuotePriceRequest\n"
+                "from shop.application.ports.quotes import QuotePriceResponse as QuotePriceResponse\n"
+                "from shop.application.ports.stock import HoldStockRequest as HoldStockRequest\n"
+                "from shop.application.ports.stock import HoldStockResponse as HoldStockResponse\n"
+                "from shop.application.ports.stock import StockStore as StockStore\n",
+                True,
+            ),
+            (
+                "shop/application/keep_actions.py",
+                "shop.application.keep_actions",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToHoldStockRequest(ts.Mapper, ports.HoldStockRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class Keep(ts.Actions):\n"
+                "    def __init__(self, stock_store: ports.StockStore) -> None:\n"
+                "        self._stock_store = stock_store\n"
+                "    async def keep_stock(self, hold_stock_request: ports.HoldStockRequest) -> ports.HoldStockResponse:\n"
+                "        name = thing.Name(hold_stock_request.text)\n"
+                "        async with self._stock_store.transaction() as stock:\n"
+                "            return await stock.hold_stock(MapToHoldStockRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/reserve_actions.py",
+                "shop.application.reserve_actions",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.domain.thing as thing\n"
+                "class MapToHoldStockRequest(ts.Mapper, ports.HoldStockRequest):\n"
+                "    def __init__(self, name: thing.Name) -> None:\n"
+                "        super().__init__(text=str(name))\n"
+                "class Reserve(ts.Actions):\n"
+                "    def __init__(self, stock_store: ports.StockStore) -> None:\n"
+                "        self._stock_store = stock_store\n"
+                "    async def reserve_stock(self, hold_stock_request: ports.HoldStockRequest) -> ports.HoldStockResponse:\n"
+                "        name = thing.Name(hold_stock_request.text)\n"
+                "        async with self._stock_store.transaction() as stock:\n"
+                "            await stock.hold_stock(MapToHoldStockRequest(name))\n"
+                "            return await stock.hold_stock(MapToHoldStockRequest(name))\n",
+                False,
+            ),
+            (
+                "shop/application/release_actions.py",
+                "shop.application.release_actions",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "class Release(ts.Actions):\n"
+                "    def __init__(self, stock_store: ports.StockStore) -> None:\n"
+                "        self._stock_store = stock_store\n"
+                "    async def release_stock(self, hold_stock_request: ports.HoldStockRequest) -> ports.HoldStockResponse:\n"
+                "        async with self._stock_store.transaction() as stock:\n"
+                "            return await stock.hold_stock(hold_stock_request)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("shop.application.keep_actions.Keep.keep_stock makes" in f for f in findings)
+    assert any(
+        "shop.application.reserve_actions.Reserve.reserve_stock makes 2 calls on its port; "
+        "an action makes exactly one call on its port" in f
+        for f in findings
+    )
+    assert any(
+        "shop.application.release_actions.Release.release_stock sends its request itself "
+        "straight to a port; a value crossing into a port has passed through "
+        "a domain type" in f
+        for f in findings
+    )
+
+
 def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
