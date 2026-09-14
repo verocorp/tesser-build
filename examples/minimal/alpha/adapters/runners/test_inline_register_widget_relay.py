@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tesser.testing as ts
 
+import alpha.adapters.runners as runners
 import alpha.adapters.runtimes as runtimes
 import alpha.application.client as client
 import alpha.application.relays as relays
@@ -14,16 +15,11 @@ class FakeAlphaApplicationClient(client.AlphaApplicationClient):
         return relays.KeepWidgetResponse(name=keep_widget_request.name)
 
 
-class TestInlineWidgetRuntime:
+class TestInlineRegisterWidgetRelay:
 
-    def test_the_keep_widget_handler_reaches_the_application_client(self) -> None:
+    def test_running_register_widget_reaches_the_runtimes_handler(self) -> None:
         inline_widget_runtime = runtimes.InlineWidgetRuntime(FakeAlphaApplicationClient())
-        keep_widget_response = inline_widget_runtime.keep_widget_handler(relays.KeepWidgetRequest(name="a"))
-        assert keep_widget_response.name == "a"
-
-    def test_the_register_widget_handler_builds_the_orchestrator_it_runs(self) -> None:
-        inline_widget_runtime = runtimes.InlineWidgetRuntime(FakeAlphaApplicationClient())
-        register_widget_response = inline_widget_runtime.register_widget_handler(
+        register_widget_response = runners.InlineRegisterWidgetRelay(inline_widget_runtime).run_register_widget(
             relays.RegisterWidgetRequest(name="a")
         )
         assert register_widget_response.name == "a"

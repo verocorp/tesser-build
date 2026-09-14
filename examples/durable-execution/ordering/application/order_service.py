@@ -49,8 +49,8 @@ class MapToPlaceOrderResponse(ts.Mapper, client.PlaceOrderResponse):
 
 class OrderService(ts.ApplicationService):
 
-    def __init__(self, order_orchestrator_runner: relays.OrderOrchestratorRunner) -> None:
-        self._order_orchestrator_runner = order_orchestrator_runner
+    def __init__(self, confirm_order_relay: relays.ConfirmOrderRelay) -> None:
+        self._confirm_order_relay = confirm_order_relay
 
     async def submit_order(
         self, submit_order_request: client.SubmitOrderRequest
@@ -62,7 +62,7 @@ class OrderService(ts.ApplicationService):
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
         start_confirm_order_response = (
-            await self._order_orchestrator_runner.start_confirm_order(
+            await self._confirm_order_relay.start_confirm_order(
                 relays.ConfirmOrderRequest(order=order)
             )
         )
@@ -81,7 +81,7 @@ class OrderService(ts.ApplicationService):
             raise client.OrderRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        confirm_order_response = await self._order_orchestrator_runner.run_confirm_order(
+        confirm_order_response = await self._confirm_order_relay.run_confirm_order(
             relays.ConfirmOrderRequest(order=order)
         )
         match confirm_order_response.outcome:  # tesser:debt TB082

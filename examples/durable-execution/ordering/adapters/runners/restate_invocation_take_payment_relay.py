@@ -7,7 +7,7 @@ import ordering.adapters.runtimes as runtimes
 import ordering.application.relays as relays
 
 
-class RestatePurchaseActionsRunner(ts.Runner):
+class RestateInvocationTakePaymentRelay(ts.Runner):
 
     def __init__(
         self,

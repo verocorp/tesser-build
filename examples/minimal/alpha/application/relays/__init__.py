@@ -1,3 +1,5 @@
-from alpha.application.relays.widget_actions_runner import QuoteWidgetRequest as QuoteWidgetRequest
-from alpha.application.relays.widget_actions_runner import QuoteWidgetResponse as QuoteWidgetResponse
-from alpha.application.relays.widget_actions_runner import WidgetActionsRunner as WidgetActionsRunner
+from alpha.application.relays.keep_widget_relay import KeepWidgetRelay as KeepWidgetRelay
+from alpha.application.relays.keep_widget_relay import KeepWidgetRequest as KeepWidgetRequest
+from alpha.application.relays.keep_widget_relay import KeepWidgetResponse as KeepWidgetResponse
+from alpha.application.relays.register_widget_relay import RegisterWidgetRequest as RegisterWidgetRequest
+from alpha.application.relays.register_widget_relay import RegisterWidgetResponse as RegisterWidgetResponse

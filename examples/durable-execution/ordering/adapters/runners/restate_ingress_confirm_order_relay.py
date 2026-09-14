@@ -17,24 +17,38 @@ _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOU
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class RestatePurchaseOrchestratorRunner(ts.Runner):
+class RestateIngressConfirmOrderRelay(ts.Runner):
 
     def __init__(self, ingress: str, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
         self._ingress = ingress
         self._restate_order_runtime = restate_order_runtime
 
-    async def run_pay_for_order(
-        self, pay_for_order_request: relays.PayForOrderRequest
-    ) -> relays.PayForOrderResponse:
-        key = str(pay_for_order_request.order.identity)
+    async def start_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.StartConfirmOrderResponse:
+        key = str(confirm_order_request.order.identity)
+        async with httpx.AsyncClient(base_url=self._ingress) as async_client:
+            await restate_client.Client(async_client).workflow_send(
+                self._restate_order_runtime.confirm_order_handler,
+                key=urllib_parse.quote(key, safe=""),
+                arg=confirm_order_request,
+            )
+        return relays.StartConfirmOrderResponse(
+            outcome=relays.StartConfirmOrderOutcome.STARTED, order_id=key
+        )
+
+    async def run_confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse:
+        key = str(confirm_order_request.order.identity)
         try:
             async with httpx.AsyncClient(
                 base_url=self._ingress, timeout=_RUN_TIMEOUT
             ) as async_client:
                 return await restate_client.Client(async_client).workflow_call(
-                    self._restate_order_runtime.pay_for_order_handler,
+                    self._restate_order_runtime.confirm_order_handler,
                     key=urllib_parse.quote(key, safe=""),
-                    arg=pay_for_order_request,
+                    arg=confirm_order_request,
                 )
         except restate.HttpError as http_error:
             if http_error.status_code != 409:
@@ -49,9 +63,9 @@ class RestatePurchaseOrchestratorRunner(ts.Runner):
                 and refusal.get("message") == _ALREADY_INVOKED
             ):
                 raise
-            return relays.PayForOrderResponse(
-                outcome=relays.PayForOrderOutcome.ALREADY_STARTED,
+            return relays.ConfirmOrderResponse(
+                outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
                 order_id=key,
-                purchases=(),
+                confirmed_orders=(),
                 reasons=(),
             )

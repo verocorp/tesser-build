@@ -12,7 +12,7 @@ import tesser.errors as errors
 
 
 @ts.fake
-class FakePurchaseActionsRunner(relays.PurchaseActionsRunner):
+class FakeTakePaymentRelay(relays.TakePaymentRelay):
 
     def __init__(self, cents_charged: int = 0, order_charged: str = "") -> None:
         self._cents_charged = cents_charged
@@ -44,7 +44,7 @@ class FakePurchaseActionsRunner(relays.PurchaseActionsRunner):
 
 
 @ts.fake
-class FakeDecliningPurchaseActionsRunner(relays.PurchaseActionsRunner):
+class FakeDecliningTakePaymentRelay(relays.TakePaymentRelay):
 
     async def run_take_payment(
         self, take_payment_request: relays.TakePaymentRequest
@@ -58,7 +58,7 @@ class FakeDecliningPurchaseActionsRunner(relays.PurchaseActionsRunner):
 
 
 @ts.fake
-class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
+class FakeConfirmOrderRelay(relays.ConfirmOrderRelay):
 
     def __init__(self, order_confirmed: str = "") -> None:
         self._order_confirmed = order_confirmed
@@ -91,7 +91,7 @@ class FakeOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
 
 @ts.fake
-class FakeUnpricedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
+class FakeUnpricedConfirmOrderRelay(relays.ConfirmOrderRelay):
 
     async def start_confirm_order(
         self, confirm_order_request: relays.ConfirmOrderRequest
@@ -113,7 +113,7 @@ class FakeUnpricedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
 
 
 @ts.fake
-class FakeStartedOrderOrchestratorRunner(relays.OrderOrchestratorRunner):
+class FakeStartedConfirmOrderRelay(relays.ConfirmOrderRelay):
 
     async def start_confirm_order(
         self, confirm_order_request: relays.ConfirmOrderRequest
@@ -152,7 +152,7 @@ class TestPurchaseOrchestrator:
     def test_paying_answers_the_order_its_total_and_the_payment_taken(self) -> None:
         pay_for_order_response = asyncio.run(
             orchestrators.PurchaseOrchestrator(
-                FakePurchaseActionsRunner(), FakeOrderOrchestratorRunner()
+                FakeTakePaymentRelay(), FakeConfirmOrderRelay()
             ).pay_for_order(pay_for_order_request())
         )
         assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAID
@@ -163,65 +163,65 @@ class TestPurchaseOrchestrator:
     def test_paying_confirms_the_order_as_a_child_and_then_takes_payment_for_its_total(
         self,
     ) -> None:
-        fake_purchase_actions_runner = FakePurchaseActionsRunner()
-        fake_order_orchestrator_runner = FakeOrderOrchestratorRunner()
+        fake_take_payment_relay = FakeTakePaymentRelay()
+        fake_confirm_order_relay = FakeConfirmOrderRelay()
         asyncio.run(
             orchestrators.PurchaseOrchestrator(
-                fake_purchase_actions_runner, fake_order_orchestrator_runner
+                fake_take_payment_relay, fake_confirm_order_relay
             ).pay_for_order(pay_for_order_request(order_id="o2", quantity=4))
         )
-        assert fake_order_orchestrator_runner.ran == ["o2"]
-        assert fake_order_orchestrator_runner.started == []
-        assert fake_purchase_actions_runner.taken == [("o2", 1000, "card-4242")]
+        assert fake_confirm_order_relay.ran == ["o2"]
+        assert fake_confirm_order_relay.started == []
+        assert fake_take_payment_relay.taken == [("o2", 1000, "card-4242")]
 
     def test_the_payment_method_the_caller_named_reaches_the_payment_action(self) -> None:
-        fake_purchase_actions_runner = FakePurchaseActionsRunner()
+        fake_take_payment_relay = FakeTakePaymentRelay()
         asyncio.run(
             orchestrators.PurchaseOrchestrator(
-                fake_purchase_actions_runner, FakeOrderOrchestratorRunner()
+                fake_take_payment_relay, FakeConfirmOrderRelay()
             ).pay_for_order(pay_for_order_request(payment_method="card-1234"))
         )
-        assert [m for _, _, m in fake_purchase_actions_runner.taken] == ["card-1234"]
+        assert [m for _, _, m in fake_take_payment_relay.taken] == ["card-1234"]
 
     def test_a_payment_of_another_amount_is_a_fault(self) -> None:
         with pytest.raises(errors.DomainError) as excinfo:
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
-                    FakePurchaseActionsRunner(cents_charged=700), FakeOrderOrchestratorRunner()
+                    FakeTakePaymentRelay(cents_charged=700), FakeConfirmOrderRelay()
                 ).pay_for_order(pay_for_order_request())
             )
         assert "does not settle" in excinfo.value.message
 
     def test_an_unconfirmed_child_order_stops_the_act_before_any_payment(self) -> None:
-        fake_purchase_actions_runner = FakePurchaseActionsRunner()
+        fake_take_payment_relay = FakeTakePaymentRelay()
         pay_for_order_response = asyncio.run(
             orchestrators.PurchaseOrchestrator(
-                fake_purchase_actions_runner, FakeUnpricedOrderOrchestratorRunner()
+                fake_take_payment_relay, FakeUnpricedConfirmOrderRelay()
             ).pay_for_order(pay_for_order_request(sku="nothing"))
         )
         assert (
             pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
         )
         assert pay_for_order_response.reasons == ("no price for sku nothing",)
-        assert fake_purchase_actions_runner.taken == []
+        assert fake_take_payment_relay.taken == []
 
     def test_a_child_already_started_is_the_parents_own_step_not_confirmed(self) -> None:
-        fake_purchase_actions_runner = FakePurchaseActionsRunner()
+        fake_take_payment_relay = FakeTakePaymentRelay()
         pay_for_order_response = asyncio.run(
             orchestrators.PurchaseOrchestrator(
-                fake_purchase_actions_runner, FakeStartedOrderOrchestratorRunner()
+                fake_take_payment_relay, FakeStartedConfirmOrderRelay()
             ).pay_for_order(pay_for_order_request())
         )
         assert (
             pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
         )
         assert pay_for_order_response.reasons == ("the order was already started",)
-        assert fake_purchase_actions_runner.taken == []
+        assert fake_take_payment_relay.taken == []
 
     def test_a_declined_payment_is_the_parents_payment_declined(self) -> None:
         pay_for_order_response = asyncio.run(
             orchestrators.PurchaseOrchestrator(
-                FakeDecliningPurchaseActionsRunner(), FakeOrderOrchestratorRunner()
+                FakeDecliningTakePaymentRelay(), FakeConfirmOrderRelay()
             ).pay_for_order(pay_for_order_request())
         )
         assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAYMENT_DECLINED
@@ -231,23 +231,23 @@ class TestPurchaseOrchestrator:
     def test_a_child_that_answered_for_another_order_is_a_fault_before_any_payment(
         self,
     ) -> None:
-        fake_purchase_actions_runner = FakePurchaseActionsRunner()
+        fake_take_payment_relay = FakeTakePaymentRelay()
         with pytest.raises(errors.DomainError) as excinfo:
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
-                    fake_purchase_actions_runner,
-                    FakeOrderOrchestratorRunner(order_confirmed="other"),
+                    fake_take_payment_relay,
+                    FakeConfirmOrderRelay(order_confirmed="other"),
                 ).pay_for_order(pay_for_order_request())
             )
         assert "pricing of order 'other'" in excinfo.value.message
-        assert fake_purchase_actions_runner.taken == []
+        assert fake_take_payment_relay.taken == []
 
     def test_a_receipt_for_another_order_is_a_fault(self) -> None:
         with pytest.raises(errors.DomainError) as excinfo:
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
-                    FakePurchaseActionsRunner(order_charged="other"),
-                    FakeOrderOrchestratorRunner(),
+                    FakeTakePaymentRelay(order_charged="other"),
+                    FakeConfirmOrderRelay(),
                 ).pay_for_order(pay_for_order_request())
             )
         assert "does not settle order o1" in excinfo.value.message

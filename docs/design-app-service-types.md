@@ -24,11 +24,11 @@ kinds replace all of it.
 | runtime | `ts.Runtime` (`tesser.adapters.Runtime`) | `adapters/runtimes/` | once, by the component | the application client, the orchestrators, the relays, the runners | the engine, and the host that mounts what it registers |
 
 **One relay kind; lifetime is not a property of the protocol.** The two
-actions-runner protocols that were written as `ts.JobContext` are `ts.Relay`
-now, like the orchestrator runners beside them. The proof that lifetime does
-not belong on the protocol is in the tree: `OrderOrchestratorRunner` has two
-implementations — `RestateOrderOrchestratorRunner`, built once at wiring and
-entering through the engine's ingress, and `RestateOrderOrchestratorChildRunner`,
+action relays, `PriceProductRelay` and `TakePaymentRelay`, once written as
+`ts.JobContext`, are `ts.Relay` now, like the orchestrator relays beside them. The proof that lifetime does
+not belong on the protocol is in the tree: `ConfirmOrderRelay` has two
+implementations — `RestateIngressConfirmOrderRelay`, built once at wiring and
+entering through the engine's ingress, and `RestateInvocationConfirmOrderRelay`,
 built per invocation and running the workflow as a child — and the orchestrator
 holding one cannot tell which it has.
 
