@@ -18414,3 +18414,396 @@ def test_an_enum_on_an_operations_response_is_its_one_outcome_named_outcome() ->
         for f in findings
     ), findings
     assert not any("Sink.grade_item " in f for f in findings), findings
+
+
+def test_a_relay_is_named_for_the_one_operation_it_carries() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/orders.py",
+                "shop.application.relays.orders",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class PlaceOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class PlaceOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class PlaceOrderRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n"
+                "class OrdersRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n"
+                "class PlaceAndShipOrderRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n"
+                "    async def run_ship_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.relays.orders.OrdersRelay carries place_order and is not PlaceOrderRelay; "
+        "a relay is named for the operation it carries, because a name for what sits behind it is "
+        "a pattern word" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.orders.PlaceAndShipOrderRelay carries 2 operations; a relay "
+        "carries one operation, because its name is the operation it carries" in f
+        for f in findings
+    ), findings
+    assert not any("orders.PlaceOrderRelay carries" in f for f in findings), findings
+
+
+def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/confirm_order_relay.py",
+                "shop.application.relays.confirm_order_relay",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class ConfirmOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ConfirmOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class StartConfirmOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ConfirmOrderRelay(ts.Relay, typing.Protocol):\n"
+                "    async def start_confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
+                " -> StartConfirmOrderResponse: ...\n"
+                "    async def run_confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
+                " -> ConfirmOrderResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/engine_confirm_order_relay.py",
+                "shop.adapters.runners.engine_confirm_order_relay",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.runtimes as runtimes\n"
+                "import shop.application.relays.confirm_order_relay as confirm_order_relay\n"
+                "class EngineConfirmOrderRelay(ts.Runner):\n"
+                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
+                "        self._engine_runtime = engine_runtime\n"
+                "    async def start_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.StartConfirmOrderResponse:\n"
+                "        return self._engine_runtime.cancel_order_handler(confirm_order_request)\n"
+                "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.ConfirmOrderResponse:\n"
+                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "    async def refund_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.ConfirmOrderResponse:\n"
+                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "class LaterConfirmOrderRelay(ts.Runner):\n"
+                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
+                "        self._engine_runtime = engine_runtime\n"
+                "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.ConfirmOrderResponse:\n"
+                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "class EngineOrderRunner(ts.Runner):\n"
+                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
+                "        self._engine_runtime = engine_runtime\n",
+                False,
+            ),
+        ))).violations()
+    )
+    where = "shop.adapters.runners.engine_confirm_order_relay"
+    assert any(
+        f"{where}.EngineOrderRunner ends in no relay's name; a runner is its engine's word followed "
+        "by the name of the relay it implements, because its name is how its relay is found" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.EngineConfirmOrderRelay.refund_order is not on ConfirmOrderRelay; a runner's public "
+        "methods are exactly its relay's, because it implements that relay and nothing else" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.LaterConfirmOrderRelay lacks start_confirm_order; a runner's public methods are "
+        "exactly its relay's, because it implements that relay and nothing else" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.EngineConfirmOrderRelay.start_confirm_order reaches cancel_order_handler; a runner "
+        "method reaches the handler of the operation it carries, because one operation keeps one "
+        "name across a relay" in f
+        for f in findings
+    ), findings
+    assert not any("EngineConfirmOrderRelay.run_confirm_order reaches" in f for f in findings), findings
+    assert not any("EngineConfirmOrderRelay lacks" in f for f in findings), findings
+    assert not any("EngineConfirmOrderRelay ends in no relay" in f for f in findings), findings
+
+
+def test_a_runtime_handler_is_its_operation_exposed_with_handler_and_invokes_it() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/runtimes/restate.py",
+                "shop.adapters.runtimes.restate",
+                "import tesser.adapters as ts\n"
+                "import shop.application.client as client\n"
+                "import shop.application.relays as relays\n"
+                "class RestateRuntime(ts.Runtime):\n"
+                "    def __init__(self, shop_application_client: client.ShopApplicationClient, service: str) -> None:\n"
+                "        self._shop_application_client = shop_application_client\n"
+                "        @service.handler()\n"
+                "        async def quote_price(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            return shop_application_client.quote_price(quote_price_request)\n"
+                "        @service.handler(name='quote_prices')\n"
+                "        async def settle_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            return shop_application_client.quote_price(quote_price_request)\n"
+                "        @service.handler()\n"
+                "        async def price(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            return shop_application_client.price(quote_price_request)\n"
+                "        @service.handler()\n"
+                "        async def hold_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            return shop_application_client.hold_quote(quote_price_request)\n"
+                "        @service.handler()\n"
+                "        async def cancel_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            return shop_application_client.cancel_quote(quote_price_request)\n"
+                "        self.quote_price_handler = quote_price\n"
+                "        self.settle_quote_handler = settle_quote\n"
+                "        self.price_handler = price\n"
+                "        self.cancel = cancel_quote\n"
+                "    def check_quote_handler(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return self._shop_application_client.check_quote(quote_price_request)\n"
+                "    def lookup_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return self._shop_application_client.lookup_quote(quote_price_request)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    where = "shop.adapters.runtimes.restate.RestateRuntime"
+    assert any(
+        f"{where}.lookup_quote is not an operation followed by _handler; a runtime exposes each "
+        "handler as its operation followed by _handler, because a bare operation on a runtime "
+        "reads as the method it invokes" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where} never exposes hold_quote; a runtime exposes each handler as its operation "
+        "followed by _handler, because a bare operation on a runtime reads as the method it "
+        "invokes" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where} exposes cancel_quote as cancel; a runtime exposes each handler as its operation "
+        "followed by _handler, because a bare operation on a runtime reads as the method it "
+        "invokes" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.settle_quote registers as quote_prices; a handler registers under the operation "
+        "it is named for, because the engine's name and the runtime's are one name" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.settle_quote invokes quote_price; a handler invokes the operation it is named "
+        "for, because one operation keeps one name across a relay" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.price names the operation price; an operation is a verb and the business thing "
+        "it acts on, so its name has at least two segments" in f
+        for f in findings
+    ), findings
+    assert not any(f"{where}.quote_price " in f for f in findings), findings
+    assert not any(f"{where}.check_quote_handler " in f for f in findings), findings
+    assert not any("never exposes quote_price" in f for f in findings), findings
+
+
+def test_an_actions_class_and_its_application_client_offer_the_same_calls() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/billing.py",
+                "shop.application.client.billing",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class BillingApplicationClient(ts.Client, typing.Protocol):\n"
+                "    def charge_card(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse: ...\n"
+                "    def refund_card(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/client/orphan.py",
+                "shop.application.client.orphan",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class OrphanApplicationClient(ts.Client, typing.Protocol):\n"
+                "    def adopt_card(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/billing.py",
+                "shop.application.billing",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.application.relays as relays\n"
+                "class Billing(ts.Actions):\n"
+                "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+                "        self._catalog = catalog\n"
+                "    def charge_card(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return relays.QuotePriceResponse(text=quote_price_request.text)\n"
+                "    def void_card(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return relays.QuotePriceResponse(text=quote_price_request.text)\n",
+                False,
+            ),
+            (
+                "shop/application/lonely.py",
+                "shop.application.lonely",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.application.relays as relays\n"
+                "class Lonely(ts.Actions):\n"
+                "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+                "        self._catalog = catalog\n"
+                "    def find_card(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return relays.QuotePriceResponse(text=quote_price_request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.billing.Billing.void_card is not on the application client in "
+        "shop.application.client.billing; an actions class's public methods are exactly the "
+        "application client's in the module of its name, because that client is the only way a "
+        "runtime reaches it" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.billing.Billing lacks refund_card; an actions class's public methods are "
+        "exactly the application client's in the module of its name, because that client is the "
+        "only way a runtime reaches it" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.lonely.Lonely has no application client in shop.application.client.lonely; "
+        "an actions class's public methods are exactly the application client's in the module of "
+        "its name, because that client is the only way a runtime reaches it" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.client.orphan.OrphanApplicationClient has no actions class in "
+        "shop.application.orphan; an actions class's public methods are exactly the application "
+        "client's in the module of its name, because that client is the only way a runtime "
+        "reaches it" in f
+        for f in findings
+    ), findings
+    assert not any("Billing.charge_card is not on" in f for f in findings), findings
+    assert not any("shop.application.quotes.Quotes has no application client" in f for f in findings), findings
+    assert not any("ShopApplicationClient has no actions class" in f for f in findings), findings
+
+
+def test_every_service_method_is_on_the_context_client_and_on_one_service() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/extra.py",
+                "shop.application.extra",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "class ExtraService(ts.ApplicationService):\n"
+                "    def ask_question(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "        return client.AskQuestionResponse(text=ask_question_request.text)\n"
+                "    def drop_question(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "        return client.AskQuestionResponse(text=ask_question_request.text)\n",
+                False,
+            ),
+            (
+                "shop/client/more.py",
+                "shop.client.more",
+                "import typing\n"
+                "import tesser.context as ts\n"
+                "import shop.client.client as client\n"
+                "class MoreClient(ts.Client, typing.Protocol):\n"
+                "    def close_question(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.extra.ExtraService.drop_question is on no context client; a service's "
+        "public methods are the context client's, each on exactly one service, because the client "
+        "is the context's one published interface" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.client.client.Client.ask_question is on 2 services; a service's public methods are "
+        "the context client's, each on exactly one service, because the client is the context's "
+        "one published interface" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.client.more.MoreClient.close_question is on 0 services; a service's public methods "
+        "are the context client's, each on exactly one service" in f
+        for f in findings
+    ), findings
+    assert not any("ExtraService.ask_question is on no context client" in f for f in findings), findings
+
+
+def test_two_operations_behind_a_relay_never_share_a_name() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/pricing.py",
+                "shop.application.pricing",
+                "import tesser.application as ts\n"
+                "import shop.application.ports as ports\n"
+                "import shop.application.relays as relays\n"
+                "class Pricing(ts.Actions):\n"
+                "    def __init__(self, catalog: ports.Catalog) -> None:\n"
+                "        self._catalog = catalog\n"
+                "    def settle_price(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return relays.QuotePriceResponse(text=quote_price_request.text)\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators/settlement.py",
+                "shop.application.orchestrators.settlement",
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class Settlement(ts.Orchestrator):\n"
+                "    def __init__(self) -> None:\n"
+                "        return None\n"
+                "    async def settle_price(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return relays.QuotePriceResponse(text=quote_price_request.text)\n",
+                False,
+            ),
+            (
+                "shop/application/settle.py",
+                "shop.application.settle",
+                "import tesser.application as ts\n"
+                "import shop.client.client as client\n"
+                "class SettleService(ts.ApplicationService):\n"
+                "    def settle_price(self, ask_question_request: client.AskQuestionRequest) -> client.AskQuestionResponse:\n"
+                "        return client.AskQuestionResponse(text=ask_question_request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.pricing.Pricing.settle_price shares its name with "
+        "shop.application.orchestrators.settlement.Settlement; two different operations never "
+        "share a name, because a handler, a runner, and a relay method each name exactly one of "
+        "them" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.orchestrators.settlement.Settlement.settle_price shares its name with "
+        "shop.application.pricing.Pricing; two different operations never share a name" in f
+        for f in findings
+    ), findings
+    assert not any("SettleService.settle_price shares" in f for f in findings), findings
+    assert not any("shares its name with shop.application.settle" in f for f in findings), findings

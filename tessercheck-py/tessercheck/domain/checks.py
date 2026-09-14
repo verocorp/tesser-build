@@ -184,6 +184,20 @@ RUNNER_BLOCK: typing.Final[str] = "runner"
 
 RUNTIME_BLOCK: typing.Final[str] = "runtime"
 
+RELAY_SUFFIX: typing.Final[str] = "Relay"
+
+HANDLER_SUFFIX: typing.Final[str] = "_handler"
+
+APPLICATION_ROLE: typing.Final[str] = "application"
+
+CONTEXT_CLIENT_ROLE: typing.Final[str] = "client"
+
+UNIQUE_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = ("actions", "orchestrator")
+
+CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
+    {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime"}
+)
+
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
     {"handler", "gateway", "repository", RUNNER_BLOCK, RUNTIME_BLOCK}
 )
@@ -2009,6 +2023,28 @@ class ReturnRows(ts.ValueObject):
         return None
 
 
+class OperationRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, tuple[str, ...]], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, tuple[str, ...]], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def owners(self, text: Text) -> Symbols:
+        wanted = str(text)
+        return Symbols(SymbolsSpec(tuple(
+            SymbolSpec(module_name, cls) for module_name, cls, block, _ in self._items if block == wanted
+        )))
+
+    def methods(self, symbol: Symbol) -> Names:
+        wanted_module = str(symbol.module())
+        wanted_name = str(symbol.name())
+        for module_name, cls, _, methods in self._items:
+            if module_name == wanted_module and cls == wanted_name:
+                return Names(methods)
+        return Names(())
+
+
 class SharedRows(ts.ValueObject):
 
     _items: tuple[tuple[str, str, int, str, str, str, str], ...]
@@ -2055,7 +2091,9 @@ class RegistrySpec(ts.Spec):
         attrs: tuple[tuple[str, str, str, str, str], ...] = (),
         package_attrs: tuple[tuple[str, str], ...] = (),
         enums: tuple[tuple[str, str], ...] = (),
+        operations: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (),
     ) -> None:
+        self.operations = operations
         self.enums = enums
         self.export_packages = export_packages
         self.returns = returns
@@ -2104,8 +2142,10 @@ class Registry(ts.ValueObject):
     _attrs: AttrRows
     _package_attrs: SymbolRows
     _enums: SymbolRows
+    _operations: OperationRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_operations", OperationRows(spec.operations))
         object.__setattr__(self, "_enums", SymbolRows(spec.enums))
         object.__setattr__(self, "_export_packages", NameRows(spec.export_packages))
         object.__setattr__(self, "_returns", ReturnRows(spec.returns))
@@ -2191,6 +2231,9 @@ class Registry(ts.ValueObject):
 
     def enums(self) -> Symbols:
         return self._enums.symbols()
+
+    def operations(self) -> OperationRows:
+        return self._operations
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
@@ -11097,6 +11140,441 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
+    def relay_name_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) not in ("relays", "relays-file"):
+            return ()
+        kind_table = Registry(registry_spec).kinds()
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) != RELAY_BLOCK:
+                continue
+            where = f"{self._name}.{cls.name}"
+            carried = tuple(sorted({
+                item.name[len(prefix):]
+                for item in cls.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                for prefix in CALLING_MODES
+                if item.name.startswith(prefix)
+            }))
+            count = len(carried)
+            if count > 1:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} carries {count} operations; a relay carries one operation, "
+                        "because its name is the operation it carries",
+                    ))
+                )
+                continue
+            if count == 0:
+                continue
+            operation = carried[0]
+            expected = f"{MessageName(operation)}{RELAY_SUFFIX}"
+            if cls.name != expected:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} carries {operation} and is not {expected}; a relay is named "
+                        "for the operation it carries, because a name for what sits behind it "
+                        "is a pattern word",
+                    ))
+                )
+        return tuple(found)
+
+    def runner_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        operation_rows = registry.operations()
+        context = self._name.split(".")[0]
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) != RUNNER_BLOCK:
+                continue
+            where = f"{self._name}.{cls.name}"
+            relay_name = ""
+            relay_module = ""
+            for symbol in operation_rows.owners(Text(RELAY_BLOCK)):
+                named = str(symbol.name())
+                if (
+                    str(symbol.module()).split(".")[0] == context
+                    and cls.name.endswith(named)
+                    and len(named) > len(relay_name)
+                ):
+                    relay_name = named
+                    relay_module = str(symbol.module())
+            if not relay_name:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} ends in no relay's name; a runner is its engine's word "
+                        "followed by the name of the relay it implements, because its name "
+                        "is how its relay is found",
+                    ))
+                )
+                continue
+            carried = tuple(operation_rows.methods(Symbol(SymbolSpec(relay_module, relay_name))))
+            members = tuple(
+                item
+                for item in cls.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+            )
+            implemented = tuple(member.name for member in members)
+            for sibling in implemented:
+                if sibling not in carried:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cls.lineno,
+                            "TB081",
+                            f"{where}.{sibling} is not on {relay_name}; a runner's public "
+                            "methods are exactly its relay's, because it implements that relay "
+                            "and nothing else",
+                        ))
+                    )
+            for sibling in carried:
+                if sibling not in implemented:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cls.lineno,
+                            "TB081",
+                            f"{where} lacks {sibling}; a runner's public methods are exactly "
+                            "its relay's, because it implements that relay and nothing else",
+                        ))
+                    )
+            for member in members:
+                mode = next((prefix for prefix in CALLING_MODES if member.name.startswith(prefix)), None)
+                if mode is None:
+                    continue
+                handler = f"{member.name[len(mode):]}{HANDLER_SUFFIX}"
+                for node in ast.walk(member):
+                    if not isinstance(node, ast.Attribute) or not node.attr.endswith(HANDLER_SUFFIX):
+                        continue
+                    reached = node.attr
+                    if reached != handler:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                member.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches {reached}; a runner method "
+                                "reaches the handler of the operation it carries, because one "
+                                "operation keeps one name across a relay",
+                            ))
+                        )
+        return tuple(found)
+
+    def runtime_handler_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        kind_table = Registry(registry_spec).kinds()
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) != RUNTIME_BLOCK:
+                continue
+            where = f"{self._name}.{cls.name}"
+            handlers: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, str]] = []
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name.startswith("_"):
+                    continue
+                if not member.name.endswith(HANDLER_SUFFIX):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            member.lineno,
+                            "TB085",
+                            f"{where}.{member.name} is not an operation followed by _handler; a "
+                            "runtime exposes each handler as its operation followed by _handler, "
+                            "because a bare operation on a runtime reads as the method it invokes",
+                        ))
+                    )
+                    continue
+                handlers.append((member, member.name[: -len(HANDLER_SUFFIX)]))
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name != "__init__":
+                    continue
+                exposed: dict[str, str] = {}
+                for stmt in member.body:
+                    if (
+                        isinstance(stmt, ast.Assign)
+                        and len(stmt.targets) == 1
+                        and isinstance(stmt.targets[0], ast.Attribute)
+                        and isinstance(stmt.targets[0].value, ast.Name)
+                        and stmt.targets[0].value.id == "self"
+                        and isinstance(stmt.value, ast.Name)
+                    ):
+                        exposed[stmt.value.id] = stmt.targets[0].attr
+                for fn in member.body:
+                    if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    handlers.append((fn, fn.name))
+                    published = exposed.get(fn.name)
+                    if published is None:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                fn.lineno,
+                                "TB085",
+                                f"{where} never exposes {fn.name}; a runtime exposes each "
+                                "handler as its operation followed by _handler, because a bare "
+                                "operation on a runtime reads as the method it invokes",
+                            ))
+                        )
+                    elif published != f"{fn.name}{HANDLER_SUFFIX}":
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                fn.lineno,
+                                "TB085",
+                                f"{where} exposes {fn.name} as {published}; a runtime exposes each "
+                                "handler as its operation followed by _handler, because a bare "
+                                "operation on a runtime reads as the method it invokes",
+                            ))
+                        )
+                    for decorator in fn.decorator_list:
+                        if not isinstance(decorator, ast.Call):
+                            continue
+                        for keyword in decorator.keywords:
+                            if (
+                                keyword.arg == "name"
+                                and isinstance(keyword.value, ast.Constant)
+                                and keyword.value.value != fn.name
+                            ):
+                                registered = keyword.value.value
+                                found.append(
+                                    Violation(ViolationSpec(
+                                        self._path,
+                                        fn.lineno,
+                                        "TB085",
+                                        f"{where}.{fn.name} registers as {registered}; a handler "
+                                        "registers under the operation it is named for, because "
+                                        "the engine's name and the runtime's are one name",
+                                    ))
+                                )
+            for handler, operation in handlers:
+                if len(operation.split("_")) < OPERATION_SEGMENTS:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            handler.lineno,
+                            "TB085",
+                            f"{where}.{handler.name} names the operation {operation}; an operation "
+                            "is a verb and the business thing it acts on, so its name has at least "
+                            "two segments",
+                        ))
+                    )
+                    continue
+                invoked = next(
+                    (
+                        returned.func.attr
+                        for node in ast.walk(handler)
+                        if isinstance(node, ast.Return) and node.value is not None
+                        for returned in (node.value.value if isinstance(node.value, ast.Await) else node.value,)
+                        if isinstance(returned, ast.Call) and isinstance(returned.func, ast.Attribute)
+                    ),
+                    None,
+                )
+                if invoked is not None and invoked != operation:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            handler.lineno,
+                            "TB085",
+                            f"{where}.{handler.name} invokes {invoked}; a handler invokes the "
+                            "operation it is named for, because one operation keeps one name "
+                            "across a relay",
+                        ))
+                    )
+        return tuple(found)
+
+    def actions_mirror_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        place = str(self._placement)
+        if place in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        operation_rows = registry.operations()
+        parts = self._name.split(".")
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            where = f"{self._name}.{cls.name}"
+            if block is not None and str(block) == "actions" and len(parts) == 3 and parts[1] == APPLICATION_ROLE:
+                paired = ".".join((parts[0], APPLICATION_ROLE, APPLICATION_CLIENT_PACKAGE, parts[2]))
+                protocols = tuple(
+                    symbol for symbol in operation_rows.owners(Text("actions_client")) if str(symbol.module()) == paired
+                )
+                if not protocols:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cls.lineno,
+                            "TB081",
+                            f"{where} has no application client in {paired}; an actions class's "
+                            "public methods are exactly the application client's in the module of "
+                            "its name, because that client is the only way a runtime reaches it",
+                        ))
+                    )
+                    continue
+                offered = tuple(
+                    sibling for symbol in protocols for sibling in operation_rows.methods(symbol)
+                )
+                implemented = tuple(
+                    item.name
+                    for item in cls.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                )
+                for sibling in implemented:
+                    if sibling not in offered:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                cls.lineno,
+                                "TB081",
+                                f"{where}.{sibling} is not on the application client in {paired}; "
+                                "an actions class's public methods are exactly the application "
+                                "client's in the module of its name, because that client is the "
+                                "only way a runtime reaches it",
+                            ))
+                        )
+                for sibling in offered:
+                    if sibling not in implemented:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                cls.lineno,
+                                "TB081",
+                                f"{where} lacks {sibling}; an actions class's public methods are "
+                                "exactly the application client's in the module of its name, "
+                                "because that client is the only way a runtime reaches it",
+                            ))
+                        )
+            elif block is not None and str(block) == "actions_client" and place in ("app-client", "app-client-file"):
+                paired = ".".join((parts[0], APPLICATION_ROLE, parts[-1]))
+                if not any(str(symbol.module()) == paired for symbol in operation_rows.owners(Text("actions"))):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cls.lineno,
+                            "TB081",
+                            f"{where} has no actions class in {paired}; an actions class's public "
+                            "methods are exactly the application client's in the module of its "
+                            "name, because that client is the only way a runtime reaches it",
+                        ))
+                    )
+        return tuple(found)
+
+    def service_mirror_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        operation_rows = registry.operations()
+        parts = self._name.split(".")
+        context = parts[0]
+        clients = tuple(
+            symbol
+            for symbol in operation_rows.owners(Text("client"))
+            if str(symbol.module()).split(".")[:2] == [context, CONTEXT_CLIENT_ROLE]
+        )
+        if not clients or context not in registry.contexts():
+            return ()
+        published = tuple(sibling for symbol in clients for sibling in operation_rows.methods(symbol))
+        services = tuple(
+            symbol
+            for symbol in operation_rows.owners(Text("service"))
+            if str(symbol.module()).split(".")[0] == context
+        )
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None:
+                continue
+            where = f"{self._name}.{cls.name}"
+            members = tuple(
+                item
+                for item in cls.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+            )
+            if str(block) == "service":
+                for member in members:
+                    if member.name not in published:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                member.lineno,
+                                "TB081",
+                                f"{where}.{member.name} is on no context client; a service's "
+                                "public methods are the context client's, each on exactly one "
+                                "service, because the client is the context's one published "
+                                "interface",
+                            ))
+                        )
+            elif str(block) == "client" and parts[1:2] == [CONTEXT_CLIENT_ROLE]:
+                for member in members:
+                    count = sum(1 for symbol in services if member.name in operation_rows.methods(symbol))
+                    if count == 1:
+                        continue
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            member.lineno,
+                            "TB081",
+                            f"{where}.{member.name} is on {count} services; a service's public "
+                            "methods are the context client's, each on exactly one service, "
+                            "because the client is the context's one published interface",
+                        ))
+                    )
+        return tuple(found)
+
+    def operation_unique_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        operation_rows = registry.operations()
+        context = self._name.split(".")[0]
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) not in UNIQUE_OPERATION_BLOCKS:
+                continue
+            where = f"{self._name}.{cls.name}"
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name.startswith("_"):
+                    continue
+                for kind in UNIQUE_OPERATION_BLOCKS:
+                    for symbol in operation_rows.owners(Text(kind)):
+                        if (
+                            (str(symbol.module()), str(symbol.name())) == (self._name, cls.name)
+                            or str(symbol.module()).split(".")[0] != context
+                            or member.name not in operation_rows.methods(symbol)
+                        ):
+                            continue
+                        owner = f"{symbol.module()}.{symbol.name()}"
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                member.lineno,
+                                "TB085",
+                                f"{where}.{member.name} shares its name with {owner}; two "
+                                "different operations never share a name, because a handler, a "
+                                "runner, and a relay method each name exactly one of them",
+                            ))
+                        )
+        return tuple(found)
+
     def pairing_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         registry = Registry(registry_spec)
@@ -12175,6 +12653,22 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.class_defs()
             if stmt.name in module.enums()
         ))
+        operation_rows = tuple(sorted(
+            (
+                module.name(),
+                stmt.name,
+                blocks[(module.name(), stmt.name)],
+                tuple(
+                    item.name
+                    for item in stmt.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                ),
+            )
+            for module in self._modules
+            if str(module.place()) not in TEST_TIER
+            for stmt in module.class_defs()
+            if blocks.get((module.name(), stmt.name)) in CHAIN_BLOCKS
+        ))
         outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
         action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
         context_rows = self._contexts
@@ -12229,6 +12723,7 @@ class Codebase(ts.AggregateRoot):
             attrs=attr_rows,
             package_attrs=package_attr_rows,
             enums=enum_rows,
+            operations=operation_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
@@ -12307,6 +12802,7 @@ class Codebase(ts.AggregateRoot):
             attrs=attr_rows,
             package_attrs=package_attr_rows,
             enums=enum_rows,
+            operations=operation_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())
@@ -12663,6 +13159,12 @@ class Codebase(ts.AggregateRoot):
                     found.extend(decl.operation_name_violations())
         for module in scoped:
             found.extend(module.pairing_violations(registry))
+            found.extend(module.relay_name_violations(registry))
+            found.extend(module.runner_violations(registry))
+            found.extend(module.runtime_handler_violations(registry))
+            found.extend(module.actions_mirror_violations(registry))
+            found.extend(module.service_mirror_violations(registry))
+            found.extend(module.operation_unique_violations(registry))
         if whole:
             for module in self._modules:
                 place = str(module.place())
