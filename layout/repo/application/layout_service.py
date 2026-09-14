@@ -109,13 +109,13 @@ class MapToReadRepoRequest(ts.Mapper, ports.ReadRepoRequest):
         super().__init__(repo_root=str(repo_root))
 
 
-class MapToCheckResponseWhenClean(ts.Mapper, client.CheckResponse):
+class MapToCheckLayoutResponseWhenClean(ts.Mapper, client.CheckLayoutResponse):
 
     def __init__(self, repo: domain.Repo) -> None:
         super().__init__(problems=(), counts=tuple(str(count) for count in repo.counts()))
 
 
-class MapToCheckResponseWithProblems(ts.Mapper, client.CheckResponse):
+class MapToCheckLayoutResponseWithProblems(ts.Mapper, client.CheckLayoutResponse):
 
     def __init__(self, repo: domain.Repo) -> None:
         super().__init__(
@@ -124,7 +124,7 @@ class MapToCheckResponseWithProblems(ts.Mapper, client.CheckResponse):
         )
 
 
-class MapToTreesResponse(ts.Mapper, client.TreesResponse):
+class MapToListTreesResponse(ts.Mapper, client.ListTreesResponse):
 
     def __init__(self, repo: domain.Repo) -> None:
         super().__init__(trees=tuple(str(tree) for tree in repo.trees()))
@@ -135,20 +135,20 @@ class LayoutService(ts.ApplicationService):
     def __init__(self, repo_reader: ports.RepoReader) -> None:
         self._repo_reader = repo_reader
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
-        repo_root = domain.RepoRoot(check_request.repo_root)
+    def check_layout(self, check_layout_request: client.CheckLayoutRequest) -> client.CheckLayoutResponse:
+        repo_root = domain.RepoRoot(check_layout_request.repo_root)
         read_repo_response = self._repo_reader.read_repo(MapToReadRepoRequest(repo_root))
         repo = domain.Repo(MapToRepoSpec(read_repo_response))
         match repo.health():
             case domain.Health.CLEAN:
-                return MapToCheckResponseWhenClean(repo)
+                return MapToCheckLayoutResponseWhenClean(repo)
             case domain.Health.PROBLEMS:
-                return MapToCheckResponseWithProblems(repo)
+                return MapToCheckLayoutResponseWithProblems(repo)
             case _ as unreachable:
                 typing.assert_never(unreachable)
 
-    def trees(self, trees_request: client.TreesRequest) -> client.TreesResponse:
-        repo_root = domain.RepoRoot(trees_request.repo_root)
+    def list_trees(self, list_trees_request: client.ListTreesRequest) -> client.ListTreesResponse:
+        repo_root = domain.RepoRoot(list_trees_request.repo_root)
         read_repo_response = self._repo_reader.read_repo(MapToReadRepoRequest(repo_root))
         repo = domain.Repo(MapToRepoSpec(read_repo_response))
-        return MapToTreesResponse(repo)
+        return MapToListTreesResponse(repo)

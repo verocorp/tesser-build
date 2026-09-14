@@ -47,29 +47,29 @@ def test_each_config_is_its_own() -> None:
 
 
 def test_the_built_client_checks_a_clean_repo_off_disk(tmp_path: pathlib.Path) -> None:
-    check_response = component.Repo(component.Config(component.Spec())).client.check(client.CheckRequest(repo_root=str(_repo(tmp_path))))
-    assert check_response.problems == ()
-    assert check_response.counts == ("3", "1")
+    check_layout_response = component.Repo(component.Config(component.Spec())).client.check_layout(client.CheckLayoutRequest(repo_root=str(_repo(tmp_path))))
+    assert check_layout_response.problems == ()
+    assert check_layout_response.counts == ("3", "1")
 
 
 def test_the_built_client_reads_the_filesystem_it_is_pointed_at(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
-    check_response = component.Repo(component.Config(component.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
-    assert any("'utils' has no manifest.json row" in p for p in check_response.problems)
+    check_layout_response = component.Repo(component.Config(component.Spec())).client.check_layout(client.CheckLayoutRequest(repo_root=str(tmp_path)))
+    assert any("'utils' has no manifest.json row" in p for p in check_layout_response.problems)
 
 
 def test_the_built_client_lists_the_app_trees(tmp_path: pathlib.Path) -> None:
-    trees_response = component.Repo(component.Config(component.Spec())).client.trees(client.TreesRequest(repo_root=str(_repo(tmp_path))))
-    assert trees_response.trees == ("appone",)
+    list_trees_response = component.Repo(component.Config(component.Spec())).client.list_trees(client.ListTreesRequest(repo_root=str(_repo(tmp_path))))
+    assert list_trees_response.trees == ("appone",)
 
 
 def test_the_built_client_turns_a_missing_root_into_a_problem(tmp_path: pathlib.Path) -> None:
-    check_response = component.Repo(component.Config(component.Spec())).client.check(
-        client.CheckRequest(repo_root=str(tmp_path / "no-such-dir"))
+    check_layout_response = component.Repo(component.Config(component.Spec())).client.check_layout(
+        client.CheckLayoutRequest(repo_root=str(tmp_path / "no-such-dir"))
     )
-    assert len(check_response.problems) == 1
-    assert "is not a directory" in check_response.problems[0]
+    assert len(check_layout_response.problems) == 1
+    assert "is not a directory" in check_layout_response.problems[0]
 
 
 def test_the_built_client_turns_a_broken_manifest_into_one_problem(
@@ -77,16 +77,16 @@ def test_the_built_client_turns_a_broken_manifest_into_one_problem(
 ) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    check_response = component.Repo(component.Config(component.Spec())).client.check(client.CheckRequest(repo_root=str(tmp_path)))
-    assert len(check_response.problems) == 1
-    assert "manifest.json is unreadable" in check_response.problems[0]
+    check_layout_response = component.Repo(component.Config(component.Spec())).client.check_layout(client.CheckLayoutRequest(repo_root=str(tmp_path)))
+    assert len(check_layout_response.problems) == 1
+    assert "manifest.json is unreadable" in check_layout_response.problems[0]
 
 
 def test_every_build_hands_back_a_separate_client(tmp_path: pathlib.Path) -> None:
     first = component.Repo(component.Config(component.Spec())).client
     second = component.Repo(component.Config(component.Spec())).client
     assert first is not second
-    assert first.check(
-        client.CheckRequest(repo_root=str(_repo(tmp_path)))
+    assert first.check_layout(
+        client.CheckLayoutRequest(repo_root=str(_repo(tmp_path)))
     ).problems == ()
-    assert second.check(client.CheckRequest(repo_root=str(tmp_path))).problems == ()
+    assert second.check_layout(client.CheckLayoutRequest(repo_root=str(tmp_path))).problems == ()

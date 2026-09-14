@@ -14,52 +14,52 @@ class FakeCheckClient(client.TessercheckClient):
         self.findings = findings
         self.roots: list[str] = []
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
-        self.roots.append(check_request.tree)
-        return client.CheckResponse(findings=self.findings)
+    def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
+        self.roots.append(check_tree_request.tree)
+        return client.CheckTreeResponse(findings=self.findings)
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
         self.roots.append(check_file_request.tree)
         return client.CheckFileResponse(governance="governed", findings=self.findings, codes=())
 
-    def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
-        self.roots.append(hook_request.tree)
-        return client.HookResponse(
+    def check_write(self, check_write_request: client.CheckWriteRequest) -> client.CheckWriteResponse:
+        self.roots.append(check_write_request.tree)
+        return client.CheckWriteResponse(
             governance="governed", mode="advisory", action="advise", findings=self.findings, codes=()
         )
 
-    def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
-        self.roots.append(mark_request.tree)
-        return client.MarkResponse(files=0, remaining=self.findings)
+    def mark_debt(self, mark_debt_request: client.MarkDebtRequest) -> client.MarkDebtResponse:
+        self.roots.append(mark_debt_request.tree)
+        return client.MarkDebtResponse(files=0, remaining=self.findings)
 
-    def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
-        self.roots.append(rename_request.tree)
-        return client.RenameResponse(files=0, remaining=self.findings)
+    def apply_renames(self, apply_renames_request: client.ApplyRenamesRequest) -> client.ApplyRenamesResponse:
+        self.roots.append(apply_renames_request.tree)
+        return client.ApplyRenamesResponse(files=0, remaining=self.findings)
 
-    def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
-        self.roots.append(rulebook_request.tree)
-        return client.RulebookResponse(rendered="| rendered |")
+    def render_rulebook(self, render_rulebook_request: client.RenderRulebookRequest) -> client.RenderRulebookResponse:
+        self.roots.append(render_rulebook_request.tree)
+        return client.RenderRulebookResponse(rendered="| rendered |")
 
 
 @ts.fake
 class FakeRejectingClient(client.TessercheckClient):
 
-    def check(self, check_request: client.CheckRequest) -> client.CheckResponse:
+    def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
-    def hook(self, hook_request: client.HookRequest) -> client.HookResponse:
+    def check_write(self, check_write_request: client.CheckWriteRequest) -> client.CheckWriteResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
-    def mark(self, mark_request: client.MarkRequest) -> client.MarkResponse:
+    def mark_debt(self, mark_debt_request: client.MarkDebtRequest) -> client.MarkDebtResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
-    def rename(self, rename_request: client.RenameRequest) -> client.RenameResponse:
+    def apply_renames(self, apply_renames_request: client.ApplyRenamesRequest) -> client.ApplyRenamesResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
-    def rulebook(self, rulebook_request: client.RulebookRequest) -> client.RulebookResponse:
+    def render_rulebook(self, render_rulebook_request: client.RenderRulebookRequest) -> client.RenderRulebookResponse:
         raise client.Rejected("unreadable", "checks.py cannot be read")
 
 

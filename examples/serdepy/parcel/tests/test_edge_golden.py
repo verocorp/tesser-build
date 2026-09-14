@@ -16,7 +16,7 @@ def test_wire_golden_locks_the_payload_shape() -> None:
             scanned_at="2026-07-20T10:16:15.123456-05:00",
         )
     )
-    parcel_record = ports.ParcelRecord(
+    manifest_parcel_request = ports.ManifestParcelRequest(
         code=str(parcel.code),
         items=int(parcel.items),
         weight_kg=float(parcel.weight),
@@ -29,11 +29,11 @@ def test_wire_golden_locks_the_payload_shape() -> None:
             else ports.WeightClass.LIGHT
         ),
     )
-    payload_response = gateways.ParcelWireGateway().to_payload(parcel_record)
-    assert payload_response.parcel_code == "PKG-2026-0042"
-    assert payload_response.item_count == 3
-    assert payload_response.weight_kg == 21.5
-    assert payload_response.label_digest_hex == "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-    assert payload_response.declared_value == "199.99"
-    assert payload_response.scanned_at == "2026-07-20T15:16:15.123456+00:00"
-    assert payload_response.weight_class is ports.WeightClass.HEAVY
+    manifest_parcel_response = gateways.ParcelWireGateway().manifest_parcel(manifest_parcel_request)
+    assert manifest_parcel_response.parcel.parcel_code == "PKG-2026-0042"
+    assert manifest_parcel_response.parcel.item_count == 3
+    assert manifest_parcel_response.parcel.weight_kg == 21.5
+    assert manifest_parcel_response.parcel.label_digest_hex == "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    assert manifest_parcel_response.parcel.declared_value == "199.99"
+    assert manifest_parcel_response.parcel.scanned_at == "2026-07-20T15:16:15.123456+00:00"
+    assert manifest_parcel_response.parcel.weight_class is ports.WeightClass.HEAVY

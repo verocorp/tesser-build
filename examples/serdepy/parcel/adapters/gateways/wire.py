@@ -7,13 +7,17 @@ import parcel.application.ports as ports
 
 class ParcelWireGateway(ts.Gateway):
 
-    def to_payload(self, parcel_record: ports.ParcelRecord) -> ports.PayloadResponse:
-        return ports.PayloadResponse(
-            parcel_code=parcel_record.code,
-            item_count=parcel_record.items,
-            weight_kg=parcel_record.weight_kg,
-            label_digest_hex=parcel_record.label_digest.hex(),
-            declared_value=parcel_record.declared_value,
-            scanned_at=parcel_record.scanned_at,
-            weight_class=parcel_record.weight_class,
+    def manifest_parcel(
+        self, manifest_parcel_request: ports.ManifestParcelRequest
+    ) -> ports.ManifestParcelResponse:
+        return ports.ManifestParcelResponse(
+            parcel=ports.Parcel(
+                parcel_code=manifest_parcel_request.code,
+                item_count=manifest_parcel_request.items,
+                weight_kg=manifest_parcel_request.weight_kg,
+                label_digest_hex=manifest_parcel_request.label_digest.hex(),
+                declared_value=manifest_parcel_request.declared_value,
+                scanned_at=manifest_parcel_request.scanned_at,
+                weight_class=manifest_parcel_request.weight_class,
+            )
         )

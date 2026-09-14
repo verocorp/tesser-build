@@ -5,26 +5,26 @@ import typing
 import tesser.context as ts
 
 
-class CheckRequest(ts.Request):
+class CheckLayoutRequest(ts.Request):
 
     def __init__(self, repo_root: str) -> None:
         self.repo_root = repo_root
 
 
-class CheckResponse(ts.Response):
+class CheckLayoutResponse(ts.Response):
 
     def __init__(self, problems: tuple[str, ...], counts: tuple[str, ...]) -> None:
         self.problems = problems
         self.counts = counts
 
 
-class TreesRequest(ts.Request):
+class ListTreesRequest(ts.Request):
 
     def __init__(self, repo_root: str) -> None:
         self.repo_root = repo_root
 
 
-class TreesResponse(ts.Response):
+class ListTreesResponse(ts.Response):
 
     def __init__(self, trees: tuple[str, ...]) -> None:
         self.trees = trees
@@ -32,6 +32,6 @@ class TreesResponse(ts.Response):
 
 class RepoClient(ts.Client, typing.Protocol):
 
-    def check(self, check_request: CheckRequest) -> CheckResponse: ...  # tesser:debt TB085
+    def check_layout(self, check_layout_request: CheckLayoutRequest) -> CheckLayoutResponse: ...
 
-    def trees(self, trees_request: TreesRequest) -> TreesResponse: ...  # tesser:debt TB085
+    def list_trees(self, list_trees_request: ListTreesRequest) -> ListTreesResponse: ...

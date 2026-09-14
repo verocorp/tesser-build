@@ -24,9 +24,9 @@ def main() -> int:
     tree = args[0] if args else _HERE
     tessercheck = component.Tessercheck(component.Config(component.Spec()))
     try:
-        check_response = tessercheck.client.check(client.CheckRequest(tree=tree))
+        check_tree_response = tessercheck.client.check_tree(client.CheckTreeRequest(tree=tree))
     finally:
         tessercheck.close()
-    for finding in check_response.findings:
+    for finding in check_tree_response.findings:
         print(finding)
-    return 1 if check_response.findings else 0
+    return 1 if check_tree_response.findings else 0

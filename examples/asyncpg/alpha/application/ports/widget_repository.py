@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class Found(enum.Enum):
+class FindWidgetOutcome(enum.Enum):
     YES = "yes"
     NO = "no"
 
@@ -83,8 +83,8 @@ class FindWidgetRequest(ts.Request):
 
 class FindWidgetResponse(ts.Response):
 
-    def __init__(self, found: Found) -> None:
-        self.found = found
+    def __init__(self, outcome: FindWidgetOutcome) -> None:
+        self.outcome = outcome
 
 
 class WidgetRepository(ts.Port, typing.Protocol):

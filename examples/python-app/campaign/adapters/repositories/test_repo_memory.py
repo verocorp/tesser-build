@@ -124,7 +124,7 @@ def test_a_registered_slug_reads_as_taken() -> None:
 
     slug_taken_response = in_memory_campaign_repository.slug_taken(ports.SlugTakenRequest(slug="promo"))
 
-    assert slug_taken_response.availability is ports.SlugAvailability.TAKEN
+    assert slug_taken_response.outcome is ports.SlugTakenOutcome.TAKEN
 
 
 def test_an_unregistered_slug_reads_as_free() -> None:
@@ -132,7 +132,7 @@ def test_an_unregistered_slug_reads_as_free() -> None:
 
     slug_taken_response = in_memory_campaign_repository.slug_taken(ports.SlugTakenRequest(slug="promo"))
 
-    assert slug_taken_response.availability is ports.SlugAvailability.FREE
+    assert slug_taken_response.outcome is ports.SlugTakenOutcome.FREE
 
 
 def test_an_empty_store_lists_no_campaigns() -> None:

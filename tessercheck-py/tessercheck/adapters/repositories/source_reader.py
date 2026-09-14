@@ -43,7 +43,7 @@ class FilesystemSourceReader(ts.Repository):
         self, read_sources_request: ports.ReadSourcesRequest
     ) -> ports.ReadSourcesResponse:
         base = pathlib.Path(read_sources_request.tree)
-        root = ports.RootForm.APP
+        outcome = ports.ReadSourcesOutcome.APP
         skips: set[str] = set()
         exports: list[str] = []
         imports: list[str] = []
@@ -52,13 +52,13 @@ class FilesystemSourceReader(ts.Repository):
             declared = (base / DECLARATION).read_text(encoding="utf-8-sig")
             lines = [line.strip() for line in declared.splitlines() if line.strip()]
             if not lines or lines[0] != "app":
-                root = ports.RootForm.UNRECOGNIZED
+                outcome = ports.ReadSourcesOutcome.UNRECOGNIZED
             else:
                 for line in lines[1:]:
                     directive, _, value = line.partition(" ")
                     value = value.strip()
                     if not value:
-                        root = ports.RootForm.UNRECOGNIZED
+                        outcome = ports.ReadSourcesOutcome.UNRECOGNIZED
                         break
                     dotted = all(part.isidentifier() for part in value.split("."))
                     if directive == SKIP_DIRECTIVE and "/" not in value:
@@ -70,13 +70,13 @@ class FilesystemSourceReader(ts.Repository):
                     elif directive == STDLIB_DIRECTIVE and dotted:
                         pure_stdlib.append(value)
                     else:
-                        root = ports.RootForm.UNRECOGNIZED
+                        outcome = ports.ReadSourcesOutcome.UNRECOGNIZED
                         break
         except FileNotFoundError:
-            root = ports.RootForm.MISSING
+            outcome = ports.ReadSourcesOutcome.MISSING
         except (UnicodeDecodeError, OSError):
-            root = ports.RootForm.UNREADABLE
-        if root is not ports.RootForm.APP:
+            outcome = ports.ReadSourcesOutcome.UNREADABLE
+        if outcome is not ports.ReadSourcesOutcome.APP:
             skips = set()
             exports = []
             imports = []
@@ -128,7 +128,7 @@ class FilesystemSourceReader(ts.Repository):
                             )
                         )
         return ports.ReadSourcesResponse(
-            root=root,
+            outcome=outcome,
             nested=tuple(nested),
             symlinked=tuple(symlinked),
             sources=tuple(sorted(found, key=lambda source: source.path)),  # tesser:debt TB023

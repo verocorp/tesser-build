@@ -314,51 +314,51 @@ def _malformed(
 
 def test_check_passes_the_root_to_the_port() -> None:
     fake_repo_reader = FakeRepoReader(_response())
-    application.LayoutService(fake_repo_reader).check(client.CheckRequest(repo_root="/somewhere"))
+    application.LayoutService(fake_repo_reader).check_layout(client.CheckLayoutRequest(repo_root="/somewhere"))
     assert fake_repo_reader.roots == ["/somewhere"]
 
 
 def test_trees_passes_the_root_to_the_port() -> None:
     fake_repo_reader = FakeRepoReader(_response())
-    application.LayoutService(fake_repo_reader).trees(client.TreesRequest(repo_root="/elsewhere"))
+    application.LayoutService(fake_repo_reader).list_trees(client.ListTreesRequest(repo_root="/elsewhere"))
     assert fake_repo_reader.roots == ["/elsewhere"]
 
 
 def test_a_clean_read_checks_clean_with_counts() -> None:
-    check_response = application.LayoutService(FakeRepoReader(_response())).check(
-        client.CheckRequest(repo_root=".")
+    check_layout_response = application.LayoutService(FakeRepoReader(_response())).check_layout(
+        client.CheckLayoutRequest(repo_root=".")
     )
-    assert check_response.problems == ()
-    assert check_response.counts == ("2", "1")
+    assert check_layout_response.problems == ()
+    assert check_layout_response.counts == ("2", "1")
 
 
 def test_problems_come_back_rendered_as_text() -> None:
-    check_response = application.LayoutService(FakeRepoReader(_response(kind="library"))).check(
-        client.CheckRequest(repo_root=".")
+    check_layout_response = application.LayoutService(FakeRepoReader(_response(kind="library"))).check_layout(
+        client.CheckLayoutRequest(repo_root=".")
     )
     assert any(
         "manifest.json row 'appone' declares unknown kind 'library'" in problem
-        for problem in check_response.problems
-    ), check_response.problems
+        for problem in check_layout_response.problems
+    ), check_layout_response.problems
 
 
 def test_trees_returns_the_app_rows() -> None:
-    trees_response = application.LayoutService(FakeRepoReader(_response())).trees(
-        client.TreesRequest(repo_root=".")
+    list_trees_response = application.LayoutService(FakeRepoReader(_response())).list_trees(
+        client.ListTreesRequest(repo_root=".")
     )
-    assert trees_response.trees == ("appone",)
+    assert list_trees_response.trees == ("appone",)
 
 
 def test_a_malformed_manifest_renders_as_one_problem_and_zero_counts() -> None:
-    check_response = application.LayoutService(
+    check_layout_response = application.LayoutService(
         FakeRepoReader(_malformed(note="line 1 column 2"))
-    ).check(client.CheckRequest(repo_root="."))
-    assert check_response.problems == ("manifest.json is unreadable: line 1 column 2",)
-    assert check_response.counts == ("0", "0")
+    ).check_layout(client.CheckLayoutRequest(repo_root="."))
+    assert check_layout_response.problems == ("manifest.json is unreadable: line 1 column 2",)
+    assert check_layout_response.counts == ("0", "0")
 
 
 def test_trees_degrade_when_the_manifest_cannot_be_read() -> None:
-    trees_response = application.LayoutService(FakeRepoReader(_malformed())).trees(
-        client.TreesRequest(repo_root=".")
+    list_trees_response = application.LayoutService(FakeRepoReader(_malformed())).list_trees(
+        client.ListTreesRequest(repo_root=".")
     )
-    assert trees_response.trees == ()
+    assert list_trees_response.trees == ()

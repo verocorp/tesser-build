@@ -76,8 +76,8 @@ class PostgresWidgetRepository(ts.Repository):
             row = await self._connection.fetchrow(_FIND, find_widget_request.name)
         except (asyncpg.PostgresError, OSError) as e:
             raise ports.StoreUnavailable("the widget store cannot answer") from e
-        found = ports.Found.NO if row is None else ports.Found.YES
-        return ports.FindWidgetResponse(found=found)
+        outcome = ports.FindWidgetOutcome.NO if row is None else ports.FindWidgetOutcome.YES
+        return ports.FindWidgetResponse(outcome=outcome)
 
 
 class PostgresWidgetStore(ts.Repository):

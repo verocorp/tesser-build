@@ -56,8 +56,8 @@ class FakeWidgetRepository(ports.WidgetRepository):
         )
 
     async def find_widget(self, find_widget_request: ports.FindWidgetRequest) -> ports.FindWidgetResponse:
-        found = ports.Found.YES if find_widget_request.name in self._part_by_name else ports.Found.NO
-        return ports.FindWidgetResponse(found=found)
+        outcome = ports.FindWidgetOutcome.YES if find_widget_request.name in self._part_by_name else ports.FindWidgetOutcome.NO
+        return ports.FindWidgetResponse(outcome=outcome)
 
 
 @ts.fake

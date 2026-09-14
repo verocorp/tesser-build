@@ -84,9 +84,9 @@ class InMemoryCampaignRepository(ts.Repository):
             raise ports.StoreUnavailable("campaign store unavailable")
         taken = any(link.slug == slug_taken_request.slug for row in self._rows.values() for link in row.links)
         return ports.SlugTakenResponse(
-            availability=ports.SlugAvailability.TAKEN
+            outcome=ports.SlugTakenOutcome.TAKEN
             if taken
-            else ports.SlugAvailability.FREE
+            else ports.SlugTakenOutcome.FREE
         )
 
     def list_campaigns(

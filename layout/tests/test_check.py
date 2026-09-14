@@ -45,37 +45,37 @@ def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
 
 
 def test_a_consistent_repo_checks_clean(tmp_path: pathlib.Path) -> None:
-    check_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check(repo_client.CheckRequest(repo_root=str(_repo(tmp_path))))
-    assert check_response.problems == ()
-    assert check_response.counts == ("6", "1")
+    check_layout_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check_layout(repo_client.CheckLayoutRequest(repo_root=str(_repo(tmp_path))))
+    assert check_layout_response.problems == ()
+    assert check_layout_response.counts == ("6", "1")
 
 
 def test_an_unregistered_directory_is_reported_through_the_stack(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "utils").mkdir()
-    check_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check(repo_client.CheckRequest(repo_root=str(tmp_path)))
-    assert any("'utils' has no manifest.json row" in p for p in check_response.problems)
+    check_layout_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check_layout(repo_client.CheckLayoutRequest(repo_root=str(tmp_path)))
+    assert any("'utils' has no manifest.json row" in p for p in check_layout_response.problems)
 
 
 def test_trees_lists_app_rows_through_the_client(tmp_path: pathlib.Path) -> None:
-    trees_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.trees(repo_client.TreesRequest(repo_root=str(_repo(tmp_path))))
-    assert trees_response.trees == ("appone",)
+    list_trees_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.list_trees(repo_client.ListTreesRequest(repo_root=str(_repo(tmp_path))))
+    assert list_trees_response.trees == ("appone",)
 
 
 def test_a_malformed_manifest_is_one_message_not_a_crash(tmp_path: pathlib.Path) -> None:
     _repo(tmp_path)
     (tmp_path / "manifest.json").write_text("{ truncated")
-    check_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check(repo_client.CheckRequest(repo_root=str(tmp_path)))
-    assert len(check_response.problems) == 1
-    assert "manifest.json is unreadable" in check_response.problems[0]
+    check_layout_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check_layout(repo_client.CheckLayoutRequest(repo_root=str(tmp_path)))
+    assert len(check_layout_response.problems) == 1
+    assert "manifest.json is unreadable" in check_layout_response.problems[0]
 
 
 def test_a_nonexistent_root_is_a_problem_not_a_crash(tmp_path: pathlib.Path) -> None:
-    check_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check(
-        repo_client.CheckRequest(repo_root=str(tmp_path / "no-such-dir"))
+    check_layout_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check_layout(
+        repo_client.CheckLayoutRequest(repo_root=str(tmp_path / "no-such-dir"))
     )
-    assert len(check_response.problems) == 1
-    assert "is not a directory" in check_response.problems[0]
+    assert len(check_layout_response.problems) == 1
+    assert "is not a directory" in check_layout_response.problems[0]
 
 
 def test_a_stale_python_floor_is_reported_through_the_stack(tmp_path: pathlib.Path) -> None:
@@ -83,5 +83,5 @@ def test_a_stale_python_floor_is_reported_through_the_stack(tmp_path: pathlib.Pa
     (tmp_path / "appone" / "pyproject.toml").write_text(
         '[project]\nname = "appone"\nrequires-python = ">=3.11"\n'
     )
-    check_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check(repo_client.CheckRequest(repo_root=str(tmp_path)))
-    assert any("the Python floor is 3.12" in p for p in check_response.problems), check_response.problems
+    check_layout_response = repo_component.Repo(repo_component.Config(repo_component.Spec())).client.check_layout(repo_client.CheckLayoutRequest(repo_root=str(tmp_path)))
+    assert any("the Python floor is 3.12" in p for p in check_layout_response.problems), check_layout_response.problems

@@ -32,8 +32,8 @@ class TestPostgresWidgetStore:
         assert loaded.outcome is ports.LoadWidgetOutcome.FOUND
         assert loaded.widgets[0].part == "p"
         assert loaded.widgets[0].standing == "kept"
-        assert found.found is ports.Found.YES
-        assert missing.found is ports.Found.NO
+        assert found.outcome is ports.FindWidgetOutcome.YES
+        assert missing.outcome is ports.FindWidgetOutcome.NO
 
     async def test_a_released_widget_is_loaded_back_as_released(self) -> None:
         dsn = os.environ["ALPHA_STORAGE"]

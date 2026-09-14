@@ -24,12 +24,12 @@ def main() -> int:
     tree = args[0] if args else _HERE
     tessercheck = component.Tessercheck(component.Config(component.Spec()))
     try:
-        mark_response = tessercheck.client.mark(client.MarkRequest(tree=tree))
+        mark_debt_response = tessercheck.client.mark_debt(client.MarkDebtRequest(tree=tree))
     finally:
         tessercheck.close()
-    print(f"marked {mark_response.files} file(s)")
-    if mark_response.remaining:
-        print(f"{len(mark_response.remaining)} finding(s) this cannot mark:")
-        for finding in mark_response.remaining:
+    print(f"marked {mark_debt_response.files} file(s)")
+    if mark_debt_response.remaining:
+        print(f"{len(mark_debt_response.remaining)} finding(s) this cannot mark:")
+        for finding in mark_debt_response.remaining:
             print(finding)
-    return 1 if mark_response.remaining else 0
+    return 1 if mark_debt_response.remaining else 0

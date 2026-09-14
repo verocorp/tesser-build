@@ -6,7 +6,7 @@ import typing
 import tesser.application as ts
 
 
-class Held(enum.Enum):
+class HasKeyOutcome(enum.Enum):
     YES = "yes"
     NO = "no"
 
@@ -23,8 +23,8 @@ class HasKeyRequest(ts.Request):
 
 class HasKeyResponse(ts.Response):
 
-    def __init__(self, held: Held) -> None:
-        self.held = held
+    def __init__(self, outcome: HasKeyOutcome) -> None:
+        self.outcome = outcome
 
 
 class PutKeyRequest(ts.Request):

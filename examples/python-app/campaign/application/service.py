@@ -167,10 +167,10 @@ class MapToShortLinkSpec(ts.Mapper, domain.ShortLinkSpec):
                 )
             case _ as unreachable:
                 typing.assert_never(unreachable)
-        match slug_taken_response.availability:
-            case ports.SlugAvailability.FREE:
+        match slug_taken_response.outcome:
+            case ports.SlugTakenOutcome.FREE:
                 pass
-            case ports.SlugAvailability.TAKEN:
+            case ports.SlugTakenOutcome.TAKEN:
                 raise client.Conflict(
                     code="duplicate_slug",
                     message=f"slug {add_link_request.slug!r} already exists",

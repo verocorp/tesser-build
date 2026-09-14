@@ -8,7 +8,7 @@ from alpha.application.ports.widget_repository import AddWidgetResponse as AddWi
 from alpha.application.ports.widget_repository import AddWidgetOutcome as AddWidgetOutcome
 from alpha.application.ports.widget_repository import FindWidgetRequest as FindWidgetRequest
 from alpha.application.ports.widget_repository import FindWidgetResponse as FindWidgetResponse
-from alpha.application.ports.widget_repository import Found as Found
+from alpha.application.ports.widget_repository import FindWidgetOutcome as FindWidgetOutcome
 from alpha.application.ports.widget_repository import LoadWidgetRequest as LoadWidgetRequest
 from alpha.application.ports.widget_repository import LoadWidgetResponse as LoadWidgetResponse
 from alpha.application.ports.widget_repository import LoadWidgetOutcome as LoadWidgetOutcome

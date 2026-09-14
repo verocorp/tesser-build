@@ -113,15 +113,15 @@ def _worker(args: list[str]) -> int:
     conf = sys.stdin.read()
     tessercheck = component.Tessercheck(component.Config(component.Spec()))
     try:
-        hook_response = tessercheck.client.hook(client.HookRequest(tree=tree, path=path, conf=conf))
+        check_write_response = tessercheck.client.check_write(client.CheckWriteRequest(tree=tree, path=path, conf=conf))
     finally:
         tessercheck.close()
     print(json.dumps({
-        "governance": hook_response.governance,
-        "mode": hook_response.mode,
-        "action": hook_response.action,
-        "findings": list(hook_response.findings),
-        "codes": list(hook_response.codes),
+        "governance": check_write_response.governance,
+        "mode": check_write_response.mode,
+        "action": check_write_response.action,
+        "findings": list(check_write_response.findings),
+        "codes": list(check_write_response.codes),
     }))
     return 0
 

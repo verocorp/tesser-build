@@ -62,7 +62,7 @@ class FakeCampaignRepositoryRecording(ports.CampaignRepository):
         self, slug_taken_request: ports.SlugTakenRequest
     ) -> ports.SlugTakenResponse:
         return ports.SlugTakenResponse(
-            availability=ports.SlugAvailability.FREE
+            outcome=ports.SlugTakenOutcome.FREE
         )
 
     def list_campaigns(

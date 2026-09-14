@@ -27,8 +27,8 @@ class TestPostgresKeyStore:
             missing = await key_repository.has_key(ports.HasKeyRequest(key="x"))
         await database.close()
         assert put.key == "k"
-        assert held.held is ports.Held.YES
-        assert missing.held is ports.Held.NO
+        assert held.outcome is ports.HasKeyOutcome.YES
+        assert missing.outcome is ports.HasKeyOutcome.NO
 
     async def test_a_transaction_that_raises_is_rolled_back(self) -> None:
         dsn = os.environ["BETA_STORAGE"]
@@ -45,7 +45,7 @@ class TestPostgresKeyStore:
         async with postgres_key_store.transaction() as key_repository:
             missing = await key_repository.has_key(ports.HasKeyRequest(key="k"))
         await database.close()
-        assert missing.held is ports.Held.NO
+        assert missing.outcome is ports.HasKeyOutcome.NO
 
     async def test_the_schema_outlives_a_first_transaction_that_rolls_back(self) -> None:
         dsn = os.environ["BETA_STORAGE"]

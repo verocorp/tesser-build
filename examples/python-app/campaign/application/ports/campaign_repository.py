@@ -16,7 +16,7 @@ class LoadCampaignBySlugOutcome(enum.Enum):
     NOT_FOUND = "not_found"
 
 
-class SlugAvailability(enum.Enum):
+class SlugTakenOutcome(enum.Enum):
     TAKEN = "taken"
     FREE = "free"
 
@@ -94,8 +94,8 @@ class SlugTakenRequest(ts.Request):
 
 class SlugTakenResponse(ts.Response):
 
-    def __init__(self, availability: SlugAvailability) -> None:
-        self.availability = availability
+    def __init__(self, outcome: SlugTakenOutcome) -> None:
+        self.outcome = outcome
 
 
 class ListCampaignsRequest(ts.Request):

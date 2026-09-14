@@ -25,8 +25,8 @@ class PostgresKeyRepository(ts.Repository):
             row = await self._connection.fetchrow(_HAS, has_key_request.key)
         except (asyncpg.PostgresError, OSError) as e:
             raise ports.StoreUnavailable("the key store cannot answer") from e
-        held = ports.Held.NO if row is None else ports.Held.YES
-        return ports.HasKeyResponse(held=held)
+        outcome = ports.HasKeyOutcome.NO if row is None else ports.HasKeyOutcome.YES
+        return ports.HasKeyResponse(outcome=outcome)
 
     async def put_key(self, put_key_request: ports.PutKeyRequest) -> ports.PutKeyResponse:
         try:

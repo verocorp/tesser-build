@@ -20,8 +20,8 @@ class FakeKeyRepository(ports.KeyRepository):
         self._keys = keys
 
     async def has_key(self, has_key_request: ports.HasKeyRequest) -> ports.HasKeyResponse:
-        held = ports.Held.YES if has_key_request.key in self._keys else ports.Held.NO
-        return ports.HasKeyResponse(held=held)
+        outcome = ports.HasKeyOutcome.YES if has_key_request.key in self._keys else ports.HasKeyOutcome.NO
+        return ports.HasKeyResponse(outcome=outcome)
 
     async def put_key(self, put_key_request: ports.PutKeyRequest) -> ports.PutKeyResponse:
         self._keys.add(put_key_request.key)

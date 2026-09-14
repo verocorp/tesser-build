@@ -18303,3 +18303,78 @@ def test_a_name_two_modules_export_under_one_package_resolves_through_the_first_
         "TB083" in f and "shop.domain.kernel.alpha.MoneySpec" in f for f in findings
     ), findings
     assert not any("shop.domain.kernel.zulu.MoneySpec" in f for f in findings), findings
+
+
+def test_an_enum_on_an_operations_response_is_its_one_outcome_named_outcome() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/__init__.py",
+                "shop.application.ports",
+                "",
+                True,
+            ),
+            (
+                "shop/application/ports/sink.py",
+                "shop.application.ports.sink",
+                "import enum\n"
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class FindItemOutcome(enum.Enum):\n"
+                "    FOUND = 'found'\n"
+                "    NOT_FOUND = 'not_found'\n"
+                "class CheckItemOutcome(enum.Enum):\n"
+                "    PASSED = 'passed'\n"
+                "class GradeItemOutcome(enum.Enum):\n"
+                "    GRADED = 'graded'\n"
+                "class Grade(enum.Enum):\n"
+                "    HIGH = 'high'\n"
+                "class FindItemRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class FindItemResponse(ts.Response):\n"
+                "    def __init__(self, found: FindItemOutcome) -> None:\n"
+                "        self.found = found\n"
+                "class CheckItemRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class CheckItemResponse(ts.Response):\n"
+                "    def __init__(self, outcome: CheckItemOutcome, grade: Grade) -> None:\n"
+                "        self.outcome = outcome\n"
+                "        self.grade = grade\n"
+                "class Item(ts.Response):\n"
+                "    def __init__(self, grade: Grade) -> None:\n"
+                "        self.grade = grade\n"
+                "class GradeItemRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class GradeItemResponse(ts.Response):\n"
+                "    def __init__(self, outcome: GradeItemOutcome, items: tuple[Item, ...]) -> None:\n"
+                "        self.outcome = outcome\n"
+                "        self.items = items\n"
+                "class Sink(ts.Port, typing.Protocol):\n"
+                "    def find_item(self, find_item_request: FindItemRequest) -> FindItemResponse: ...\n"
+                "    def check_item(self, check_item_request: CheckItemRequest) -> CheckItemResponse: ...\n"
+                "    def grade_item(self, grade_item_request: GradeItemRequest) -> GradeItemResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.ports.sink.Sink.find_item carries its outcome on found; a "
+        "response's outcome is the field named outcome, because an enum on a response is "
+        "the answer its caller matches, and a data enum rides inside a record" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.ports.sink.Sink.check_item answers 2 outcomes; a response carries "
+        "at most one outcome, because its caller matches one answer" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.ports.sink.Sink.check_item carries its outcome on grade; a "
+        "response's outcome is the field named outcome" in f
+        for f in findings
+    ), findings
+    assert not any("Sink.grade_item " in f for f in findings), findings

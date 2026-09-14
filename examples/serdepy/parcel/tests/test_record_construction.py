@@ -21,7 +21,7 @@ def _spec(items: int = 3, declared_value: str = "199.99") -> domain.ParcelSpec:
 
 def test_mapping_carries_typed_canonical_leaves_and_derived_fields() -> None:
     parcel = domain.Parcel(_spec())
-    parcel_record = ports.ParcelRecord(
+    manifest_parcel_request = ports.ManifestParcelRequest(
         code=str(parcel.code),
         items=int(parcel.items),
         weight_kg=float(parcel.weight),
@@ -34,18 +34,18 @@ def test_mapping_carries_typed_canonical_leaves_and_derived_fields() -> None:
             else ports.WeightClass.LIGHT
         ),
     )
-    assert parcel_record.code == "PKG-2026-0042"
-    assert parcel_record.items == 3
-    assert parcel_record.weight_kg == 21.5
-    assert parcel_record.label_digest == bytes(range(32))
-    assert parcel_record.declared_value == "199.99"
-    assert parcel_record.scanned_at == "2026-07-20T15:16:15.123456+00:00"
-    assert parcel_record.weight_class is ports.WeightClass.HEAVY
+    assert manifest_parcel_request.code == "PKG-2026-0042"
+    assert manifest_parcel_request.items == 3
+    assert manifest_parcel_request.weight_kg == 21.5
+    assert manifest_parcel_request.label_digest == bytes(range(32))
+    assert manifest_parcel_request.declared_value == "199.99"
+    assert manifest_parcel_request.scanned_at == "2026-07-20T15:16:15.123456+00:00"
+    assert manifest_parcel_request.weight_class is ports.WeightClass.HEAVY
 
 
 def test_records_from_equal_parcels_render_identically() -> None:
     parcel = domain.Parcel(_spec())
-    a = ports.ParcelRecord(
+    a = ports.ManifestParcelRequest(
         code=str(parcel.code),
         items=int(parcel.items),
         weight_kg=float(parcel.weight),
@@ -59,7 +59,7 @@ def test_records_from_equal_parcels_render_identically() -> None:
         ),
     )
     parcel = domain.Parcel(_spec())
-    b = ports.ParcelRecord(
+    b = ports.ManifestParcelRequest(
         code=str(parcel.code),
         items=int(parcel.items),
         weight_kg=float(parcel.weight),
@@ -82,7 +82,7 @@ def test_records_from_equal_parcels_render_identically() -> None:
 
 def test_record_carries_a_changed_leaf_through_the_mapping() -> None:
     parcel = domain.Parcel(_spec(items=7, declared_value="0.01"))
-    parcel_record = ports.ParcelRecord(
+    manifest_parcel_request = ports.ManifestParcelRequest(
         code=str(parcel.code),
         items=int(parcel.items),
         weight_kg=float(parcel.weight),
@@ -95,20 +95,20 @@ def test_record_carries_a_changed_leaf_through_the_mapping() -> None:
             else ports.WeightClass.LIGHT
         ),
     )
-    assert parcel_record.items == 7
-    assert parcel_record.declared_value == "0.01"
+    assert manifest_parcel_request.items == 7
+    assert manifest_parcel_request.declared_value == "0.01"
 
 
 def test_record_diverges_from_spec_by_construction() -> None:
-    record_fields = {n for n in inspect.signature(ports.ParcelRecord.__init__).parameters if n != "self"}
+    record_fields = {n for n in inspect.signature(ports.ManifestParcelRequest.__init__).parameters if n != "self"}
     spec_fields = {n for n in inspect.signature(domain.ParcelSpec.__init__).parameters if n != "self"}
     derived = record_fields - spec_fields
-    assert derived == {"weight_class"}, "the parcel_record must carry derived fields the constructor never accepts"
+    assert derived == {"weight_class"}, "the manifest_parcel_request must carry derived fields the constructor never accepts"
     assert "weight_class" not in spec_fields
 
 
 def test_record_is_total() -> None:
-    for name, param in inspect.signature(ports.ParcelRecord.__init__).parameters.items():
+    for name, param in inspect.signature(ports.ManifestParcelRequest.__init__).parameters.items():
         if name == "self":
             continue
         assert param.default is inspect.Parameter.empty, f"{name} must have no default"
