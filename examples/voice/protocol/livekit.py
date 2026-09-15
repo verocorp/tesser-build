@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.srv as ts
 
 
@@ -18,3 +20,10 @@ class PersonUtterance(ts.Request):
 
     call_id: str
     text: str
+
+
+class PersonEvents(ts.Port, typing.Protocol):
+
+    async def person_answered(self, person_answered: PersonAnswered, /) -> None: ...
+
+    async def person_utterance(self, person_utterance: PersonUtterance, /) -> None: ...
