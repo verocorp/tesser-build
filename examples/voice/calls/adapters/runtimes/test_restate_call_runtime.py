@@ -140,6 +140,7 @@ class FakeRestateObjectContext:  # tesser:debt TB072
         self._key = key
         self.state = state
         self.resolved: list[tuple[str, object]] = []
+        self.rejected: list[str] = []
 
     def key(self) -> str:
         return self._key
@@ -155,6 +156,9 @@ class FakeRestateObjectContext:  # tesser:debt TB072
 
     def resolve_awakeable(self, name: str, value: object, serde: object) -> None:
         self.resolved.append((name, value))
+
+    def reject_awakeable(self, name: str, failure_message: str) -> None:
+        self.rejected.append(name)
 
 
 @ts.helper
@@ -347,3 +351,13 @@ class TestRestateCallRuntime:
             )
 
         assert len(fake_restate_workflow_shared_context.resolved) == 1
+
+    async def test_a_second_taker_does_not_displace_the_one_already_waiting(self) -> None:
+        fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_1"})  # tesser:debt TB085
+
+        await runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+        ).take_person_utterance_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_2")
+
+        assert fake_restate_object_context.state["waiting"] == "sign_1"
+        assert fake_restate_object_context.rejected == ["sign_2"]
