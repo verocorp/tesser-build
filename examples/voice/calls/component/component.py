@@ -33,7 +33,7 @@ class Calls(ts.Component):
             application.CallActions(self._postgres_call_store)
         )
         self.client: client.CallsClient = application.CallsService(
-            runners.RestateIngressConductCallRelay(config.ingress, self.restate_call_runtime),
+            runners.RestateIngressCallRelays(config.ingress, self.restate_call_runtime),
             self._postgres_call_store,
         )
 

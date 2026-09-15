@@ -29,14 +29,14 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         return relays.RecordCallResponse(call_id="c1")
 
 
-class TestRestateInvocationRecordCallRelay:
+class TestRestateInvocationCallRelays:
 
     async def test_running_record_call_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(FakeCallsApplicationClient())
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         record_call_request = relays.RecordCallRequest(call_id="c1", person_name="Ada", phone_number="+15555550100")
 
-        await runners.RestateInvocationRecordCallRelay(
+        await runners.RestateInvocationCallRelays(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
         ).run_record_call(record_call_request)
 

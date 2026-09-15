@@ -7,7 +7,7 @@ import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
-class RestateInvocationRecordCallRelay(ts.Runner):
+class RestateInvocationCallRelays(ts.Runner):  # tesser:debt TB085
 
     def __init__(
         self,
