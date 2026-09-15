@@ -30,7 +30,7 @@ class PersonName(ts.ValueObject):
         return serialization.canonical_str(self._value)
 
 
-class PhoneNumber(ts.ValueObject):
+class PersonPhoneNumber(ts.ValueObject):
 
     _value: str
 
@@ -39,6 +39,31 @@ class PhoneNumber(ts.ValueObject):
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
+
+
+class PersonSpec(ts.Spec):
+
+    def __init__(self, name: str, phone_number: str) -> None:
+        self.name = name
+        self.phone_number = phone_number
+
+
+class Person(ts.ValueObject):
+
+    _name: PersonName
+    _phone_number: PersonPhoneNumber
+
+    def __init__(self, spec: PersonSpec) -> None:
+        object.__setattr__(self, "_name", PersonName(spec.name))
+        object.__setattr__(self, "_phone_number", PersonPhoneNumber(spec.phone_number))
+
+    @property
+    def name(self) -> PersonName:
+        return self._name
+
+    @property
+    def phone_number(self) -> PersonPhoneNumber:
+        return self._phone_number
 
 
 class CallLookup(ts.Outcome):
@@ -69,27 +94,21 @@ class CallPresence(ts.ValueObject):
 
 class CallSpec(ts.Spec):
 
-    def __init__(self, call_id: str, person_name: str, phone_number: str) -> None:
+    def __init__(self, call_id: str, person: PersonSpec) -> None:
         self.call_id = call_id
-        self.person_name = person_name
-        self.phone_number = phone_number
+        self.person = person
 
 
 class Call(ts.AggregateRoot):
 
     def __init__(self, spec: CallSpec) -> None:
         self._call_id = CallId(spec.call_id)
-        self._person_name = PersonName(spec.person_name)
-        self._phone_number = PhoneNumber(spec.phone_number)
+        self._person = Person(spec.person)
 
     @property
     def identity(self) -> CallId:
         return self._call_id
 
     @property
-    def person_name(self) -> PersonName:
-        return self._person_name
-
-    @property
-    def phone_number(self) -> PhoneNumber:
-        return self._phone_number
+    def person(self) -> Person:
+        return self._person

@@ -19,8 +19,10 @@ class MapToCallSpec(ts.Mapper, domain.CallSpec):
     ) -> None:
         super().__init__(
             call_id=issue_call_id_response.call_id,
-            person_name=place_call_request.person_name,
-            phone_number=place_call_request.phone_number,
+            person=domain.PersonSpec(
+                name=place_call_request.person_name,
+                phone_number=place_call_request.phone_number,
+            ),
         )
 
 
@@ -29,8 +31,8 @@ class MapToConductCallRequest(ts.Mapper, relays.ConductCallRequest):
     def __init__(self, call: domain.Call) -> None:
         super().__init__(
             call_id=str(call.identity),
-            person_name=str(call.person_name),
-            phone_number=str(call.phone_number),
+            person_name=str(call.person.name),
+            phone_number=str(call.person.phone_number),
         )
 
 
