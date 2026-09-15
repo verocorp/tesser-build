@@ -19,6 +19,18 @@ class Call(ts.Response):
         self.phone_number = phone_number
 
 
+class IssueCallIdRequest(ts.Request):
+
+    def __init__(self) -> None:
+        return None
+
+
+class IssueCallIdResponse(ts.Response):
+
+    def __init__(self, call_id: str) -> None:
+        self.call_id = call_id
+
+
 class SaveCallRequest(ts.Request):
 
     def __init__(self, call_id: str, person_name: str, phone_number: str) -> None:
@@ -47,6 +59,8 @@ class LoadCallResponse(ts.Response):
 
 
 class CallRepository(ts.Port, typing.Protocol):
+
+    async def issue_call_id(self, issue_call_id_request: IssueCallIdRequest) -> IssueCallIdResponse: ...
 
     async def save_call(self, save_call_request: SaveCallRequest) -> SaveCallResponse: ...
 

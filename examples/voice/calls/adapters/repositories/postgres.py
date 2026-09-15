@@ -14,6 +14,7 @@ _SCHEMA: typing.Final[str] = (
     "CREATE TABLE IF NOT EXISTS calls "
     "(call_id text PRIMARY KEY, person_name text NOT NULL, phone_number text NOT NULL)"
 )
+_ISSUE: typing.Final[str] = "SELECT gen_random_uuid()::text AS call_id"
 _SAVE: typing.Final[str] = "INSERT INTO calls (call_id, person_name, phone_number) VALUES ($1, $2, $3)"
 _LOAD: typing.Final[str] = "SELECT call_id, person_name, phone_number FROM calls WHERE call_id = $1"
 
@@ -22,6 +23,10 @@ class PostgresCallRepository(ts.Repository):
 
     def __init__(self, connection: asyncpg.pool.PoolConnectionProxy[asyncpg.Record]) -> None:
         self._connection = connection
+
+    async def issue_call_id(self, issue_call_id_request: ports.IssueCallIdRequest) -> ports.IssueCallIdResponse:
+        call_id = await self._connection.fetchval(_ISSUE)
+        return ports.IssueCallIdResponse(call_id=call_id)
 
     async def save_call(self, save_call_request: ports.SaveCallRequest) -> ports.SaveCallResponse:
         await self._connection.execute(

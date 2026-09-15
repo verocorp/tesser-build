@@ -16,6 +16,9 @@ class FakeCallRepository(ports.CallRepository):
     def __init__(self, calls: dict[str, ports.Call]) -> None:
         self._calls = calls
 
+    async def issue_call_id(self, issue_call_id_request: ports.IssueCallIdRequest) -> ports.IssueCallIdResponse:
+        return ports.IssueCallIdResponse(call_id="issued-1")
+
     async def save_call(self, save_call_request: ports.SaveCallRequest) -> ports.SaveCallResponse:
         self._calls[save_call_request.call_id] = ports.Call(
             call_id=save_call_request.call_id,

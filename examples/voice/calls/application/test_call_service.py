@@ -30,6 +30,9 @@ class FakeCallRepository(ports.CallRepository):
     def __init__(self, calls: dict[str, ports.Call]) -> None:
         self._calls = calls
 
+    async def issue_call_id(self, issue_call_id_request: ports.IssueCallIdRequest) -> ports.IssueCallIdResponse:
+        return ports.IssueCallIdResponse(call_id="issued-1")
+
     async def save_call(self, save_call_request: ports.SaveCallRequest) -> ports.SaveCallResponse:
         self._calls[save_call_request.call_id] = ports.Call(
             call_id=save_call_request.call_id,
@@ -73,6 +76,13 @@ class TestCallService:
         assert [
             (conducted.call_id, conducted.person_name) for conducted in fake_conduct_call_relay.conducted
         ] == [(place_call_response.call_id, "Grace")]
+
+    async def test_a_placed_call_takes_the_call_id_the_store_issued(self) -> None:
+        call_service = application.CallService(FakeConductCallRelay(), FakeCallStore())
+
+        place_call_response = await call_service.place_call(place_call_request())
+
+        assert place_call_response.call_id == "issued-1"
 
     async def test_a_saved_call_is_read_back_by_its_call_id(self) -> None:
         fake_call_store = FakeCallStore()
