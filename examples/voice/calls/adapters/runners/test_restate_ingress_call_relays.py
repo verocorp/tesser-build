@@ -9,13 +9,31 @@ import calls.adapters.runners as runners
 import calls.adapters.runtimes as runtimes
 import calls.application.client as client
 import calls.application.relays as relays
+import calls.domain as domain
 
 
 @ts.fake
 class FakeCallApplicationClient(client.CallApplicationClient):
 
     async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
-        return relays.RecordCallResponse(call_id=record_call_request.call_id)
+        return relays.RecordCallResponse(call_id=str(record_call_request.call.identity))
+
+
+@ts.fake
+class FakeDialingApplicationClient(client.DialingApplicationClient):
+
+    async def dial_person(self, dial_person_request: relays.DialPersonRequest) -> relays.DialPersonResponse:
+        return relays.DialPersonResponse(call_id=str(dial_person_request.call.identity))
+
+    async def hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
+        return relays.HangUpResponse(call_id=str(hang_up_request.call.identity))
+
+
+@ts.fake
+class FakeSpeechApplicationClient(client.SpeechApplicationClient):
+
+    async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
+        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi", person_names=())
 
 
 @ts.fake
@@ -65,10 +83,10 @@ class FakeRestateIngress:  # tesser:debt TB072
 
 
 @ts.helper
-def conduct_call_request(
-    call_id: str = "c1", person_name: str = "Ada", phone_number: str = "+15555550100"
-) -> relays.ConductCallRequest:
-    return relays.ConductCallRequest(call_id=call_id, person_name=person_name, phone_number=phone_number)
+def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
+    return domain.CallSpec(
+        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="ask_name"
+    )
 
 
 class TestRestateIngressCallRelays:
@@ -80,8 +98,8 @@ class TestRestateIngressCallRelays:
         fake_restate_ingress.start()
 
         conduct_call_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient())
-        ).run_conduct_call(conduct_call_request(call_id="c7"))
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient())
+        ).run_conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(call_id="c7"))))
         fake_restate_ingress.close()
 
         assert conduct_call_response.call_id == "c7"
@@ -94,7 +112,7 @@ class TestRestateIngressCallRelays:
         fake_restate_ingress.start()
 
         person_answered_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient())
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient())
         ).run_person_answered(relays.PersonAnsweredRequest(call_id="c7"))
         fake_restate_ingress.close()
 
@@ -108,7 +126,7 @@ class TestRestateIngressCallRelays:
         fake_restate_ingress.start()
 
         person_utterance_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient())
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient())
         ).run_person_utterance(relays.PersonUtteranceRequest(call_id="c7", text="Ada"))
         fake_restate_ingress.close()
 

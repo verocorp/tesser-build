@@ -9,6 +9,16 @@ import calls.component as calls_component
 import pgdatabase.database as pgdatabase_database
 import tesser.errors as errors
 
+_REQUIRED: typing.Final[tuple[str, ...]] = (
+    "CALLS_STORAGE",
+    "RESTATE_INGRESS",
+    "LIVEKIT_URL",
+    "LIVEKIT_API_KEY",
+    "LIVEKIT_API_SECRET",
+    "LIVEKIT_AGENT_NAME",
+    "LIVEKIT_SIP_TRUNK_ID",
+)
+
 
 class Spec(ts.Spec):
 
@@ -44,14 +54,26 @@ class AppConfigRepository(ts.ConfigRepository, typing.Protocol):
 class EnvConfigRepository(AppConfigRepository):
 
     def get(self) -> AppConfig:
-        calls_storage = os.environ.get("CALLS_STORAGE")
-        if calls_storage is None:
-            raise errors.invalid("missing_env", "CALLS_STORAGE is required")
-        ingress = os.environ.get("RESTATE_INGRESS")
-        if ingress is None:
-            raise errors.invalid("missing_env", "RESTATE_INGRESS is required")
+        settings: dict[str, str] = {}
+        for name in _REQUIRED:
+            value = os.environ.get(name)
+            if value is None:
+                raise errors.invalid("missing_env", f"{name} is required")
+            settings[name] = value
         return AppConfig(
-            Spec(calls=calls_component.Config(calls_component.Spec(storage=calls_storage, ingress=ingress)))
+            Spec(
+                calls=calls_component.Config(
+                    calls_component.Spec(
+                        storage=settings["CALLS_STORAGE"],
+                        ingress=settings["RESTATE_INGRESS"],
+                        livekit_url=settings["LIVEKIT_URL"],
+                        livekit_api_key=settings["LIVEKIT_API_KEY"],
+                        livekit_api_secret=settings["LIVEKIT_API_SECRET"],
+                        livekit_agent_name=settings["LIVEKIT_AGENT_NAME"],
+                        livekit_sip_trunk_id=settings["LIVEKIT_SIP_TRUNK_ID"],
+                    )
+                )
+            )
         )
 
 

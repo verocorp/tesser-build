@@ -9,10 +9,11 @@ import calls.application.relays as relays
 class MapToSaveCallRequest(ts.Mapper, ports.SaveCallRequest):
 
     def __init__(self, record_call_request: relays.RecordCallRequest) -> None:
+        call = record_call_request.call
         super().__init__(
-            call_id=record_call_request.call_id,
-            person_name=record_call_request.person_name,
-            phone_number=record_call_request.phone_number,
+            call_id=str(call.identity),
+            person_name=str(call.person.name),
+            phone_number=str(call.person.phone_number),
         )
 
 

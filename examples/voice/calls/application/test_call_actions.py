@@ -8,6 +8,7 @@ import tesser.testing as ts
 import calls.application as application
 import calls.application.ports as ports
 import calls.application.relays as relays
+import calls.domain as domain
 
 
 @ts.fake
@@ -47,25 +48,27 @@ class FakeCallStore(ports.CallStore):
 
 
 @ts.helper
-def record_call_request(
-    call_id: str = "c1", person_name: str = "Ada", phone_number: str = "+15555550100"
-) -> relays.RecordCallRequest:
-    return relays.RecordCallRequest(call_id=call_id, person_name=person_name, phone_number=phone_number)
+def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
+    return domain.CallSpec(
+        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="done"
+    )
 
 
 class TestCallActions:
 
-    async def test_recording_a_call_saves_it_under_its_call_id(self) -> None:
+    async def test_recording_a_call_saves_the_persons_name_under_its_call_id(self) -> None:
         fake_call_store = FakeCallStore()
         call_actions = application.CallActions(fake_call_store)
 
-        await call_actions.record_call(record_call_request(call_id="c7", person_name="Grace"))
+        await call_actions.record_call(relays.RecordCallRequest(call=domain.Call(call_spec(call_id="c7", name="Grace"))))
 
         assert fake_call_store.calls["c7"].person_name == "Grace"
 
     async def test_recording_a_call_answers_the_call_id_it_saved(self) -> None:
         call_actions = application.CallActions(FakeCallStore())
 
-        record_call_response = await call_actions.record_call(record_call_request(call_id="c7"))
+        record_call_response = await call_actions.record_call(
+            relays.RecordCallRequest(call=domain.Call(call_spec(call_id="c7")))
+        )
 
         assert record_call_response.call_id == "c7"
