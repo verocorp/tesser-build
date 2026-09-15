@@ -15,7 +15,7 @@ class FakeConfigRepository(app.AppConfigRepository):
         {{context}}_storage = os.environ["{{storage_env}}"]
         ingress = os.environ["{{ingress_env}}"]
         return app.AppConfig(
-            app.Spec({{context}}_component.Config({{context}}_component.Spec({{context}}_storage, ingress)))
+            app.Spec({{context}}_component.Config({{context}}_component.Spec({{context}}_storage, ingress, 7)))
         )
 
 
@@ -23,7 +23,9 @@ class TestAppConfig:
 
     def test_a_config_carries_the_{{context}}_config(self) -> None:
         spec = app.Spec(
-            {{context}}_component.Config({{context}}_component.Spec("postgres://a@b/{{context}}", "http://localhost:8080"))
+            {{context}}_component.Config(
+                {{context}}_component.Spec("postgres://a@b/{{context}}", "http://localhost:8080", 7)
+            )
         )
 
         app_config = app.AppConfig(spec)
@@ -38,6 +40,14 @@ class TestEnvConfigRepository:
 
         assert app_config.{{context}}.storage == os.environ["{{storage_env}}"]
         assert app_config.{{context}}.ingress == os.environ["{{ingress_env}}"]
+
+    def test_each_read_draws_a_new_identity_seed(self) -> None:
+        env_config_repository = app.EnvConfigRepository()
+
+        first = env_config_repository.get()
+        second = env_config_repository.get()
+
+        assert first.{{context}}.identity_seed != second.{{context}}.identity_seed
 
 
 class TestAppLoader:

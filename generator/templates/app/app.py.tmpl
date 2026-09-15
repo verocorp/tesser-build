@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import typing
 
 import tesser.app as ts
@@ -8,6 +9,8 @@ import tesser.app as ts
 import {{context}}.component as {{context}}_component
 import pgdatabase.database as pgdatabase_database
 import tesser.errors as errors
+
+_IDENTITY_SEED_BITS: typing.Final[int] = 128
 
 
 class Spec(ts.Spec):
@@ -53,7 +56,11 @@ class EnvConfigRepository(AppConfigRepository):
         return AppConfig(
             Spec(
                 {{context}}={{context}}_component.Config(
-                    {{context}}_component.Spec(storage={{context}}_storage, ingress=ingress)
+                    {{context}}_component.Spec(
+                        storage={{context}}_storage,
+                        ingress=ingress,
+                        identity_seed=secrets.randbits(_IDENTITY_SEED_BITS),
+                    )
                 )
             )
         )
