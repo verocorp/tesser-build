@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.context as ts
+
+
+class {{Write}}Request(ts.Request):
+
+    def __init__(self, {{#write_fields}}{{field}}: {{py_type}}{{comma}}{{/write_fields}}) -> None:
+{{#write_fields}}
+        self.{{field}} = {{field}}
+{{/write_fields}}
+
+
+class {{Write}}Response(ts.Response):
+
+    def __init__(self, {{identity}}: str) -> None:
+        self.{{identity}} = {{identity}}
+
+
+class {{Aggregate}}(ts.Response):
+
+    def __init__(self, {{#read_fields}}{{field}}: {{py_type}}{{comma}}{{/read_fields}}) -> None:
+{{#read_fields}}
+        self.{{field}} = {{field}}
+{{/read_fields}}
+
+
+class {{Read}}Request(ts.Request):
+
+    def __init__(self, {{identity}}: str) -> None:
+        self.{{identity}} = {{identity}}
+
+
+class {{Read}}Response(ts.Response):
+
+    def __init__(self, {{aggregate}}: {{Aggregate}}) -> None:
+        self.{{aggregate}} = {{aggregate}}
+
+
+class {{Context}}Client(ts.Client, typing.Protocol):
+
+    async def {{write}}(self, {{write}}_request: {{Write}}Request) -> {{Write}}Response: ...
+
+    async def {{read}}(self, {{read}}_request: {{Read}}Request) -> {{Read}}Response: ...

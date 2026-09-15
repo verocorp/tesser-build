@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.adapters as ts
+import restate
+import restate.serde as restate_serde
+
+import {{context}}.adapters.runners as runners
+import {{context}}.application.client as client
+import {{context}}.application.orchestrators as orchestrators
+import {{context}}.application.relays as relays
+
+_EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
+_RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
+    max_attempts=5, on_max_attempts="pause"
+)
+
+
+class Restate{{Conduct}}RequestSerde(ts.Serde, restate_serde.Serde[relays.{{Conduct}}Request]):
+
+    def serialize(self, {{conduct}}_request: relays.{{Conduct}}Request | None) -> bytes:
+        if {{conduct}}_request is None:
+            return b""
+        return relays.{{Conduct}}RequestSnapshot().serialize({{conduct}}_request)
+
+    def deserialize(self, buf: bytes) -> relays.{{Conduct}}Request | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Conduct}}RequestSnapshot().deserialize(buf)
+
+
+class Restate{{Conduct}}ResponseSerde(ts.Serde, restate_serde.Serde[relays.{{Conduct}}Response]):
+
+    def serialize(self, {{conduct}}_response: relays.{{Conduct}}Response | None) -> bytes:
+        if {{conduct}}_response is None:
+            return b""
+        return relays.{{Conduct}}ResponseSnapshot().serialize({{conduct}}_response)
+
+    def deserialize(self, buf: bytes) -> relays.{{Conduct}}Response | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Conduct}}ResponseSnapshot().deserialize(buf)
+
+
+class Restate{{Record}}RequestSerde(ts.Serde, restate_serde.Serde[relays.{{Record}}Request]):
+
+    def serialize(self, {{record}}_request: relays.{{Record}}Request | None) -> bytes:
+        if {{record}}_request is None:
+            return b""
+        return relays.{{Record}}RequestSnapshot().serialize({{record}}_request)
+
+    def deserialize(self, buf: bytes) -> relays.{{Record}}Request | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Record}}RequestSnapshot().deserialize(buf)
+
+
+class Restate{{Record}}ResponseSerde(ts.Serde, restate_serde.Serde[relays.{{Record}}Response]):
+
+    def serialize(self, {{record}}_response: relays.{{Record}}Response | None) -> bytes:
+        if {{record}}_response is None:
+            return b""
+        return relays.{{Record}}ResponseSnapshot().serialize({{record}}_response)
+
+    def deserialize(self, buf: bytes) -> relays.{{Record}}Response | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Record}}ResponseSnapshot().deserialize(buf)
+
+
+class Restate{{Aggregate}}Runtime(ts.Runtime):
+
+    def __init__(self, {{aggregate}}_application_client: client.{{Aggregate}}ApplicationClient) -> None:
+        self.{{aggregate}}_actions_service = restate.Service(
+            "{{Aggregate}}Actions", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.{{aggregate}}_orchestrator_workflow = restate.Workflow(
+            "{{Aggregate}}Orchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
+
+        @self.{{aggregate}}_actions_service.handler(
+            input_serde=Restate{{Record}}RequestSerde(),
+            output_serde=Restate{{Record}}ResponseSerde(),
+        )
+        async def {{record}}(  # tesser:debt TB023
+            restate_context: restate.Context, {{record}}_request: relays.{{Record}}Request
+        ) -> relays.{{Record}}Response:
+            return await {{aggregate}}_application_client.{{record}}({{record}}_request)
+
+        @self.{{aggregate}}_orchestrator_workflow.main(
+            input_serde=Restate{{Conduct}}RequestSerde(),
+            output_serde=Restate{{Conduct}}ResponseSerde(),
+        )
+        async def {{conduct}}(  # tesser:debt TB023
+            restate_workflow_context: restate.WorkflowContext, {{conduct}}_request: relays.{{Conduct}}Request
+        ) -> relays.{{Conduct}}Response:
+            return await orchestrators.{{Aggregate}}Orchestrator(
+                runners.RestateInvocation{{Record}}Relay(restate_workflow_context, self)
+            ).{{conduct}}({{conduct}}_request)
+
+        self.{{record}}_handler = {{record}}
+        self.{{conduct}}_handler = {{conduct}}

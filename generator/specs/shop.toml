@@ -1,0 +1,36 @@
+app = "shop"
+context = "orders"
+aggregate = "PurchaseOrder"
+engine = "restate"
+store = "postgres"
+
+[identity]
+name = "order_id"
+minted_by = "store"
+
+[fields]
+customer_name = "str"
+quantity = "int"
+sku = "str"
+
+[client]
+write = "place_order"
+read = "get_order"
+read_answers = ["customer_name", "quantity"]
+
+[orchestrator]
+operation = "fulfil_order"
+
+[action]
+operation = "record_order"
+
+[port]
+save = "save_order"
+load = "load_order"
+
+[acceptance]
+asserts = "quantity"
+
+[env]
+storage = "ORDERS_STORAGE"
+ingress = "RESTATE_INGRESS"

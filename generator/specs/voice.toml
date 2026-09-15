@@ -1,0 +1,35 @@
+app = "voice"
+context = "calls"
+aggregate = "Call"
+engine = "restate"
+store = "postgres"
+
+[identity]
+name = "call_id"
+minted_by = "domain"
+
+[fields]
+person_name = "str"
+phone_number = "str"
+
+[client]
+write = "place_call"
+read = "get_call"
+read_answers = ["call_id", "person_name"]
+
+[orchestrator]
+operation = "conduct_call"
+
+[action]
+operation = "record_call"
+
+[port]
+save = "save_call"
+load = "load_call"
+
+[acceptance]
+asserts = "person_name"
+
+[env]
+storage = "CALLS_STORAGE"
+ingress = "RESTATE_INGRESS"

@@ -1,0 +1,11 @@
+from {{context}}.application.ports.{{aggregate}}_repository import {{Aggregate}} as {{Aggregate}}
+from {{context}}.application.ports.{{aggregate}}_repository import {{Aggregate}}Repository as {{Aggregate}}Repository
+from {{context}}.application.ports.{{aggregate}}_repository import {{Aggregate}}Store as {{Aggregate}}Store
+{{#store_mints}}
+from {{context}}.application.ports.{{aggregate}}_repository import {{Issue}}Request as {{Issue}}Request
+from {{context}}.application.ports.{{aggregate}}_repository import {{Issue}}Response as {{Issue}}Response
+{{/store_mints}}
+from {{context}}.application.ports.{{aggregate}}_repository import {{Load}}Request as {{Load}}Request
+from {{context}}.application.ports.{{aggregate}}_repository import {{Load}}Response as {{Load}}Response
+from {{context}}.application.ports.{{aggregate}}_repository import {{Save}}Request as {{Save}}Request
+from {{context}}.application.ports.{{aggregate}}_repository import {{Save}}Response as {{Save}}Response

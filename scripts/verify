@@ -257,6 +257,77 @@ run_layout() {
   pytest -q || return 1
 }
 
+# The generator app (generator/) writes a tesser app tree from a TOML spec: a
+# context whose service runs a Restate workflow, whose orchestrator runs one
+# action, and whose action writes to Postgres. Its own gates run first. Then
+# every spec in generator/specs/ is generated into a scratch directory and the
+# generated tree is gated at the bar of an example: tessercheck zero findings,
+# mypy --strict, and pytest against Postgres and Restate, with the generated
+# Restate endpoint served here and registered with the Restate admin API. The
+# local defaults are a `generator` database and a Restate server of its own on
+# 48080/49070, so a local run never re-registers another tree's services.
+run_generator() {
+  cd "$ROOT/generator" || return 1
+  step "tessercheck (zero findings over the whole tree)"
+  tessercheck_tree "$PWD" || return 1
+  step "mypy --strict"
+  MYPYPATH=.:../tesser-py mypy --strict app protocol srv tests trees conftest.py || return 1
+  step "pytest"
+  pytest -q || return 1
+  local scratch
+  scratch=$(mktemp -d) || return 1
+  local spec
+  for spec in specs/*.toml; do
+    run_generated_tree "$spec" "$scratch/$(basename "$spec" .toml)" || return 1
+  done
+  rm -rf "$scratch"
+}
+
+run_generated_tree() {
+  local spec=$1
+  local out=$2
+  local storage="${GENERATED_STORAGE:-postgres://tesser@localhost:5434/generator}"
+  local ingress="${RESTATE_INGRESS:-http://localhost:48080}"
+  local admin="${RESTATE_ADMIN:-http://localhost:49070}"
+  local port="${GENERATED_DEPLOYMENT_PORT:-9081}"
+  local deployment="${GENERATED_DEPLOYMENT:-http://host.docker.internal:$port}"
+  local names context storage_env ingress_env
+  names=$(python3 -c 'import sys, tomllib; s = tomllib.load(open(sys.argv[1], "rb")); print(s["context"], s["env"]["storage"], s["env"]["ingress"])' "$spec") || return 1
+  read -r context storage_env ingress_env <<<"$names"
+  step "generate $spec into $out"
+  PYTHONPATH=.:../tesser-py python3 -m srv.cli.generate "$spec" "$out" >/dev/null || return 1
+  step "$spec: tessercheck (zero findings over the generated tree)"
+  tessercheck_tree "$out" || return 1
+  step "$spec: mypy --strict"
+  (cd "$out" && MYPYPATH=".:$ROOT/tesser-py" mypy --strict app "$context" pgdatabase srv tests conftest.py) || return 1
+  step "$spec: serve the generated Restate endpoint on :$port and register it at $admin"
+  (cd "$out" && exec env "$storage_env=$storage" "$ingress_env=$ingress" PYTHONPATH=".:$ROOT/tesser-py" \
+    python3 -m srv.restate.main "0.0.0.0:$port") &
+  local host=$!
+  local registered=1
+  for _ in $(seq 1 50); do
+    if curl -sf -X POST "$admin/deployments" -H 'content-type: application/json' \
+      -d "{\"uri\": \"$deployment\", \"force\": true}" >/dev/null; then
+      registered=0
+      break
+    fi
+    sleep 0.2
+  done
+  if [ "$registered" -ne 0 ]; then
+    echo "generator: could not register $deployment with $admin" >&2
+    kill "$host" 2>/dev/null
+    wait "$host" 2>/dev/null
+    return 1
+  fi
+  step "$spec: pytest (against Postgres at $storage_env and Restate at $ingress_env)"
+  (cd "$out" && env "$storage_env=$storage" "$ingress_env=$ingress" PYTHONPATH=".:$ROOT/tesser-py" \
+    pytest -q -p no:cacheprovider)
+  local status=$?
+  kill -INT "$host" 2>/dev/null
+  wait "$host" 2>/dev/null
+  return "$status"
+}
+
 run_tessercheck_py() {
   cd "$ROOT/tessercheck-py" || return 1
   step "tessercheck (self-check over its own tree)"
@@ -287,6 +358,7 @@ run_tree() {
     tesser-py)      run_tesser_py ;;
     specs-app)      run_specs_app ;;
     layout)         run_layout ;;
+    generator)      run_generator ;;
     tessercheck-py) run_tessercheck_py ;;
     *) echo "unknown tree: $tree (known: ${TREES[*]})"; return 1 ;;
   esac

@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+import pytest
+
+import {{context}}.application.relays as relays
+import tesser.errors as errors
+
+
+class Test{{Conduct}}RequestSnapshot:
+
+    def test_a_request_is_its_fields(self) -> None:
+        {{conduct}}_request = relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+
+        raw = relays.{{Conduct}}RequestSnapshot().serialize({{conduct}}_request)
+
+        assert raw == b'{{{#record_fields}}"{{field}}": {{sample}}{{comma}}{{/record_fields}}}'
+
+    def test_a_request_comes_back_equal(self) -> None:
+        {{conduct}}_request_snapshot = relays.{{Conduct}}RequestSnapshot()
+        {{conduct}}_request = relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+
+        returned = {{conduct}}_request_snapshot.deserialize({{conduct}}_request_snapshot.serialize({{conduct}}_request))
+
+        assert returned == {{conduct}}_request
+
+    def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
+        for raw in (
+            b"{}",
+            b'{{{#record_fields}}"{{field}}": {{#is_identity}}{{wrong}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}}}',
+            b'["{{identity_raw}}"]',
+        ):
+            with pytest.raises(errors.DomainError):
+                relays.{{Conduct}}RequestSnapshot().deserialize(raw)
+
+
+class Test{{Conduct}}ResponseSnapshot:
+
+    def test_a_response_is_its_{{identity}}(self) -> None:
+        raw = relays.{{Conduct}}ResponseSnapshot().serialize(relays.{{Conduct}}Response({{identity}}={{identity_sample}}))
+
+        assert raw == b'{"{{identity}}": {{identity_sample}}}'
+
+    def test_a_response_comes_back_equal(self) -> None:
+        {{conduct}}_response_snapshot = relays.{{Conduct}}ResponseSnapshot()
+        {{conduct}}_response = relays.{{Conduct}}Response({{identity}}={{identity_sample}})
+
+        returned = {{conduct}}_response_snapshot.deserialize(
+            {{conduct}}_response_snapshot.serialize({{conduct}}_response)
+        )
+
+        assert returned == {{conduct}}_response
+
+    def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
+        for raw in (b"{}", b'{"{{identity}}": 1}', b'["{{identity_raw}}"]'):
+            with pytest.raises(errors.DomainError):
+                relays.{{Conduct}}ResponseSnapshot().deserialize(raw)

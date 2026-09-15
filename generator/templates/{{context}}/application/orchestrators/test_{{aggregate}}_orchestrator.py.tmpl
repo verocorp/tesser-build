@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+import tesser.testing as ts
+
+import {{context}}.application.orchestrators as orchestrators
+import {{context}}.application.relays as relays
+
+
+@ts.fake
+class Fake{{Record}}Relay(relays.{{Record}}Relay):
+
+    def __init__(self) -> None:
+        self.recorded: list[relays.{{Record}}Request] = []
+
+    async def run_{{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        self.recorded.append({{record}}_request)
+        return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
+
+
+class Test{{Aggregate}}Orchestrator:
+
+    async def test_{{conduct}}_runs_{{record}}_with_the_{{aggregate}}(self) -> None:
+        fake_{{record}}_relay = Fake{{Record}}Relay()
+        {{aggregate}}_orchestrator = orchestrators.{{Aggregate}}Orchestrator(fake_{{record}}_relay)
+
+        await {{aggregate}}_orchestrator.{{conduct}}(
+            relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+        )
+
+        assert [
+            ({{#record_fields}}recorded.{{field}}{{comma}}{{/record_fields}})
+            for recorded in fake_{{record}}_relay.recorded
+        ] == [({{#record_fields}}{{sample}}{{comma}}{{/record_fields}})]
+
+    async def test_{{conduct}}_answers_the_{{identity}}_that_{{record}}_answered(self) -> None:
+        {{aggregate}}_orchestrator = orchestrators.{{Aggregate}}Orchestrator(Fake{{Record}}Relay())
+
+        {{conduct}}_response = await {{aggregate}}_orchestrator.{{conduct}}(
+            relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+        )
+
+        assert {{conduct}}_response.{{identity}} == {{identity_sample}}

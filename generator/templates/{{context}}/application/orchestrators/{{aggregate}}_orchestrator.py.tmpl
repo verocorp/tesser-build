@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+import tesser.application as ts
+
+import {{context}}.application.relays as relays
+
+
+class MapTo{{Record}}Request(ts.Mapper, relays.{{Record}}Request):
+
+    def __init__(self, {{conduct}}_request: relays.{{Conduct}}Request) -> None:
+        super().__init__(
+{{#record_fields}}
+            {{field}}={{conduct}}_request.{{field}},
+{{/record_fields}}
+        )
+
+
+class MapTo{{Conduct}}Response(ts.Mapper, relays.{{Conduct}}Response):
+
+    def __init__(self, {{record}}_response: relays.{{Record}}Response) -> None:
+        super().__init__({{identity}}={{record}}_response.{{identity}})
+
+
+class {{Aggregate}}Orchestrator(ts.Orchestrator):
+
+    def __init__(self, {{record}}_relay: relays.{{Record}}Relay) -> None:
+        self._{{record}}_relay = {{record}}_relay
+
+    async def {{conduct}}(self, {{conduct}}_request: relays.{{Conduct}}Request) -> relays.{{Conduct}}Response:
+        {{record}}_response = await self._{{record}}_relay.run_{{record}}(
+            MapTo{{Record}}Request({{conduct}}_request)
+        )
+        return MapTo{{Conduct}}Response({{record}}_response)

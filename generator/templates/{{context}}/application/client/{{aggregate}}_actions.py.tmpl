@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.application as ts
+
+import {{context}}.application.relays as relays
+
+
+class {{Aggregate}}ApplicationClient(ts.Client, typing.Protocol):
+
+    async def {{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response: ...

@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+{{#domain_mints}}
+import uuid
+
+{{/domain_mints}}
+import tesser.domain as ts
+
+import tesser.serialization as serialization
+
+
+class {{Identity}}(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+{{#fields}}
+
+
+class {{Field}}(ts.ValueObject):
+
+    _value: {{py_type}}
+
+    def __init__(self, value: {{py_type}}) -> None:
+        object.__setattr__(self, "_value", value)
+
+    def {{dunder}}(self) -> {{py_type}}:
+        return serialization.{{canonical}}(self._value)
+{{/fields}}
+
+
+class {{Aggregate}}Spec(ts.Spec):
+
+    def __init__(self, {{#spec_fields}}{{field}}: {{py_type}}{{comma}}{{/spec_fields}}) -> None:
+{{#spec_fields}}
+        self.{{field}} = {{field}}
+{{/spec_fields}}
+
+
+class {{Aggregate}}(ts.AggregateRoot):
+
+    def __init__(self, spec: {{Aggregate}}Spec) -> None:
+{{#domain_mints}}
+        self._{{identity}} = {{Identity}}(str(uuid.uuid4()))
+{{/domain_mints}}
+{{^domain_mints}}
+        self._{{identity}} = {{Identity}}(spec.{{identity}})
+{{/domain_mints}}
+{{#fields}}
+        self._{{field}} = {{Field}}(spec.{{field}})
+{{/fields}}
+
+    @property
+    def identity(self) -> {{Identity}}:
+        return self._{{identity}}
+{{#fields}}
+
+    @property
+    def {{field}}(self) -> {{Field}}:
+        return self._{{field}}
+{{/fields}}

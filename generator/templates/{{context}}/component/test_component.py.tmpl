@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+import {{context}}.component as component
+import pgdatabase.database as pgdatabase_database
+
+
+class TestConfig:
+
+    def test_a_postgres_coordinate_requests_that_database(self) -> None:
+        spec = component.Spec(storage="postgres://a@b/c", ingress="http://localhost:8080")
+
+        config = component.Config(spec)
+
+        assert config.database == pgdatabase_database.DatabaseRequest(spec.storage)
+
+    def test_a_config_carries_the_engine_ingress(self) -> None:
+        spec = component.Spec(storage="postgres://a@b/c", ingress="http://localhost:8080")
+
+        config = component.Config(spec)
+
+        assert config.ingress == spec.ingress
+
+
+class Test{{Context}}:
+
+    async def test_the_component_publishes_the_restate_runtime_it_wired(self) -> None:
+        config = component.Config(
+            component.Spec(storage="postgres://nobody@nowhere/none", ingress="http://localhost:8080")
+        )
+
+        {{context}} = component.{{Context}}(config, pgdatabase_database.Database(config.database))
+        registered = {
+            {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_actions_service.name: sorted(
+                {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_actions_service.handlers
+            ),
+            {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow.name: sorted(
+                {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow.handlers
+            ),
+        }
+        await {{context}}.close()
+
+        assert registered == {"{{Aggregate}}Actions": ["{{record}}"], "{{Aggregate}}Orchestrator": ["{{conduct}}"]}

@@ -1,0 +1,36 @@
+from __future__ import annotations
+
+import random
+{{#client_mints}}
+import uuid
+{{/client_mints}}
+
+import tesser.testing as ts
+
+import app as app
+import {{context}}.client as {{context}}_client
+
+
+@ts.helper
+def {{write}}_request(
+    {{#write_fields}}{{field}}: {{py_type}} = {{sample}}{{comma}}{{/write_fields}}
+) -> {{context}}_client.{{Write}}Request:
+    return {{context}}_client.{{Write}}Request({{#write_fields}}{{field}}={{field}}{{comma}}{{/write_fields}})
+
+
+class Test{{Write}}Then{{Read}}:
+
+    async def test_the_{{asserts}}_given_to_{{write}}_is_the_{{asserts}}_{{read}}_answers(self) -> None:
+        {{app}}_app = app.load()
+        await {{app}}_app.open()
+        {{asserts}} = random.choice({{asserts_choices}})
+
+        {{write}}_response = await {{app}}_app.{{context}}.client.{{write}}(
+            {{write}}_request({{asserts}}={{asserts}}{{#client_mints}}, {{identity}}=str(uuid.uuid4()){{/client_mints}})
+        )
+        {{read}}_response = await {{app}}_app.{{context}}.client.{{read}}(
+            {{context}}_client.{{Read}}Request({{identity}}={{write}}_response.{{identity}})
+        )
+        await {{app}}_app.close()
+
+        assert {{read}}_response.{{aggregate}}.{{asserts}} == {{asserts}}

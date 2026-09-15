@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.testing as ts
+import restate
+
+import {{context}}.adapters.runners as runners
+import {{context}}.adapters.runtimes as runtimes
+import {{context}}.application.client as client
+import {{context}}.application.relays as relays
+
+
+@ts.fake
+class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
+
+    async def {{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
+
+
+@ts.fake
+class FakeRestateWorkflowContext:  # tesser:debt TB072
+
+    def __init__(self) -> None:
+        self.called: list[tuple[object, object]] = []
+
+    async def service_call(self, tpe: object, arg: object) -> object:
+        self.called.append((tpe, arg))
+        return relays.{{Record}}Response({{identity}}={{identity_sample}})
+
+
+class TestRestateInvocation{{Record}}Relay:
+
+    async def test_running_{{record}}_journals_a_call_to_the_runtimes_handler(self) -> None:
+        restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
+        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
+        {{record}}_request = relays.{{Record}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+
+        await runners.RestateInvocation{{Record}}Relay(
+            typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_{{aggregate}}_runtime
+        ).run_{{record}}({{record}}_request)
+
+        assert fake_restate_workflow_context.called == [
+            (restate_{{aggregate}}_runtime.{{record}}_handler, {{record}}_request)
+        ]

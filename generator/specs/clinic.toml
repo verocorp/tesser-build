@@ -1,0 +1,34 @@
+app = "clinic"
+context = "visits"
+aggregate = "Visit"
+engine = "restate"
+store = "postgres"
+
+[identity]
+name = "visit_id"
+minted_by = "client"
+
+[fields]
+patient_name = "str"
+
+[client]
+write = "book_visit"
+read = "get_visit"
+read_answers = ["patient_name"]
+
+[orchestrator]
+operation = "hold_visit"
+
+[action]
+operation = "record_visit"
+
+[port]
+save = "save_visit"
+load = "load_visit"
+
+[acceptance]
+asserts = "patient_name"
+
+[env]
+storage = "VISITS_STORAGE"
+ingress = "RESTATE_INGRESS"
