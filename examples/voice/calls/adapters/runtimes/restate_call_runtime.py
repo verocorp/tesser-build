@@ -305,9 +305,13 @@ class RestateCallRuntime(ts.Runtime):
             restate_workflow_shared_context: restate.WorkflowSharedContext,
             person_answered_request: relays.PersonAnsweredRequest,
         ) -> relays.PersonAnsweredResponse:
-            await restate_workflow_shared_context.promise(
+            person_answered_promise = restate_workflow_shared_context.promise(
                 _PERSON_ANSWERED_PROMISE, serde=RestateAwaitPersonAnsweredResponseSerde()
-            ).resolve(relays.AwaitPersonAnsweredResponse(call_id=person_answered_request.call_id))
+            )
+            if await person_answered_promise.peek() is None:
+                await person_answered_promise.resolve(
+                    relays.AwaitPersonAnsweredResponse(call_id=person_answered_request.call_id)
+                )
             return relays.PersonAnsweredResponse(call_id=person_answered_request.call_id)
 
         @self.call_utterances_object.handler(
