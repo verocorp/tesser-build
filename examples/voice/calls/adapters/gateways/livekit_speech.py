@@ -36,7 +36,11 @@ class MapToSpeakTurnResponse(ts.Mapper, ports.SpeakTurnResponse):
             if item.get("type") == "message" and isinstance(item.get("text"), str):
                 said.append(item["text"])
             if item.get("type") == "function_call" and item.get("name") == PERSON_GAVE_NAME_TOOL:
-                arguments = json.loads(item.get("arguments", "{}"))
+                raw_arguments = item.get("arguments")
+                try:
+                    arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else None
+                except json.JSONDecodeError:
+                    arguments = None
                 if isinstance(arguments, dict) and isinstance(arguments.get("name"), str):
                     names.append(arguments["name"])
         super().__init__(call_id=call_id, text=" ".join(said), person_names=tuple(names))

@@ -136,3 +136,19 @@ class TestLivekitSpeech:
         await livekit_speech.speak_turn(speak_turn_request())
 
         assert FakeRoom.disconnected == [True]
+
+    async def test_a_tool_call_whose_arguments_cannot_be_read_records_no_name(self) -> None:
+        for arguments in ("{bad", None, '{"name": 42}'):
+            FakeRoom.reply = json.dumps(
+                [
+                    {"type": "function_call", "name": "person_gave_name", "arguments": arguments},
+                    {"type": "message", "text": "sorry, could you repeat that?"},
+                ]
+            )
+            livekit_speech = gateways.LivekitSpeech(
+                typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent"
+            )
+
+            speak_turn_response = await livekit_speech.speak_turn(speak_turn_request())
+
+            assert (speak_turn_response.text, speak_turn_response.person_names) == ("sorry, could you repeat that?", ())
