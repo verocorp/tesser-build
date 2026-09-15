@@ -180,3 +180,38 @@ class TestCallOrchestrator:
         )
 
         assert conduct_call_response.call_id == "c7"
+
+
+@ts.fake
+class FakeSilentThenSpeakTurnRelay(relays.SpeakTurnRelay):
+
+    def __init__(self, journal: list[str]) -> None:
+        self._journal = journal
+        self.spoken = 0
+
+    async def run_speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
+        self.spoken += 1
+        self._journal.append(f"speak {self.spoken}")
+        if self.spoken == 1:
+            return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="", person_names=())
+        return relays.SpeakTurnResponse(
+            call_id=str(speak_turn_request.call.identity), text="nice to meet you, Grace", person_names=("Grace",)
+        )
+
+
+class TestCallOrchestratorWhenTheAgentIsSilent:
+
+    async def test_a_turn_in_which_the_agent_said_nothing_is_spoken_again_rather_than_waited_on(self) -> None:
+        journal: list[str] = []
+        call_orchestrator = orchestrators.CallOrchestrator(
+            FakeDialPersonRelay(journal),
+            FakeAwaitPersonAnsweredRelay(journal),
+            FakeSilentThenSpeakTurnRelay(journal),
+            FakeAwaitPersonUtteranceRelay(journal),
+            FakeHangUpRelay(journal),
+            FakeRecordCallRelay(journal),
+        )
+
+        await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
+
+        assert journal[:4] == ["dial +15555550100", "answered", "speak 1", "speak 2"]

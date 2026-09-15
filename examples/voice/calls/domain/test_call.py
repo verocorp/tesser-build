@@ -56,10 +56,32 @@ class TestCall:
 
         assert first.person == second.person
 
-    def test_a_call_that_is_asking_for_the_name_continues(self) -> None:
+    def test_a_call_in_which_nothing_has_been_said_is_the_agents_turn(self) -> None:
         call = domain.Call(call_spec(step="ask_name"))
 
-        assert call.progress() is domain.CallProgress.CONTINUING
+        assert call.progress() is domain.CallProgress.AGENTS_TURN
+
+    def test_after_the_agent_speaks_it_is_the_persons_turn(self) -> None:
+        call = domain.Call(call_spec())
+
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
+
+        assert call.progress() is domain.CallProgress.PERSONS_TURN
+
+    def test_after_the_person_speaks_it_is_the_agents_turn(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
+
+        call.person_said("my name is Grace")
+
+        assert call.progress() is domain.CallProgress.AGENTS_TURN
+
+    def test_an_agent_turn_with_nothing_said_leaves_it_the_agents_turn(self) -> None:
+        call = domain.Call(call_spec())
+
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text="   ")))
+
+        assert call.progress() is domain.CallProgress.AGENTS_TURN
 
     def test_a_call_that_is_done_has_ended(self) -> None:
         call = domain.Call(call_spec(step="done"))

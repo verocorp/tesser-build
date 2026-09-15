@@ -227,7 +227,8 @@ class AgentTurn(ts.ValueObject):
 
 
 class CallProgress(ts.Outcome):
-    CONTINUING = enum.auto()
+    AGENTS_TURN = enum.auto()
+    PERSONS_TURN = enum.auto()
     ENDED = enum.auto()
 
 
@@ -314,4 +315,7 @@ class Call(ts.AggregateRoot):
     def progress(self) -> CallProgress:
         if self._step == CallStep(DONE):
             return CallProgress.ENDED
-        return CallProgress.CONTINUING
+        turns = self._conversation.turns
+        if turns and turns[-1].speaker == Speaker(AGENT):
+            return CallProgress.PERSONS_TURN
+        return CallProgress.AGENTS_TURN
