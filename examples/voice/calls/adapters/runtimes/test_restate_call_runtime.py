@@ -75,7 +75,15 @@ class FakeDurablePromise:  # tesser:debt TB072
         self._value = value
 
     async def resolve(self, value: object) -> None:
+        if any(name == self._name for name, _ in self._resolved):
+            raise RuntimeError(f"promise {self._name!r} is already resolved")
         self._resolved.append((self._name, value))
+
+    async def peek(self) -> object:
+        for name, value in self._resolved:
+            if name == self._name:
+                return value
+        return None
 
     def value(self) -> FakeDurableFuture:
         return FakeDurableFuture(self._value)
@@ -325,3 +333,17 @@ class TestRestateCallRuntime:
 
         assert fake_restate_object_context.state == {"waiting": "sign_1"}
         assert fake_restate_object_context.resolved == []
+
+    async def test_a_second_answer_for_a_call_already_answered_is_acknowledged_not_failed(self) -> None:
+        restate_call_runtime = runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+        )
+        fake_restate_workflow_shared_context = FakeRestateWorkflowSharedContext()  # tesser:debt TB085
+
+        for _ in (1, 2):
+            await restate_call_runtime.person_answered_handler(
+                typing.cast(restate.WorkflowSharedContext, fake_restate_workflow_shared_context),
+                relays.PersonAnsweredRequest(call_id="c7"),
+            )
+
+        assert len(fake_restate_workflow_shared_context.resolved) == 1
