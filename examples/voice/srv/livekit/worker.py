@@ -9,6 +9,7 @@ import tesser.srv as ts
 import livekit.agents as livekit_agents
 import livekit.agents.llm as livekit_llm
 import livekit.agents.utils.participant as livekit_participant
+import livekit.agents.voice.room_io as livekit_room_io
 import livekit.rtc as livekit_rtc
 
 import app as app
@@ -99,6 +100,9 @@ class CallWorker(ts.Host):
     def agent_session(self) -> livekit_agents.AgentSession[None]:
         return livekit_agents.AgentSession(stt=self._stt, llm=self._llm, tts=self._tts, turn_handling=_TURN_HANDLING)
 
+    def room_options(self) -> livekit_room_io.RoomOptions:
+        return livekit_room_io.RoomOptions(participant_identity=_PERSON_IDENTITY)
+
     async def entrypoint(self, job_context: livekit_agents.JobContext) -> None:
         await job_context.connect()
         call_id = job_context.room.name
@@ -106,7 +110,9 @@ class CallWorker(ts.Host):
         agent_session = self.agent_session()  # tesser:debt TB051
         agent_session.on("user_input_transcribed", call_agent.on_user_input_transcribed)
         job_context.room.local_participant.register_rpc_method(SPEAK_TURN_METHOD, call_agent.speak_turn)
-        await agent_session.start(agent=call_agent, room=job_context.room)
+        await agent_session.start(
+            agent=call_agent, room=job_context.room, room_options=self.room_options()  # tesser:debt TB051
+        )
         await livekit_participant.wait_for_participant(job_context.room, identity=_PERSON_IDENTITY)
         await livekit_participant.wait_for_participant_attribute(
             job_context.room, identity=_PERSON_IDENTITY, attribute=_SIP_CALL_STATUS, value=_SIP_CALL_ACTIVE
