@@ -10,7 +10,6 @@ import {{context}}.domain as domain
 
 class MapTo{{Aggregate}}Spec(ts.Mapper, domain.{{Aggregate}}Spec):
 
-{{#store_mints}}
     def __init__(
         self,
         {{write}}_request: client.{{Write}}Request,
@@ -22,15 +21,6 @@ class MapTo{{Aggregate}}Spec(ts.Mapper, domain.{{Aggregate}}Spec):
             {{field}}={{write}}_request.{{field}},
 {{/fields}}
         )
-{{/store_mints}}
-{{^store_mints}}
-    def __init__(self, {{write}}_request: client.{{Write}}Request) -> None:
-        super().__init__(
-{{#write_fields}}
-            {{field}}={{write}}_request.{{field}},
-{{/write_fields}}
-        )
-{{/store_mints}}
 
 
 class MapTo{{Conduct}}Request(ts.Mapper, relays.{{Conduct}}Request):
@@ -64,24 +54,24 @@ class MapTo{{Aggregate}}(ts.Mapper, client.{{Aggregate}}):
 class MapTo{{Read}}Response(ts.Mapper, client.{{Read}}Response):
 
     def __init__(self, {{load}}_response: ports.{{Load}}Response) -> None:
-        super().__init__({{aggregate}}=MapTo{{Aggregate}}({{load}}_response.{{context}}[0]))
+        super().__init__({{aggregate}}=MapTo{{Aggregate}}({{load}}_response.{{collection}}[0]))
 
 
 class {{Aggregate}}Service(ts.ApplicationService):
 
-    def __init__(self, {{conduct}}_relay: relays.{{Conduct}}Relay, {{aggregate}}_store: ports.{{Aggregate}}Store) -> None:
+    def __init__(
+        self,
+        {{conduct}}_relay: relays.{{Conduct}}Relay,
+        {{aggregate}}_identity_repository: ports.{{Aggregate}}IdentityRepository,
+        {{aggregate}}_store: ports.{{Aggregate}}Store,
+    ) -> None:
         self._{{conduct}}_relay = {{conduct}}_relay
+        self._{{aggregate}}_identity_repository = {{aggregate}}_identity_repository
         self._{{aggregate}}_store = {{aggregate}}_store
 
     async def {{write}}(self, {{write}}_request: client.{{Write}}Request) -> client.{{Write}}Response:
-{{#store_mints}}
-        async with self._{{aggregate}}_store.transaction() as {{aggregate}}_repository:
-            {{issue}}_response = await {{aggregate}}_repository.{{issue}}(ports.{{Issue}}Request())
+        {{issue}}_response = await self._{{aggregate}}_identity_repository.{{issue}}(ports.{{Issue}}Request())
         {{aggregate}} = domain.{{Aggregate}}(MapTo{{Aggregate}}Spec({{write}}_request, {{issue}}_response))
-{{/store_mints}}
-{{^store_mints}}
-        {{aggregate}} = domain.{{Aggregate}}(MapTo{{Aggregate}}Spec({{write}}_request))
-{{/store_mints}}
         {{conduct}}_response = await self._{{conduct}}_relay.run_{{conduct}}(MapTo{{Conduct}}Request({{aggregate}}))
         return MapTo{{Write}}Response({{conduct}}_response)
 

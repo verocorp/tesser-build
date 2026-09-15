@@ -14,9 +14,6 @@ _SCHEMA: typing.Final[str] = (
     "CREATE TABLE IF NOT EXISTS {{context}} "
     "({{#record_fields}}{{field}} {{sql_type}}{{#is_identity}} PRIMARY KEY{{/is_identity}}{{^is_identity}} NOT NULL{{/is_identity}}{{comma}}{{/record_fields}})"
 )
-{{#store_mints}}
-_ISSUE: typing.Final[str] = "SELECT gen_random_uuid()::text AS {{identity}}"
-{{/store_mints}}
 _SAVE: typing.Final[str] = (
     "INSERT INTO {{context}} ({{#record_fields}}{{field}}{{comma}}{{/record_fields}}) "
     "VALUES ({{#record_fields}}${{position}}{{comma}}{{/record_fields}})"
@@ -30,12 +27,6 @@ class Postgres{{Aggregate}}Repository(ts.Repository):
 
     def __init__(self, connection: asyncpg.pool.PoolConnectionProxy[asyncpg.Record]) -> None:
         self._connection = connection
-{{#store_mints}}
-
-    async def {{issue}}(self, {{issue}}_request: ports.{{Issue}}Request) -> ports.{{Issue}}Response:
-        {{identity}} = await self._connection.fetchval(_ISSUE)
-        return ports.{{Issue}}Response({{identity}}={{identity}})
-{{/store_mints}}
 
     async def {{save}}(self, {{save}}_request: ports.{{Save}}Request) -> ports.{{Save}}Response:
         await self._connection.execute(
@@ -49,7 +40,7 @@ class Postgres{{Aggregate}}Repository(ts.Repository):
     async def {{load}}(self, {{load}}_request: ports.{{Load}}Request) -> ports.{{Load}}Response:
         rows = await self._connection.fetch(_LOAD, {{load}}_request.{{identity}})
         return ports.{{Load}}Response(
-            {{context}}=tuple(
+            {{collection}}=tuple(
                 ports.{{Aggregate}}(
 {{#record_fields}}
                     {{field}}=row["{{field}}"],

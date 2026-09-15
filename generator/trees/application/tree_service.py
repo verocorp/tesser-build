@@ -27,27 +27,42 @@ class MapToTreeSpec(ts.Mapper, domain.TreeSpec):
         super().__init__(
             state=read_generation_response.spec.state.value,
             note=read_generation_response.spec.note,
+            unknown_keys=read_generation_response.spec.unknown_keys,
             target=read_generation_response.target.state.value,
-            app=read_generation_response.spec.app,
-            context=read_generation_response.spec.context,
-            aggregate=read_generation_response.spec.aggregate,
-            engine=read_generation_response.spec.engine,
-            store=read_generation_response.spec.store,
-            identity=read_generation_response.spec.identity,
-            minted_by=read_generation_response.spec.minted_by,
-            fields=tuple(
-                (field_record.name, field_record.kind) for field_record in read_generation_response.spec.fields
+            app_name=read_generation_response.spec.app_name,
+            bounded_context_name=read_generation_response.spec.bounded_context_name,
+            aggregate_root_class_name=read_generation_response.spec.aggregate_root_class_name,
+            durable_execution_engine=read_generation_response.spec.durable_execution_engine,
+            database=read_generation_response.spec.database,
+            identity_field_name=read_generation_response.spec.identity_field_name,
+            identity_port_operation_name=read_generation_response.spec.identity_port_operation_name,
+            aggregate_fields=tuple(
+                (field_record.name, field_record.kind)
+                for field_record in read_generation_response.spec.aggregate_fields
             ),
-            write=read_generation_response.spec.write,
-            read=read_generation_response.spec.read,
-            read_answers=read_generation_response.spec.read_answers,
-            orchestrator=read_generation_response.spec.orchestrator,
-            action=read_generation_response.spec.action,
-            save=read_generation_response.spec.save,
-            load=read_generation_response.spec.load,
-            asserts=read_generation_response.spec.asserts,
-            storage_env=read_generation_response.spec.storage_env,
-            ingress_env=read_generation_response.spec.ingress_env,
+            sample_values=tuple(
+                (
+                    sample_record.name,
+                    tuple((value_record.kind, value_record.text) for value_record in sample_record.values),
+                )
+                for sample_record in read_generation_response.spec.sample_values
+            ),
+            write_operation_name=read_generation_response.spec.write_operation_name,
+            read_operation_name=read_generation_response.spec.read_operation_name,
+            read_response_fields=read_generation_response.spec.read_response_fields,
+            orchestrator_operation_name=read_generation_response.spec.orchestrator_operation_name,
+            action_operation_name=read_generation_response.spec.action_operation_name,
+            save_operation_name=read_generation_response.spec.save_operation_name,
+            load_operation_name=read_generation_response.spec.load_operation_name,
+            load_response_collection_name=read_generation_response.spec.load_response_collection_name,
+            test_class_name=read_generation_response.spec.test_class_name,
+            test_method_name=read_generation_response.spec.test_method_name,
+            asserted_field=read_generation_response.spec.asserted_field,
+            random_values=tuple(
+                (value_record.kind, value_record.text) for value_record in read_generation_response.spec.random_values
+            ),
+            storage_url_variable=read_generation_response.spec.storage_url_variable,
+            restate_ingress_url_variable=read_generation_response.spec.restate_ingress_url_variable,
             templates=tuple(
                 (template_record.path, template_record.text)
                 for template_record in read_generation_response.templates

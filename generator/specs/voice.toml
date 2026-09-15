@@ -1,35 +1,42 @@
-app = "voice"
-context = "calls"
-aggregate = "Call"
-engine = "restate"
-store = "postgres"
+app_name = "voice"
+bounded_context_name = "calls"
+aggregate_root_class_name = "Call"
+durable_execution_engine = "restate"
+database = "postgres"
+identity_field_name = "call_id"
+identity_port_operation_name = "issue_call_id"
 
-[identity]
-name = "call_id"
-minted_by = "domain"
-
-[fields]
+[aggregate_fields]
 person_name = "str"
 phone_number = "str"
 
+[sample_values]
+call_id = ["call-1", "call-2"]
+person_name = ["Ada", "Grace"]
+phone_number = ["+15555550100", "+15555550101"]
+
 [client]
-write = "place_call"
-read = "get_call"
-read_answers = ["call_id", "person_name"]
+write_operation_name = "place_call"
+read_operation_name = "get_call"
+read_response_fields = ["call_id", "person_name"]
 
 [orchestrator]
-operation = "conduct_call"
+operation_name = "conduct_call"
 
 [action]
-operation = "record_call"
+operation_name = "record_call"
 
-[port]
-save = "save_call"
-load = "load_call"
+[repository]
+save_operation_name = "save_call"
+load_operation_name = "load_call"
+load_response_collection_name = "calls"
 
-[acceptance]
-asserts = "person_name"
+[acceptance_test]
+test_class_name = "TestPlacingCalls"
+test_method_name = "test_a_call_is_successfully_made"
+asserted_field = "person_name"
+random_values = ["Ada", "Grace", "Alan", "Barbara"]
 
-[env]
-storage = "CALLS_STORAGE"
-ingress = "RESTATE_INGRESS"
+[environment_variables]
+storage_url = "CALLS_STORAGE"
+restate_ingress_url = "RESTATE_INGRESS"

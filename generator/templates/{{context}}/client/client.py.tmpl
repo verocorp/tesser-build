@@ -7,10 +7,10 @@ import tesser.context as ts
 
 class {{Write}}Request(ts.Request):
 
-    def __init__(self, {{#write_fields}}{{field}}: {{py_type}}{{comma}}{{/write_fields}}) -> None:
-{{#write_fields}}
+    def __init__(self, {{#fields}}{{field}}: {{py_type}}{{comma}}{{/fields}}) -> None:
+{{#fields}}
         self.{{field}} = {{field}}
-{{/write_fields}}
+{{/fields}}
 
 
 class {{Write}}Response(ts.Response):

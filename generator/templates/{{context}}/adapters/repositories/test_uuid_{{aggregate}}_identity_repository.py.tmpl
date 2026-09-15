@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+import uuid
+
+import {{context}}.adapters.repositories as repositories
+import {{context}}.application.ports as ports
+
+
+class TestUuid{{Aggregate}}IdentityRepository:
+
+    async def test_the_same_seed_issues_the_same_{{identity}}(self) -> None:
+        uuid_{{aggregate}}_identity_repository = repositories.Uuid{{Aggregate}}IdentityRepository(7)
+        same_seed = repositories.Uuid{{Aggregate}}IdentityRepository(7)
+
+        first = await uuid_{{aggregate}}_identity_repository.{{issue}}(ports.{{Issue}}Request())
+        second = await same_seed.{{issue}}(ports.{{Issue}}Request())
+
+        assert first.{{identity}} == second.{{identity}}
+
+    async def test_each_{{identity}}_issued_is_a_different_version_4_uuid(self) -> None:
+        uuid_{{aggregate}}_identity_repository = repositories.Uuid{{Aggregate}}IdentityRepository(7)
+
+        first = await uuid_{{aggregate}}_identity_repository.{{issue}}(ports.{{Issue}}Request())
+        second = await uuid_{{aggregate}}_identity_repository.{{issue}}(ports.{{Issue}}Request())
+
+        assert first.{{identity}} != second.{{identity}}
+        assert uuid.UUID(first.{{identity}}).version == 4

@@ -292,7 +292,7 @@ run_generated_tree() {
   local port="${GENERATED_DEPLOYMENT_PORT:-9081}"
   local deployment="${GENERATED_DEPLOYMENT:-http://host.docker.internal:$port}"
   local names context storage_env ingress_env
-  names=$(python3 -c 'import sys, tomllib; s = tomllib.load(open(sys.argv[1], "rb")); print(s["context"], s["env"]["storage"], s["env"]["ingress"])' "$spec") || return 1
+  names=$(python3 -c 'import sys, tomllib; s = tomllib.load(open(sys.argv[1], "rb")); print(s["bounded_context_name"], s["environment_variables"]["storage_url"], s["environment_variables"]["restate_ingress_url"])' "$spec") || return 1
   read -r context storage_env ingress_env <<<"$names"
   step "generate $spec into $out"
   PYTHONPATH=.:../tesser-py python3 -m srv.cli.generate "$spec" "$out" >/dev/null || return 1

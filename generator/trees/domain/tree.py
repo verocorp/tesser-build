@@ -20,9 +20,11 @@ OCCUPIED: typing.Final[str] = "occupied"
 
 ENGINE: typing.Final[str] = "restate"
 
-STORE: typing.Final[str] = "postgres"
+DATABASE: typing.Final[str] = "postgres"
 
-MINTERS: typing.Final[tuple[str, ...]] = ("domain", "store", "client")
+IDENTITY_TYPE: typing.Final[str] = "str"
+
+SAMPLE_COUNT: typing.Final[int] = 2
 
 TYPES: typing.Final[dict[str, tuple[str, str, str]]] = {
     "str": ("text", "canonical_str", "__str__"),
@@ -55,6 +57,14 @@ OPERATION: typing.Final[re.Pattern[str]] = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-
 PASCAL: typing.Final[re.Pattern[str]] = re.compile(r"(?:[A-Z][a-z0-9]+)+")
 
 ENVIRONMENT: typing.Final[re.Pattern[str]] = re.compile(r"[A-Z][A-Z0-9_]*")
+
+TEST_CLASS: typing.Final[re.Pattern[str]] = re.compile(r"Test(?:[A-Z][a-z0-9]+)+")
+
+TEST_METHOD: typing.Final[re.Pattern[str]] = re.compile(r"test(?:_[a-z0-9]+)+")
+
+SAMPLE_TEXT: typing.Final[re.Pattern[str]] = re.compile(r"[ !#-&(-\[\]-~]+")
+
+IDENTITY_TEXT: typing.Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9._~-]+")
 
 WORD_START: typing.Final[re.Pattern[str]] = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -247,48 +257,60 @@ class TreeSpec(ts.Spec):
         self,
         state: str,
         note: str,
+        unknown_keys: tuple[str, ...],
         target: str,
-        app: str,
-        context: str,
-        aggregate: str,
-        engine: str,
-        store: str,
-        identity: str,
-        minted_by: str,
-        fields: tuple[tuple[str, str], ...],
-        write: str,
-        read: str,
-        read_answers: tuple[str, ...],
-        orchestrator: str,
-        action: str,
-        save: str,
-        load: str,
-        asserts: str,
-        storage_env: str,
-        ingress_env: str,
+        app_name: str,
+        bounded_context_name: str,
+        aggregate_root_class_name: str,
+        durable_execution_engine: str,
+        database: str,
+        identity_field_name: str,
+        identity_port_operation_name: str,
+        aggregate_fields: tuple[tuple[str, str], ...],
+        sample_values: tuple[tuple[str, tuple[tuple[str, str], ...]], ...],
+        write_operation_name: str,
+        read_operation_name: str,
+        read_response_fields: tuple[str, ...],
+        orchestrator_operation_name: str,
+        action_operation_name: str,
+        save_operation_name: str,
+        load_operation_name: str,
+        load_response_collection_name: str,
+        test_class_name: str,
+        test_method_name: str,
+        asserted_field: str,
+        random_values: tuple[tuple[str, str], ...],
+        storage_url_variable: str,
+        restate_ingress_url_variable: str,
         templates: tuple[tuple[str, str], ...],
     ) -> None:
         self.state = state
         self.note = note
+        self.unknown_keys = unknown_keys
         self.target = target
-        self.app = app
-        self.context = context
-        self.aggregate = aggregate
-        self.engine = engine
-        self.store = store
-        self.identity = identity
-        self.minted_by = minted_by
-        self.fields = fields
-        self.write = write
-        self.read = read
-        self.read_answers = read_answers
-        self.orchestrator = orchestrator
-        self.action = action
-        self.save = save
-        self.load = load
-        self.asserts = asserts
-        self.storage_env = storage_env
-        self.ingress_env = ingress_env
+        self.app_name = app_name
+        self.bounded_context_name = bounded_context_name
+        self.aggregate_root_class_name = aggregate_root_class_name
+        self.durable_execution_engine = durable_execution_engine
+        self.database = database
+        self.identity_field_name = identity_field_name
+        self.identity_port_operation_name = identity_port_operation_name
+        self.aggregate_fields = aggregate_fields
+        self.sample_values = sample_values
+        self.write_operation_name = write_operation_name
+        self.read_operation_name = read_operation_name
+        self.read_response_fields = read_response_fields
+        self.orchestrator_operation_name = orchestrator_operation_name
+        self.action_operation_name = action_operation_name
+        self.save_operation_name = save_operation_name
+        self.load_operation_name = load_operation_name
+        self.load_response_collection_name = load_response_collection_name
+        self.test_class_name = test_class_name
+        self.test_method_name = test_method_name
+        self.asserted_field = asserted_field
+        self.random_values = random_values
+        self.storage_url_variable = storage_url_variable
+        self.restate_ingress_url_variable = restate_ingress_url_variable
         self.templates = templates
 
 
@@ -296,6 +318,10 @@ class Tree(ts.AggregateRoot):
 
     def __init__(self, spec: TreeSpec) -> None:
         found: list[Text] = []
+        identity = spec.identity_field_name
+        kinds = {identity: IDENTITY_TYPE, **dict(spec.aggregate_fields)}
+        field_names = tuple(name for name, _ in spec.aggregate_fields)
+        sampled = dict(spec.sample_values)
         if spec.state == MISSING:
             found.append(Text(f"there is no spec file at {spec.note}"))
         elif spec.state == UNREADABLE:
@@ -305,63 +331,165 @@ class Tree(ts.AggregateRoot):
         elif spec.state != READ:
             found.append(Text(f"the spec file could not be read: {spec.state}"))
         else:
+            for unknown in spec.unknown_keys:
+                found.append(Text(f"the spec names '{unknown}', which is not a key the spec takes"))
             shaped = (
-                ("app", spec.app, SNAKE, "a snake_case name, like voice"),
-                ("context", spec.context, SNAKE, "a snake_case name, like calls"),
-                ("aggregate", spec.aggregate, PASCAL, "a PascalCase name, like Call"),
-                ("identity name", spec.identity, SNAKE, "a snake_case name, like call_id"),
-                ("client write", spec.write, OPERATION, "a snake_case verb and noun, like place_call"),
-                ("client read", spec.read, OPERATION, "a snake_case verb and noun, like get_call"),
-                ("orchestrator operation", spec.orchestrator, OPERATION, "a snake_case verb and noun, like conduct_call"),
-                ("action operation", spec.action, OPERATION, "a snake_case verb and noun, like record_call"),
-                ("port save", spec.save, OPERATION, "a snake_case verb and noun, like save_call"),
-                ("port load", spec.load, OPERATION, "a snake_case verb and noun, like load_call"),
-                ("acceptance asserts", spec.asserts, SNAKE, "a field name"),
-                ("env storage", spec.storage_env, ENVIRONMENT, "an upper-case environment variable name"),
-                ("env ingress", spec.ingress_env, ENVIRONMENT, "an upper-case environment variable name"),
+                ("app_name", spec.app_name, SNAKE, "a snake_case name, like voice"),
+                ("bounded_context_name", spec.bounded_context_name, SNAKE, "a snake_case name, like calls"),
+                ("aggregate_root_class_name", spec.aggregate_root_class_name, PASCAL, "a PascalCase class name, like Call"),
+                ("identity_field_name", identity, SNAKE, "a snake_case field name, like call_id"),
+                (
+                    "identity_port_operation_name",
+                    spec.identity_port_operation_name,
+                    OPERATION,
+                    "a snake_case verb and noun, like issue_call_id",
+                ),
+                ("client.write_operation_name", spec.write_operation_name, OPERATION, "a snake_case verb and noun, like place_call"),
+                ("client.read_operation_name", spec.read_operation_name, OPERATION, "a snake_case verb and noun, like get_call"),
+                (
+                    "orchestrator.operation_name",
+                    spec.orchestrator_operation_name,
+                    OPERATION,
+                    "a snake_case verb and noun, like conduct_call",
+                ),
+                ("action.operation_name", spec.action_operation_name, OPERATION, "a snake_case verb and noun, like record_call"),
+                ("repository.save_operation_name", spec.save_operation_name, OPERATION, "a snake_case verb and noun, like save_call"),
+                ("repository.load_operation_name", spec.load_operation_name, OPERATION, "a snake_case verb and noun, like load_call"),
+                (
+                    "repository.load_response_collection_name",
+                    spec.load_response_collection_name,
+                    SNAKE,
+                    "a snake_case name, like calls",
+                ),
+                (
+                    "acceptance_test.test_class_name",
+                    spec.test_class_name,
+                    TEST_CLASS,
+                    "a Test-prefixed PascalCase class name, like TestPlacingCalls",
+                ),
+                (
+                    "acceptance_test.test_method_name",
+                    spec.test_method_name,
+                    TEST_METHOD,
+                    "a test_-prefixed snake_case method name, like test_a_call_is_successfully_made",
+                ),
+                ("acceptance_test.asserted_field", spec.asserted_field, SNAKE, "a snake_case field name"),
+                (
+                    "environment_variables.storage_url",
+                    spec.storage_url_variable,
+                    ENVIRONMENT,
+                    "an upper-case environment variable name",
+                ),
+                (
+                    "environment_variables.restate_ingress_url",
+                    spec.restate_ingress_url_variable,
+                    ENVIRONMENT,
+                    "an upper-case environment variable name",
+                ),
             )
             for key, value, shape, described in shaped:
                 if not value:
                     found.append(Text(f"the spec names no {key}"))
                 elif shape.fullmatch(value) is None:
                     found.append(Text(f"{key} '{value}' is not {described}"))
-            if spec.engine != ENGINE:
-                found.append(Text(f"engine '{spec.engine}' has no templates; the one engine is '{ENGINE}'"))
-            if spec.store != STORE:
-                found.append(Text(f"store '{spec.store}' has no templates; the one store is '{STORE}'"))
-            if spec.minted_by not in MINTERS:
+            if spec.durable_execution_engine != ENGINE:
                 found.append(
-                    Text(f"identity minted_by '{spec.minted_by}' is not one of {', '.join(MINTERS)}")
+                    Text(
+                        f"durable_execution_engine '{spec.durable_execution_engine}' has no templates; "
+                        f"the one engine is '{ENGINE}'"
+                    )
                 )
-            if spec.context in RESERVED:
-                found.append(Text(f"context '{spec.context}' is a name the generated tree already uses"))
-            if not spec.fields:
-                found.append(Text("the spec names no fields"))
-            identity_class = "".join(part.capitalize() for part in spec.identity.split("_"))
-            taken = {spec.aggregate, identity_class, f"{spec.aggregate}Spec"}
-            field_names = tuple(name for name, _ in spec.fields)
-            for name, kind in spec.fields:
+            if spec.database != DATABASE:
+                found.append(
+                    Text(f"database '{spec.database}' has no templates; the one database is '{DATABASE}'")
+                )
+            if spec.bounded_context_name in RESERVED:
+                found.append(
+                    Text(f"bounded_context_name '{spec.bounded_context_name}' is a name the generated tree already uses")
+                )
+            if not spec.aggregate_fields:
+                found.append(Text("aggregate_fields names no fields"))
+            identity_class = "".join(part.capitalize() for part in identity.split("_"))
+            taken = {spec.aggregate_root_class_name, identity_class, f"{spec.aggregate_root_class_name}Spec"}
+            for name, kind in spec.aggregate_fields:
                 if SNAKE.fullmatch(name) is None:
-                    found.append(Text(f"field '{name}' is not a snake_case name"))
-                if name == spec.identity:
-                    found.append(Text(f"field '{name}' is the identity, which every record already carries"))
+                    found.append(Text(f"aggregate_fields names '{name}', which is not a snake_case name"))
+                if name == identity:
+                    found.append(Text(f"aggregate_fields names '{name}', which is the identity field"))
                 if name in RESERVED:
-                    found.append(Text(f"field '{name}' is a name the generated tree already uses"))
+                    found.append(Text(f"aggregate_fields names '{name}', a name the generated tree already uses"))
                 if kind not in TYPES:
-                    found.append(Text(f"field '{name}' is a '{kind}'; a field is one of {', '.join(TYPES)}"))
+                    found.append(Text(f"aggregate_fields names '{name}' as '{kind}'; a field is one of {', '.join(TYPES)}"))
                 if "".join(part.capitalize() for part in name.split("_")) in taken:
-                    found.append(Text(f"field '{name}' names a class the domain module already declares"))
-            answers = tuple(answer for answer in spec.read_answers if answer != spec.identity)
-            for answer in answers:
-                if answer not in field_names:
-                    found.append(Text(f"client read answers '{answer}', which is not a field"))
-            if spec.asserts and spec.asserts not in answers:
-                found.append(Text(f"acceptance asserts '{spec.asserts}', which the client read does not answer"))
-            issue = f"issue_{spec.identity}"
-            operations = [spec.write, spec.read, spec.orchestrator, spec.action, spec.save, spec.load]
-            if spec.minted_by == "store":
-                operations.append(issue)
-            for operation in sorted({operation for operation in operations if operations.count(operation) > 1}):
+                    found.append(Text(f"aggregate_fields names '{name}', whose class the domain module already declares"))
+            for name in sampled:
+                if name not in kinds:
+                    found.append(
+                        Text(f"sample_values names '{name}', which is neither the identity field nor an aggregate field")
+                    )
+            for name, kind in kinds.items():
+                if name not in sampled:
+                    found.append(Text(f"sample_values names no values for '{name}'"))
+                    continue
+                values = sampled[name]
+                if len(values) != SAMPLE_COUNT:
+                    found.append(
+                        Text(f"sample_values for '{name}' holds {len(values)} values; each field takes {SAMPLE_COUNT}")
+                    )
+                if len({text for _, text in values}) != len(values):
+                    found.append(Text(f"sample_values for '{name}' repeats a value; its values differ"))
+                if kind in TYPES and any(value_kind != kind for value_kind, _ in values):
+                    found.append(Text(f"sample_values for '{name}' holds a value that is not a {kind}"))
+                for value_kind, text in values:
+                    if value_kind == "str" and SAMPLE_TEXT.fullmatch(text) is None:
+                        found.append(
+                            Text(f"sample value '{text}' for '{name}' is not printable ASCII free of quotes and backslashes")
+                        )
+                    elif name == identity and IDENTITY_TEXT.fullmatch(text) is None:
+                        found.append(
+                            Text(f"sample value '{text}' for '{name}' is not letters, digits, '.', '_', '~', and '-'")
+                        )
+            if not spec.read_response_fields:
+                found.append(Text("client.read_response_fields names no fields"))
+            for answer in spec.read_response_fields:
+                if answer not in kinds:
+                    found.append(
+                        Text(
+                            f"client.read_response_fields names '{answer}', "
+                            f"which is neither the identity field nor an aggregate field"
+                        )
+                    )
+            for answer in sorted({answer for answer in spec.read_response_fields if spec.read_response_fields.count(answer) > 1}):
+                found.append(Text(f"client.read_response_fields names '{answer}' twice"))
+            if spec.asserted_field and (
+                spec.asserted_field == identity or spec.asserted_field not in spec.read_response_fields
+            ):
+                found.append(
+                    Text(
+                        f"acceptance_test.asserted_field '{spec.asserted_field}' "
+                        f"is not an aggregate field the client read answers"
+                    )
+                )
+            if not spec.random_values:
+                found.append(Text("acceptance_test.random_values names no values"))
+            asserted_kind = kinds.get(spec.asserted_field, "")
+            if asserted_kind in TYPES and any(value_kind != asserted_kind for value_kind, _ in spec.random_values):
+                found.append(Text(f"acceptance_test.random_values holds a value that is not a {asserted_kind}"))
+            for value_kind, text in spec.random_values:
+                if value_kind == "str" and SAMPLE_TEXT.fullmatch(text) is None:
+                    found.append(
+                        Text(f"random value '{text}' is not printable ASCII free of quotes and backslashes")
+                    )
+            operations = [
+                spec.write_operation_name,
+                spec.read_operation_name,
+                spec.orchestrator_operation_name,
+                spec.action_operation_name,
+                spec.save_operation_name,
+                spec.load_operation_name,
+                spec.identity_port_operation_name,
+            ]
+            for operation in sorted({operation for operation in operations if operation and operations.count(operation) > 1}):
                 found.append(Text(f"operation '{operation}' is named twice; every operation has a name of its own"))
             if spec.target == OCCUPIED:
                 found.append(Text("the output directory is not empty"))
@@ -374,25 +502,26 @@ class Tree(ts.AggregateRoot):
         classes = {
             name: "".join(part.capitalize() for part in name.split("_"))
             for name in (
-                spec.app,
-                spec.context,
-                spec.identity,
-                spec.write,
-                spec.read,
-                spec.orchestrator,
-                spec.action,
-                spec.save,
-                spec.load,
-                issue,
+                spec.app_name,
+                spec.bounded_context_name,
+                identity,
+                spec.write_operation_name,
+                spec.read_operation_name,
+                spec.orchestrator_operation_name,
+                spec.action_operation_name,
+                spec.save_operation_name,
+                spec.load_operation_name,
+                spec.identity_port_operation_name,
                 *field_names,
             )
         }
-        typed = dict(spec.fields)
+        literals = {
+            name: tuple(f'"{text}"' if value_kind == "str" else text for value_kind, text in values)
+            for name, values in sampled.items()
+        }
         items: dict[str, tuple[tuple[str, str], ...]] = {}
-        for name in (spec.identity, *field_names):
-            kind = typed.get(name, "str")
+        for name, kind in kinds.items():
             sql_type, canonical, dunder = TYPES[kind]
-            quoted = kind == "str"
             items[name] = (
                 ("field", name),
                 ("Field", classes[name]),
@@ -400,20 +529,16 @@ class Tree(ts.AggregateRoot):
                 ("sql_type", sql_type),
                 ("canonical", canonical),
                 ("dunder", dunder),
-                ("sample", f'"{name}-1"' if quoted else "1"),
-                ("sample2", f'"{name}-2"' if quoted else "2"),
-                ("wrong", "1" if quoted else '"1"'),
-                ("fresh", "str(uuid.uuid4())" if name == spec.identity else (f'"{name}-1"' if quoted else "1")),
-                ("accessor", "identity" if name == spec.identity else name),
-                ("is_identity", "true" if name == spec.identity else ""),
+                ("sample", literals[name][0]),
+                ("sample2", literals[name][1]),
+                ("wrong", "1" if kind == "str" else '"1"'),
+                ("accessor", "identity" if name == identity else name),
+                ("is_identity", "true" if name == identity else ""),
             )
-        record_names = (spec.identity, *field_names)
         listed = (
             ("fields", field_names),
-            ("record_fields", record_names),
-            ("read_fields", (spec.identity, *answers)),
-            ("write_fields", record_names if spec.minted_by == "client" else field_names),
-            ("spec_fields", field_names if spec.minted_by == "domain" else record_names),
+            ("record_fields", (identity, *field_names)),
+            ("read_fields", spec.read_response_fields),
         )
         sections = tuple(
             (
@@ -435,47 +560,42 @@ class Tree(ts.AggregateRoot):
             )
             for section, names in listed
         )
-        asserted = typed.get(spec.asserts, "str")
+        choices = tuple(f'"{text}"' if value_kind == "str" else text for value_kind, text in spec.random_values)
         values = (
-            ("app", spec.app),
-            ("App", classes[spec.app]),
-            ("context", spec.context),
-            ("Context", classes[spec.context]),
-            ("aggregate", WORD_START.sub("_", spec.aggregate).lower()),
-            ("Aggregate", spec.aggregate),
-            ("identity", spec.identity),
-            ("Identity", classes[spec.identity]),
-            ("identity_sample", f'"{spec.identity}-1"'),
-            ("identity_sample2", f'"{spec.identity}-2"'),
-            ("identity_raw", f"{spec.identity}-1"),
-            ("write", spec.write),
-            ("Write", classes[spec.write]),
-            ("read", spec.read),
-            ("Read", classes[spec.read]),
-            ("conduct", spec.orchestrator),
-            ("Conduct", classes[spec.orchestrator]),
-            ("conduct_words", spec.orchestrator.replace("_", " ")),
-            ("record", spec.action),
-            ("Record", classes[spec.action]),
-            ("record_words", spec.action.replace("_", " ")),
-            ("save", spec.save),
-            ("Save", classes[spec.save]),
-            ("load", spec.load),
-            ("Load", classes[spec.load]),
-            ("issue", issue),
-            ("Issue", classes[issue]),
-            ("storage_env", spec.storage_env),
-            ("ingress_env", spec.ingress_env),
-            ("asserts", spec.asserts),
-            (
-                "asserts_choices",
-                f'("{spec.asserts}-a", "{spec.asserts}-b", "{spec.asserts}-c", "{spec.asserts}-d")'
-                if asserted == "str"
-                else "(11, 12, 13, 14)",
-            ),
-            ("domain_mints", "true" if spec.minted_by == "domain" else ""),
-            ("store_mints", "true" if spec.minted_by == "store" else ""),
-            ("client_mints", "true" if spec.minted_by == "client" else ""),
+            ("app", spec.app_name),
+            ("App", classes[spec.app_name]),
+            ("context", spec.bounded_context_name),
+            ("Context", classes[spec.bounded_context_name]),
+            ("aggregate", WORD_START.sub("_", spec.aggregate_root_class_name).lower()),
+            ("Aggregate", spec.aggregate_root_class_name),
+            ("identity", identity),
+            ("Identity", classes[identity]),
+            ("identity_sample", literals[identity][0]),
+            ("identity_sample2", literals[identity][1]),
+            ("identity_raw", sampled[identity][0][1]),
+            ("write", spec.write_operation_name),
+            ("Write", classes[spec.write_operation_name]),
+            ("read", spec.read_operation_name),
+            ("Read", classes[spec.read_operation_name]),
+            ("conduct", spec.orchestrator_operation_name),
+            ("Conduct", classes[spec.orchestrator_operation_name]),
+            ("conduct_words", spec.orchestrator_operation_name.replace("_", " ")),
+            ("record", spec.action_operation_name),
+            ("Record", classes[spec.action_operation_name]),
+            ("record_words", spec.action_operation_name.replace("_", " ")),
+            ("save", spec.save_operation_name),
+            ("Save", classes[spec.save_operation_name]),
+            ("load", spec.load_operation_name),
+            ("Load", classes[spec.load_operation_name]),
+            ("issue", spec.identity_port_operation_name),
+            ("Issue", classes[spec.identity_port_operation_name]),
+            ("collection", spec.load_response_collection_name),
+            ("storage_env", spec.storage_url_variable),
+            ("ingress_env", spec.restate_ingress_url_variable),
+            ("asserts", spec.asserted_field),
+            ("random_choices", "(" + ", ".join(choices) + ("," if len(choices) == 1 else "") + ")"),
+            ("test_class", spec.test_class_name),
+            ("test_method", spec.test_method_name),
         )
         scope = Scope(ScopeSpec(values=values, sections=sections))
         self._files = tuple(

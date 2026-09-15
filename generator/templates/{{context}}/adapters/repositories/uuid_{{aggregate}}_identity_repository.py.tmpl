@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+import random
+import uuid
+
+import tesser.adapters as ts
+
+import {{context}}.application.ports as ports
+
+
+class Uuid{{Aggregate}}IdentityRepository(ts.Repository):
+
+    def __init__(self, seed: int) -> None:
+        self._random = random.Random(seed)
+
+    async def {{issue}}(self, {{issue}}_request: ports.{{Issue}}Request) -> ports.{{Issue}}Response:
+        return ports.{{Issue}}Response({{identity}}=str(uuid.UUID(int=self._random.getrandbits(128), version=4)))

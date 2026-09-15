@@ -1,36 +1,44 @@
-app = "shop"
-context = "orders"
-aggregate = "PurchaseOrder"
-engine = "restate"
-store = "postgres"
+app_name = "shop"
+bounded_context_name = "orders"
+aggregate_root_class_name = "PurchaseOrder"
+durable_execution_engine = "restate"
+database = "postgres"
+identity_field_name = "order_id"
+identity_port_operation_name = "issue_order_id"
 
-[identity]
-name = "order_id"
-minted_by = "store"
-
-[fields]
+[aggregate_fields]
 customer_name = "str"
 quantity = "int"
 sku = "str"
 
+[sample_values]
+order_id = ["order-1", "order-2"]
+customer_name = ["Ada", "Grace"]
+quantity = [1, 2]
+sku = ["SKU-1", "SKU-2"]
+
 [client]
-write = "place_order"
-read = "get_order"
-read_answers = ["customer_name", "quantity"]
+write_operation_name = "place_order"
+read_operation_name = "get_order"
+read_response_fields = ["order_id", "customer_name", "quantity"]
 
 [orchestrator]
-operation = "fulfil_order"
+operation_name = "fulfil_order"
 
 [action]
-operation = "record_order"
+operation_name = "record_order"
 
-[port]
-save = "save_order"
-load = "load_order"
+[repository]
+save_operation_name = "save_order"
+load_operation_name = "load_order"
+load_response_collection_name = "orders"
 
-[acceptance]
-asserts = "quantity"
+[acceptance_test]
+test_class_name = "TestPlacingOrders"
+test_method_name = "test_a_placed_order_is_read_back_with_its_quantity"
+asserted_field = "quantity"
+random_values = [3, 5, 8, 13]
 
-[env]
-storage = "ORDERS_STORAGE"
-ingress = "RESTATE_INGRESS"
+[environment_variables]
+storage_url = "ORDERS_STORAGE"
+restate_ingress_url = "RESTATE_INGRESS"

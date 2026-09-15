@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import random
-{{#client_mints}}
-import uuid
-{{/client_mints}}
 
 import tesser.testing as ts
 
@@ -13,21 +10,19 @@ import {{context}}.client as {{context}}_client
 
 @ts.helper
 def {{write}}_request(
-    {{#write_fields}}{{field}}: {{py_type}} = {{sample}}{{comma}}{{/write_fields}}
+    {{#fields}}{{field}}: {{py_type}} = {{sample}}{{comma}}{{/fields}}
 ) -> {{context}}_client.{{Write}}Request:
-    return {{context}}_client.{{Write}}Request({{#write_fields}}{{field}}={{field}}{{comma}}{{/write_fields}})
+    return {{context}}_client.{{Write}}Request({{#fields}}{{field}}={{field}}{{comma}}{{/fields}})
 
 
-class Test{{Write}}Then{{Read}}:
+class {{test_class}}:
 
-    async def test_the_{{asserts}}_given_to_{{write}}_is_the_{{asserts}}_{{read}}_answers(self) -> None:
+    async def {{test_method}}(self) -> None:
         {{app}}_app = app.load()
         await {{app}}_app.open()
-        {{asserts}} = random.choice({{asserts_choices}})
+        {{asserts}} = random.choice({{random_choices}})
 
-        {{write}}_response = await {{app}}_app.{{context}}.client.{{write}}(
-            {{write}}_request({{asserts}}={{asserts}}{{#client_mints}}, {{identity}}=str(uuid.uuid4()){{/client_mints}})
-        )
+        {{write}}_response = await {{app}}_app.{{context}}.client.{{write}}({{write}}_request({{asserts}}={{asserts}}))
         {{read}}_response = await {{app}}_app.{{context}}.client.{{read}}(
             {{context}}_client.{{Read}}Request({{identity}}={{write}}_response.{{identity}})
         )

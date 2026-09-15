@@ -23,18 +23,20 @@ class Fake{{Conduct}}Relay(relays.{{Conduct}}Relay):
 
 
 @ts.fake
-class Fake{{Aggregate}}Repository(ports.{{Aggregate}}Repository):
-
-    def __init__(self, {{context}}: dict[str, ports.{{Aggregate}}]) -> None:
-        self._{{context}} = {{context}}
-{{#store_mints}}
+class Fake{{Aggregate}}IdentityRepository(ports.{{Aggregate}}IdentityRepository):
 
     async def {{issue}}(self, {{issue}}_request: ports.{{Issue}}Request) -> ports.{{Issue}}Response:
         return ports.{{Issue}}Response({{identity}}={{identity_sample2}})
-{{/store_mints}}
+
+
+@ts.fake
+class Fake{{Aggregate}}Repository(ports.{{Aggregate}}Repository):
+
+    def __init__(self, {{collection}}: dict[str, ports.{{Aggregate}}]) -> None:
+        self._{{collection}} = {{collection}}
 
     async def {{save}}(self, {{save}}_request: ports.{{Save}}Request) -> ports.{{Save}}Response:
-        self._{{context}}[{{save}}_request.{{identity}}] = ports.{{Aggregate}}(
+        self._{{collection}}[{{save}}_request.{{identity}}] = ports.{{Aggregate}}(
 {{#record_fields}}
             {{field}}={{save}}_request.{{field}},
 {{/record_fields}}
@@ -42,47 +44,46 @@ class Fake{{Aggregate}}Repository(ports.{{Aggregate}}Repository):
         return ports.{{Save}}Response({{identity}}={{save}}_request.{{identity}})
 
     async def {{load}}(self, {{load}}_request: ports.{{Load}}Request) -> ports.{{Load}}Response:
-        return ports.{{Load}}Response({{context}}=(self._{{context}}[{{load}}_request.{{identity}}],))
+        return ports.{{Load}}Response({{collection}}=(self._{{collection}}[{{load}}_request.{{identity}}],))
 
 
 @ts.fake
 class Fake{{Aggregate}}Store(ports.{{Aggregate}}Store):
 
     def __init__(self) -> None:
-        self.{{context}}: dict[str, ports.{{Aggregate}}] = {}
+        self.{{collection}}: dict[str, ports.{{Aggregate}}] = {}
 
     @contextlib.asynccontextmanager
     async def transaction(self) -> typing.AsyncIterator[ports.{{Aggregate}}Repository]:
-        yield Fake{{Aggregate}}Repository(self.{{context}})
+        yield Fake{{Aggregate}}Repository(self.{{collection}})
 
 
 class Test{{Aggregate}}Service:
 
-    async def test_{{write}}_conducts_the_{{aggregate}}_it_built_from_the_request(self) -> None:
+    async def test_{{write}}_conducts_the_{{aggregate}}_under_the_{{identity}}_its_identity_repository_issued(self) -> None:
         fake_{{conduct}}_relay = Fake{{Conduct}}Relay()
-        {{aggregate}}_service = application.{{Aggregate}}Service(fake_{{conduct}}_relay, Fake{{Aggregate}}Store())
+        {{aggregate}}_service = application.{{Aggregate}}Service(
+            fake_{{conduct}}_relay, Fake{{Aggregate}}IdentityRepository(), Fake{{Aggregate}}Store()
+        )
 
         {{write}}_response = await {{aggregate}}_service.{{write}}(
-            client.{{Write}}Request({{#write_fields}}{{field}}={{sample}}{{comma}}{{/write_fields}})
+            client.{{Write}}Request({{#fields}}{{field}}={{sample}}{{comma}}{{/fields}})
         )
 
         assert [
             ({{#record_fields}}conducted.{{field}}{{comma}}{{/record_fields}})
             for conducted in fake_{{conduct}}_relay.conducted
-        ] == [({{#record_fields}}{{#is_identity}}{{write}}_response.{{identity}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})]
-{{#store_mints}}
+        ] == [({{#record_fields}}{{#is_identity}}{{identity_sample2}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})]
         assert {{write}}_response.{{identity}} == {{identity_sample2}}
-{{/store_mints}}
-{{#client_mints}}
-        assert {{write}}_response.{{identity}} == {{identity_sample}}
-{{/client_mints}}
 
     async def test_a_saved_{{aggregate}}_is_read_back_by_its_{{identity}}(self) -> None:
         fake_{{aggregate}}_store = Fake{{Aggregate}}Store()
-        fake_{{aggregate}}_store.{{context}}[{{identity_sample}}] = ports.{{Aggregate}}(
+        fake_{{aggregate}}_store.{{collection}}[{{identity_sample}}] = ports.{{Aggregate}}(
             {{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}}
         )
-        {{aggregate}}_service = application.{{Aggregate}}Service(Fake{{Conduct}}Relay(), fake_{{aggregate}}_store)
+        {{aggregate}}_service = application.{{Aggregate}}Service(
+            Fake{{Conduct}}Relay(), Fake{{Aggregate}}IdentityRepository(), fake_{{aggregate}}_store
+        )
 
         {{read}}_response = await {{aggregate}}_service.{{read}}(client.{{Read}}Request({{identity}}={{identity_sample}}))
 

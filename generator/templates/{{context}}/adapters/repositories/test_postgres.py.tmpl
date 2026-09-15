@@ -30,21 +30,6 @@ class TestPostgres{{Aggregate}}Store:
             )
         await database.close()
 
-        assert {{load}}_response.{{context}} == (
+        assert {{load}}_response.{{collection}} == (
             ports.{{Aggregate}}({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}}),
         )
-{{#store_mints}}
-
-    async def test_each_issued_{{identity}}_is_a_new_one(self) -> None:
-        dsn = os.environ["{{storage_env}}"]
-        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
-        await database.open()
-        postgres_{{aggregate}}_store = repositories.Postgres{{Aggregate}}Store(database)
-
-        async with postgres_{{aggregate}}_store.transaction() as {{aggregate}}_repository:
-            first = await {{aggregate}}_repository.{{issue}}(ports.{{Issue}}Request())
-            second = await {{aggregate}}_repository.{{issue}}(ports.{{Issue}}Request())
-        await database.close()
-
-        assert first.{{identity}} != second.{{identity}}
-{{/store_mints}}

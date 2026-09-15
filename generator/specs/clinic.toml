@@ -1,34 +1,40 @@
-app = "clinic"
-context = "visits"
-aggregate = "Visit"
-engine = "restate"
-store = "postgres"
+app_name = "clinic"
+bounded_context_name = "visits"
+aggregate_root_class_name = "Visit"
+durable_execution_engine = "restate"
+database = "postgres"
+identity_field_name = "visit_id"
+identity_port_operation_name = "issue_visit_id"
 
-[identity]
-name = "visit_id"
-minted_by = "client"
-
-[fields]
+[aggregate_fields]
 patient_name = "str"
 
+[sample_values]
+visit_id = ["visit-1", "visit-2"]
+patient_name = ["Ada", "Grace"]
+
 [client]
-write = "book_visit"
-read = "get_visit"
-read_answers = ["patient_name"]
+write_operation_name = "book_visit"
+read_operation_name = "get_visit"
+read_response_fields = ["visit_id", "patient_name"]
 
 [orchestrator]
-operation = "hold_visit"
+operation_name = "hold_visit"
 
 [action]
-operation = "record_visit"
+operation_name = "record_visit"
 
-[port]
-save = "save_visit"
-load = "load_visit"
+[repository]
+save_operation_name = "save_visit"
+load_operation_name = "load_visit"
+load_response_collection_name = "visits"
 
-[acceptance]
-asserts = "patient_name"
+[acceptance_test]
+test_class_name = "TestBookingVisits"
+test_method_name = "test_a_booked_visit_is_read_back_for_its_patient"
+asserted_field = "patient_name"
+random_values = ["Ada", "Grace"]
 
-[env]
-storage = "VISITS_STORAGE"
-ingress = "RESTATE_INGRESS"
+[environment_variables]
+storage_url = "VISITS_STORAGE"
+restate_ingress_url = "RESTATE_INGRESS"

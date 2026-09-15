@@ -1,0 +1,22 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.application as ts
+
+
+class {{Issue}}Request(ts.Request):
+
+    def __init__(self) -> None:
+        return None
+
+
+class {{Issue}}Response(ts.Response):
+
+    def __init__(self, {{identity}}: str) -> None:
+        self.{{identity}} = {{identity}}
+
+
+class {{Aggregate}}IdentityRepository(ts.Port, typing.Protocol):
+
+    async def {{issue}}(self, {{issue}}_request: {{Issue}}Request) -> {{Issue}}Response: ...

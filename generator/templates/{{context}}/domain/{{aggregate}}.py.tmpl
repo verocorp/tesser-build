@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-{{#domain_mints}}
-import uuid
-
-{{/domain_mints}}
 import tesser.domain as ts
 
 import tesser.serialization as serialization
@@ -35,21 +31,16 @@ class {{Field}}(ts.ValueObject):
 
 class {{Aggregate}}Spec(ts.Spec):
 
-    def __init__(self, {{#spec_fields}}{{field}}: {{py_type}}{{comma}}{{/spec_fields}}) -> None:
-{{#spec_fields}}
+    def __init__(self, {{#record_fields}}{{field}}: {{py_type}}{{comma}}{{/record_fields}}) -> None:
+{{#record_fields}}
         self.{{field}} = {{field}}
-{{/spec_fields}}
+{{/record_fields}}
 
 
 class {{Aggregate}}(ts.AggregateRoot):
 
     def __init__(self, spec: {{Aggregate}}Spec) -> None:
-{{#domain_mints}}
-        self._{{identity}} = {{Identity}}(str(uuid.uuid4()))
-{{/domain_mints}}
-{{^domain_mints}}
         self._{{identity}} = {{Identity}}(spec.{{identity}})
-{{/domain_mints}}
 {{#fields}}
         self._{{field}} = {{Field}}(spec.{{field}})
 {{/fields}}

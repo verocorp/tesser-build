@@ -32,30 +32,45 @@ class FakeTreeWriter(ports.TreeWriter):
 
 @ts.helper
 def read_generation_response(
-    state: str = "read", target: str = "absent", engine: str = "restate"
+    state: str = "read", target: str = "absent", durable_execution_engine: str = "restate"
 ) -> ports.ReadGenerationResponse:
     return ports.ReadGenerationResponse(
         spec=ports.SpecRecord(
             state=ports.SpecState(state),
             note="spec.toml",
-            app="voice",
-            context="calls",
-            aggregate="Call",
-            engine=engine,
-            store="postgres",
-            identity="call_id",
-            minted_by="domain",
-            fields=(ports.FieldRecord(name="person_name", kind="str"),),
-            write="place_call",
-            read="get_call",
-            read_answers=("person_name",),
-            orchestrator="conduct_call",
-            action="record_call",
-            save="save_call",
-            load="load_call",
-            asserts="person_name",
-            storage_env="CALLS_STORAGE",
-            ingress_env="RESTATE_INGRESS",
+            unknown_keys=(),
+            app_name="voice",
+            bounded_context_name="calls",
+            aggregate_root_class_name="Call",
+            durable_execution_engine=durable_execution_engine,
+            database="postgres",
+            identity_field_name="call_id",
+            identity_port_operation_name="issue_call_id",
+            aggregate_fields=(ports.FieldRecord(name="person_name", kind="str"),),
+            sample_values=(
+                ports.SampleRecord(
+                    name="call_id",
+                    values=(ports.ValueRecord(kind="str", text="call-1"), ports.ValueRecord(kind="str", text="call-2")),
+                ),
+                ports.SampleRecord(
+                    name="person_name",
+                    values=(ports.ValueRecord(kind="str", text="Ada"), ports.ValueRecord(kind="str", text="Grace")),
+                ),
+            ),
+            write_operation_name="place_call",
+            read_operation_name="get_call",
+            read_response_fields=("call_id", "person_name"),
+            orchestrator_operation_name="conduct_call",
+            action_operation_name="record_call",
+            save_operation_name="save_call",
+            load_operation_name="load_call",
+            load_response_collection_name="calls",
+            test_class_name="TestPlacingCalls",
+            test_method_name="test_a_call_is_successfully_made",
+            asserted_field="person_name",
+            random_values=(ports.ValueRecord(kind="str", text="Ada"),),
+            storage_url_variable="CALLS_STORAGE",
+            restate_ingress_url_variable="RESTATE_INGRESS",
         ),
         target=ports.TargetRecord(state=ports.TargetState(target)),
         templates=(ports.TemplateRecord(path="{{context}}/domain/{{aggregate}}.py.tmpl", text="class {{Aggregate}}:\n"),),
@@ -96,7 +111,7 @@ class TestTreeService:
     def test_a_spec_with_problems_writes_nothing_and_answers_the_problems(self) -> None:
         fake_tree_writer = FakeTreeWriter()
         tree_service = application.TreeService(
-            FakeGenerationReader(read_generation_response(engine="temporal")), fake_tree_writer
+            FakeGenerationReader(read_generation_response(durable_execution_engine="temporal")), fake_tree_writer
         )
 
         generate_tree_response = tree_service.generate_tree(
@@ -105,7 +120,7 @@ class TestTreeService:
 
         assert fake_tree_writer.written == []
         assert generate_tree_response.problems == (
-            "engine 'temporal' has no templates; the one engine is 'restate'",
+            "durable_execution_engine 'temporal' has no templates; the one engine is 'restate'",
         )
         assert generate_tree_response.paths == ()
 

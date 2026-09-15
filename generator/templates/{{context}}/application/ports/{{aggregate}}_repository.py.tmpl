@@ -11,20 +11,6 @@ class {{Aggregate}}(ts.Response):
 {{#record_fields}}
         self.{{field}} = {{field}}
 {{/record_fields}}
-{{#store_mints}}
-
-
-class {{Issue}}Request(ts.Request):
-
-    def __init__(self) -> None:
-        return None
-
-
-class {{Issue}}Response(ts.Response):
-
-    def __init__(self, {{identity}}: str) -> None:
-        self.{{identity}} = {{identity}}
-{{/store_mints}}
 
 
 class {{Save}}Request(ts.Request):
@@ -49,15 +35,11 @@ class {{Load}}Request(ts.Request):
 
 class {{Load}}Response(ts.Response):
 
-    def __init__(self, {{context}}: tuple[{{Aggregate}}, ...]) -> None:
-        self.{{context}} = {{context}}
+    def __init__(self, {{collection}}: tuple[{{Aggregate}}, ...]) -> None:
+        self.{{collection}} = {{collection}}
 
 
 class {{Aggregate}}Repository(ts.Port, typing.Protocol):
-{{#store_mints}}
-
-    async def {{issue}}(self, {{issue}}_request: {{Issue}}Request) -> {{Issue}}Response: ...
-{{/store_mints}}
 
     async def {{save}}(self, {{save}}_request: {{Save}}Request) -> {{Save}}Response: ...
 

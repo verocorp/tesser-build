@@ -31,7 +31,7 @@ class TestGeneratingTrees:
             name: template_count for name in answered
         }
 
-    def test_the_voice_spec_generates_the_calls_context_with_a_domain_minted_call_id(
+    def test_the_voice_spec_generates_the_calls_context_with_a_call_identity_repository(
         self, tmp_path: pathlib.Path
     ) -> None:
         tree = pathlib.Path(__file__).resolve().parents[1]
@@ -45,15 +45,16 @@ class TestGeneratingTrees:
         trees.close()
 
         assert generate_tree_response.problems == ()
-        assert (tmp_path / ".tesser-root").read_text() == "app\nskip pgdatabase\nstdlib uuid\n"
+        assert (tmp_path / ".tesser-root").read_text() == "app\nskip pgdatabase\n"
         assert "class Call(ts.AggregateRoot):" in (tmp_path / "calls" / "domain" / "call.py").read_text()
-        assert "class CallOrchestrator(ts.Orchestrator):" in (
-            tmp_path / "calls" / "application" / "orchestrators" / "call_orchestrator.py"
+        assert "class CallIdentityRepository(ts.Port, typing.Protocol):" in (
+            tmp_path / "calls" / "application" / "ports" / "call_identity_repository.py"
         ).read_text()
+        assert "class TestPlacingCalls:" in (tmp_path / "tests" / "test_acceptance.py").read_text()
 
     def test_a_spec_with_problems_writes_nothing(self, tmp_path: pathlib.Path) -> None:
         tree = pathlib.Path(__file__).resolve().parents[1]
-        (tmp_path / "spec.toml").write_text('app = "voice"\nengine = "temporal"\n')
+        (tmp_path / "spec.toml").write_text('app_name = "voice"\ndurable_execution_engine = "temporal"\n')
         trees = trees_component.Trees(
             trees_component.Config(trees_component.Spec(templates_root=str(tree / "templates")))
         )
@@ -63,5 +64,8 @@ class TestGeneratingTrees:
         )
         trees.close()
 
-        assert "engine 'temporal' has no templates; the one engine is 'restate'" in generate_tree_response.problems
+        assert (
+            "durable_execution_engine 'temporal' has no templates; the one engine is 'restate'"
+            in generate_tree_response.problems
+        )
         assert not (tmp_path / "out").exists()

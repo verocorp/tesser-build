@@ -22,15 +22,25 @@ class TestTrees:
         (tmp_path / "templates" / "{{context}}").mkdir(parents=True)
         (tmp_path / "templates" / "{{context}}" / "{{aggregate}}.py.tmpl").write_text("class {{Aggregate}}:\n")
         (tmp_path / "spec.toml").write_text(
-            'app = "voice"\ncontext = "calls"\naggregate = "Call"\nengine = "restate"\nstore = "postgres"\n'
-            '[identity]\nname = "call_id"\nminted_by = "domain"\n'
-            '[fields]\nperson_name = "str"\n'
-            '[client]\nwrite = "place_call"\nread = "get_call"\nread_answers = ["person_name"]\n'
-            '[orchestrator]\noperation = "conduct_call"\n'
-            '[action]\noperation = "record_call"\n'
-            '[port]\nsave = "save_call"\nload = "load_call"\n'
-            '[acceptance]\nasserts = "person_name"\n'
-            '[env]\nstorage = "CALLS_STORAGE"\ningress = "RESTATE_INGRESS"\n'
+            'app_name = "voice"\n'
+            'bounded_context_name = "calls"\n'
+            'aggregate_root_class_name = "Call"\n'
+            'durable_execution_engine = "restate"\n'
+            'database = "postgres"\n'
+            'identity_field_name = "call_id"\n'
+            'identity_port_operation_name = "issue_call_id"\n'
+            '[aggregate_fields]\nperson_name = "str"\n'
+            '[sample_values]\ncall_id = ["call-1", "call-2"]\nperson_name = ["Ada", "Grace"]\n'
+            '[client]\nwrite_operation_name = "place_call"\nread_operation_name = "get_call"\n'
+            'read_response_fields = ["call_id", "person_name"]\n'
+            '[orchestrator]\noperation_name = "conduct_call"\n'
+            '[action]\noperation_name = "record_call"\n'
+            '[repository]\nsave_operation_name = "save_call"\nload_operation_name = "load_call"\n'
+            'load_response_collection_name = "calls"\n'
+            '[acceptance_test]\ntest_class_name = "TestPlacingCalls"\n'
+            'test_method_name = "test_a_call_is_successfully_made"\nasserted_field = "person_name"\n'
+            'random_values = ["Ada", "Grace"]\n'
+            '[environment_variables]\nstorage_url = "CALLS_STORAGE"\nrestate_ingress_url = "RESTATE_INGRESS"\n'
         )
         trees = component.Trees(component.Config(component.Spec(templates_root=str(tmp_path / "templates"))))
 

@@ -26,51 +26,77 @@ class FieldRecord(ts.Response):
         self.kind = kind
 
 
+class ValueRecord(ts.Response):
+
+    def __init__(self, kind: str, text: str) -> None:
+        self.kind = kind
+        self.text = text
+
+
+class SampleRecord(ts.Response):
+
+    def __init__(self, name: str, values: tuple[ValueRecord, ...]) -> None:
+        self.name = name
+        self.values = values
+
+
 class SpecRecord(ts.Response):
 
     def __init__(
         self,
         state: SpecState,
         note: str,
-        app: str,
-        context: str,
-        aggregate: str,
-        engine: str,
-        store: str,
-        identity: str,
-        minted_by: str,
-        fields: tuple[FieldRecord, ...],
-        write: str,
-        read: str,
-        read_answers: tuple[str, ...],
-        orchestrator: str,
-        action: str,
-        save: str,
-        load: str,
-        asserts: str,
-        storage_env: str,
-        ingress_env: str,
+        unknown_keys: tuple[str, ...],
+        app_name: str,
+        bounded_context_name: str,
+        aggregate_root_class_name: str,
+        durable_execution_engine: str,
+        database: str,
+        identity_field_name: str,
+        identity_port_operation_name: str,
+        aggregate_fields: tuple[FieldRecord, ...],
+        sample_values: tuple[SampleRecord, ...],
+        write_operation_name: str,
+        read_operation_name: str,
+        read_response_fields: tuple[str, ...],
+        orchestrator_operation_name: str,
+        action_operation_name: str,
+        save_operation_name: str,
+        load_operation_name: str,
+        load_response_collection_name: str,
+        test_class_name: str,
+        test_method_name: str,
+        asserted_field: str,
+        random_values: tuple[ValueRecord, ...],
+        storage_url_variable: str,
+        restate_ingress_url_variable: str,
     ) -> None:
         self.state = state
         self.note = note
-        self.app = app
-        self.context = context
-        self.aggregate = aggregate
-        self.engine = engine
-        self.store = store
-        self.identity = identity
-        self.minted_by = minted_by
-        self.fields = fields
-        self.write = write
-        self.read = read
-        self.read_answers = read_answers
-        self.orchestrator = orchestrator
-        self.action = action
-        self.save = save
-        self.load = load
-        self.asserts = asserts
-        self.storage_env = storage_env
-        self.ingress_env = ingress_env
+        self.unknown_keys = unknown_keys
+        self.app_name = app_name
+        self.bounded_context_name = bounded_context_name
+        self.aggregate_root_class_name = aggregate_root_class_name
+        self.durable_execution_engine = durable_execution_engine
+        self.database = database
+        self.identity_field_name = identity_field_name
+        self.identity_port_operation_name = identity_port_operation_name
+        self.aggregate_fields = aggregate_fields
+        self.sample_values = sample_values
+        self.write_operation_name = write_operation_name
+        self.read_operation_name = read_operation_name
+        self.read_response_fields = read_response_fields
+        self.orchestrator_operation_name = orchestrator_operation_name
+        self.action_operation_name = action_operation_name
+        self.save_operation_name = save_operation_name
+        self.load_operation_name = load_operation_name
+        self.load_response_collection_name = load_response_collection_name
+        self.test_class_name = test_class_name
+        self.test_method_name = test_method_name
+        self.asserted_field = asserted_field
+        self.random_values = random_values
+        self.storage_url_variable = storage_url_variable
+        self.restate_ingress_url_variable = restate_ingress_url_variable
 
 
 class TargetRecord(ts.Response):
