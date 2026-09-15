@@ -71,7 +71,7 @@ def conduct_call_request(
     return relays.ConductCallRequest(call_id=call_id, person_name=person_name, phone_number=phone_number)
 
 
-class TestRestateIngressConductCallRelay:
+class TestRestateIngressCallRelays:
 
     async def test_running_conduct_call_calls_the_workflow_keyed_by_the_call_id(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
@@ -79,10 +79,39 @@ class TestRestateIngressConductCallRelay:
         )
         fake_restate_ingress.start()
 
-        conduct_call_response = await runners.RestateIngressConductCallRelay(
+        conduct_call_response = await runners.RestateIngressCallRelays(
             fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallsApplicationClient())
         ).run_conduct_call(conduct_call_request(call_id="c7"))
         fake_restate_ingress.close()
 
         assert conduct_call_response.call_id == "c7"
         assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/conduct_call HTTP/1.1"
+
+    async def test_running_person_answered_calls_the_workflows_shared_handler_keyed_by_the_call_id(self) -> None:
+        fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
+            relays.PersonAnsweredResponseSnapshot().serialize(relays.PersonAnsweredResponse(call_id="c7"))
+        )
+        fake_restate_ingress.start()
+
+        person_answered_response = await runners.RestateIngressCallRelays(
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+        ).run_person_answered(relays.PersonAnsweredRequest(call_id="c7"))
+        fake_restate_ingress.close()
+
+        assert person_answered_response.call_id == "c7"
+        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/person_answered HTTP/1.1"
+
+    async def test_running_a_person_utterance_calls_the_mailbox_keyed_by_the_call_id(self) -> None:
+        fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
+            relays.PersonUtteranceResponseSnapshot().serialize(relays.PersonUtteranceResponse(call_id="c7"))
+        )
+        fake_restate_ingress.start()
+
+        person_utterance_response = await runners.RestateIngressCallRelays(
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+        ).run_person_utterance(relays.PersonUtteranceRequest(call_id="c7", text="Ada"))
+        fake_restate_ingress.close()
+
+        assert person_utterance_response.call_id == "c7"
+        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallUtterances/c7/person_utterance HTTP/1.1"
+        assert fake_restate_ingress.seen[1] == b'{"call_id": "c7", "text": "Ada"}'

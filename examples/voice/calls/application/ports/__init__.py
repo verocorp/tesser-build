@@ -5,3 +5,13 @@ from calls.application.ports.call_repository import LoadCallRequest as LoadCallR
 from calls.application.ports.call_repository import LoadCallResponse as LoadCallResponse
 from calls.application.ports.call_repository import SaveCallRequest as SaveCallRequest
 from calls.application.ports.call_repository import SaveCallResponse as SaveCallResponse
+from calls.application.ports.dialing import DialPersonRequest as DialPersonRequest
+from calls.application.ports.dialing import DialPersonResponse as DialPersonResponse
+from calls.application.ports.dialing import Dialing as Dialing
+from calls.application.ports.dialing import HangUpRequest as HangUpRequest
+from calls.application.ports.dialing import HangUpResponse as HangUpResponse
+from calls.application.ports.speech import SpeakTurnRequest as SpeakTurnRequest
+from calls.application.ports.speech import SpeakTurnResponse as SpeakTurnResponse
+from calls.application.ports.speech import Speech as Speech
+from calls.application.ports.speech import SpokenBy as SpokenBy
+from calls.application.ports.speech import SpokenTurn as SpokenTurn
