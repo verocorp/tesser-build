@@ -51,7 +51,7 @@ class MapToGetCallResponse(ts.Mapper, client.GetCallResponse):
         super().__init__(call=MapToCall(load_call_response.calls[0]))
 
 
-class CallsService(ts.ApplicationService):
+class CallService(ts.ApplicationService):
 
     def __init__(self, conduct_call_relay: relays.ConductCallRelay, call_store: ports.CallStore) -> None:
         self._conduct_call_relay = conduct_call_relay

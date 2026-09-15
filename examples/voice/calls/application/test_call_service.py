@@ -56,13 +56,13 @@ def place_call_request(person_name: str = "Ada", phone_number: str = "+155555501
     return client.PlaceCallRequest(person_name=person_name, phone_number=phone_number)
 
 
-class TestCallsService:
+class TestCallService:
 
     async def test_placing_a_call_conducts_it_for_the_person_it_was_placed_for(self) -> None:
         fake_conduct_call_relay = FakeConductCallRelay()
-        calls_service = application.CallsService(fake_conduct_call_relay, FakeCallStore())
+        call_service = application.CallService(fake_conduct_call_relay, FakeCallStore())
 
-        place_call_response = await calls_service.place_call(place_call_request(person_name="Grace"))
+        place_call_response = await call_service.place_call(place_call_request(person_name="Grace"))
 
         assert [
             (conducted.call_id, conducted.person_name) for conducted in fake_conduct_call_relay.conducted
@@ -71,8 +71,8 @@ class TestCallsService:
     async def test_a_saved_call_is_read_back_by_its_call_id(self) -> None:
         fake_call_store = FakeCallStore()
         fake_call_store.calls["c1"] = ports.Call(call_id="c1", person_name="Grace", phone_number="+15555550100")
-        calls_service = application.CallsService(FakeConductCallRelay(), fake_call_store)
+        call_service = application.CallService(FakeConductCallRelay(), fake_call_store)
 
-        get_call_response = await calls_service.get_call(client.GetCallRequest(call_id="c1"))
+        get_call_response = await call_service.get_call(client.GetCallRequest(call_id="c1"))
 
         assert get_call_response.call.person_name == "Grace"
