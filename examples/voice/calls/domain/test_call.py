@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 import calls.domain as domain
+import tesser.errors as errors
 
 
 class TestCall:
@@ -20,6 +23,25 @@ class TestCall:
         second = domain.Call(call_spec)
 
         assert first.identity != second.identity
+
+
+class TestCallPresence:
+
+    def test_a_call_the_store_found_decides_that_it_was_found(self) -> None:
+        call_presence = domain.CallPresence(domain.CallPresenceSpec(presence="found"))
+
+        assert call_presence.decide() is domain.CallLookup.FOUND
+
+    def test_a_call_the_store_did_not_find_decides_that_it_was_not_found(self) -> None:
+        call_presence = domain.CallPresence(domain.CallPresenceSpec(presence="not_found"))
+
+        assert call_presence.decide() is domain.CallLookup.NOT_FOUND
+
+    def test_a_presence_the_domain_does_not_know_is_refused(self) -> None:
+        with pytest.raises(errors.DomainError) as raised:
+            domain.CallPresence(domain.CallPresenceSpec(presence="maybe"))
+
+        assert raised.value.code == "invalid_presence"
 
 
 class TestCallId:

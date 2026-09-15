@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.application as ts
 
 import calls.application.ports as ports
@@ -45,10 +47,16 @@ class MapToCall(ts.Mapper, client.Call):
         super().__init__(call_id=call.call_id, person_name=call.person_name)
 
 
-class MapToGetCallResponse(ts.Mapper, client.GetCallResponse):
+class MapToCallPresenceSpec(ts.Mapper, domain.CallPresenceSpec):
 
     def __init__(self, load_call_response: ports.LoadCallResponse) -> None:
-        super().__init__(call=MapToCall(load_call_response.calls[0]))
+        super().__init__(presence=load_call_response.outcome.value)
+
+
+class MapToGetCallResponse(ts.Mapper, client.GetCallResponse):
+
+    def __init__(self, call: ports.Call) -> None:
+        super().__init__(call=MapToCall(call))
 
 
 class CallService(ts.ApplicationService):
@@ -66,4 +74,10 @@ class CallService(ts.ApplicationService):
         call_id = domain.CallId(get_call_request.call_id)
         async with self._call_store.transaction() as call_repository:
             load_call_response = await call_repository.load_call(MapToLoadCallRequest(call_id))
-        return MapToGetCallResponse(load_call_response)
+        match domain.CallPresence(MapToCallPresenceSpec(load_call_response)).decide():
+            case domain.CallLookup.FOUND:
+                return MapToGetCallResponse(load_call_response.calls[0])
+            case domain.CallLookup.NOT_FOUND:
+                raise client.CallNotFound(f"no call {get_call_request.call_id!r}")
+            case _ as never:
+                typing.assert_never(never)

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import enum
 import uuid
 
 import tesser.domain as ts
 
+import tesser.errors as errors
 import tesser.serialization as serialization
 
 
@@ -38,6 +40,32 @@ class PhoneNumber(ts.ValueObject):
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
+
+
+class CallLookup(ts.Outcome):
+    FOUND = enum.auto()
+    NOT_FOUND = enum.auto()
+
+
+class CallPresenceSpec(ts.Spec):
+
+    def __init__(self, presence: str) -> None:
+        self.presence = presence
+
+
+class CallPresence(ts.ValueObject):
+
+    _presence: str
+
+    def __init__(self, spec: CallPresenceSpec) -> None:
+        if spec.presence not in ("found", "not_found"):
+            raise errors.invalid("invalid_presence", f"presence {spec.presence!r} is not a presence")
+        object.__setattr__(self, "_presence", spec.presence)
+
+    def decide(self) -> CallLookup:
+        if self._presence == "found":
+            return CallLookup.FOUND
+        return CallLookup.NOT_FOUND
 
 
 class CallSpec(ts.Spec):

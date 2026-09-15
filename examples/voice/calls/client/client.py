@@ -37,6 +37,16 @@ class GetCallResponse(ts.Response):
         self.call = call
 
 
+class CallNotFound(ts.Error):
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[CallNotFound]]] = (CallNotFound,)
+
+
 class CallsClient(ts.Client, typing.Protocol):
 
     async def place_call(self, place_call_request: PlaceCallRequest) -> PlaceCallResponse: ...

@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 import typing
 
+import pytest
+
 import tesser.testing as ts
 
 import calls.application as application
@@ -37,7 +39,11 @@ class FakeCallRepository(ports.CallRepository):
         return ports.SaveCallResponse(call_id=save_call_request.call_id)
 
     async def load_call(self, load_call_request: ports.LoadCallRequest) -> ports.LoadCallResponse:
-        return ports.LoadCallResponse(calls=(self._calls[load_call_request.call_id],))
+        if load_call_request.call_id not in self._calls:
+            return ports.LoadCallResponse(outcome=ports.LoadCallOutcome.NOT_FOUND, calls=())
+        return ports.LoadCallResponse(
+            outcome=ports.LoadCallOutcome.FOUND, calls=(self._calls[load_call_request.call_id],)
+        )
 
 
 @ts.fake
@@ -76,3 +82,11 @@ class TestCallService:
         get_call_response = await call_service.get_call(client.GetCallRequest(call_id="c1"))
 
         assert get_call_response.call.person_name == "Grace"
+
+    async def test_a_call_that_was_never_placed_is_not_found(self) -> None:
+        call_service = application.CallService(FakeConductCallRelay(), FakeCallStore())
+
+        with pytest.raises(client.CallNotFound) as raised:
+            await call_service.get_call(client.GetCallRequest(call_id="never-placed"))
+
+        assert str(raised.value) == "no call 'never-placed'"
