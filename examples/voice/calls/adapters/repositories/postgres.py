@@ -15,7 +15,9 @@ _SCHEMA: typing.Final[str] = (
     "(call_id text PRIMARY KEY, person_name text NOT NULL, phone_number text NOT NULL)"
 )
 _ISSUE: typing.Final[str] = "SELECT gen_random_uuid()::text AS call_id"
-_SAVE: typing.Final[str] = "INSERT INTO calls (call_id, person_name, phone_number) VALUES ($1, $2, $3)"
+_SAVE: typing.Final[str] = (
+    "INSERT INTO calls (call_id, person_name, phone_number) VALUES ($1, $2, $3) ON CONFLICT (call_id) DO NOTHING"
+)
 _LOAD: typing.Final[str] = "SELECT call_id, person_name, phone_number FROM calls WHERE call_id = $1"
 
 
