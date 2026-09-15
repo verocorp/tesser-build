@@ -1,3 +1,10 @@
 from calls.domain.call import Call as Call
 from calls.domain.call import CallId as CallId
 from calls.domain.call import CallSpec as CallSpec
+from calls.domain.conversation import Conversation as Conversation
+from calls.domain.conversation import ConversationSpec as ConversationSpec
+from calls.domain.conversation import Speaker as Speaker
+from calls.domain.conversation import Turn as Turn
+from calls.domain.conversation import TurnSpec as TurnSpec
+from calls.domain.conversation import Utterance as Utterance
+from calls.domain.persona import Persona as Persona
