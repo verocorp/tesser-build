@@ -34,11 +34,13 @@ class PostgresCallRepository(ts.Repository):
 
     async def load_call(self, load_call_request: ports.LoadCallRequest) -> ports.LoadCallResponse:
         rows = await self._connection.fetch(_LOAD, load_call_request.call_id)
+        outcome = ports.LoadCallOutcome.NOT_FOUND if rows == [] else ports.LoadCallOutcome.FOUND
         return ports.LoadCallResponse(
+            outcome=outcome,
             calls=tuple(
                 ports.Call(call_id=row["call_id"], person_name=row["person_name"], phone_number=row["phone_number"])
                 for row in rows
-            )
+            ),
         )
 
 
