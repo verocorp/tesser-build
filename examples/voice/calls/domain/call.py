@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import enum
-import uuid
 
 import tesser.domain as ts
 
@@ -70,7 +69,8 @@ class CallPresence(ts.ValueObject):
 
 class CallSpec(ts.Spec):
 
-    def __init__(self, person_name: str, phone_number: str) -> None:
+    def __init__(self, call_id: str, person_name: str, phone_number: str) -> None:
+        self.call_id = call_id
         self.person_name = person_name
         self.phone_number = phone_number
 
@@ -78,7 +78,7 @@ class CallSpec(ts.Spec):
 class Call(ts.AggregateRoot):
 
     def __init__(self, spec: CallSpec) -> None:
-        self._call_id = CallId(str(uuid.uuid4()))
+        self._call_id = CallId(spec.call_id)
         self._person_name = PersonName(spec.person_name)
         self._phone_number = PhoneNumber(spec.phone_number)
 
