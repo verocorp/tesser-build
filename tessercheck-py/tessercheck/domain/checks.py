@@ -197,6 +197,8 @@ CONTEXT_CLIENT_ROLE: typing.Final[str] = "client"
 
 UNIQUE_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = ("service", "actions", "orchestrator", "relay")
 
+INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = ("orchestrator", "actions", "actions_client")
+
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
     {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime"}
 )
@@ -11302,10 +11304,23 @@ class Module(ts.Entity):
                 if mode is None:
                     continue
                 handler = f"{member.name[len(mode):]}{HANDLER_SUFFIX}"
-                for node in ast.walk(member):
-                    if not isinstance(node, ast.Attribute) or not node.attr.endswith(HANDLER_SUFFIX):
-                        continue
-                    reached = node.attr
+                reached_handlers = tuple(
+                    node.attr
+                    for node in ast.walk(member)
+                    if isinstance(node, ast.Attribute) and node.attr.endswith(HANDLER_SUFFIX)
+                )
+                if not reached_handlers:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            member.lineno,
+                            "TB085",
+                            f"{where}.{member.name} reaches no handler; a runner method "
+                            "reaches the handler of the operation it carries, because one "
+                            "operation keeps one name across a relay",
+                        ))
+                    )
+                for reached in reached_handlers:
                     if reached != handler:
                         found.append(
                             Violation(ViolationSpec(
@@ -11322,7 +11337,17 @@ class Module(ts.Entity):
     def runtime_handler_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         if str(self._placement) in TEST_TIER:
             return ()
-        kind_table = Registry(registry_spec).kinds()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        operation_rows = registry.operations()
+        context = self._name.split(".")[0]
+        operations = frozenset(
+            str(method)
+            for block_name in INVOKED_OPERATION_BLOCKS
+            for symbol in operation_rows.owners(Text(block_name))
+            if str(symbol.module()).split(".")[0] == context
+            for method in operation_rows.methods(symbol)
+        )
         found: list[Violation] = []
         for cls in self._class_defs:
             block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
@@ -11421,27 +11446,49 @@ class Module(ts.Entity):
                         ))
                     )
                     continue
-                invoked = next(
-                    (
-                        returned.func.attr
-                        for node in ast.walk(handler)
-                        if isinstance(node, ast.Return) and node.value is not None
-                        for returned in (node.value.value if isinstance(node.value, ast.Await) else node.value,)
-                        if isinstance(returned, ast.Call) and isinstance(returned.func, ast.Attribute)
-                    ),
-                    None,
-                )
-                if invoked is not None and invoked != operation:
+                called = tuple(sorted({
+                    node.func.attr
+                    for node in ast.walk(handler)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in operations
+                }))
+                if not called:
                     found.append(
                         Violation(ViolationSpec(
                             self._path,
                             handler.lineno,
                             "TB085",
-                            f"{where}.{handler.name} invokes {invoked}; a handler invokes the "
+                            f"{where}.{handler.name} invokes no operation; a handler invokes the "
                             "operation it is named for, because one operation keeps one name "
                             "across a relay",
                         ))
                     )
+                elif len(called) > 1:
+                    count = len(called)
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            handler.lineno,
+                            "TB085",
+                            f"{where}.{handler.name} invokes {count} operations; a handler invokes "
+                            "the operation it is named for, because one operation keeps one name "
+                            "across a relay",
+                        ))
+                    )
+                else:
+                    invoked = called[0]
+                    if invoked != operation:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                handler.lineno,
+                                "TB085",
+                                f"{where}.{handler.name} invokes {invoked}; a handler invokes the "
+                                "operation it is named for, because one operation keeps one name "
+                                "across a relay",
+                            ))
+                        )
         return tuple(found)
 
     def actions_mirror_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:

@@ -18964,6 +18964,15 @@ def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
                 "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
                 " -> confirm_order_relay.ConfirmOrderResponse:\n"
                 "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "class StubConfirmOrderRelay(ts.Runner):\n"
+                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
+                "        self._engine_runtime = engine_runtime\n"
+                "    async def start_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.StartConfirmOrderResponse:\n"
+                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.ConfirmOrderResponse:\n"
+                "        return confirm_order_relay.ConfirmOrderResponse(text=confirm_order_request.text)\n"
                 "class EngineOrderRunner(ts.Runner):\n"
                 "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
                 "        self._engine_runtime = engine_runtime\n",
@@ -18996,12 +19005,37 @@ def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
     assert not any("EngineConfirmOrderRelay.run_confirm_order reaches" in f for f in findings), findings
     assert not any("EngineConfirmOrderRelay lacks" in f for f in findings), findings
     assert not any("EngineConfirmOrderRelay ends in no relay" in f for f in findings), findings
+    assert any(
+        f"{where}.StubConfirmOrderRelay.run_confirm_order reaches no handler; a runner method "
+        "reaches the handler of the operation it carries, because one operation keeps one name "
+        "across a relay" in f
+        for f in findings
+    ), findings
+    assert not any("StubConfirmOrderRelay.start_confirm_order reaches" in f for f in findings), findings
 
 
 def test_a_runtime_handler_is_its_operation_exposed_with_handler_and_invokes_it() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/orchestrators/quote_holds.py",
+                "shop.application.orchestrators.quote_holds",
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class QuoteHolds(ts.Orchestrator):\n"
+                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
+                "        self._quote_price_relay = quote_price_relay\n"
+                "    async def hold_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "    async def cancel_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "    async def check_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "    async def review_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n",
+                False,
+            ),
             (
                 "shop/adapters/runtimes/restate.py",
                 "shop.adapters.runtimes.restate",
@@ -19026,10 +19060,29 @@ def test_a_runtime_handler_is_its_operation_exposed_with_handler_and_invokes_it(
                 "        @service.handler()\n"
                 "        async def cancel_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
                 "            return shop_application_client.cancel_quote(quote_price_request)\n"
+                "        @service.handler()\n"
+                "        async def review_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            quote_price_response = shop_application_client.review_quote(quote_price_request)\n"
+                "            return relays.QuotePriceResponse(text=quote_price_response.text)\n"
+                "        @service.handler()\n"
+                "        async def accept_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            quote_price_response = shop_application_client.review_quote(quote_price_request)\n"
+                "            return quote_price_response\n"
+                "        @service.handler()\n"
+                "        async def reject_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            return relays.QuotePriceResponse(text=quote_price_request.text)\n"
+                "        @service.handler()\n"
+                "        async def split_quote(quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
+                "            quote_price_response = shop_application_client.review_quote(quote_price_request)\n"
+                "            return shop_application_client.check_quote(quote_price_response)\n"
                 "        self.quote_price_handler = quote_price\n"
                 "        self.settle_quote_handler = settle_quote\n"
                 "        self.price_handler = price\n"
                 "        self.cancel = cancel_quote\n"
+                "        self.review_quote_handler = review_quote\n"
+                "        self.accept_quote_handler = accept_quote\n"
+                "        self.reject_quote_handler = reject_quote\n"
+                "        self.split_quote_handler = split_quote\n"
                 "    def check_quote_handler(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
                 "        return self._shop_application_client.check_quote(quote_price_request)\n"
                 "    def lookup_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
@@ -19075,6 +19128,24 @@ def test_a_runtime_handler_is_its_operation_exposed_with_handler_and_invokes_it(
     assert not any(f"{where}.quote_price " in f for f in findings), findings
     assert not any(f"{where}.check_quote_handler " in f for f in findings), findings
     assert not any("never exposes quote_price" in f for f in findings), findings
+    assert any(
+        f"{where}.accept_quote invokes review_quote; a handler invokes the operation it is named "
+        "for, because one operation keeps one name across a relay" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.reject_quote invokes no operation; a handler invokes the operation it is named "
+        "for, because one operation keeps one name across a relay" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.split_quote invokes 2 operations; a handler invokes the operation it is named "
+        "for, because one operation keeps one name across a relay" in f
+        for f in findings
+    ), findings
+    assert not any(f"{where}.review_quote " in f for f in findings), findings
+    assert not any(f"{where}.hold_quote invokes" in f for f in findings), findings
+    assert not any(f"{where}.cancel_quote invokes" in f for f in findings), findings
 
 
 def test_an_actions_class_and_its_application_client_offer_the_same_calls() -> None:

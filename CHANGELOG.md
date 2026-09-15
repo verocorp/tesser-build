@@ -5,6 +5,23 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.6.1] - 2026-09-14
+
+The relay chain check now reads the call a handler makes and the handler a
+runner reaches, instead of the shape of a return statement.
+
+### Fixed
+- **A runtime handler's operation is read from its calls, not its `return`.**
+  TB085 used to read the first `return <x>.<name>(...)`, so a handler that
+  built its own response was reported as invoking the response class, and a
+  handler that held the wrong operation's result in a local passed. It now
+  collects every call in the handler to an operation (a public method of an
+  orchestrator, actions class, or application client in the context) and
+  reports a handler that invokes none, more than one, or the wrong one.
+- **A runner method that reaches no handler is a finding.** TB085 rejected a
+  wrongly named `_handler` reach but let a `start_` or `run_` method that
+  reaches none, such as a stub building its own response, pass.
+
 ## [0.1.6.0] - 2026-09-14
 
 A context's errors are now named for what happened. The status categories

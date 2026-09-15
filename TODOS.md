@@ -170,6 +170,28 @@ yet reach, and the names they found that were deferred rather than renamed:
   way (`OrderActionsRunner`, `relays.OrderOrchestratorRequest`, `run`), so the
   relay and runner naming rules go in with it.
 
+## Left open by the rows 1-7 Codex challenge (2026-09-14, v0.1.6.1)
+
+Codex challenged the five naming PRs (#192-#197) for coherence and for what
+users hit. It found no rule contradicting another or the design doc and no
+dead end. Findings 2 and 3 are fixed in v0.1.6.1; these four stand, each
+proven with an in-memory fixture.
+
+- [ ] **A runner that inherits its relay's methods is told it lacks them.**
+  `runner_violations` reads only the methods written in the class body, so
+  `CachedInlineQuotePriceRelay(InlineQuotePriceRelay)` is "lacks
+  run_quote_price". The mirror checks share the gap.
+- [ ] **A registration name held in a constant is not read.**
+  `@service.handler(name=_REGISTERED)` with `_REGISTERED = "refund_payment"`
+  passes; only a string literal in `name=` is compared.
+- [ ] **`__call__` is public to the signature checks and private to the
+  chain checks.** The mirror and uniqueness collectors drop every name
+  starting with `_`, so a client `__call__` served by two services is not
+  reported, while the signature dispatch treats `__call__` as public.
+- [ ] **An `outcome` field typed as a primitive passes.**
+  `FindItemResponse(outcome: str)` on a port operation produces no finding;
+  the check only compares a field whose annotation resolves to a class.
+
 ## Left open by the error-names change (2026-09-14, v0.1.6.0)
 
 - [ ] **The skill still teaches port errors and their translation.** Chris
