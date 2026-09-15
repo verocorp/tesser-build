@@ -91,3 +91,15 @@ class TestCallAgent:
         acknowledged = await call_agent.acknowledge({"name": "Grace"})
 
         assert acknowledged == "recorded"
+
+
+class TestCallWorker:
+
+    async def test_the_session_generates_no_reply_of_its_own(self) -> None:
+        call_worker = livekit.CallWorker(
+            FakePersonEvents(), "caller", "deepgram/nova-3", "openai/gpt-4.1-mini", "cartesia/sonic-2"
+        )
+
+        agent_session = call_worker.agent_session()
+
+        assert agent_session.turn_detection == "manual"

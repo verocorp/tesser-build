@@ -96,13 +96,14 @@ class CallWorker(ts.Host):
     async def on_request(self, job_request: livekit_agents.JobRequest) -> None:
         await job_request.accept(identity=self._agent_name)
 
+    def agent_session(self) -> livekit_agents.AgentSession[None]:
+        return livekit_agents.AgentSession(stt=self._stt, llm=self._llm, tts=self._tts, turn_handling=_TURN_HANDLING)
+
     async def entrypoint(self, job_context: livekit_agents.JobContext) -> None:
         await job_context.connect()
         call_id = job_context.room.name
         call_agent = CallAgent(self._person_events, call_id)
-        agent_session: livekit_agents.AgentSession[None] = livekit_agents.AgentSession(
-            stt=self._stt, llm=self._llm, tts=self._tts, turn_handling=_TURN_HANDLING
-        )
+        agent_session = self.agent_session()  # tesser:debt TB051
         agent_session.on("user_input_transcribed", call_agent.on_user_input_transcribed)
         job_context.room.local_participant.register_rpc_method(SPEAK_TURN_METHOD, call_agent.speak_turn)
         await agent_session.start(agent=call_agent, room=job_context.room)
