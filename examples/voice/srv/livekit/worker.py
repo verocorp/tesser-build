@@ -24,6 +24,7 @@ _AGENT_ROLE: typing.Final[str] = "agent"
 _DEFAULT_STT: typing.Final[str] = "deepgram/nova-3"
 _DEFAULT_LLM: typing.Final[str] = "openai/gpt-4.1-mini"
 _DEFAULT_TTS: typing.Final[str] = "cartesia/sonic-2"
+_TURN_HANDLING: typing.Final[livekit_agents.TurnHandlingOptions] = {"turn_detection": "manual"}
 
 
 class CallAgent(livekit_agents.Agent, ts.Host):
@@ -100,7 +101,7 @@ class CallWorker(ts.Host):
         call_id = job_context.room.name
         call_agent = CallAgent(self._person_events, call_id)
         agent_session: livekit_agents.AgentSession[None] = livekit_agents.AgentSession(
-            stt=self._stt, llm=self._llm, tts=self._tts
+            stt=self._stt, llm=self._llm, tts=self._tts, turn_handling=_TURN_HANDLING
         )
         agent_session.on("user_input_transcribed", call_agent.on_user_input_transcribed)
         job_context.room.local_participant.register_rpc_method(SPEAK_TURN_METHOD, call_agent.speak_turn)
