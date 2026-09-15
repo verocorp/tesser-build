@@ -32,7 +32,7 @@ class Calls(ts.Component):
         self.restate_call_runtime: runtimes.RestateCallRuntime = runtimes.RestateCallRuntime(
             application.CallActions(self._postgres_call_store)
         )
-        self.client: client.CallsClient = application.CallsService(
+        self.client: client.CallsClient = application.CallService(
             runners.RestateIngressConductCallRelay(config.ingress, self.restate_call_runtime),
             self._postgres_call_store,
         )

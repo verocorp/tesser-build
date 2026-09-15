@@ -71,7 +71,7 @@ class RestateRecordCallResponseSerde(ts.Serde, restate_serde.Serde[relays.Record
 
 class RestateCallRuntime(ts.Runtime):
 
-    def __init__(self, calls_application_client: client.CallsApplicationClient) -> None:
+    def __init__(self, call_application_client: client.CallApplicationClient) -> None:
         self.call_actions_service = restate.Service("CallActions", invocation_retry_policy=_RETRY_POLICY)
         self.call_orchestrator_workflow = restate.Workflow("CallOrchestrator", invocation_retry_policy=_RETRY_POLICY)
 
@@ -82,7 +82,7 @@ class RestateCallRuntime(ts.Runtime):
         async def record_call(  # tesser:debt TB023
             restate_context: restate.Context, record_call_request: relays.RecordCallRequest
         ) -> relays.RecordCallResponse:
-            return await calls_application_client.record_call(record_call_request)
+            return await call_application_client.record_call(record_call_request)
 
         @self.call_orchestrator_workflow.main(
             input_serde=RestateConductCallRequestSerde(),
