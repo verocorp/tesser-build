@@ -79,12 +79,13 @@ class CallOrchestrator(ts.Orchestrator):
         await self._dial_person_relay.run_dial_person(MapToDialPersonRequest(call))
         await self._await_person_answered_relay.await_person_answered(MapToAwaitPersonAnsweredRequest(call))
         while True:
-            speak_turn_response = await self._speak_turn_relay.run_speak_turn(MapToSpeakTurnRequest(call))
-            call.agent_said(domain.AgentTurn(MapToAgentTurnSpec(speak_turn_response)))
             match conduct_call_request.call.progress():  # tesser:debt TB082
                 case domain.CallProgress.ENDED:
                     break
-                case domain.CallProgress.CONTINUING:
+                case domain.CallProgress.AGENTS_TURN:
+                    speak_turn_response = await self._speak_turn_relay.run_speak_turn(MapToSpeakTurnRequest(call))
+                    call.agent_said(domain.AgentTurn(MapToAgentTurnSpec(speak_turn_response)))
+                case domain.CallProgress.PERSONS_TURN:
                     await_person_utterance_response = (
                         await self._await_person_utterance_relay.await_person_utterance(
                             MapToAwaitPersonUtteranceRequest(call)
