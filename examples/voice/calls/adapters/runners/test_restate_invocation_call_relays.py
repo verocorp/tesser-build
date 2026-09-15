@@ -12,7 +12,7 @@ import calls.application.relays as relays
 
 
 @ts.fake
-class FakeCallsApplicationClient(client.CallsApplicationClient):
+class FakeCallApplicationClient(client.CallApplicationClient):
 
     async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
         return relays.RecordCallResponse(call_id=record_call_request.call_id)
@@ -32,7 +32,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
 class TestRestateInvocationCallRelays:
 
     async def test_running_record_call_journals_a_call_to_the_runtimes_handler(self) -> None:
-        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallApplicationClient())
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         record_call_request = relays.RecordCallRequest(call_id="c1", person_name="Ada", phone_number="+15555550100")
 

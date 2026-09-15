@@ -11,7 +11,7 @@ import calls.application.relays as relays
 
 
 @ts.fake
-class FakeCallsApplicationClient(client.CallsApplicationClient):
+class FakeCallApplicationClient(client.CallApplicationClient):
 
     def __init__(self) -> None:
         self.recorded: list[relays.RecordCallRequest] = []
@@ -26,7 +26,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
 
     async def service_call(self, tpe: object, arg: object) -> object:
         assert isinstance(arg, relays.RecordCallRequest)
-        return await FakeCallsApplicationClient().record_call(arg)
+        return await FakeCallApplicationClient().record_call(arg)
 
 
 @ts.fake
@@ -77,7 +77,7 @@ class FakeRestateObjectContext:  # tesser:debt TB072
 class TestRestateCallRuntime:
 
     def test_it_registers_the_actions_service_the_orchestrator_workflow_and_the_utterance_mailbox(self) -> None:
-        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallApplicationClient())
 
         registered = {
             restate_call_runtime.call_actions_service.name: sorted(restate_call_runtime.call_actions_service.handlers),
@@ -96,7 +96,7 @@ class TestRestateCallRuntime:
         }
 
     def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
-        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallApplicationClient())
 
         policies = [
             restate_call_runtime.call_actions_service.invocation_retry_policy,
@@ -111,26 +111,26 @@ class TestRestateCallRuntime:
         ]
 
     async def test_the_record_call_handler_hands_the_request_to_the_application_client(self) -> None:
-        fake_calls_application_client = FakeCallsApplicationClient()
+        fake_call_application_client = FakeCallApplicationClient()
         record_call_request = relays.RecordCallRequest(call_id="c1", person_name="Ada", phone_number="+15555550100")
 
-        await runtimes.RestateCallRuntime(fake_calls_application_client).record_call_handler(
+        await runtimes.RestateCallRuntime(fake_call_application_client).record_call_handler(
             typing.cast(restate.Context, None), record_call_request
         )
 
-        assert fake_calls_application_client.recorded == [record_call_request]
+        assert fake_call_application_client.recorded == [record_call_request]
 
     async def test_the_conduct_call_handler_runs_the_orchestrator_inside_this_invocation(self) -> None:
         conduct_call_request = relays.ConductCallRequest(call_id="c7", person_name="Ada", phone_number="+15555550100")
 
-        conduct_call_response = await runtimes.RestateCallRuntime(FakeCallsApplicationClient()).conduct_call_handler(  # tesser:debt TB085
+        conduct_call_response = await runtimes.RestateCallRuntime(FakeCallApplicationClient()).conduct_call_handler(  # tesser:debt TB085
             typing.cast(restate.WorkflowContext, FakeRestateWorkflowContext()), conduct_call_request
         )
 
         assert conduct_call_response.call_id == "c7"
 
     async def test_the_person_answered_handler_resolves_the_workflows_promise(self) -> None:
-        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+        restate_call_runtime = runtimes.RestateCallRuntime(FakeCallApplicationClient())
         fake_restate_workflow_shared_context = FakeRestateWorkflowSharedContext()  # tesser:debt TB085
 
         await restate_call_runtime.person_answered_handler(
@@ -145,7 +145,7 @@ class TestRestateCallRuntime:
     async def test_an_utterance_nobody_is_waiting_for_is_buffered_in_order(self) -> None:
         fake_restate_object_context = FakeRestateObjectContext("c7", {"buffered": ["my name is"]})  # tesser:debt TB085
 
-        await runtimes.RestateCallRuntime(FakeCallsApplicationClient()).person_utterance_handler(
+        await runtimes.RestateCallRuntime(FakeCallApplicationClient()).person_utterance_handler(
             typing.cast(restate.ObjectContext, fake_restate_object_context),
             relays.PersonUtteranceRequest(call_id="c7", text="Ada"),
         )
@@ -155,7 +155,7 @@ class TestRestateCallRuntime:
     async def test_an_utterance_someone_is_waiting_for_resolves_their_awakeable(self) -> None:
         fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_1"})  # tesser:debt TB085
 
-        await runtimes.RestateCallRuntime(FakeCallsApplicationClient()).person_utterance_handler(
+        await runtimes.RestateCallRuntime(FakeCallApplicationClient()).person_utterance_handler(
             typing.cast(restate.ObjectContext, fake_restate_object_context),
             relays.PersonUtteranceRequest(call_id="c7", text="Ada"),
         )
@@ -168,7 +168,7 @@ class TestRestateCallRuntime:
     async def test_taking_with_utterances_buffered_resolves_the_awakeable_with_the_oldest(self) -> None:
         fake_restate_object_context = FakeRestateObjectContext("c7", {"buffered": ["my name is", "Ada"]})  # tesser:debt TB085
 
-        await runtimes.RestateCallRuntime(FakeCallsApplicationClient()).take_person_utterance_handler(
+        await runtimes.RestateCallRuntime(FakeCallApplicationClient()).take_person_utterance_handler(
             typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1"
         )
 
@@ -180,7 +180,7 @@ class TestRestateCallRuntime:
     async def test_taking_with_nothing_buffered_leaves_the_awakeable_waiting(self) -> None:
         fake_restate_object_context = FakeRestateObjectContext("c7", {})  # tesser:debt TB085
 
-        await runtimes.RestateCallRuntime(FakeCallsApplicationClient()).take_person_utterance_handler(
+        await runtimes.RestateCallRuntime(FakeCallApplicationClient()).take_person_utterance_handler(
             typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1"
         )
 

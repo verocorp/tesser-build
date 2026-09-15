@@ -1,1 +1,1 @@
-from calls.application.client.call_actions import CallsApplicationClient as CallsApplicationClient
+from calls.application.client.call_actions import CallApplicationClient as CallApplicationClient

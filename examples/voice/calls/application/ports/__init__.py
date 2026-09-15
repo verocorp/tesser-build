@@ -1,6 +1,9 @@
 from calls.application.ports.call_repository import Call as Call
 from calls.application.ports.call_repository import CallRepository as CallRepository
 from calls.application.ports.call_repository import CallStore as CallStore
+from calls.application.ports.call_repository import IssueCallIdRequest as IssueCallIdRequest
+from calls.application.ports.call_repository import IssueCallIdResponse as IssueCallIdResponse
+from calls.application.ports.call_repository import LoadCallOutcome as LoadCallOutcome
 from calls.application.ports.call_repository import LoadCallRequest as LoadCallRequest
 from calls.application.ports.call_repository import LoadCallResponse as LoadCallResponse
 from calls.application.ports.call_repository import SaveCallRequest as SaveCallRequest

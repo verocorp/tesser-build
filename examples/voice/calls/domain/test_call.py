@@ -1,25 +1,52 @@
 from __future__ import annotations
 
+import pytest
+
 import calls.domain as domain
+import tesser.errors as errors
 
 
 class TestCall:
 
     def test_a_call_constructs_from_its_spec(self) -> None:
-        call_spec = domain.CallSpec(person_name="Ada", phone_number="+15555550100")
+        person_spec = domain.PersonSpec(name="Ada", phone_number="+15555550100")
+        call_spec = domain.CallSpec(call_id="c1", person=person_spec)
 
         call = domain.Call(call_spec)
 
-        assert str(call.person_name) == call_spec.person_name
-        assert str(call.phone_number) == call_spec.phone_number
+        assert str(call.identity) == call_spec.call_id
+        assert str(call.person.name) == person_spec.name
+        assert str(call.person.phone_number) == person_spec.phone_number
 
-    def test_each_call_takes_an_identity_of_its_own(self) -> None:
-        call_spec = domain.CallSpec(person_name="Ada", phone_number="+15555550100")
 
-        first = domain.Call(call_spec)
-        second = domain.Call(call_spec)
+    def test_two_calls_placed_for_the_same_person_hold_an_equal_person(self) -> None:
+        first = domain.Call(
+            domain.CallSpec(call_id="c1", person=domain.PersonSpec(name="Ada", phone_number="+15555550100"))
+        )
+        second = domain.Call(
+            domain.CallSpec(call_id="c2", person=domain.PersonSpec(name="Ada", phone_number="+15555550100"))
+        )
 
-        assert first.identity != second.identity
+        assert first.person == second.person
+
+
+class TestCallPresence:
+
+    def test_a_call_the_store_found_decides_that_it_was_found(self) -> None:
+        call_presence = domain.CallPresence(domain.CallPresenceSpec(presence="found"))
+
+        assert call_presence.decide() is domain.CallLookup.FOUND
+
+    def test_a_call_the_store_did_not_find_decides_that_it_was_not_found(self) -> None:
+        call_presence = domain.CallPresence(domain.CallPresenceSpec(presence="not_found"))
+
+        assert call_presence.decide() is domain.CallLookup.NOT_FOUND
+
+    def test_a_presence_the_domain_does_not_know_is_refused(self) -> None:
+        with pytest.raises(errors.DomainError) as raised:
+            domain.CallPresence(domain.CallPresenceSpec(presence="maybe"))
+
+        assert raised.value.code == "invalid_presence"
 
 
 class TestCallId:

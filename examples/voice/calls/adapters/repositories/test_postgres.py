@@ -31,3 +31,15 @@ class TestPostgresCallStore:
         assert load_call_response.calls == (
             ports.Call(call_id="c1", person_name="Grace", phone_number="+15555550100"),
         )
+
+    async def test_a_call_that_was_never_saved_is_not_found(self) -> None:
+        dsn = os.environ["CALLS_STORAGE"]
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
+        await database.open()
+        postgres_call_store = repositories.PostgresCallStore(database)
+
+        async with postgres_call_store.transaction() as call_repository:
+            load_call_response = await call_repository.load_call(ports.LoadCallRequest(call_id="never-saved"))
+        await database.close()
+
+        assert load_call_response.outcome is ports.LoadCallOutcome.NOT_FOUND
