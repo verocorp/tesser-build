@@ -72,6 +72,84 @@ class RestateRecordCallResponseSerde(ts.Serde, restate_serde.Serde[relays.Record
         return relays.RecordCallResponseSnapshot().deserialize(buf)
 
 
+class RestateDialPersonRequestSerde(ts.Serde, restate_serde.Serde[relays.DialPersonRequest]):
+
+    def serialize(self, dial_person_request: relays.DialPersonRequest | None) -> bytes:
+        if dial_person_request is None:
+            return b""
+        return relays.DialPersonRequestSnapshot().serialize(dial_person_request)
+
+    def deserialize(self, buf: bytes) -> relays.DialPersonRequest | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.DialPersonRequestSnapshot().deserialize(buf)
+
+
+class RestateDialPersonResponseSerde(ts.Serde, restate_serde.Serde[relays.DialPersonResponse]):
+
+    def serialize(self, dial_person_response: relays.DialPersonResponse | None) -> bytes:
+        if dial_person_response is None:
+            return b""
+        return relays.DialPersonResponseSnapshot().serialize(dial_person_response)
+
+    def deserialize(self, buf: bytes) -> relays.DialPersonResponse | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.DialPersonResponseSnapshot().deserialize(buf)
+
+
+class RestateSpeakTurnRequestSerde(ts.Serde, restate_serde.Serde[relays.SpeakTurnRequest]):
+
+    def serialize(self, speak_turn_request: relays.SpeakTurnRequest | None) -> bytes:
+        if speak_turn_request is None:
+            return b""
+        return relays.SpeakTurnRequestSnapshot().serialize(speak_turn_request)
+
+    def deserialize(self, buf: bytes) -> relays.SpeakTurnRequest | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.SpeakTurnRequestSnapshot().deserialize(buf)
+
+
+class RestateSpeakTurnResponseSerde(ts.Serde, restate_serde.Serde[relays.SpeakTurnResponse]):
+
+    def serialize(self, speak_turn_response: relays.SpeakTurnResponse | None) -> bytes:
+        if speak_turn_response is None:
+            return b""
+        return relays.SpeakTurnResponseSnapshot().serialize(speak_turn_response)
+
+    def deserialize(self, buf: bytes) -> relays.SpeakTurnResponse | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.SpeakTurnResponseSnapshot().deserialize(buf)
+
+
+class RestateHangUpRequestSerde(ts.Serde, restate_serde.Serde[relays.HangUpRequest]):
+
+    def serialize(self, hang_up_request: relays.HangUpRequest | None) -> bytes:
+        if hang_up_request is None:
+            return b""
+        return relays.HangUpRequestSnapshot().serialize(hang_up_request)
+
+    def deserialize(self, buf: bytes) -> relays.HangUpRequest | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.HangUpRequestSnapshot().deserialize(buf)
+
+
+class RestateHangUpResponseSerde(ts.Serde, restate_serde.Serde[relays.HangUpResponse]):
+
+    def serialize(self, hang_up_response: relays.HangUpResponse | None) -> bytes:
+        if hang_up_response is None:
+            return b""
+        return relays.HangUpResponseSnapshot().serialize(hang_up_response)
+
+    def deserialize(self, buf: bytes) -> relays.HangUpResponse | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.HangUpResponseSnapshot().deserialize(buf)
+
+
 class RestatePersonAnsweredRequestSerde(ts.Serde, restate_serde.Serde[relays.PersonAnsweredRequest]):
 
     def serialize(self, person_answered_request: relays.PersonAnsweredRequest | None) -> bytes:
@@ -152,8 +230,15 @@ class RestateAwaitPersonUtteranceResponseSerde(ts.Serde, restate_serde.Serde[rel
 
 class RestateCallRuntime(ts.Runtime):
 
-    def __init__(self, call_application_client: client.CallApplicationClient) -> None:
+    def __init__(
+        self,
+        call_application_client: client.CallApplicationClient,
+        dialing_application_client: client.DialingApplicationClient,
+        speech_application_client: client.SpeechApplicationClient,
+    ) -> None:
         self.call_actions_service = restate.Service("CallActions", invocation_retry_policy=_RETRY_POLICY)
+        self.dialing_actions_service = restate.Service("DialingActions", invocation_retry_policy=_RETRY_POLICY)
+        self.speech_actions_service = restate.Service("SpeechActions", invocation_retry_policy=_RETRY_POLICY)
         self.call_orchestrator_workflow = restate.Workflow("CallOrchestrator", invocation_retry_policy=_RETRY_POLICY)
         self.call_utterances_object = restate.VirtualObject("CallUtterances", invocation_retry_policy=_RETRY_POLICY)
         self.person_answered_promise = _PERSON_ANSWERED_PROMISE
@@ -167,6 +252,33 @@ class RestateCallRuntime(ts.Runtime):
         ) -> relays.RecordCallResponse:
             return await call_application_client.record_call(record_call_request)
 
+        @self.dialing_actions_service.handler(
+            input_serde=RestateDialPersonRequestSerde(),
+            output_serde=RestateDialPersonResponseSerde(),
+        )
+        async def dial_person(  # tesser:debt TB023
+            restate_context: restate.Context, dial_person_request: relays.DialPersonRequest
+        ) -> relays.DialPersonResponse:
+            return await dialing_application_client.dial_person(dial_person_request)
+
+        @self.dialing_actions_service.handler(
+            input_serde=RestateHangUpRequestSerde(),
+            output_serde=RestateHangUpResponseSerde(),
+        )
+        async def hang_up(  # tesser:debt TB023
+            restate_context: restate.Context, hang_up_request: relays.HangUpRequest
+        ) -> relays.HangUpResponse:
+            return await dialing_application_client.hang_up(hang_up_request)
+
+        @self.speech_actions_service.handler(
+            input_serde=RestateSpeakTurnRequestSerde(),
+            output_serde=RestateSpeakTurnResponseSerde(),
+        )
+        async def speak_turn(  # tesser:debt TB023
+            restate_context: restate.Context, speak_turn_request: relays.SpeakTurnRequest
+        ) -> relays.SpeakTurnResponse:
+            return await speech_application_client.speak_turn(speak_turn_request)
+
         @self.call_orchestrator_workflow.main(
             input_serde=RestateConductCallRequestSerde(),
             output_serde=RestateConductCallResponseSerde(),
@@ -174,8 +286,15 @@ class RestateCallRuntime(ts.Runtime):
         async def conduct_call(  # tesser:debt TB023
             restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
         ) -> relays.ConductCallResponse:
+            restate_invocation_call_relays = runners.RestateInvocationCallRelays(restate_workflow_context, self)
+            restate_await_call_relays = runners.RestateAwaitCallRelays(restate_workflow_context, self)
             return await orchestrators.CallOrchestrator(
-                runners.RestateInvocationCallRelays(restate_workflow_context, self)
+                restate_invocation_call_relays,
+                restate_await_call_relays,
+                restate_invocation_call_relays,
+                restate_await_call_relays,
+                restate_invocation_call_relays,
+                restate_invocation_call_relays,
             ).conduct_call(conduct_call_request)
 
         @self.call_orchestrator_workflow.handler(
@@ -229,6 +348,9 @@ class RestateCallRuntime(ts.Runtime):
                 restate_object_context.set(_WAITING_AWAKEABLE, awakeable_id)
 
         self.record_call_handler = record_call
+        self.dial_person_handler = dial_person
+        self.hang_up_handler = hang_up
+        self.speak_turn_handler = speak_turn
         self.conduct_call_handler = conduct_call
         self.person_answered_handler = person_answered
         self.person_utterance_handler = person_utterance

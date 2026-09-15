@@ -25,6 +25,8 @@ class RestateHost(ts.Host):
             restate.app(
                 [
                     voice_app.calls.restate_call_runtime.call_actions_service,
+                    voice_app.calls.restate_call_runtime.dialing_actions_service,
+                    voice_app.calls.restate_call_runtime.speech_actions_service,
                     voice_app.calls.restate_call_runtime.call_orchestrator_workflow,
                     voice_app.calls.restate_call_runtime.call_utterances_object,
                 ]

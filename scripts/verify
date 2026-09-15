@@ -272,6 +272,11 @@ run_voice() {
   local admin="${RESTATE_ADMIN:-http://localhost:29070}"
   local port="${VOICE_DEPLOYMENT_PORT:-9080}"
   local deployment="${VOICE_DEPLOYMENT:-http://host.docker.internal:$port}"
+  export LIVEKIT_URL="${LIVEKIT_URL:-ws://livekit.invalid}"
+  export LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-unused}"
+  export LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-unused}"
+  export LIVEKIT_AGENT_NAME="${LIVEKIT_AGENT_NAME:-caller}"
+  export LIVEKIT_SIP_TRUNK_ID="${LIVEKIT_SIP_TRUNK_ID:-unused}"
   step "serve the Restate endpoint on :$port and register it at $admin"
   CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" PYTHONPATH=.:../../tesser-py \
     python3 -m srv.restate.main "0.0.0.0:$port" &

@@ -13,7 +13,15 @@ class TestCallsContext:
 
     async def test_a_call_that_was_never_placed_is_not_found(self) -> None:
         config = component.Config(
-            component.Spec(storage=os.environ["CALLS_STORAGE"], ingress=os.environ["RESTATE_INGRESS"])
+            component.Spec(
+                storage=os.environ["CALLS_STORAGE"],
+                ingress=os.environ["RESTATE_INGRESS"],
+                livekit_url="ws://livekit.invalid",
+                livekit_api_key="unused",
+                livekit_api_secret="unused",
+                livekit_agent_name="caller",
+                livekit_sip_trunk_id="unused",
+            )
         )
         database = pgdatabase_database.Database(config.database)
         await database.open()

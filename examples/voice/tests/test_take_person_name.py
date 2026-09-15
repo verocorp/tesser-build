@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 import random
+
+import pytest
 
 import tesser.testing as ts
 
@@ -16,6 +19,8 @@ def place_call_request(person_name: str = "Ada", phone_number: str = "+155555501
 class TestPlacingCalls:
 
     async def test_a_call_is_successfully_made(self) -> None:
+        if os.environ.get("VOICE_LIVE_CALLS") != "1":
+            pytest.skip("a live call needs LiveKit, a SIP trunk, and a person to answer: set VOICE_LIVE_CALLS=1")
         voice_app = app.load()
         await voice_app.open()
         person_name = random.choice(("Ada", "Grace", "Alan", "Barbara"))

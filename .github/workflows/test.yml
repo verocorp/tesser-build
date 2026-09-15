@@ -208,6 +208,11 @@ jobs:
           CALLS_STORAGE: postgres://tesser@localhost:5432/tesser
           RESTATE_INGRESS: http://localhost:8080
           RESTATE_ADMIN: http://localhost:9070
+          LIVEKIT_URL: ws://livekit.invalid
+          LIVEKIT_API_KEY: unused
+          LIVEKIT_API_SECRET: unused
+          LIVEKIT_AGENT_NAME: caller
+          LIVEKIT_SIP_TRUNK_ID: unused
         run: scripts/verify voice
 
   asyncpg-example:

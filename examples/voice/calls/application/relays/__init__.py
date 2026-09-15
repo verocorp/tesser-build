@@ -13,6 +13,16 @@ from calls.application.relays.conduct_call_relay import ConductCallRequest as Co
 from calls.application.relays.conduct_call_relay import ConductCallRequestSnapshot as ConductCallRequestSnapshot
 from calls.application.relays.conduct_call_relay import ConductCallResponse as ConductCallResponse
 from calls.application.relays.conduct_call_relay import ConductCallResponseSnapshot as ConductCallResponseSnapshot
+from calls.application.relays.dial_person_relay import DialPersonRelay as DialPersonRelay
+from calls.application.relays.dial_person_relay import DialPersonRequest as DialPersonRequest
+from calls.application.relays.dial_person_relay import DialPersonRequestSnapshot as DialPersonRequestSnapshot
+from calls.application.relays.dial_person_relay import DialPersonResponse as DialPersonResponse
+from calls.application.relays.dial_person_relay import DialPersonResponseSnapshot as DialPersonResponseSnapshot
+from calls.application.relays.hang_up_relay import HangUpRelay as HangUpRelay
+from calls.application.relays.hang_up_relay import HangUpRequest as HangUpRequest
+from calls.application.relays.hang_up_relay import HangUpRequestSnapshot as HangUpRequestSnapshot
+from calls.application.relays.hang_up_relay import HangUpResponse as HangUpResponse
+from calls.application.relays.hang_up_relay import HangUpResponseSnapshot as HangUpResponseSnapshot
 from calls.application.relays.person_answered_relay import PersonAnsweredRelay as PersonAnsweredRelay
 from calls.application.relays.person_answered_relay import PersonAnsweredRequest as PersonAnsweredRequest
 from calls.application.relays.person_answered_relay import PersonAnsweredRequestSnapshot as PersonAnsweredRequestSnapshot
@@ -28,3 +38,8 @@ from calls.application.relays.record_call_relay import RecordCallRequest as Reco
 from calls.application.relays.record_call_relay import RecordCallRequestSnapshot as RecordCallRequestSnapshot
 from calls.application.relays.record_call_relay import RecordCallResponse as RecordCallResponse
 from calls.application.relays.record_call_relay import RecordCallResponseSnapshot as RecordCallResponseSnapshot
+from calls.application.relays.speak_turn_relay import SpeakTurnRelay as SpeakTurnRelay
+from calls.application.relays.speak_turn_relay import SpeakTurnRequest as SpeakTurnRequest
+from calls.application.relays.speak_turn_relay import SpeakTurnRequestSnapshot as SpeakTurnRequestSnapshot
+from calls.application.relays.speak_turn_relay import SpeakTurnResponse as SpeakTurnResponse
+from calls.application.relays.speak_turn_relay import SpeakTurnResponseSnapshot as SpeakTurnResponseSnapshot

@@ -44,4 +44,6 @@ class TestRestateHost:
             "CallActions": ["record_call"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
             "CallUtterances": ["person_utterance", "take_person_utterance"],
+            "DialingActions": ["dial_person", "hang_up"],
+            "SpeechActions": ["speak_turn"],
         }

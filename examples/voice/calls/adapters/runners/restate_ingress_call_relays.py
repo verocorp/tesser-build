@@ -24,7 +24,7 @@ class RestateIngressCallRelays(ts.Runner):  # tesser:debt TB085
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
             return await restate_client.Client(async_client).workflow_call(
                 self._restate_call_runtime.conduct_call_handler,
-                key=urllib_parse.quote(conduct_call_request.call_id, safe=""),
+                key=urllib_parse.quote(str(conduct_call_request.call.identity), safe=""),
                 arg=conduct_call_request,
             )
 
