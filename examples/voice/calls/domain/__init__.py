@@ -11,9 +11,11 @@ from calls.domain.call import CallSpec as CallSpec
 from calls.domain.call import CallStep as CallStep
 from calls.domain.call import Conversation as Conversation
 from calls.domain.call import ConversationSpec as ConversationSpec
+from calls.domain.call import Hearing as Hearing
 from calls.domain.call import PersonSpec as PersonSpec
 from calls.domain.call import Persona as Persona
 from calls.domain.call import Speaker as Speaker
+from calls.domain.call import Transcript as Transcript
 from calls.domain.call import Turn as Turn
 from calls.domain.call import TurnSpec as TurnSpec
 from calls.domain.call import Utterance as Utterance
