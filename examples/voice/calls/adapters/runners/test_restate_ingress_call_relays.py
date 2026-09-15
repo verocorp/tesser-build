@@ -12,7 +12,7 @@ import calls.application.relays as relays
 
 
 @ts.fake
-class FakeCallsApplicationClient(client.CallsApplicationClient):
+class FakeCallApplicationClient(client.CallApplicationClient):
 
     async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
         return relays.RecordCallResponse(call_id=record_call_request.call_id)
@@ -80,7 +80,7 @@ class TestRestateIngressCallRelays:
         fake_restate_ingress.start()
 
         conduct_call_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient())
         ).run_conduct_call(conduct_call_request(call_id="c7"))
         fake_restate_ingress.close()
 
@@ -94,7 +94,7 @@ class TestRestateIngressCallRelays:
         fake_restate_ingress.start()
 
         person_answered_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient())
         ).run_person_answered(relays.PersonAnsweredRequest(call_id="c7"))
         fake_restate_ingress.close()
 
@@ -108,7 +108,7 @@ class TestRestateIngressCallRelays:
         fake_restate_ingress.start()
 
         person_utterance_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallsApplicationClient())
+            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient())
         ).run_person_utterance(relays.PersonUtteranceRequest(call_id="c7", text="Ada"))
         fake_restate_ingress.close()
 
