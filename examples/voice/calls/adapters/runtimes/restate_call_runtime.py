@@ -18,6 +18,7 @@ _RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationR
 _PERSON_ANSWERED_PROMISE: typing.Final[str] = "person_answered"
 _BUFFERED_UTTERANCES: typing.Final[str] = "buffered"
 _WAITING_AWAKEABLE: typing.Final[str] = "waiting"
+_ALREADY_TAKING: typing.Final[str] = "another take of this call's utterances is already waiting"
 
 
 class RestateConductCallRequestSerde(ts.Serde, restate_serde.Serde[relays.ConductCallRequest]):
@@ -340,8 +341,11 @@ class RestateCallRuntime(ts.Runtime):
         async def take_person_utterance(  # tesser:debt TB023
             restate_object_context: restate.ObjectContext, awakeable_id: str
         ) -> None:
+            waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
             buffered = await restate_object_context.get(_BUFFERED_UTTERANCES, type_hint=list[str]) or []
-            if buffered:
+            if waiting is not None:
+                restate_object_context.reject_awakeable(awakeable_id, _ALREADY_TAKING)
+            elif buffered:
                 restate_object_context.set(_BUFFERED_UTTERANCES, buffered[1:])
                 restate_object_context.resolve_awakeable(
                     awakeable_id,
