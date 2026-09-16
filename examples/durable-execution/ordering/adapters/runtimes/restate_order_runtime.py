@@ -169,7 +169,7 @@ class RestateOrderRuntime(ts.Runtime):
             input_serde=RestatePriceProductRequestSerde(),
             output_serde=RestatePriceProductResponseSerde(),
         )
-        async def price_product(  # tesser:debt TB023
+        async def price_product(
             restate_context: restate.Context, price_product_request: relays.PriceProductRequest
         ) -> relays.PriceProductResponse:
             return ordering_application_client.price_product(price_product_request)
@@ -178,7 +178,7 @@ class RestateOrderRuntime(ts.Runtime):
             input_serde=RestateConfirmOrderRequestSerde(),
             output_serde=RestateConfirmOrderResponseSerde(),
         )
-        async def confirm_order(  # tesser:debt TB023
+        async def confirm_order(
             restate_workflow_context: restate.WorkflowContext,
             confirm_order_request: relays.ConfirmOrderRequest,
         ) -> relays.ConfirmOrderResponse:
@@ -190,7 +190,7 @@ class RestateOrderRuntime(ts.Runtime):
             input_serde=RestateTakePaymentRequestSerde(),
             output_serde=RestateTakePaymentResponseSerde(),
         )
-        async def take_payment(  # tesser:debt TB023
+        async def take_payment(
             restate_context: restate.Context, take_payment_request: relays.TakePaymentRequest
         ) -> relays.TakePaymentResponse:
             return purchase_application_client.take_payment(take_payment_request)
@@ -199,7 +199,7 @@ class RestateOrderRuntime(ts.Runtime):
             input_serde=RestatePayForOrderRequestSerde(),
             output_serde=RestatePayForOrderResponseSerde(),
         )
-        async def pay_for_order(  # tesser:debt TB023
+        async def pay_for_order(
             restate_workflow_context: restate.WorkflowContext,
             pay_for_order_request: relays.PayForOrderRequest,
         ) -> relays.PayForOrderResponse:

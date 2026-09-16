@@ -80,6 +80,8 @@ TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
 
 ROLES: typing.Final[tuple[str, ...]] = ("domain", "application", "client", "adapters", "component")
 
+ADAPTERS_ROLE: typing.Final[str] = "adapters"
+
 EXPORT_PACKAGE_PLACES: typing.Final[frozenset[str]] = frozenset({
     "role-init", "ports-init", "app-client-init", "orchestrators-init",
     "relays-init", "snapshots-init", "shell-init", "protocol-init",
@@ -7408,6 +7410,9 @@ class Module(ts.Entity):
         self._reexports: tuple[tuple[str, str, str, str], ...] = spec.reexports
         parts = spec.name.split(".")
         self._package: tuple[str, ...] = tuple(parts if spec.is_package else parts[:-1])
+        self._adapter_side: bool = (
+            len(parts) >= 3 and parts[0] in spec.contexts and parts[1] == ADAPTERS_ROLE
+        )
         self._body: tuple[ast.stmt, ...] = tuple(tree.body)
         self._package_aliases: dict[str, str] = {}
         self._alias_bindings: list[tuple[str, str, int]] = []
@@ -7940,6 +7945,8 @@ class Module(ts.Entity):
 
     def function_placement_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
+        if self._adapter_side and str(self._placement) not in TEST_TIER:
+            return ()
         sites: list[tuple[int, str]] = []
         pending: list[tuple[ast.AST, bool]] = [(stmt, False) for stmt in self._body]
         while pending:

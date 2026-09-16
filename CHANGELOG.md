@@ -5,6 +5,26 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.7.0] - 2026-09-16
+
+TB023 stops reading `adapters/`, the one layer where someone else's SDK sets
+the terms.
+
+### Changed
+- **TB023 no longer reads an `adapters/` implementation module.** A `lambda`
+  and a `def` inside another function are still findings in `domain/`,
+  `application/`, `client/`, `component/`, `srv/`, `app/`, and in every test
+  module — including a test that sits beside an adapter, which is where a
+  test-local closure would otherwise hide. An adapter implements a contract it
+  does not own: the Restate SDK registers a handler by decorating a function at
+  construction time, and the decorated form is the readable one (maintainer
+  ruling 2026-09-16). The scope column in `RULES.md` now reads "every module
+  outside adapters, and every test under adapters".
+- **Five debt markers retired.** Four on durable-execution's Restate
+  registration callbacks, one on the analyzer's own `source_reader` sort key.
+  The two on `examples/asyncpg`'s repository *test* stand — a test under
+  `adapters/` still answers for the rule.
+
 ## [0.1.6.1] - 2026-09-14
 
 The relay chain check now reads the call a handler makes and the handler a

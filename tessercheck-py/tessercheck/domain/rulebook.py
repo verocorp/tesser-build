@@ -120,7 +120,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.aggregate_root_violations": "domain module",
     "Module.annotation_violations": "every module",
     "Module.type_name_violations": "every module",
-    "Module.function_placement_violations": "every module",
+    "Module.function_placement_violations": "every module outside adapters, and every test under adapters",
     "Module.comment_violations": "every module",
     "Module.double_violations": "every module",
     "Module.shadowing_violations": "every module",

@@ -292,9 +292,16 @@ for `Awaitable`. The async protocols the store contract needs stay legal —
 and `typing.AsyncIterator[...]` is what its implementation yields; both name a
 shape the caller can use.
 
-**A function is declared at module level or as a method** (TB023, maintainer
-ruling 2026-09-06). A `lambda` anywhere, and a `def` inside another function,
-are both findings. The mechanical reason is placement: every rule about a
+**A function is declared at module level or as a method, outside `adapters/`**
+(TB023, maintainer ruling 2026-09-06; the adapters carve-out, maintainer ruling
+2026-09-16). A `lambda` anywhere, and a `def` inside another function, are both
+findings in `domain/`, `application/`, `client/`, `component/`, `srv/`, `app/`,
+and in every test module — including a test that sits beside an adapter, which
+is where a test-local closure would otherwise hide. An `adapters/`
+implementation module is out of scope: an adapter implements a contract it does
+not own, and an SDK that registers a handler by decorating a function at
+construction time leaves no relocation to make. The mechanical reason for the
+rule is placement: every rule about a
 function keys on where it sits — `TB040` on which module it belongs to,
 `TB070` on which tier its test lives in, `TB071` on every *module-level*
 function in a test module being a test, a `@ts.helper` or a `@ts.fake`. A
@@ -1243,14 +1250,14 @@ class RestateOrderRuntime(ts.Runtime):
         self.order_orchestrator_workflow = restate.Workflow("OrderOrchestrator")
 
         @self.order_actions_service.handler(input_serde=..., output_serde=...)
-        async def price_product(restate_context: restate.Context, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:  # tesser:debt TB023 — engine registration, unruled
+        async def price_product(restate_context: restate.Context, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
             try:
                 return ordering_application_client.price_product(price_product_request)
             except errors.DomainError as domain_error:
                 raise restate.TerminalError(domain_error.message, status_code=errors.status_for(domain_error.kind)) from domain_error
 
         @self.order_orchestrator_workflow.main(input_serde=..., output_serde=...)
-        async def run(restate_workflow_context: restate.WorkflowContext, order_orchestrator_request: relays.OrderOrchestratorRequest) -> relays.OrderOrchestratorResponse:  # tesser:debt TB023
+        async def run(restate_workflow_context: restate.WorkflowContext, order_orchestrator_request: relays.OrderOrchestratorRequest) -> relays.OrderOrchestratorResponse:
             return await orchestrators.OrderOrchestrator(
                 runners.RestateOrderActionsRunner(restate_workflow_context, self)
             ).run(order_orchestrator_request)
