@@ -140,7 +140,7 @@ class CallService(ts.ApplicationService):
     async def report_person_utterance(
         self, report_person_utterance_request: client.ReportPersonUtteranceRequest
     ) -> client.ReportPersonUtteranceResponse:
-        match domain.Transcript(report_person_utterance_request.text).decide():
+        match domain.PersonTranscription(report_person_utterance_request.text).decide():
             case domain.Hearing.UTTERANCE:
                 person_utterance_response = await self._person_utterance_relay.run_person_utterance(
                     MapToPersonUtteranceRequest(report_person_utterance_request)

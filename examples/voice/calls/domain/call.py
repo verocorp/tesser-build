@@ -237,7 +237,7 @@ class Hearing(ts.Outcome):
     SILENCE = enum.auto()
 
 
-class Transcript(ts.ValueObject):
+class PersonTranscription(ts.ValueObject):
 
     _text: str
 
