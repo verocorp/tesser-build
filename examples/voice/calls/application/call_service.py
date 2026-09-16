@@ -90,12 +90,6 @@ class MapToReportPersonUtteranceResponse(ts.Mapper, client.ReportPersonUtterance
         super().__init__(call_id=person_utterance_response.call_id)
 
 
-class MapToReportPersonUtteranceResponseFromSilence(ts.Mapper, client.ReportPersonUtteranceResponse):
-
-    def __init__(self, report_person_utterance_request: client.ReportPersonUtteranceRequest) -> None:
-        super().__init__(call_id=report_person_utterance_request.call_id)
-
-
 class CallService(ts.ApplicationService):
 
     def __init__(
@@ -140,13 +134,7 @@ class CallService(ts.ApplicationService):
     async def report_person_utterance(
         self, report_person_utterance_request: client.ReportPersonUtteranceRequest
     ) -> client.ReportPersonUtteranceResponse:
-        match domain.PersonTranscription(report_person_utterance_request.text).decide():
-            case domain.Hearing.UTTERANCE:
-                person_utterance_response = await self._person_utterance_relay.run_person_utterance(
-                    MapToPersonUtteranceRequest(report_person_utterance_request)
-                )
-                return MapToReportPersonUtteranceResponse(person_utterance_response)
-            case domain.Hearing.SILENCE:
-                return MapToReportPersonUtteranceResponseFromSilence(report_person_utterance_request)
-            case _ as never:
-                typing.assert_never(never)
+        person_utterance_response = await self._person_utterance_relay.run_person_utterance(
+            MapToPersonUtteranceRequest(report_person_utterance_request)
+        )
+        return MapToReportPersonUtteranceResponse(person_utterance_response)

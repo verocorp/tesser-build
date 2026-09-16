@@ -148,15 +148,6 @@ class TestCall:
         assert raised.value.code == "invalid_step"
 
 
-class TestPersonTranscription:
-
-    def test_words_are_an_utterance(self) -> None:
-        assert domain.PersonTranscription("my name is Grace").decide() is domain.Hearing.UTTERANCE
-
-    def test_blank_text_is_silence(self) -> None:
-        assert domain.PersonTranscription("   ").decide() is domain.Hearing.SILENCE
-
-
 class TestCallPresence:
 
     def test_a_call_the_store_found_decides_that_it_was_found(self) -> None:

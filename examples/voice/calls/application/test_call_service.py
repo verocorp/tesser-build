@@ -169,13 +169,3 @@ class TestCallService:
         assert [(uttered.call_id, uttered.text) for uttered in fake_person_utterance_relay.uttered] == [
             ("c7", "my name is Grace")
         ]
-
-    async def test_reporting_a_blank_utterance_signals_nothing(self) -> None:
-        fake_person_utterance_relay = FakePersonUtteranceRelay()
-        call_service = application.CallService(
-            FakeConductCallRelay(), FakePersonAnsweredRelay(), fake_person_utterance_relay, FakeCallStore()
-        )
-
-        await call_service.report_person_utterance(client.ReportPersonUtteranceRequest(call_id="c7", text="   "))
-
-        assert fake_person_utterance_relay.uttered == []

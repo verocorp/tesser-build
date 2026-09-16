@@ -232,24 +232,6 @@ class CallProgress(ts.Outcome):
     ENDED = enum.auto()
 
 
-class Hearing(ts.Outcome):
-    UTTERANCE = enum.auto()
-    SILENCE = enum.auto()
-
-
-class PersonTranscription(ts.ValueObject):
-
-    _text: str
-
-    def __init__(self, text: str) -> None:
-        object.__setattr__(self, "_text", text)
-
-    def decide(self) -> Hearing:
-        if self._text.strip():
-            return Hearing.UTTERANCE
-        return Hearing.SILENCE
-
-
 class CallLookup(ts.Outcome):
     FOUND = enum.auto()
     NOT_FOUND = enum.auto()
