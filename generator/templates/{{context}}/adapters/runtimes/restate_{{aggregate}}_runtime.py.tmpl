@@ -83,7 +83,7 @@ class Restate{{Aggregate}}Runtime(ts.Runtime):
             input_serde=Restate{{Record}}RequestSerde(),
             output_serde=Restate{{Record}}ResponseSerde(),
         )
-        async def {{record}}(  # tesser:debt TB023
+        async def {{record}}(
             restate_context: restate.Context, {{record}}_request: relays.{{Record}}Request
         ) -> relays.{{Record}}Response:
             return await {{aggregate}}_application_client.{{record}}({{record}}_request)
@@ -92,7 +92,7 @@ class Restate{{Aggregate}}Runtime(ts.Runtime):
             input_serde=Restate{{Conduct}}RequestSerde(),
             output_serde=Restate{{Conduct}}ResponseSerde(),
         )
-        async def {{conduct}}(  # tesser:debt TB023
+        async def {{conduct}}(
             restate_workflow_context: restate.WorkflowContext, {{conduct}}_request: relays.{{Conduct}}Request
         ) -> relays.{{Conduct}}Response:
             return await orchestrators.{{Aggregate}}Orchestrator(
