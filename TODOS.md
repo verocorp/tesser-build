@@ -155,9 +155,13 @@ yet reach, and the names they found that were deferred rather than renamed:
   relay method, and the word is not settled.
 - [x] **minimal's words stand (2026-09-14, Chris: "your recs are fine").**
   `keep_widget`, `register_widget`, and the client's `create_widget`.
-- [ ] **The TB023 carve-out for a runtime's nested handlers is still open.**
-  The four `# tesser:debt TB023` markers on durable-execution's registration
-  callbacks stand; the chain checks read those handlers without it.
+- [x] **The TB023 carve-out for a runtime's nested handlers is RULED
+  (2026-09-16, Chris: "keeping the decorators is better, more readable ...
+  remove the check for inline functions under adapters/").** TB023 no longer
+  reads an `adapters/` implementation module, so the four markers on
+  durable-execution's registration callbacks and the one on the analyzer's own
+  `source_reader` sort key are gone. The rule still runs everywhere else,
+  tests included — a test beside an adapter is read like any other test.
 - [x] **The client error-name check landed with the rework (2026-09-14).**
   TB085 refuses a context error named `Missing`, `Conflict`, `Unavailable`,
   `Unreadable`, or a bare `Rejected`; it fired on 23 declarations in five
@@ -325,10 +329,13 @@ What is still open:
   in `.tesser-root`; require a tesser-side protocol between the runner and the
   SDK; or leave it as standing debt.
 
-- [ ] **26 `TB023` markers** in `examples/durable-execution/` — nested `def`s in
-  the Restate handler registrations, in the FastAPI route registrations, and in
-  the runners' fake-ingress tests. Untouched: the nested-def wave is gated on
-  its own exception list (see the TB022/TB023 entry).
+- [ ] **3 `TB023` markers** in `examples/durable-execution/` — the nested `def`s
+  in the FastAPI route registrations in `srv/http/main.py`. The Restate handler
+  registrations no longer carry one (2026-09-16: TB023 stopped reading
+  `adapters/`), and the runners' fake-ingress tests lost theirs when
+  `FakeRestateIngress` replaced them. Whether `srv/` deserves the same
+  treatment as `adapters/` is unruled — the host's server loop is its own entry
+  on the exception list below.
 
 ## Keeping the sequence of port calls out of the domain (2026-09-08, Chris)
 
@@ -1771,13 +1778,17 @@ measured:
   specimen — `ToolEndpoint` beside it is already a `ts.Port`, `halt` is a bare
   `abc.Callable`), versus how many are genuinely per-test arrangement with no
   production dependency behind them. Count that before the wave runs.
-- [ ] **An engine's registration callback — `examples/durable-execution`
+- [x] **An engine's registration callback — RULED 2026-09-16 (maintainer).**
+  `examples/durable-execution`
   `ordering/adapters/runtimes/restate_order_runtime.py` (`def price_product`,
-  `def run` inside `__init__`).** The SDK wants a function registered against a handler name at
-  construction time. The closure captures `self`. This is the shape with the
-  least obvious relocation, because the engine's API is the constraint, not
-  the code's taste — and it is exactly where the durable-execution example's
-  existing debt markers already sit.
+  `def run` inside `__init__`). The SDK wants a function registered against a
+  handler name at construction time. The closure captures `self`. This was the
+  shape with the least obvious relocation, because the engine's API is the
+  constraint, not the code's taste — and the ruling is that the whole of
+  `adapters/` is out of TB023's scope for exactly that reason: an adapter
+  implements a contract it does not own. A method registered in `__init__` was
+  tried as the alternative and costs more than it buys (it trades two TB023
+  markers for two TB051 and two TB085 findings), so the decorated form stands.
 - [ ] **A host's server loop — `srv/cli/main.py`, `srv/http/main.py`,
   `srv/voice/agent.py` in three trees, 1 each.** A `def serve()` nested in
   `main()` so it closes over the parsed config. `srv` modules already carry

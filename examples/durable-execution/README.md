@@ -534,8 +534,9 @@ and that list is the analyzer's work list:
   placement in a test module for data that is not construction data.
 - The parent orchestrator's second `match` is no longer among them: the
   count check leaving the snapshots took the marker with it.
-- **`TB023`, 7** — the nested handlers the SDK registers and the routes `main`
-  declares, the separately gated nested-def wave. **`TB072`, 6** — the two
+- **`TB023`, 3** — the routes `main` declares. The four nested handlers the SDK
+  registers carried one each until TB023 stopped reading `adapters/`
+  (2026-09-16); `srv/` is still read. **`TB072`, 6** — the two
   hand-written doubles. **`TB052`, 5** — a plain `enum.Enum` outcome in a
   relay module, which placement rejects today. **`TB062`, 4** — `import enum`
   in a relay module, outside its stdlib allowlist. **`TB051`, 2** — the fake

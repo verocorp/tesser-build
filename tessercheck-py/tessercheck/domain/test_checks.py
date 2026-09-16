@@ -14197,10 +14197,10 @@ def test_a_lambda_and_a_nested_def_are_findings_and_a_method_is_not() -> None:
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/adapters/gateways/anon.py",
-                "shop.adapters.gateways.anon",
-                "import tesser.adapters as ts\n"
-                "class AnonGateway(ts.Gateway):\n"
+                "shop/application/anon.py",
+                "shop.application.anon",
+                "import tesser.application as ts\n"
+                "class AnonQuotes(ts.Actions):\n"
                 "    def ranked(self, rows: list[str]) -> list[str]:\n"
                 "        rows.sort(key=lambda row: (row.startswith('a'), row))\n"
                 "        return rows\n"
@@ -14216,7 +14216,7 @@ def test_a_lambda_and_a_nested_def_are_findings_and_a_method_is_not() -> None:
         ))).violations()
     )
     assert any(
-        "anon.py:4: TB023 shop.adapters.gateways.anon writes a lambda; a function is "
+        "anon.py:4: TB023 shop.application.anon writes a lambda; a function is "
         "declared at module level or as a method, because every rule about a function "
         "keys on its placement and a nested one has none — an ordering belongs on the "
         "object it orders, a deferred call behind a port" in f
@@ -14224,7 +14224,7 @@ def test_a_lambda_and_a_nested_def_are_findings_and_a_method_is_not() -> None:
     )
     assert len([f for f in findings if "anon.py:7: TB023" in f]) == 1
     assert any(
-        "anon.py:9: TB023 shop.adapters.gateways.anon declares rank inside a function; "
+        "anon.py:9: TB023 shop.application.anon declares rank inside a function; "
         "a function is declared at module level or as a method, because every rule about "
         "a function keys on its placement and a nested one has none — an ordering belongs "
         "on the object it orders, a deferred call behind a port" in f
@@ -14239,12 +14239,12 @@ def test_a_nested_class_resets_the_scope_and_a_branch_body_does_not() -> None:
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/adapters/gateways/scoped.py",
-                "shop.adapters.gateways.scoped",
-                "import tesser.adapters as ts\n"
+                "shop/application/scoped.py",
+                "shop.application.scoped",
+                "import tesser.application as ts\n"
                 "def free() -> int:\n"
                 "    return 1\n"
-                "class ScopedGateway(ts.Gateway):\n"
+                "class ScopedQuotes(ts.Actions):\n"
                 "    def holds(self) -> None:\n"
                 "        class Local:\n"
                 "            def method(self) -> int:\n"
@@ -14260,7 +14260,7 @@ def test_a_nested_class_resets_the_scope_and_a_branch_body_does_not() -> None:
     assert not any("scoped.py:2: TB023" in f for f in findings)
     assert not any("scoped.py:7: TB023" in f for f in findings)
     assert any(
-        "scoped.py:11: TB023 shop.adapters.gateways.scoped declares buried inside a "
+        "scoped.py:11: TB023 shop.application.scoped declares buried inside a "
         "function; a function is declared at module level or as a method, because every "
         "rule about a function keys on its placement and a nested one has none — an "
         "ordering belongs on the object it orders, a deferred call behind a port" in f
@@ -14273,11 +14273,11 @@ def test_a_lambda_is_a_finding_at_module_level_and_in_a_class_body() -> None:
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/adapters/gateways/loose_fn.py",
-                "shop.adapters.gateways.loose_fn",
-                "import tesser.adapters as ts\n"
+                "shop/application/loose_fn.py",
+                "shop.application.loose_fn",
+                "import tesser.application as ts\n"
                 "RANK = lambda row: row\n"
-                "class LooseFnGateway(ts.Gateway):\n"
+                "class LooseFnQuotes(ts.Actions):\n"
                 "    ORDER = lambda row: row\n"
                 "    def kept(self) -> None:\n"
                 "        return None\n",
@@ -14286,13 +14286,55 @@ def test_a_lambda_is_a_finding_at_module_level_and_in_a_class_body() -> None:
         ))).violations()
     )
     assert any(
-        "loose_fn.py:2: TB023 shop.adapters.gateways.loose_fn writes a lambda; a function "
+        "loose_fn.py:2: TB023 shop.application.loose_fn writes a lambda; a function "
         "is declared at module level or as a method, because every rule about a function "
         "keys on its placement and a nested one has none — an ordering belongs on the "
         "object it orders, a deferred call behind a port" in f
         for f in findings
     )
     assert any("loose_fn.py:4: TB023" in f for f in findings)
+
+
+def test_an_adapter_may_nest_a_function_and_a_test_beside_it_may_not() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/gateways/nested.py",
+                "shop.adapters.gateways.nested",
+                "import tesser.adapters as ts\n"
+                "class NestedGateway(ts.Gateway):\n"
+                "    def registered(self) -> None:\n"
+                "        async def handler() -> int:\n"
+                "            return 1\n"
+                "        self._handler = handler\n"
+                "    def ranked(self, rows: list[str]) -> list[str]:\n"
+                "        rows.sort(key=lambda row: row)\n"
+                "        return rows\n",
+                False,
+            ),
+            (
+                "shop/adapters/gateways/test_nested.py",
+                "shop.adapters.gateways.test_nested",
+                "def test_the_gateway_registers() -> None:\n"
+                "    def local() -> int:\n"
+                "        return 1\n"
+                "    assert local() == 1\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any(
+        "TB023" in f and "shop.adapters.gateways.nested" in f for f in findings
+    )
+    assert any(
+        "test_nested.py:2: TB023 shop.adapters.gateways.test_nested declares local "
+        "inside a function; a function is declared at module level or as a method, "
+        "because every rule about a function keys on its placement and a nested one "
+        "has none — an ordering belongs on the object it orders, a deferred call "
+        "behind a port" in f
+        for f in findings
+    )
 
 
 def test_two_banned_names_of_the_same_kind_on_one_line_report_once() -> None:

@@ -107,8 +107,10 @@ class it carries), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
 annotations written unquoted (`TB021`), a type that names what the value is
 (`TB022` — `Any`, `Callable`, and `Awaitable` are findings wherever a module
-names them), a function declared at module level or as a method (`TB023` — no
-`lambda` anywhere, no `def` inside another function),
+names them), a function declared at module level or as a method outside
+`adapters/` (`TB023` — no `lambda` anywhere, no `def` inside another function;
+an adapter, where someone else's SDK sets the terms, is out of scope, and a
+test beside one is not),
 fakes-only test doubles (`TB030`), no called shadowed builtin (`TB033`), and
 debt-marker hygiene (`TB090` — a
 suppression that suppresses nothing is itself a finding). The full per-code
