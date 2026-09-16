@@ -3,8 +3,9 @@
 <!-- tb-status: partial -->
 
 **v0 of the testing norm covers how a test is written and what it must
-prove — not how the suite is laid out.** Rules 1 and 9 are machine-checked
-today; rule 2 is ruled doctrine whose checker is specified by its fixture pair
+prove — not how the suite is laid out.** Rules 1, 9 and 10 are machine-checked
+today — rule 10 rides `TB072`, the same clause that carries rule 9's fakes;
+rule 2 is ruled doctrine whose checker is specified by its fixture pair
 and lands next; the rest is guidance enforced by review. What is genuinely undecided is
 listed as open at the bottom rather than smuggled in as prose (Chris ruling
 2026-07-20).
@@ -151,6 +152,33 @@ file says *how*, and it is the cross-cutting layer they assume.
    is a different tool with different trade-offs; a library can provide those.
    This rule is about construction.
 
+10. **An adapter's dependency is exercised, not doubled.** An adapter exists to
+    talk to something the context does not own — a database, an execution
+    engine, a vendor's API — and what is worth proving is that the real
+    conversation works. In order of preference:
+
+    1. **An integration test against the real service, storage, or engine.**
+    2. **A test implementation the dependency itself provides** — an emulator,
+       a stubber, an official test double. It is trustworthy because its author
+       builds it against the same model the real client uses.
+    3. **One written as a separate package, outside this repo's purview** —
+       its own distribution, or an in-repo directory the analyzer does not
+       govern (a `skip` line in `.tesser-root`).
+
+    **So no double of an external dependency is defined in an adapter's test
+    module.** A fake of a *tesser* contract — an application port, a client —
+    stays legal there, because it implements something the type checker can
+    see: change the contract and the fake fails `mypy --strict`, which is the
+    fail-loudly property rule 1 is about. A double of a foreign SDK class
+    implements nothing and is cast into place at the call site, so it asserts
+    call shape and stays green when the SDK moves — the mock defect rule 1
+    rejects, wearing a hand-written coat. `TB072` is what refuses it.
+
+    An emulator is not a double: it is the same implementation in a different
+    deployment, which is why step 2 outranks step 3. And there is no scheduled
+    tier — a suite run against a third party on a timer mostly reports that
+    vendor's uptime, which is not this repo's subject.
+
 ## Where the norm applies
 
 - **Constructed-app code** — the tests the skill routes you to write in a
@@ -200,7 +228,10 @@ file says *how*, and it is the cross-cutting layer they assume.
   `# tesser:debt TB074` where the finding lands, as visible debt.
 - **`TB071` + `TB072` + `TB073` (test-module totality)** — rule 9, and the analyzer's
   first **totality** check (they superseded the frozen-dataclass era's
-  `TB032`). Every other check hunts a known-bad shape and stays quiet
+  `TB032`). `TB072`'s fake clause does double duty: requiring a fake to name
+  the contract it doubles is also what refuses rule 10's foreign double, since
+  a stand-in for a vendor's SDK class implements no tesser contract and so
+  declares nothing the analyzer can read. Every other check hunts a known-bad shape and stays quiet
   otherwise. That is the wrong instrument here, because the failure mode is
   *variety* — there is no single bad helper to match, and new ways to smuggle
   logic into a test module arrive with every feature. So this one inverts it:
@@ -271,6 +302,13 @@ file says *how*, and it is the cross-cutting layer they assume.
   (3, 4, 5) or not mechanically decidable in a way worth the false positives
   (6, 7, 8). That is deliberate: semantic correctness is test territory,
   structure is analyzer territory.
+- Rule 10 is **half-checked, and the half that is checked is the half that
+  matters.** `TB072` refuses the double — a fake implementing no tesser
+  contract is a finding wherever it sits — but nothing can tell from a test
+  whether it reached a real engine or a stub, so the ladder's ordering
+  (real service, then a provided test implementation, then one packaged
+  outside this repo's purview) is guidance. The teeth are on the shape that
+  goes wrong silently; the preference order is a judgment a reader makes.
 
 ## Open — deliberately not decided in v0
 
@@ -308,6 +346,11 @@ is ruled.
 - **The mock that can't fail.** `sender.send.assert_called_once_with(...)`
   passes forever, including after `send` changes shape. Assert the observable
   outcome through a hand-written double instead.
+- **The foreign double.** A hand-written `FakeVendorContext` that implements no
+  contract and is `typing.cast` into place, asserting that the SDK was called a
+  particular way. It cannot notice when the SDK changes — the same defect as
+  the mock above, in a class you wrote yourself. Exercise the dependency
+  instead (rule 10).
 - **Asserting the fixture.** `assert money.currency == "USD"` when the test
   never set a currency — the helper's default leaked into the claim.
 - **The re-tested layer.** Proving invalid input is rejected at the aggregate

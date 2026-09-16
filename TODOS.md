@@ -317,17 +317,28 @@ What is still open:
   "An adapter raises no domain kind" was rejected by the maintainer and was not
   measured.
 
-- [ ] **`FakeRestateWorkflowContext` doubles a foreign SDK class** — 4 `TB072`
-  and 6 `TB085` markers across `adapters/runners/` and `adapters/runtimes/`
-  tests, and the whole of the non-`TB023` marker residue in
-  `examples/durable-execution/`. The fake has no base at all (the SDK's
-  `restate.WorkflowContext` is not a tesser kind) and is `typing.cast` at the
-  call site, so nothing on the page links the double to what it doubles:
-  `TB072` cannot see a contract and `TB085` cannot derive the local's name.
-  There is no shape in the tree to register — a rule here would be invented.
-  Options: admit a `@ts.fake` whose declared base is an external module named
-  in `.tesser-root`; require a tesser-side protocol between the runner and the
-  SDK; or leave it as standing debt.
+- [x] **`FakeRestateWorkflowContext` doubles a foreign SDK class — RULED
+  2026-09-16 (maintainer).** An adapter's dependency is exercised, not doubled:
+  prefer an integration test against the real service/storage/engine; else a
+  test implementation the dependency itself provides; else one written as a
+  separate package outside this repo's purview (its own distribution, or a
+  `skip`ped in-repo directory). No double of an external dependency is defined
+  in an adapter's test module — a fake of a *tesser* contract (port, client)
+  stays legal there, because the type checker can see it. No scheduled tier:
+  "we're not here to test uptime." Landed as `testing.md` rule 10.
+  **No analyzer change was needed** — `TB072` already refuses a fake that
+  implements no tesser contract, which is exactly the foreign double. Both
+  alternatives are dropped: declaring a foreign base in `.tesser-root`, and
+  requiring a conformance test to prove a fake still matches the real thing.
+  **Still open — the migration.** `examples/durable-execution` is the tree
+  carrying this debt (4 `TB072` and 6 `TB085` across `adapters/runners/` and
+  `adapters/runtimes/` tests, plus `FakeRestateIngress` and its `TB051`), and
+  moving it is not free: its 189 tests pass today with no Restate server —
+  `.github/workflows/test.yml` says in as many words that "no restate-server
+  runs in CI" for that job — so real-engine tests mean giving it a service
+  container. The asyncpg job is currently the only `services:` block in the
+  workflow. The generator's templates carry the same three doubles and migrate
+  for free, because its arm already runs a real Restate.
 
 - [ ] **3 `TB023` markers** in `examples/durable-execution/` — the nested `def`s
   in the FastAPI route registrations in `srv/http/main.py`. The Restate handler
