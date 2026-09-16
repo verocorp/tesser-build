@@ -4,6 +4,7 @@ import asyncio
 import os
 import typing
 
+import aiohttp
 import pytest
 
 import tesser.testing as ts
@@ -60,7 +61,10 @@ class SimulatedPerson:
         self._api_secret = api_secret
         self.name = name
         self._llm = livekit_inference.LLM(_PERSON_LLM, api_key=api_key, api_secret=api_secret)
-        self._tts = livekit_inference.TTS(_PERSON_TTS, api_key=api_key, api_secret=api_secret)
+        self._http_session = aiohttp.ClientSession()
+        self._tts = livekit_inference.TTS(
+            _PERSON_TTS, api_key=api_key, api_secret=api_secret, http_session=self._http_session
+        )
         self._source = livekit_rtc.AudioSource(self._tts.sample_rate, self._tts.num_channels)
         self._room = livekit_rtc.Room()
         self._chat_context = livekit_llm.ChatContext.empty()
@@ -155,6 +159,7 @@ class SimulatedPerson:
         await self._room.disconnect()
         await self._llm.aclose()
         await self._tts.aclose()
+        await self._http_session.close()
 
 
 @ts.fake
@@ -396,7 +401,8 @@ class TestTakePersonName:
         transcripts: list[list[tuple[str, str]]] = []
         try:
             for person_name in _PERSON_NAMES:
-                simulated_person_dialing.expecting = SimulatedPerson(url, api_key, api_secret, person_name)
+                simulated_person = SimulatedPerson(url, api_key, api_secret, person_name)  # tesser:debt TB085
+                simulated_person_dialing.expecting = simulated_person
                 place_call_response = await asyncio.wait_for(
                     call_service.place_call(client.PlaceCallRequest(person_name="", phone_number="")), _CALL_SECONDS
                 )
@@ -405,6 +411,7 @@ class TestTakePersonName:
                 )
                 conducted = inline_conduct_call.conducted[-1]
                 transcripts.append(transcript(conducted))
+                print(f"\n[{person_name}] kept={get_call_response.call.person_name!r} said={simulated_person.said} heard={transcript(conducted)}")
                 kept.append(get_call_response.call.person_name == person_name)
                 greeted.append(person_name.lower() in last_agent_line(conducted).lower())
         finally:
