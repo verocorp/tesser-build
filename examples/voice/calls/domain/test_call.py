@@ -22,6 +22,11 @@ def agent_turn_spec(text: str = "hi, may I have your name?", person_name: str = 
     return domain.AgentTurnSpec(text=text, person_names=(person_name,) if person_name else ())
 
 
+@ts.helper
+def heard_spec(text: str = "my name is Grace") -> domain.HeardSpec:
+    return domain.HeardSpec(heard=domain.UTTERANCE if text else domain.SILENCE, text=text)
+
+
 class TestCall:
 
     def test_a_call_constructs_from_its_spec(self) -> None:
@@ -40,15 +45,18 @@ class TestCall:
             call_id="c1",
             person=domain.PersonSpec(name="Ada", phone_number="+15555550100"),
             turns=(
-                domain.TurnSpec(speaker="agent", text="hi, may I have your name?"),
-                domain.TurnSpec(speaker="person", text="my name is"),
+                domain.TurnSpec(speaker="agent", utterances=("hi, may I have your name?",)),
+                domain.TurnSpec(speaker="person", utterances=("my name is", "Ada")),
             ),
             step="ask_name",
         )
 
         call = domain.Call(call_spec)
 
-        assert [str(turn.utterance) for turn in call.conversation.turns] == ["hi, may I have your name?", "my name is"]
+        assert [[str(utterance) for utterance in turn.utterances] for turn in call.conversation.turns] == [
+            ["hi, may I have your name?"],
+            ["my name is", "Ada"],
+        ]
 
     def test_two_calls_placed_for_the_same_person_hold_an_equal_person(self) -> None:
         first = domain.Call(call_spec(call_id="c1"))
@@ -68,11 +76,30 @@ class TestCall:
 
         assert call.progress() is domain.CallProgress.PERSONS_TURN
 
-    def test_after_the_person_speaks_it_is_the_agents_turn(self) -> None:
+    def test_after_the_person_is_heard_it_is_still_the_persons_turn(self) -> None:
         call = domain.Call(call_spec())
         call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
 
-        call.person_said("my name is Grace")
+        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
+
+        assert call.progress() is domain.CallProgress.PERSONS_TURN
+
+    def test_when_the_person_falls_silent_the_call_says_so(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
+        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
+
+        call.heard(domain.Heard(heard_spec(text="")))
+
+        assert call.progress() is domain.CallProgress.PERSON_SILENT
+
+    def test_once_the_persons_turn_has_ended_it_is_the_agents_turn(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
+        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
+        call.heard(domain.Heard(heard_spec(text="")))
+
+        call.person_turn_ended()
 
         assert call.progress() is domain.CallProgress.AGENTS_TURN
 
@@ -83,28 +110,52 @@ class TestCall:
 
         assert call.progress() is domain.CallProgress.AGENTS_TURN
 
-    def test_a_call_that_is_done_has_ended(self) -> None:
-        call = domain.Call(call_spec(step="done"))
-
-        assert call.progress() is domain.CallProgress.ENDED
-
     def test_what_the_agent_says_joins_the_conversation_as_the_agents_turn(self) -> None:
         call = domain.Call(call_spec())
 
         call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
 
-        assert [(str(turn.speaker), str(turn.utterance)) for turn in call.conversation.turns] == [
-            ("agent", "hi, may I have your name?")
+        assert [(str(turn.speaker), [str(u) for u in turn.utterances]) for turn in call.conversation.turns] == [
+            ("agent", ["hi, may I have your name?"])
         ]
 
-    def test_what_the_person_says_joins_the_conversation_as_the_persons_turn(self) -> None:
+    def test_what_the_person_is_heard_saying_joins_the_conversation_as_the_persons_turn(self) -> None:
         call = domain.Call(call_spec())
 
-        call.person_said("my name is Grace")
+        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
 
-        assert [(str(turn.speaker), str(turn.utterance)) for turn in call.conversation.turns] == [
-            ("person", "my name is Grace")
+        assert [(str(turn.speaker), [str(u) for u in turn.utterances]) for turn in call.conversation.turns] == [
+            ("person", ["my name is Grace"])
         ]
+
+    def test_everything_heard_before_the_person_falls_silent_is_one_turn(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
+
+        call.heard(domain.Heard(heard_spec(text="my name is")))
+        call.heard(domain.Heard(heard_spec(text="Grace")))
+
+        assert [(str(turn.speaker), [str(u) for u in turn.utterances]) for turn in call.conversation.turns] == [
+            ("agent", ["hi, may I have your name?"]),
+            ("person", ["my name is", "Grace"]),
+        ]
+
+    def test_what_is_heard_after_the_persons_turn_ended_starts_a_new_turn(self) -> None:
+        call = domain.Call(call_spec())
+        call.heard(domain.Heard(heard_spec(text="hello?")))
+        call.heard(domain.Heard(heard_spec(text="")))
+        call.person_turn_ended()
+
+        call.heard(domain.Heard(heard_spec(text="anyone there?")))
+
+        assert [[str(u) for u in turn.utterances] for turn in call.conversation.turns] == [["hello?"], ["anyone there?"]]
+
+    def test_silence_adds_nothing_to_the_conversation(self) -> None:
+        call = domain.Call(call_spec())
+
+        call.heard(domain.Heard(heard_spec(text="")))
+
+        assert call.conversation.turns == ()
 
     def test_an_agent_turn_with_nothing_said_adds_no_turn(self) -> None:
         call = domain.Call(call_spec())
@@ -146,6 +197,23 @@ class TestCall:
             domain.Call(call_spec(step="haggle"))
 
         assert raised.value.code == "invalid_step"
+
+
+class TestHeard:
+
+    def test_an_utterance_heard_carries_the_words(self) -> None:
+        heard = domain.Heard(domain.HeardSpec(heard="utterance", text="my name is Grace"))
+
+        assert [str(utterance) for utterance in heard.utterances] == ["my name is Grace"]
+
+    def test_silence_carries_no_utterance(self) -> None:
+        heard = domain.Heard(domain.HeardSpec(heard="silence", text=""))
+
+        assert heard.utterances == ()
+
+    def test_something_neither_an_utterance_nor_silence_is_refused(self) -> None:
+        with pytest.raises(ValueError):
+            domain.Heard(domain.HeardSpec(heard="static", text=""))
 
 
 class TestCallPresence:
@@ -224,20 +292,24 @@ class TestUtterance:
 
 class TestTurn:
 
-    def test_a_turn_constructs_from_its_spec(self) -> None:
-        turn_spec = domain.TurnSpec(speaker="person", text="my name is Ada")
+    def test_a_turn_holds_its_utterances_in_order(self) -> None:
+        turn_spec = domain.TurnSpec(speaker="person", utterances=("my name is", "Ada"))
 
         turn = domain.Turn(turn_spec)
 
         assert str(turn.speaker) == turn_spec.speaker
-        assert str(turn.utterance) == turn_spec.text
+        assert [str(utterance) for utterance in turn.utterances] == ["my name is", "Ada"]
+
+    def test_a_turn_in_which_nothing_is_said_is_refused(self) -> None:
+        with pytest.raises(ValueError):
+            domain.Turn(domain.TurnSpec(speaker="person", utterances=()))
 
     def test_turns_equal_by_value(self) -> None:
-        first = domain.Turn(domain.TurnSpec(speaker="person", text="my name is Ada"))
-        second = domain.Turn(domain.TurnSpec(speaker="person", text="my name is Ada"))
+        first = domain.Turn(domain.TurnSpec(speaker="person", utterances=("my name is Ada",)))
+        second = domain.Turn(domain.TurnSpec(speaker="person", utterances=("my name is Ada",)))
 
         assert first == second
-        assert first != domain.Turn(domain.TurnSpec(speaker="agent", text="my name is Ada"))
+        assert first != domain.Turn(domain.TurnSpec(speaker="agent", utterances=("my name is Ada",)))
 
 
 class TestConversation:
@@ -245,14 +317,14 @@ class TestConversation:
     def test_a_conversation_holds_its_turns_in_order(self) -> None:
         conversation_spec = domain.ConversationSpec(
             turns=(
-                domain.TurnSpec(speaker="agent", text="what is your name?"),
-                domain.TurnSpec(speaker="person", text="Ada"),
+                domain.TurnSpec(speaker="agent", utterances=("what is your name?",)),
+                domain.TurnSpec(speaker="person", utterances=("Ada",)),
             )
         )
 
         conversation = domain.Conversation(conversation_spec)
 
-        assert [str(turn.utterance) for turn in conversation.turns] == ["what is your name?", "Ada"]
+        assert [str(turn.speaker) for turn in conversation.turns] == ["agent", "person"]
 
     def test_an_empty_conversation_has_no_turns(self) -> None:
         conversation = domain.Conversation(domain.ConversationSpec(turns=()))
@@ -261,17 +333,36 @@ class TestConversation:
 
     def test_adding_a_turn_answers_a_longer_conversation_and_leaves_this_one_alone(self) -> None:
         conversation = domain.Conversation(
-            domain.ConversationSpec(turns=(domain.TurnSpec(speaker="agent", text="what is your name?"),))
+            domain.ConversationSpec(turns=(domain.TurnSpec(speaker="agent", utterances=("what is your name?",)),))
         )
 
-        longer = conversation.with_turn(domain.TurnSpec(speaker="person", text="Ada"))
+        longer = conversation.with_turn(domain.TurnSpec(speaker="person", utterances=("Ada",)))
 
         assert [str(turn.speaker) for turn in longer.turns] == ["agent", "person"]
         assert len(conversation.turns) == 1
 
+    def test_adding_an_utterance_extends_the_last_turn(self) -> None:
+        conversation = domain.Conversation(
+            domain.ConversationSpec(turns=(domain.TurnSpec(speaker="person", utterances=("my name is",)),))
+        )
+
+        longer = conversation.with_utterance("Ada")
+
+        assert [[str(u) for u in turn.utterances] for turn in longer.turns] == [["my name is", "Ada"]]
+
+    def test_an_utterance_cannot_extend_a_conversation_with_no_turn(self) -> None:
+        conversation = domain.Conversation(domain.ConversationSpec(turns=()))
+
+        with pytest.raises(ValueError):
+            conversation.with_utterance("Ada")
+
     def test_conversations_equal_by_their_turns(self) -> None:
-        first = domain.Conversation(domain.ConversationSpec(turns=(domain.TurnSpec(speaker="person", text="Ada"),)))
-        second = domain.Conversation(domain.ConversationSpec(turns=(domain.TurnSpec(speaker="person", text="Ada"),)))
+        first = domain.Conversation(
+            domain.ConversationSpec(turns=(domain.TurnSpec(speaker="person", utterances=("Ada",)),))
+        )
+        second = domain.Conversation(
+            domain.ConversationSpec(turns=(domain.TurnSpec(speaker="person", utterances=("Ada",)),))
+        )
 
         assert first == second
         assert first != domain.Conversation(domain.ConversationSpec(turns=()))

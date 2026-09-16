@@ -16,7 +16,7 @@ def call_spec(
     return domain.CallSpec(
         call_id=call_id,
         person=domain.PersonSpec(name=name, phone_number=phone_number),
-        turns=(domain.TurnSpec(speaker="agent", text="hi, may I have your name?"),),
+        turns=(domain.TurnSpec(speaker="agent", utterances=("hi, may I have your name?",)),),
         step=step,
     )
 
@@ -30,7 +30,7 @@ class TestCallSnapshot:
 
         assert raw == (
             b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "+15555550100"}, '
-            b'"turns": [{"speaker": "agent", "text": "hi, may I have your name?"}], "step": "ask_name"}'
+            b'"turns": [{"speaker": "agent", "utterances": ["hi, may I have your name?"]}], "step": "ask_name"}'
         )
 
     def test_a_call_comes_back_whole_through_its_own_constructor(self) -> None:
@@ -55,6 +55,8 @@ class TestCallSnapshot:
             b"{}",
             b'{"call_id": "c1", "person": "Ada", "turns": [], "step": "ask_name"}',
             b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "p"}, "turns": [1], "step": "ask_name"}',
+            b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "p"}, '
+            b'"turns": [{"speaker": "agent", "utterances": [1]}], "step": "ask_name"}',
             b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "p"}, "turns": [], "step": 1}',
         ):
             with pytest.raises(errors.DomainError):

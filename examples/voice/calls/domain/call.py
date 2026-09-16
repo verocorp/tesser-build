@@ -14,6 +14,9 @@ SPEAKERS: typing.Final[tuple[str, ...]] = (AGENT, PERSON)
 ASK_NAME: typing.Final[str] = "ask_name"
 DONE: typing.Final[str] = "done"
 STEPS: typing.Final[tuple[str, ...]] = (ASK_NAME, DONE)
+UTTERANCE: typing.Final[str] = "utterance"
+SILENCE: typing.Final[str] = "silence"
+HEARD: typing.Final[tuple[str, ...]] = (UTTERANCE, SILENCE)
 _PERSONA: typing.Final[str] = (
     "You are a warm, brief receptionist placing a phone call. You speak in short, natural sentences."
 )
@@ -126,27 +129,29 @@ class Utterance(ts.ValueObject):
 
 class TurnSpec(ts.Spec):
 
-    def __init__(self, speaker: str, text: str) -> None:
+    def __init__(self, speaker: str, utterances: tuple[str, ...]) -> None:
         self.speaker = speaker
-        self.text = text
+        self.utterances = utterances
 
 
 class Turn(ts.ValueObject):
 
     _speaker: Speaker
-    _utterance: Utterance
+    _utterances: tuple[Utterance, ...]
 
     def __init__(self, spec: TurnSpec) -> None:
+        if not spec.utterances:
+            raise ValueError("a turn says something")
         object.__setattr__(self, "_speaker", Speaker(spec.speaker))
-        object.__setattr__(self, "_utterance", Utterance(spec.text))
+        object.__setattr__(self, "_utterances", tuple(Utterance(text) for text in spec.utterances))
 
     @property
     def speaker(self) -> Speaker:
         return self._speaker
 
     @property
-    def utterance(self) -> Utterance:
-        return self._utterance
+    def utterances(self) -> tuple[Utterance, ...]:
+        return self._utterances
 
 
 class ConversationSpec(ts.Spec):
@@ -170,8 +175,27 @@ class Conversation(ts.ValueObject):
         return Conversation(
             ConversationSpec(
                 turns=(
-                    *(TurnSpec(speaker=str(turn.speaker), text=str(turn.utterance)) for turn in self._turns),
+                    *(
+                        TurnSpec(speaker=str(turn.speaker), utterances=tuple(str(u) for u in turn.utterances))
+                        for turn in self._turns
+                    ),
                     turn_spec,
+                )
+            )
+        )
+
+    def with_utterance(self, text: str) -> Conversation:
+        if not self._turns:
+            raise ValueError("an utterance extends a turn, and this conversation has none")
+        last = self._turns[-1]
+        return Conversation(
+            ConversationSpec(
+                turns=(
+                    *(
+                        TurnSpec(speaker=str(turn.speaker), utterances=tuple(str(u) for u in turn.utterances))
+                        for turn in self._turns[:-1]
+                    ),
+                    TurnSpec(speaker=str(last.speaker), utterances=(*(str(u) for u in last.utterances), text)),
                 )
             )
         )
@@ -226,9 +250,31 @@ class AgentTurn(ts.ValueObject):
         return self._person_names
 
 
+class HeardSpec(ts.Spec):
+
+    def __init__(self, heard: str, text: str) -> None:
+        self.heard = heard
+        self.text = text
+
+
+class Heard(ts.ValueObject):
+
+    _utterances: tuple[Utterance, ...]
+
+    def __init__(self, spec: HeardSpec) -> None:
+        if spec.heard not in HEARD:
+            raise ValueError(f"what is heard on a call is an utterance or silence, not {spec.heard!r}")
+        object.__setattr__(self, "_utterances", (Utterance(spec.text),) if spec.heard == UTTERANCE else ())
+
+    @property
+    def utterances(self) -> tuple[Utterance, ...]:
+        return self._utterances
+
+
 class CallProgress(ts.Outcome):
     AGENTS_TURN = enum.auto()
     PERSONS_TURN = enum.auto()
+    PERSON_SILENT = enum.auto()
     ENDED = enum.auto()
 
 
@@ -275,6 +321,9 @@ class Call(ts.AggregateRoot):
         self._persona = Persona(_PERSONA)
         self._conversation = Conversation(ConversationSpec(turns=spec.turns))
         self._step = CallStep(spec.step)
+        self._listening = False
+        self._person_silent = False
+        self._person_turn_open = False
 
     @property
     def identity(self) -> CallId:
@@ -301,21 +350,42 @@ class Call(ts.AggregateRoot):
         return Instructions(_INSTRUCTIONS[str(self._step)])
 
     def agent_said(self, agent_turn: AgentTurn) -> None:
-        for utterance in agent_turn.utterances:
-            self._conversation = self._conversation.with_turn(TurnSpec(speaker=AGENT, text=str(utterance)))
+        if agent_turn.utterances:
+            self._conversation = self._conversation.with_turn(
+                TurnSpec(speaker=AGENT, utterances=tuple(str(u) for u in agent_turn.utterances))
+            )
+            self._listening = True
+            self._person_silent = False
+            self._person_turn_open = False
         if agent_turn.person_names and self._step == CallStep(ASK_NAME):
             self._person = Person(
                 PersonSpec(name=str(agent_turn.person_names[0]), phone_number=str(self._person.phone_number))
             )
             self._step = CallStep(DONE)
 
-    def person_said(self, text: str) -> None:
-        self._conversation = self._conversation.with_turn(TurnSpec(speaker=PERSON, text=text))
+    def heard(self, heard: Heard) -> None:
+        if not heard.utterances:
+            self._person_silent = True
+            return
+        for utterance in heard.utterances:
+            if self._person_turn_open:
+                self._conversation = self._conversation.with_utterance(str(utterance))
+            else:
+                self._conversation = self._conversation.with_turn(
+                    TurnSpec(speaker=PERSON, utterances=(str(utterance),))
+                )
+                self._person_turn_open = True
+
+    def person_turn_ended(self) -> None:
+        self._listening = False
+        self._person_silent = False
+        self._person_turn_open = False
 
     def progress(self) -> CallProgress:
         if self._step == CallStep(DONE):
             return CallProgress.ENDED
-        turns = self._conversation.turns
-        if turns and turns[-1].speaker == Speaker(AGENT):
+        if self._person_silent:
+            return CallProgress.PERSON_SILENT
+        if self._listening:
             return CallProgress.PERSONS_TURN
         return CallProgress.AGENTS_TURN

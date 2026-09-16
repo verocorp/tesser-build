@@ -110,6 +110,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         self._fake_dialing_application_client = fake_dialing_application_client
         self._fake_speech_application_client = fake_speech_application_client
         self.resolved: list[tuple[str, object]] = []
+        self.awakened = 0
 
     async def service_call(self, tpe: object, arg: object) -> object:
         if isinstance(arg, relays.RecordCallRequest):
@@ -127,8 +128,15 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         return FakeDurablePromise(self.resolved, name, relays.AwaitPersonAnsweredResponse(call_id="c7"))
 
     def awakeable(self, serde: object) -> tuple[str, FakeDurableFuture]:
-        return "sign_1", FakeDurableFuture(
-            relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_UTTERANCE, text="my name is Grace")
+        self.awakened += 1
+        if self.awakened % 2 == 1:
+            return "sign_1", FakeDurableFuture(
+                relays.AwaitPersonUtteranceResponse(
+                    call_id="c7", heard=relays.HEARD_UTTERANCE, text="my name is Grace"
+                )
+            )
+        return "sign_2", FakeDurableFuture(
+            relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_SILENCE, text="")
         )
 
     def object_send(self, tpe: object, key: str, arg: object, send_delay: datetime.timedelta | None = None) -> None:
@@ -294,6 +302,7 @@ class TestRestateCallRuntime:
         assert conduct_call_response.call_id == "c7"
         assert [str(recorded.call.person.name) for recorded in fake_call_application_client.recorded] == ["Grace"]
         assert len(fake_dialing_application_client.dialed) == 1
+        assert len(fake_speech_application_client.ended) == 1
         assert len(fake_dialing_application_client.hung_up) == 1
 
     async def test_the_person_answered_handler_resolves_the_workflows_promise(self) -> None:

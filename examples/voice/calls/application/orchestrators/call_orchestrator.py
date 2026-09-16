@@ -34,6 +34,18 @@ class MapToAwaitPersonUtteranceRequest(ts.Mapper, relays.AwaitPersonUtteranceReq
         super().__init__(call_id=str(call.identity), within_seconds=_SILENCE_SECONDS)
 
 
+class MapToEndPersonTurnRequest(ts.Mapper, relays.EndPersonTurnRequest):
+
+    def __init__(self, call: domain.Call) -> None:
+        super().__init__(call=call)
+
+
+class MapToHeardSpec(ts.Mapper, domain.HeardSpec):
+
+    def __init__(self, await_person_utterance_response: relays.AwaitPersonUtteranceResponse) -> None:
+        super().__init__(heard=await_person_utterance_response.heard, text=await_person_utterance_response.text)
+
+
 class MapToHangUpRequest(ts.Mapper, relays.HangUpRequest):
 
     def __init__(self, call: domain.Call) -> None:
@@ -66,6 +78,7 @@ class CallOrchestrator(ts.Orchestrator):
         await_person_answered_relay: relays.AwaitPersonAnsweredRelay,
         speak_turn_relay: relays.SpeakTurnRelay,
         await_person_utterance_relay: relays.AwaitPersonUtteranceRelay,
+        end_person_turn_relay: relays.EndPersonTurnRelay,
         hang_up_relay: relays.HangUpRelay,
         record_call_relay: relays.RecordCallRelay,
     ) -> None:
@@ -73,6 +86,7 @@ class CallOrchestrator(ts.Orchestrator):
         self._await_person_answered_relay = await_person_answered_relay
         self._speak_turn_relay = speak_turn_relay
         self._await_person_utterance_relay = await_person_utterance_relay
+        self._end_person_turn_relay = end_person_turn_relay
         self._hang_up_relay = hang_up_relay
         self._record_call_relay = record_call_relay
 
@@ -93,7 +107,10 @@ class CallOrchestrator(ts.Orchestrator):
                             MapToAwaitPersonUtteranceRequest(call)
                         )
                     )
-                    call.person_said(await_person_utterance_response.text)
+                    call.heard(domain.Heard(MapToHeardSpec(await_person_utterance_response)))
+                case domain.CallProgress.PERSON_SILENT:
+                    await self._end_person_turn_relay.run_end_person_turn(MapToEndPersonTurnRequest(call))
+                    call.person_turn_ended()
                 case _ as never:
                     typing.assert_never(never)
         await self._hang_up_relay.run_hang_up(MapToHangUpRequest(call))

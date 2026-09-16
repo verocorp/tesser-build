@@ -38,14 +38,22 @@ def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+1555
         call_id=call_id,
         person=domain.PersonSpec(name=name, phone_number=phone_number),
         turns=(
-            domain.TurnSpec(speaker="agent", text="hi, may I have your name?"),
-            domain.TurnSpec(speaker="person", text="my name is Grace"),
+            domain.TurnSpec(speaker="agent", utterances=("hi, may I have your name?",)),
+            domain.TurnSpec(speaker="person", utterances=("my name is", "Grace")),
         ),
         step="ask_name",
     )
 
 
 class TestSpeechActions:
+
+    async def test_a_turns_utterances_reach_the_port_as_one_text(self) -> None:
+        fake_speech = FakeSpeech(text="", person_name="")
+        speech_actions = application.SpeechActions(fake_speech)
+
+        await speech_actions.speak_turn(relays.SpeakTurnRequest(call=domain.Call(call_spec())))
+
+        assert fake_speech.spoken[0].turns[1].text == "my name is Grace"
 
     async def test_speaking_a_turn_hands_the_port_the_calls_persona_turns_and_instructions(self) -> None:
         fake_speech = FakeSpeech(text="nice to meet you, Grace", person_name="Grace")

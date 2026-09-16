@@ -20,6 +20,7 @@ from calls.application.relays.dial_person_relay import DialPersonRequest as Dial
 from calls.application.relays.dial_person_relay import DialPersonRequestSnapshot as DialPersonRequestSnapshot
 from calls.application.relays.dial_person_relay import DialPersonResponse as DialPersonResponse
 from calls.application.relays.dial_person_relay import DialPersonResponseSnapshot as DialPersonResponseSnapshot
+from calls.application.relays.end_person_turn_relay import EndPersonTurnRelay as EndPersonTurnRelay
 from calls.application.relays.end_person_turn_relay import EndPersonTurnRequest as EndPersonTurnRequest
 from calls.application.relays.end_person_turn_relay import EndPersonTurnRequestSnapshot as EndPersonTurnRequestSnapshot
 from calls.application.relays.end_person_turn_relay import EndPersonTurnResponse as EndPersonTurnResponse

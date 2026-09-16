@@ -331,6 +331,7 @@ class RestateCallRuntime(ts.Runtime):
                 restate_await_call_relays,
                 restate_invocation_call_relays,
                 restate_invocation_call_relays,
+                restate_invocation_call_relays,
             ).conduct_call(conduct_call_request)
 
         @self.call_orchestrator_workflow.handler(

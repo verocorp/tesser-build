@@ -10,7 +10,9 @@ import calls.domain as domain
 class MapToSpokenTurn(ts.Mapper, ports.SpokenTurn):
 
     def __init__(self, turn: domain.Turn) -> None:
-        super().__init__(spoken_by=ports.SpokenBy(str(turn.speaker)), text=str(turn.utterance))
+        super().__init__(
+            spoken_by=ports.SpokenBy(str(turn.speaker)), text=" ".join(str(u) for u in turn.utterances)
+        )
 
 
 class MapToSpeakTurnRequest(ts.Mapper, ports.SpeakTurnRequest):
