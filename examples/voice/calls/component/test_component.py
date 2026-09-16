@@ -66,5 +66,5 @@ class TestCalls:
             "DialingActions": ["dial_person", "hang_up"],
             "SpeechActions": ["speak_turn"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
-            "CallUtterances": ["person_utterance", "take_person_utterance"],
+            "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
         }

@@ -43,7 +43,7 @@ class TestRestateHost:
         assert {s["name"]: sorted(h["name"] for h in s["handlers"]) for s in services} == {
             "CallActions": ["record_call"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
-            "CallUtterances": ["person_utterance", "take_person_utterance"],
+            "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
             "DialingActions": ["dial_person", "hang_up"],
             "SpeechActions": ["speak_turn"],
         }

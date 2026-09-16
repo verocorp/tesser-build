@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import typing
 
 import tesser.testing as ts
@@ -117,9 +118,11 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         return FakeDurablePromise(self.resolved, name, relays.AwaitPersonAnsweredResponse(call_id="c7"))
 
     def awakeable(self, serde: object) -> tuple[str, FakeDurableFuture]:
-        return "sign_1", FakeDurableFuture(relays.AwaitPersonUtteranceResponse(call_id="c7", text="my name is Grace"))
+        return "sign_1", FakeDurableFuture(
+            relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_UTTERANCE, text="my name is Grace")
+        )
 
-    def object_send(self, tpe: object, key: str, arg: object) -> None:
+    def object_send(self, tpe: object, key: str, arg: object, send_delay: datetime.timedelta | None = None) -> None:
         return None
 
 
@@ -191,7 +194,7 @@ class TestRestateCallRuntime:
             "DialingActions": ["dial_person", "hang_up"],
             "SpeechActions": ["speak_turn"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
-            "CallUtterances": ["person_utterance", "take_person_utterance"],
+            "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
         }
 
     def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
@@ -312,7 +315,7 @@ class TestRestateCallRuntime:
         )
 
         assert fake_restate_object_context.resolved == [
-            ("sign_1", relays.AwaitPersonUtteranceResponse(call_id="c7", text="Ada"))
+            ("sign_1", relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_UTTERANCE, text="Ada"))
         ]
         assert fake_restate_object_context.state == {}
 
@@ -324,7 +327,10 @@ class TestRestateCallRuntime:
         ).take_person_utterance_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1")
 
         assert fake_restate_object_context.resolved == [
-            ("sign_1", relays.AwaitPersonUtteranceResponse(call_id="c7", text="my name is"))
+            (
+                "sign_1",
+                relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_UTTERANCE, text="my name is"),
+            )
         ]
         assert fake_restate_object_context.state == {"buffered": ["Ada"]}
 
@@ -361,3 +367,29 @@ class TestRestateCallRuntime:
 
         assert fake_restate_object_context.state["waiting"] == "sign_1"
         assert fake_restate_object_context.rejected == ["sign_2"]
+
+    async def test_stopping_a_take_still_waiting_answers_silence(self) -> None:
+        fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_1"})  # tesser:debt TB085
+
+        await runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+        ).stop_taking_person_utterance_handler(
+            typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1"
+        )
+
+        assert fake_restate_object_context.resolved == [
+            ("sign_1", relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_SILENCE, text=""))
+        ]
+        assert fake_restate_object_context.state == {}
+
+    async def test_stopping_a_take_that_was_already_served_changes_nothing(self) -> None:
+        fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_2"})  # tesser:debt TB085
+
+        await runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+        ).stop_taking_person_utterance_handler(
+            typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1"
+        )
+
+        assert fake_restate_object_context.resolved == []
+        assert fake_restate_object_context.state == {"waiting": "sign_2"}

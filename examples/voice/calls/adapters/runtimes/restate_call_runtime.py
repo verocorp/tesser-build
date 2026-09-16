@@ -331,7 +331,9 @@ class RestateCallRuntime(ts.Runtime):
                 restate_object_context.resolve_awakeable(
                     waiting,
                     relays.AwaitPersonUtteranceResponse(
-                        call_id=person_utterance_request.call_id, text=person_utterance_request.text
+                        call_id=person_utterance_request.call_id,
+                        heard=relays.HEARD_UTTERANCE,
+                        text=person_utterance_request.text,
                     ),
                     serde=RestateAwaitPersonUtteranceResponseSerde(),
                 )
@@ -349,11 +351,28 @@ class RestateCallRuntime(ts.Runtime):
                 restate_object_context.set(_BUFFERED_UTTERANCES, buffered[1:])
                 restate_object_context.resolve_awakeable(
                     awakeable_id,
-                    relays.AwaitPersonUtteranceResponse(call_id=restate_object_context.key(), text=buffered[0]),
+                    relays.AwaitPersonUtteranceResponse(
+                        call_id=restate_object_context.key(), heard=relays.HEARD_UTTERANCE, text=buffered[0]
+                    ),
                     serde=RestateAwaitPersonUtteranceResponseSerde(),
                 )
             else:
                 restate_object_context.set(_WAITING_AWAKEABLE, awakeable_id)
+
+        @self.call_utterances_object.handler()
+        async def stop_taking_person_utterance(  # tesser:debt TB023
+            restate_object_context: restate.ObjectContext, awakeable_id: str
+        ) -> None:
+            waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
+            if waiting == awakeable_id:
+                restate_object_context.clear(_WAITING_AWAKEABLE)
+                restate_object_context.resolve_awakeable(
+                    awakeable_id,
+                    relays.AwaitPersonUtteranceResponse(
+                        call_id=restate_object_context.key(), heard=relays.HEARD_SILENCE, text=""
+                    ),
+                    serde=RestateAwaitPersonUtteranceResponseSerde(),
+                )
 
         self.record_call_handler = record_call
         self.dial_person_handler = dial_person
@@ -363,3 +382,4 @@ class RestateCallRuntime(ts.Runtime):
         self.person_answered_handler = person_answered
         self.person_utterance_handler = person_utterance
         self.take_person_utterance_handler = take_person_utterance
+        self.stop_taking_person_utterance_handler = stop_taking_person_utterance

@@ -7,6 +7,8 @@ import tesser.application as ts
 import calls.application.relays as relays
 import calls.domain as domain
 
+_SILENCE_SECONDS: typing.Final[int] = 8
+
 
 class MapToDialPersonRequest(ts.Mapper, relays.DialPersonRequest):
 
@@ -29,7 +31,7 @@ class MapToSpeakTurnRequest(ts.Mapper, relays.SpeakTurnRequest):
 class MapToAwaitPersonUtteranceRequest(ts.Mapper, relays.AwaitPersonUtteranceRequest):
 
     def __init__(self, call: domain.Call) -> None:
-        super().__init__(call_id=str(call.identity))
+        super().__init__(call_id=str(call.identity), within_seconds=_SILENCE_SECONDS)
 
 
 class MapToHangUpRequest(ts.Mapper, relays.HangUpRequest):

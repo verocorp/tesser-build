@@ -64,7 +64,7 @@ class FakeAwaitPersonUtteranceRelay(relays.AwaitPersonUtteranceRelay):
         self.awaited += 1
         self._journal.append(f"hear {self.awaited}")
         return relays.AwaitPersonUtteranceResponse(
-            call_id=await_person_utterance_request.call_id, text="my name is Grace"
+            call_id=await_person_utterance_request.call_id, heard=relays.HEARD_UTTERANCE, text="my name is Grace"
         )
 
 
