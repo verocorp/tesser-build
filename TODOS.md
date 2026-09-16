@@ -2,6 +2,63 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the voice example's LiveKit integration (2026-09-15/16, Chris)
+
+Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).
+Chris ruled no rule or analyzer changes until the example is built and
+right; collisions carry `# tesser:debt` markers meanwhile.
+
+- **Which language each `ts.*` kind and each directory speaks.** HIGH
+  PRIORITY. The context's ubiquitous language is `domain/`,
+  `application/`, `client/`. `srv/` is not part of it: a host speaks the
+  host's language and the app's (an HTTP host defines URL paths, which are
+  the app's words; the LiveKit host speaks LiveKit's, so its worker is a
+  `Worker` or `LivekitWorker`, never a `CallWorker`). Adapters sit between
+  and translate. Write this down per `ts.*` kind and per directory in the
+  skill (strategic-design.md / python.md), so an agent naming a class in
+  `srv/` does not reach for an aggregate's name. Trigger: `CallWorker` in
+  `examples/voice/srv/livekit/worker.py` (renamed `LivekitWorker`
+  2026-09-16).
+- **Agents conflate similarly named concepts across boundaries.** HIGH
+  PRIORITY, same family as the item above. `calls` is the context and
+  `Call` the aggregate; LiveKit's "agent" and our agent are different
+  things; LiveKit's "transcript" is not our `Utterance`. The skill needs a
+  section that teaches an agent to keep an integration's vocabulary out of
+  the domain and the domain's out of the host, with these three as the
+  worked examples.
+- **Where evals live (TB070).** Chris ruled evals go in
+  `<context>/tests/evals/eval_livekit_*.py` and drive the real
+  integration through application/domain code; gateway evals were tried
+  and dropped as tedious and unhelpful. TB070's placement table has no
+  row for `<context>/tests/evals/`; whatever it imports will carry TB070
+  debt until the rule gains the row. Also decide how evals are excluded
+  from the default `pytest -q` and gated separately (env flag, marker, or
+  path).
+- **A flushed utterance after silence lands in the next turn.** When the
+  orchestrator decides `PERSON_SILENT` and runs `end_person_turn`, the
+  worker's `commit_user_turn` flushes any pending STT text as one more
+  final, which reaches the mailbox before the RPC returns (the worker
+  gathers its deliveries first). The orchestrator has already moved to
+  `AGENTS_TURN`, so that text is read as the opening of the person's next
+  turn. Accepted for now (Chris 2026-09-16). To improve: one non-waiting
+  take after `end_person_turn` returns, which needs a mailbox handler that
+  answers "nothing buffered" immediately instead of installing a waiter; a
+  zero-second sleep does not work because it races the `object_send`.
+- **A mailbox handler invokes no operation (TB085 after #199).** The
+  `CallUtterances` object's `person_utterance`, `take_person_utterance`
+  and `stop_taking_person_utterance` handlers move state and resolve
+  awakeables; they call no application client, so #199's "a handler
+  invokes the operation it is named for" has nothing to read. The
+  mailbox is engine plumbing the runtime owns, not a relay operation.
+  Decide whether a Virtual Object handler that serves only the runtime
+  is exempt, or whether the mailbox belongs elsewhere. Four TB085
+  markers in `restate_call_runtime.py` meanwhile.
+- **Is `mock_tools` a test double under TB030?** livekit-agents ships
+  `mock_tools` as a contextvar that substitutes tool bodies, not a
+  runtime patcher. The gateway sibling test hand-fakes the SDK instead
+  (no stubber exists). Rule on whether an SDK-provided substitution
+  mechanism counts as a mocking library.
+
 ## Left open by the operation-naming enactment (2026-09-13, Chris)
 
 The conventions are `docs/design-operation-naming.md`; the enactment is
