@@ -192,13 +192,22 @@ jobs:
 
   durable-execution-example:
     # Gates the durable-execution example at the same bar: tessercheck zero
-    # findings + mypy --strict + pytest. One context whose workflow runs on
-    # Restate: one FastAPI host serves POST /submissions and mounts the Restate
-    # endpoint, and the srv test boots the real host and reads its /discover
-    # manifest. restate_sdk, fastapi, httpx, and hypercorn are installed; no
-    # restate-server runs in CI.
-    name: durable-execution example (tessercheck + mypy --strict + pytest)
+    # findings + mypy --strict + pytest against Restate. One context whose
+    # workflows run on Restate: one FastAPI host serves POST /submissions,
+    # /orders and /purchases and mounts the Restate endpoint. The arm serves
+    # that host on the runner and registers it with the service container
+    # through host.docker.internal; the adapter tests drive workflows through
+    # the ingress and read what the engine recorded in sys_invocation.
+    name: durable-execution example (tessercheck + mypy --strict + pytest against Restate)
     runs-on: ubuntu-latest
+    services:
+      restate:
+        image: restatedev/restate:1.7
+        ports:
+          - 8080:8080
+          - 9070:9070
+        options: >-
+          --add-host=host.docker.internal:host-gateway
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
@@ -206,7 +215,10 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/durable-execution/requirements-dev.txt
-      - name: examples/durable-execution — tessercheck + mypy --strict + pytest
+      - name: examples/durable-execution — tessercheck + mypy --strict + pytest against Restate
+        env:
+          RESTATE_INGRESS: http://localhost:8080
+          RESTATE_ADMIN: http://localhost:9070
         run: scripts/verify durable-execution
 
   voice-example:

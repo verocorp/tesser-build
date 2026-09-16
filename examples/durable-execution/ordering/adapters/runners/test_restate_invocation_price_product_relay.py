@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import typing
+import os
+import uuid
 
 import tesser.testing as ts
-import pytest
-import restate
+import httpx
 
 import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
+import ordering.domain as domain
 
 
 @ts.fake
@@ -45,53 +46,68 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         )
 
 
-@ts.fake
-class FakeRestateWorkflowContext:  # tesser:debt TB072
-
-    def __init__(self, refusal: str = "", status_code: int = 404) -> None:
-        self._refusal = refusal
-        self._status_code = status_code
-        self.called: list[tuple[object, object]] = []
-
-    async def service_call(self, tpe: object, arg: object) -> object:
-        self.called.append((tpe, arg))
-        if self._refusal:
-            raise restate.TerminalError(self._refusal, status_code=self._status_code)
-        return relays.PriceProductResponse(
-            outcome=relays.PriceProductOutcome.PRICED,
-            prices=(relays.Price(cents=250),),
-            reasons=(),
-        )
+@ts.helper
+def confirm_order_request(
+    order_id: str = "o1", sku: str = "widget", quantity: int = 2
+) -> relays.ConfirmOrderRequest:
+    return relays.ConfirmOrderRequest(
+        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
+    )
 
 
 class TestRestateInvocationPriceProductRelay:
 
     def test_running_price_product_journals_a_call_to_the_runtimes_handler(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient())
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        price_product_request = relays.PriceProductRequest(sku="widget")
-        price_product_response = asyncio.run(
-            runners.RestateInvocationPriceProductRelay(
-                typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
-                restate_order_runtime,
-            ).run_price_product(price_product_request)
+        order_id = str(uuid.uuid4())
+        confirm_order_response = asyncio.run(
+            runners.RestateIngressConfirmOrderRelay(
+                os.environ["RESTATE_INGRESS"],
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_confirm_order(confirm_order_request(order_id=order_id))
         )
-        assert price_product_response.prices[0].cents == 250
-        assert fake_restate_workflow_context.called == [
-            (restate_order_runtime.price_product_handler, price_product_request)
-        ]
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target, invoked_by_service_name, completion_result "
+                "FROM sys_invocation "
+                "WHERE invoked_by_target = 'OrderOrchestrator/" + order_id + "/confirm_order'"
+            },
+        )
+        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
+        assert confirm_order_response.confirmed_orders[0].total_cents == 500
+        assert [
+            (row["target"], row["invoked_by_service_name"], row["completion_result"])
+            for row in response.json()["rows"]
+        ] == [("OrderActions/price_product", "OrderOrchestrator", "success")]
 
-    def test_a_terminal_error_from_the_call_is_a_fault_the_runner_never_reads(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(FakeOrderingApplicationClient(), FakePurchaseApplicationClient())
-        for status_code in (404, 409, 422, 500):
-            with pytest.raises(restate.TerminalError) as excinfo:
-                asyncio.run(
-                    runners.RestateInvocationPriceProductRelay(
-                        typing.cast(
-                            restate.WorkflowContext,
-                            FakeRestateWorkflowContext(refusal="refused", status_code=status_code),
-                        ),
-                        restate_order_runtime,
-                    ).run_price_product(relays.PriceProductRequest(sku="widget"))
-                )
-            assert excinfo.value.status_code == status_code
+    def test_a_price_the_catalog_does_not_hold_ends_the_call_as_an_outcome_not_a_failure(
+        self,
+    ) -> None:
+        order_id = str(uuid.uuid4())
+        confirm_order_response = asyncio.run(
+            runners.RestateIngressConfirmOrderRelay(
+                os.environ["RESTATE_INGRESS"],
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_confirm_order(confirm_order_request(order_id=order_id, sku="nothing"))
+        )
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target, completion_result FROM sys_invocation "
+                "WHERE invoked_by_target = 'OrderOrchestrator/" + order_id + "/confirm_order'"
+            },
+        )
+        assert (
+            confirm_order_response.outcome
+            is relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND
+        )
+        assert confirm_order_response.reasons == ("no price for sku 'nothing'",)
+        assert [
+            (row["target"], row["completion_result"]) for row in response.json()["rows"]
+        ] == [("OrderActions/price_product", "success")]

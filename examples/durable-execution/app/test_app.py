@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import tesser.testing as ts
 
 import app as app
@@ -27,7 +29,7 @@ class TestEnvConfigRepository:
     def test_the_environment_the_runner_supplied_is_read_into_a_config(self) -> None:
         app_config = app.EnvConfigRepository().get()
         assert isinstance(app_config, app.AppConfig)
-        assert app_config.ordering.ingress == "http://localhost:8080"
+        assert app_config.ordering.ingress == os.environ["RESTATE_INGRESS"]
 
     def test_each_read_returns_its_own_config(self) -> None:
         env_config_repository = app.EnvConfigRepository()

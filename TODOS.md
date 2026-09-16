@@ -387,17 +387,27 @@ What is still open:
   implements no tesser contract, which is exactly the foreign double. Both
   alternatives are dropped: declaring a foreign base in `.tesser-root`, and
   requiring a conformance test to prove a fake still matches the real thing.
-  **Still open — the migration.** `examples/durable-execution` is the tree
-  carrying this debt (4 `TB072` and 6 `TB085` across `adapters/runners/` and
-  `adapters/runtimes/` tests, plus `FakeRestateIngress` and its `TB051`), and
-  moving it is not free: its 189 tests pass today with no Restate server —
-  `.github/workflows/test.yml` says in as many words that "no restate-server
-  runs in CI" for that job — so real-engine tests mean giving it a service
-  container. The asyncpg job is currently the only `services:` block in the
-  workflow. **The generator's templates are already migrated** (#201): the three
-  doubles are gone and a generated tree carries zero markers, because its arm
-  already runs a real Restate. Chris 2026-09-16: durable-execution migrates
-  **after** #201 merges.
+  **The generator's templates migrated first** (#201): the three doubles are
+  gone and a generated tree carries zero markers, because its arm already runs
+  a real Restate. **`examples/durable-execution` migrated 2026-09-16** (branch
+  `worktree-durable-ladder`): the tree had no test in which an order went
+  through Restate at all — every test that touched the ingress asserted its
+  absence — so the arm now serves the host and registers it, CI gained a
+  Restate service container, and the six adapter test files drive real
+  workflows under fresh uuid keys and assert `sys_invocation` (keyed
+  orchestrator rows, `invoked_by_target` on the children, one row on a repeat).
+  Every rule 10 marker in those files is gone (4 `TB072`, ~30 `TB085`, 2
+  `TB051`, 7 `TB073`); the 8 `TB082` in the runtime and 3 `TB023` in `srv/`
+  stand. Dropped, by judgment: the malformed-wire tests (a non-JSON `409`, a
+  nested-past-the-decoder `409`, a `200` that is not the result, the status
+  sweeps) — bytes no Restate server sends, provable only by impersonating the
+  transport — and the invocation relay's `start_confirm_order` test, which no
+  registered handler calls. Measured but not tested: a killed invocation
+  reaches its waiting creator as `409 killed` and the runner re-raises it; the
+  runner's guard against an unrecognised `409` is now covered only by the
+  exact-message match. Teeth proven by mutation (in-process pricing fails the
+  price-product relay test on an empty child list; the analyzer also refuses
+  that mutation on `TB085`/`TB042`).
 
 - [x] **The generator's five open choices are RULED (Chris 2026-09-16: "those 5
   are fine").** Recorded here because a PR body is not in the repo. The spec

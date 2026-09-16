@@ -123,21 +123,55 @@ run_minimal() {
   pytest -q || return 1
 }
 
-# The durable-execution example: one context whose workflow runs on Restate.
-# One FastAPI host serves POST /submissions and mounts the Restate endpoint at
-# /restate; the workflow and the action it calls are both jobs (ts.Job in
-# adapters/jobs/), and the engine never touches the domain.
+# The durable-execution example: one context whose workflows run on Restate.
+# One FastAPI host serves POST /submissions, /orders and /purchases and mounts
+# the Restate endpoint at /restate; the engine never touches the domain. The
+# adapter tests exercise the real engine (testing.md rule 10): the arm serves
+# the host here, registers it with the Restate admin API, and the tests drive
+# workflows through the ingress and read what the engine recorded in
+# sys_invocation. The app reads its own environment through the config
+# repository, so the runner supplies it — the same job a deploy does. Tests
+# never inject it. CI provides a Restate service container; locally the
+# defaults are a server of its own on 18080/19070, so a local run never
+# re-registers another tree's services:
+#
+#   docker run -d --name tesser-durable-restate -p 18080:8080 -p 19070:9070 \
+#     --add-host=host.docker.internal:host-gateway restatedev/restate:1.7
 run_durable_execution() {
   cd "$ROOT/examples/durable-execution" || return 1
+  local ingress="${RESTATE_INGRESS:-http://localhost:18080}"
+  local admin="${RESTATE_ADMIN:-http://localhost:19070}"
+  local port="${DURABLE_DEPLOYMENT_PORT:-9084}"
+  local deployment="${DURABLE_DEPLOYMENT:-http://host.docker.internal:$port}"
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict protocol ordering app srv tests conftest.py || return 1
-  step "pytest"
-  # The app reads its own environment through the config repository, so the
-  # runner supplies one — the same job a deploy does. Tests never inject it.
-  RESTATE_INGRESS=http://localhost:8080 \
-    pytest -q || return 1
+  step "serve the Restate endpoint on :$port and register it at $admin"
+  (exec env RESTATE_INGRESS="$ingress" PYTHONPATH=.:../../tesser-py \
+    python3 -m srv.http.main "0.0.0.0:$port") &
+  local host=$!
+  local registered=1
+  for _ in $(seq 1 50); do
+    if curl -sf -X POST "$admin/deployments" -H 'content-type: application/json' \
+      -d "{\"uri\": \"$deployment/restate\", \"force\": true}" >/dev/null; then
+      registered=0
+      break
+    fi
+    sleep 0.2
+  done
+  if [ "$registered" -ne 0 ]; then
+    echo "durable-execution: could not register $deployment/restate with $admin" >&2
+    kill "$host" 2>/dev/null
+    wait "$host" 2>/dev/null
+    return 1
+  fi
+  step "pytest (against Restate at $ingress)"
+  RESTATE_INGRESS="$ingress" RESTATE_ADMIN="$admin" pytest -q
+  local status=$?
+  kill -INT "$host" 2>/dev/null
+  wait "$host" 2>/dev/null
+  return "$status"
 }
 
 # The minimal tree with a real database behind it: the same two contexts, each
