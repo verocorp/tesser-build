@@ -5,6 +5,28 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.8.0] - 2026-09-16
+
+An adapter's dependency is exercised, not doubled.
+
+### Changed
+- **`testing.md` gains rule 10.** An adapter exists to talk to something the
+  context does not own, so what is worth proving is that the real conversation
+  works. In order of preference: an integration test against the real service,
+  storage, or engine; a test implementation the dependency itself provides (an
+  emulator, a stubber); or one written as a separate package outside this
+  repo's purview — its own distribution, or a `skip`ped in-repo directory.
+  **No double of an external dependency is defined in an adapter's test
+  module**; a fake of a tesser contract stays legal there, because the type
+  checker can see it, which is the fail-loudly property rule 1 is about. There
+  is no scheduled tier — a suite run against a third party on a timer mostly
+  reports that vendor's uptime (maintainer ruling 2026-09-16).
+- **No analyzer change.** `TB072` already refuses a fake that implements no
+  tesser contract, which is exactly the foreign double the ruling forbids. Two
+  alternatives considered during the ruling are dropped: declaring a foreign
+  base in `.tesser-root`, and requiring a conformance test to prove a fake
+  still matches the real thing.
+
 ## [0.1.7.0] - 2026-09-16
 
 TB023 stops reading `adapters/`, the one layer where someone else's SDK sets
