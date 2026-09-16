@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import typing
+import os
+import uuid
 
 import tesser.testing as ts
-import pytest
-import restate
+import httpx
 
 import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
 import ordering.application.client as client
 import ordering.application.relays as relays
+import ordering.domain as domain
 
 
 @ts.fake
@@ -45,70 +46,101 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         )
 
 
-@ts.fake
-class FakeRestateWorkflowContext:  # tesser:debt TB072
-
-    def __init__(self, refusal: str = "", status_code: int = 409) -> None:
-        self._refusal = refusal
-        self._status_code = status_code
-        self.called: list[tuple[object, object]] = []
-
-    async def service_call(self, tpe: object, arg: object) -> object:
-        self.called.append((tpe, arg))
-        if self._refusal:
-            raise restate.TerminalError(self._refusal, status_code=self._status_code)
-        return relays.TakePaymentResponse(
-            outcome=relays.TakePaymentOutcome.TAKEN,
-            order_id="o1",
-            payments=(relays.Payment(reference="pay-o1", cents=750),),
-            reasons=(),
-        )
-
-
 @ts.helper
-def take_payment_request(
-    order_id: str = "o1", cents: int = 750, payment_method: str = "card-4242"
-) -> relays.TakePaymentRequest:
-    return relays.TakePaymentRequest(
-        order_id=order_id, cents=cents, payment_method=payment_method
+def pay_for_order_request(
+    order_id: str = "o1",
+    sku: str = "widget",
+    quantity: int = 2,
+    payment_method: str = "card-4242",
+) -> relays.PayForOrderRequest:
+    return relays.PayForOrderRequest(
+        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)),
+        payment_method=domain.PaymentMethod(payment_method),
     )
 
 
 class TestRestateInvocationTakePaymentRelay:
 
     def test_running_take_payment_journals_a_call_to_the_runtimes_handler(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(
-            FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+        order_id = str(uuid.uuid4())
+        pay_for_order_response = asyncio.run(
+            runners.RestateIngressPayForOrderRelay(
+                os.environ["RESTATE_INGRESS"],
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_pay_for_order(pay_for_order_request(order_id=order_id))
         )
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        take_payment_request = relays.TakePaymentRequest(
-            order_id="o1", cents=750, payment_method="card-4242"
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target, invoked_by_service_name, completion_result "
+                "FROM sys_invocation "
+                "WHERE invoked_by_target = 'PurchaseOrchestrator/" + order_id + "/pay_for_order' "
+                "ORDER BY created_at"
+            },
         )
-        take_payment_response = asyncio.run(
-            runners.RestateInvocationTakePaymentRelay(
-                typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
-                restate_order_runtime,
-            ).run_take_payment(take_payment_request)
-        )
-        assert take_payment_response.payments[0].reference == "pay-o1"
-        assert take_payment_response.payments[0].cents == 750
-        assert fake_restate_workflow_context.called == [
-            (restate_order_runtime.take_payment_handler, take_payment_request)
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAID
+        assert pay_for_order_response.purchases[0].payment_reference == "pay-" + order_id
+        assert pay_for_order_response.purchases[0].total_cents == 500
+        assert [
+            (row["target"], row["invoked_by_service_name"], row["completion_result"])
+            for row in response.json()["rows"]
+        ] == [
+            ("OrderOrchestrator/" + order_id + "/confirm_order", "PurchaseOrchestrator", "success"),
+            ("PurchaseActions/take_payment", "PurchaseOrchestrator", "success"),
         ]
 
-    def test_a_terminal_error_from_the_call_is_a_fault_the_runner_never_reads(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(
-            FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+    def test_no_payment_is_taken_for_an_order_that_was_not_confirmed(self) -> None:
+        order_id = str(uuid.uuid4())
+        pay_for_order_response = asyncio.run(
+            runners.RestateIngressPayForOrderRelay(
+                os.environ["RESTATE_INGRESS"],
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_pay_for_order(pay_for_order_request(order_id=order_id, sku="nothing"))
         )
-        for status_code in (404, 409, 422, 500):
-            with pytest.raises(restate.TerminalError) as excinfo:
-                asyncio.run(
-                    runners.RestateInvocationTakePaymentRelay(
-                        typing.cast(
-                            restate.WorkflowContext,
-                            FakeRestateWorkflowContext(refusal="refused", status_code=status_code),
-                        ),
-                        restate_order_runtime,
-                    ).run_take_payment(take_payment_request())
-                )
-            assert excinfo.value.status_code == status_code
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target FROM sys_invocation "
+                "WHERE invoked_by_target = 'PurchaseOrchestrator/" + order_id + "/pay_for_order'"
+            },
+        )
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
+        assert pay_for_order_response.reasons == ("no price for sku 'nothing'",)
+        assert [row["target"] for row in response.json()["rows"]] == [
+            "OrderOrchestrator/" + order_id + "/confirm_order"
+        ]
+
+    def test_a_declined_charge_ends_the_call_as_an_outcome_not_a_failure(self) -> None:
+        order_id = str(uuid.uuid4())
+        pay_for_order_response = asyncio.run(
+            runners.RestateIngressPayForOrderRelay(
+                os.environ["RESTATE_INGRESS"],
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_pay_for_order(
+                pay_for_order_request(order_id=order_id, payment_method="declined")
+            )
+        )
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target, completion_result FROM sys_invocation "
+                "WHERE invoked_by_target = 'PurchaseOrchestrator/" + order_id + "/pay_for_order' "
+                "AND target_service_name = 'PurchaseActions'"
+            },
+        )
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAYMENT_DECLINED
+        assert pay_for_order_response.reasons == (
+            f"the processor declined the charge for order {order_id!r}",
+        )
+        assert [
+            (row["target"], row["completion_result"]) for row in response.json()["rows"]
+        ] == [("PurchaseActions/take_payment", "success")]

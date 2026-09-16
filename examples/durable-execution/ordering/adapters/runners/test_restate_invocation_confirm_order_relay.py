@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import typing
+import os
+import uuid
 
 import tesser.testing as ts
-import pytest
-import restate
+import httpx
 
 import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
@@ -46,30 +46,6 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         )
 
 
-@ts.fake
-class FakeRestateWorkflowContext:  # tesser:debt TB072
-
-    def __init__(self, refusal: str = "", status_code: int = 404) -> None:
-        self._refusal = refusal
-        self._status_code = status_code
-        self.called: list[tuple[object, str, object]] = []
-        self.sent: list[tuple[object, str, object]] = []
-
-    async def workflow_call(self, tpe: object, key: str, arg: object) -> object:
-        self.called.append((tpe, key, arg))
-        if self._refusal:
-            raise restate.TerminalError(self._refusal, status_code=self._status_code)
-        return relays.ConfirmOrderResponse(
-            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
-            order_id=key,
-            confirmed_orders=(relays.ConfirmedOrder(total_cents=500),),
-            reasons=(),
-        )
-
-    def workflow_send(self, tpe: object, key: str, arg: object) -> None:
-        self.sent.append((tpe, key, arg))
-
-
 @ts.helper
 def confirm_order_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 2
@@ -79,98 +55,112 @@ def confirm_order_request(
     )
 
 
+@ts.helper
+def pay_for_order_request(
+    order_id: str = "o1",
+    sku: str = "widget",
+    quantity: int = 2,
+    payment_method: str = "card-4242",
+) -> relays.PayForOrderRequest:
+    return relays.PayForOrderRequest(
+        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)),
+        payment_method=domain.PaymentMethod(payment_method),
+    )
+
+
 class TestRestateInvocationConfirmOrderRelay:
 
     def test_running_journals_a_call_to_the_order_workflow_keyed_by_the_orders_id(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(
-            FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+        order_id = str(uuid.uuid4())
+        pay_for_order_response = asyncio.run(
+            runners.RestateIngressPayForOrderRelay(
+                os.environ["RESTATE_INGRESS"],
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_pay_for_order(pay_for_order_request(order_id=order_id))
         )
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        confirm_order_response = asyncio.run(
-            runners.RestateInvocationConfirmOrderRelay(
-                typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
-                restate_order_runtime,
-            ).run_confirm_order(confirm_order_request(order_id="o5"))
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target_service_key, invoked_by_service_name, invoked_by_target, "
+                "completion_result FROM sys_invocation "
+                "WHERE target = 'OrderOrchestrator/" + order_id + "/confirm_order'"
+            },
         )
-        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
-        assert confirm_order_response.order_id == "o5"
-        assert confirm_order_response.confirmed_orders[0].total_cents == 500
-        assert [(t, k) for t, k, _ in fake_restate_workflow_context.called] == [
-            (restate_order_runtime.confirm_order_handler, "o5")
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAID
+        assert [
+            (
+                row["target_service_key"],
+                row["invoked_by_service_name"],
+                row["invoked_by_target"],
+                row["completion_result"],
+            )
+            for row in response.json()["rows"]
+        ] == [
+            (
+                order_id,
+                "PurchaseOrchestrator",
+                "PurchaseOrchestrator/" + order_id + "/pay_for_order",
+                "success",
+            )
         ]
-        assert fake_restate_workflow_context.sent == []
 
     def test_the_key_is_the_id_as_it_is_because_no_path_is_formed_inside_the_engine(self) -> None:
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        asyncio.run(
-            runners.RestateInvocationConfirmOrderRelay(
-                typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
+        order_id = "../admin?x=1#f-" + str(uuid.uuid4())
+        pay_for_order_response = asyncio.run(
+            runners.RestateIngressPayForOrderRelay(
+                os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
                 ),
-            ).run_confirm_order(confirm_order_request(order_id="../admin?x=1#f"))
+            ).run_pay_for_order(pay_for_order_request(order_id=order_id))
         )
-        assert [k for _, k, _ in fake_restate_workflow_context.called] == ["../admin?x=1#f"]
-
-    def test_starting_journals_a_send_and_answers_the_orders_id_at_once(self) -> None:
-        restate_order_runtime = runtimes.RestateOrderRuntime(
-            FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target, target_service_key FROM sys_invocation "
+                "WHERE invoked_by_target = 'PurchaseOrchestrator/" + order_id + "/pay_for_order' "
+                "AND target_service_name = 'OrderOrchestrator'"
+            },
         )
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        start_confirm_order_response = asyncio.run(
-            runners.RestateInvocationConfirmOrderRelay(
-                typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
-                restate_order_runtime,
-            ).start_confirm_order(confirm_order_request(order_id="o6"))
-        )
-        assert (
-            start_confirm_order_response.outcome is relays.StartConfirmOrderOutcome.STARTED
-        )
-        assert start_confirm_order_response.order_id == "o6"
-        assert [(t, k) for t, k, _ in fake_restate_workflow_context.sent] == [
-            (restate_order_runtime.confirm_order_handler, "o6")
-        ]
-        assert fake_restate_workflow_context.called == []
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAID
+        assert [
+            (row["target"], row["target_service_key"]) for row in response.json()["rows"]
+        ] == [("OrderOrchestrator/" + order_id + "/confirm_order", order_id)]
 
     def test_the_already_invoked_conflict_is_the_outcome_the_engine_crossing_adds(self) -> None:
-        confirm_order_response = asyncio.run(
-            runners.RestateInvocationConfirmOrderRelay(
-                typing.cast(
-                    restate.WorkflowContext,
-                    FakeRestateWorkflowContext(
-                        refusal="the workflow method was already invoked", status_code=409
-                    ),
-                ),
-                runtimes.RestateOrderRuntime(
-                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-                ),
-            ).run_confirm_order(confirm_order_request(order_id="o5"))
-        )
-        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.ALREADY_STARTED
-        assert confirm_order_response.order_id == "o5"
-        assert confirm_order_response.confirmed_orders == ()
-        assert confirm_order_response.reasons == ()
-
-    def test_any_other_terminal_error_is_a_fault_the_cancellation_409_included(self) -> None:
+        order_id = str(uuid.uuid4())
         restate_order_runtime = runtimes.RestateOrderRuntime(
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
-        for refusal, status_code in (
-            ("cancelled", 409),
-            ("no such sku", 404),
-            ("an order is for at least one unit", 422),
-            ("Unable to parse an input argument", 500),
-        ):
-            with pytest.raises(restate.TerminalError) as excinfo:
-                asyncio.run(
-                    runners.RestateInvocationConfirmOrderRelay(
-                        typing.cast(
-                            restate.WorkflowContext,
-                            FakeRestateWorkflowContext(
-                                refusal=refusal, status_code=status_code
-                            ),
-                        ),
-                        restate_order_runtime,
-                    ).run_confirm_order(confirm_order_request())
-                )
-            assert excinfo.value.status_code == status_code
+        confirm_order_response = asyncio.run(
+            runners.RestateIngressConfirmOrderRelay(
+                os.environ["RESTATE_INGRESS"], restate_order_runtime
+            ).run_confirm_order(confirm_order_request(order_id=order_id))
+        )
+        pay_for_order_response = asyncio.run(
+            runners.RestateIngressPayForOrderRelay(
+                os.environ["RESTATE_INGRESS"], restate_order_runtime
+            ).run_pay_for_order(pay_for_order_request(order_id=order_id))
+        )
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target, invoked_by, completion_result FROM sys_invocation "
+                "WHERE target_service_key = '" + order_id + "' ORDER BY created_at"
+            },
+        )
+        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
+        assert pay_for_order_response.reasons == ("the order was already started",)
+        assert [
+            (row["target"], row["invoked_by"], row["completion_result"])
+            for row in response.json()["rows"]
+        ] == [
+            ("OrderOrchestrator/" + order_id + "/confirm_order", "ingress", "success"),
+            ("PurchaseOrchestrator/" + order_id + "/pay_for_order", "ingress", "success"),
+        ]

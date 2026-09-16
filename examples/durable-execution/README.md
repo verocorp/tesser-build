@@ -271,6 +271,15 @@ its own key, its own journal, and its own stored result. Measured on
   them apart. So an order that was placed cannot then be paid for, and a
   payment cannot be repeated, for the same reason a placed order cannot be
   placed again.
+- The same holds at the ingress (measured on `restate-server` 1.7.9): a
+  repeat `workflow_call` on a completed key is `409 {"code":409,"message":"the
+  workflow method was already invoked","source":"invocation"}`, and so is one
+  on a key whose invocation is still running — the ingress never attaches a
+  second caller. A cancel requested through the admin API while the endpoint
+  is unreachable is accepted but stays undelivered (`backing-off`) until the
+  handler next runs; a kill completes the invocation as `[409] killed` and the
+  waiting creator receives `409 {"code":409,"message":"killed"}`, which the
+  runner re-raises. A repeat `workflow_send` is `202 PreviouslyAccepted`.
 
 `RestateInvocationConfirmOrderRelay` reads one thing off the message,
 `str(confirm_order_request.order.identity)`, for the child's key, and
@@ -784,35 +793,59 @@ read as a design. A workflow slower than that raises a
 belongs at the ingress or in the workflow, where a timed-out caller can still
 attach to the result, and this tree still makes neither rule.
 
-## Tests, and the two things they fake
+## Tests, and what the engine is asked to show
 
 Every payload is pinned once, in the four `relays/test_*_relay.py` modules,
 where the snapshots are defined — including the count check: a `PRICED`
 response that carries no price and a `PRICE_NOT_FOUND` that carries one are
 both refused. The runtime's test asserts the four registrations, that each
-declares the bounded retry policy, that each handler hands its request to the
-application client, and that every shim writes what its snapshot writes and
-turns an unreadable body into a terminal `400`.
+declares the bounded retry policy, that each action handler hands its request
+to the application client, and that every shim writes what its snapshot
+writes and turns an unreadable body into a terminal `400`.
 
-The ingress runners' tests build the real SDK client over a real socket
-listening on `127.0.0.1:0` and check the request line the SDK forms from the
-registered handler — `POST /OrderOrchestrator/o1/confirm_order/send` to start,
-`POST /OrderOrchestrator/o1/confirm_order` to run,
-`POST /PurchaseOrchestrator/o1/pay_for_order` for the purchase — the route and
-the key. On the run path the fake ingress answers the response snapshot's
-bytes, or a refusal shaped as the server shapes it, so the test pins the one
-mapping that is left: the already-invoked `409` is `ALREADY_STARTED`, and a
-`409` saying `cancelled`, a `404`, a `422` and a `500` all propagate.
+The runners are tested against the real engine (`testing.md` rule 10: an
+adapter's dependency is exercised, not doubled). `scripts/verify` serves this
+host, registers it with the Restate admin API, and runs the suite with
+`RESTATE_INGRESS` and `RESTATE_ADMIN` in the environment; CI does the same
+with a service container. Each runner test drives one workflow through the
+production runner under a fresh `uuid4` key, then reads what the engine
+recorded in `sys_invocation` through the admin API, filtered by that key —
+never by service name, because rows persist across runs on a shared server
+and an unfiltered query would match an earlier run and pass for the wrong
+reason. What each test asks the engine to show is the one thing the tests
+around it cannot see: that Restate is really in the path doing the durable
+work. A runtime that called the application client in-process would answer
+the same bytes and pass the acceptance test unchanged.
 
-Two things are hand-faked. `FakeRestateWorkflowContext` doubles the SDK's
-`restate.WorkflowContext` and records the handler it was journalled with, so
-the invocation runners' tests assert the runner reached the runtime's
-own `price_product_handler`, `take_payment_handler`, or
-`confirm_order_handler`. `FakeRestateIngress` is the socket-backed stand-in
-for the Restate ingress, which replaced nineteen nested `def ingress()`
-functions with one class and dropped nineteen `TB023` markers. Both double a
-foreign class rather than a port, which the testing norm does not admit, and
-each carries its own marker.
+- The ingress runners assert the row the engine keyed by the order's id —
+  `OrderOrchestrator/<id>/confirm_order` invoked by `ingress` — so forgetting
+  the key, keying by the wrong field, or targeting the wrong service all
+  show. An id of `../admin?x=1#f` reaches the row as exactly that key, which
+  is the percent-encoding proven from the engine's side. A repeat send leaves
+  one row; a repeat run answers `ALREADY_STARTED` and leaves one row.
+- The invocation runners assert the child row the engine links to its parent:
+  `OrderActions/price_product` and `PurchaseActions/take_payment` with
+  `invoked_by_target` naming the orchestrator invocation, and the child
+  `OrderOrchestrator/<id>` invoked by `PurchaseOrchestrator`. No engine call,
+  no child row — demonstrated by mutating `confirm_order` to price in-process:
+  the price-product relay's test fails on an empty child list while every
+  ingress and keying test stays green. A not-found price and a declined
+  charge end their call with `completion_result = success`, because an
+  outcome is data and not a failure; a purchase whose order was not confirmed
+  leaves no `PurchaseActions` row at all, which is ordering, not compensation.
+- Paying for an order that was already placed exercises the child-side
+  already-invoked `409` for real: the child row stays the one `ingress`
+  created, the purchase completes, and the caller reads `ORDER_NOT_CONFIRMED`.
+
+What the engine cannot be made to say from a sibling test is not asserted
+there. A refusal that is not the already-invoked wording — a `409` saying
+`killed` or `cancelled` — reaches only the caller that created the invocation
+and only while its endpoint is unreachable, which the arm's own host cannot
+arrange mid-suite; it was measured instead (below). And a body no Restate
+server sends — a `409` that is not JSON, a `200` that is not the workflow's
+result — is a conversation this adapter does not have, so no test provokes
+one through a stand-in. The unreachable-ingress tests remain: a closed socket
+is an absence, not a double.
 
 ## Async everywhere the SDK is
 

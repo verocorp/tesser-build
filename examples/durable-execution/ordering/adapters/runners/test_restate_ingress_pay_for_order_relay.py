@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import socket
-import threading
+import uuid
 
 import tesser.testing as ts
 import httpx
 import pytest
-import restate
 
 import ordering.adapters.runners as runners
 import ordering.adapters.runtimes as runtimes
@@ -48,54 +48,6 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
         )
 
 
-@ts.fake
-class FakeRestateIngress:  # tesser:debt TB072
-
-    def __init__(self, answer: bytes, status_line: bytes = b"HTTP/1.1 200 OK") -> None:
-        self._answer = answer
-        self._status_line = status_line
-        self._listener = socket.socket()
-        self._listener.bind(("127.0.0.1", 0))
-        self._listener.listen(1)
-        self.port = self._listener.getsockname()[1]
-        self.seen: list[bytes] = []
-        self._thread = threading.Thread(target=self.serve, daemon=True)  # tesser:debt TB051
-
-    @property
-    def base_url(self) -> str:
-        return f"http://127.0.0.1:{self.port}"
-
-    def start(self) -> None:
-        self._thread.start()
-
-    def serve(self) -> None:
-        conn, _ = self._listener.accept()
-        with conn:
-            raw = b""
-            while b"\r\n\r\n" not in raw:
-                raw += conn.recv(4096)
-            head, _, body = raw.partition(b"\r\n\r\n")
-            declared = 0
-            for line in head.split(b"\r\n"):
-                if line.lower().startswith(b"content-length:"):
-                    declared = int(line.split(b":", 1)[1])
-            while len(body) < declared:
-                body += conn.recv(4096)
-            self.seen.append(head)
-            self.seen.append(body)
-            conn.sendall(
-                self._status_line
-                + b"\r\ncontent-type: application/json\r\ncontent-length: "
-                + str(len(self._answer)).encode()
-                + b"\r\n\r\n"
-                + self._answer
-            )
-
-    def close(self) -> None:
-        self._thread.join(5)
-        self._listener.close()
-
-
 @ts.helper
 def pay_for_order_request(
     order_id: str = "o1",
@@ -109,115 +61,71 @@ def pay_for_order_request(
     )
 
 
-@ts.helper
-def restate_order_runtime() -> runtimes.RestateOrderRuntime:  # tesser:debt TB073
-    return runtimes.RestateOrderRuntime(
-        FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-    )
-
-
-@ts.helper
-def paid() -> bytes:  # tesser:debt TB073
-    return relays.PayForOrderResponseSnapshot().serialize(
-        relays.PayForOrderResponse(
-            outcome=relays.PayForOrderOutcome.PAID,
-            order_id="o1",
-            purchases=(relays.Purchase(total_cents=500, payment_reference="pay-o1"),),
-            reasons=(),
-        )
-    )
-
-
 class TestRestateIngressPayForOrderRelay:
 
     def test_running_calls_the_workflow_and_answers_with_its_result(self) -> None:
-        fake_restate_ingress = FakeRestateIngress(paid())  # tesser:debt TB085
-        fake_restate_ingress.start()
-        try:
-            pay_for_order_response = asyncio.run(
-                runners.RestateIngressPayForOrderRelay(
-                    fake_restate_ingress.base_url, restate_order_runtime()
-                ).run_pay_for_order(pay_for_order_request())
-            )
-        finally:
-            fake_restate_ingress.close()
+        order_id = str(uuid.uuid4())
+        pay_for_order_response = asyncio.run(
+            runners.RestateIngressPayForOrderRelay(
+                os.environ["RESTATE_INGRESS"],
+                runtimes.RestateOrderRuntime(
+                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                ),
+            ).run_pay_for_order(pay_for_order_request(order_id=order_id))
+        )
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target, invoked_by, status, completion_result FROM sys_invocation "
+                "WHERE target = 'PurchaseOrchestrator/" + order_id + "/pay_for_order'"
+            },
+        )
         assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAID
-        assert pay_for_order_response.order_id == "o1"
+        assert pay_for_order_response.order_id == order_id
         assert pay_for_order_response.purchases[0].total_cents == 500
-        assert pay_for_order_response.purchases[0].payment_reference == "pay-o1"
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == (
-            b"POST /PurchaseOrchestrator/o1/pay_for_order HTTP/1.1"
-        )
-        assert fake_restate_ingress.seen[1] == relays.PayForOrderRequestSnapshot().serialize(
-            pay_for_order_request()
-        )
+        assert pay_for_order_response.purchases[0].payment_reference == "pay-" + order_id
+        assert [
+            (row["target"], row["invoked_by"], row["status"], row["completion_result"])
+            for row in response.json()["rows"]
+        ] == [
+            ("PurchaseOrchestrator/" + order_id + "/pay_for_order", "ingress", "completed", "success")
+        ]
 
     def test_the_already_invoked_conflict_is_the_outcome_the_engine_crossing_adds(self) -> None:
-        fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            b'{"code":409,"message":"the workflow method was already invoked"}',
-            b"HTTP/1.1 409 Conflict",
+        order_id = str(uuid.uuid4())
+        restate_ingress_pay_for_order_relay = runners.RestateIngressPayForOrderRelay(
+            os.environ["RESTATE_INGRESS"],
+            runtimes.RestateOrderRuntime(
+                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+            ),
         )
-        fake_restate_ingress.start()
-        try:
-            pay_for_order_response = asyncio.run(
-                runners.RestateIngressPayForOrderRelay(
-                    fake_restate_ingress.base_url, restate_order_runtime()
-                ).run_pay_for_order(pay_for_order_request())
+        first = asyncio.run(
+            restate_ingress_pay_for_order_relay.run_pay_for_order(
+                pay_for_order_request(order_id=order_id)
             )
-        finally:
-            fake_restate_ingress.close()
-        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.ALREADY_STARTED
-        assert pay_for_order_response.order_id == "o1"
-        assert pay_for_order_response.purchases == ()
-        assert pay_for_order_response.reasons == ()
-
-    def test_every_other_refusal_is_a_fault(self) -> None:
-        for answer, status_line, status_code in (
-            (b'{"code":409,"message":"cancelled"}', b"HTTP/1.1 409 Conflict", 409),
-            (b"conflict, but not as json", b"HTTP/1.1 409 Conflict", 409),
-            (b'{"code":404,"message":"no price for sku \'nope\'"}', b"HTTP/1.1 404 Not Found", 404),
-            (
-                b'{"code":422,"message":"an order is for at least one unit"}',
-                b"HTTP/1.1 422 Unprocessable Entity",
-                422,
-            ),
-            (
-                b'{"code":500,"message":"Unable to parse an input argument"}',
-                b"HTTP/1.1 500 Internal Server Error",
-                500,
-            ),
-        ):
-            fake_restate_ingress = FakeRestateIngress(answer, status_line)  # tesser:debt TB085
-            fake_restate_ingress.start()
-            try:
-                with pytest.raises(restate.HttpError) as excinfo:
-                    asyncio.run(
-                        runners.RestateIngressPayForOrderRelay(
-                            fake_restate_ingress.base_url, restate_order_runtime()
-                        ).run_pay_for_order(pay_for_order_request())
-                    )
-            finally:
-                fake_restate_ingress.close()
-            assert excinfo.value.status_code == status_code
-
-    def test_a_success_body_that_is_not_the_workflows_result_is_a_fault(self) -> None:
-        for answer in (
-            b'{"outcome": "paid", "order_id": "o1"}',
-            b"<html>gateway</html>",
-            b"",
-        ):
-            fake_restate_ingress = FakeRestateIngress(answer)  # tesser:debt TB085
-            fake_restate_ingress.start()
-            try:
-                with pytest.raises(restate.TerminalError) as excinfo:
-                    asyncio.run(
-                        runners.RestateIngressPayForOrderRelay(
-                            fake_restate_ingress.base_url, restate_order_runtime()
-                        ).run_pay_for_order(pay_for_order_request())
-                    )
-            finally:
-                fake_restate_ingress.close()
-            assert excinfo.value.status_code == 400
+        )
+        second = asyncio.run(
+            restate_ingress_pay_for_order_relay.run_pay_for_order(
+                pay_for_order_request(order_id=order_id)
+            )
+        )
+        response = httpx.post(
+            os.environ["RESTATE_ADMIN"] + "/query",
+            headers={"accept": "application/json"},
+            json={
+                "query": "SELECT target FROM sys_invocation "
+                "WHERE target = 'PurchaseOrchestrator/" + order_id + "/pay_for_order'"
+            },
+        )
+        assert first.outcome is relays.PayForOrderOutcome.PAID
+        assert second.outcome is relays.PayForOrderOutcome.ALREADY_STARTED
+        assert second.order_id == order_id
+        assert second.purchases == ()
+        assert second.reasons == ()
+        assert [row["target"] for row in response.json()["rows"]] == [
+            "PurchaseOrchestrator/" + order_id + "/pay_for_order"
+        ]
 
     def test_an_unreachable_ingress_is_a_fault(self) -> None:
         with socket.socket() as closed:
@@ -226,6 +134,9 @@ class TestRestateIngressPayForOrderRelay:
         with pytest.raises(httpx.TransportError):
             asyncio.run(
                 runners.RestateIngressPayForOrderRelay(
-                    unreachable, restate_order_runtime()
+                    unreachable,
+                    runtimes.RestateOrderRuntime(
+                        FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                    ),
                 ).run_pay_for_order(pay_for_order_request())
             )
