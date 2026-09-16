@@ -27,6 +27,13 @@ class RestateInvocationCallRelays(ts.Runner):  # tesser:debt TB085
             self._restate_call_runtime.speak_turn_handler, speak_turn_request
         )
 
+    async def run_end_person_turn(
+        self, end_person_turn_request: relays.EndPersonTurnRequest
+    ) -> relays.EndPersonTurnResponse:
+        return await self._restate_workflow_context.service_call(
+            self._restate_call_runtime.end_person_turn_handler, end_person_turn_request
+        )
+
     async def run_hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
         return await self._restate_workflow_context.service_call(
             self._restate_call_runtime.hang_up_handler, hang_up_request

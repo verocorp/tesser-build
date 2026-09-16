@@ -35,6 +35,18 @@ class MapToSpeakTurnResponse(ts.Mapper, relays.SpeakTurnResponse):
         )
 
 
+class MapToEndPersonTurnRequest(ts.Mapper, ports.EndPersonTurnRequest):
+
+    def __init__(self, end_person_turn_request: relays.EndPersonTurnRequest) -> None:
+        super().__init__(call_id=str(end_person_turn_request.call.identity))
+
+
+class MapToEndPersonTurnResponse(ts.Mapper, relays.EndPersonTurnResponse):
+
+    def __init__(self, end_person_turn_response: ports.EndPersonTurnResponse) -> None:
+        super().__init__(call_id=end_person_turn_response.call_id)
+
+
 class SpeechActions(ts.Actions):
 
     def __init__(self, speech: ports.Speech) -> None:
@@ -43,3 +55,11 @@ class SpeechActions(ts.Actions):
     async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
         speak_turn_response = await self._speech.speak_turn(MapToSpeakTurnRequest(speak_turn_request))
         return MapToSpeakTurnResponse(speak_turn_response)
+
+    async def end_person_turn(
+        self, end_person_turn_request: relays.EndPersonTurnRequest
+    ) -> relays.EndPersonTurnResponse:
+        end_person_turn_response = await self._speech.end_person_turn(
+            MapToEndPersonTurnRequest(end_person_turn_request)
+        )
+        return MapToEndPersonTurnResponse(end_person_turn_response)

@@ -35,6 +35,11 @@ class FakeSpeechApplicationClient(client.SpeechApplicationClient):
     async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
         return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi", person_names=())
 
+    async def end_person_turn(
+        self, end_person_turn_request: relays.EndPersonTurnRequest
+    ) -> relays.EndPersonTurnResponse:
+        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
+
 
 @ts.fake
 class FakeRestateWorkflowContext:  # tesser:debt TB072
@@ -107,3 +112,18 @@ class TestRestateInvocationCallRelays:
         ).run_hang_up(hang_up_request)
 
         assert fake_restate_workflow_context.called == [(restate_call_runtime.hang_up_handler, hang_up_request)]
+
+    async def test_running_end_person_turn_journals_a_call_to_the_runtimes_handler(self) -> None:
+        restate_call_runtime = runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+        )
+        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
+        end_person_turn_request = relays.EndPersonTurnRequest(call=domain.Call(call_spec()))
+
+        await runners.RestateInvocationCallRelays(
+            typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
+        ).run_end_person_turn(end_person_turn_request)
+
+        assert fake_restate_workflow_context.called == [
+            (restate_call_runtime.end_person_turn_handler, end_person_turn_request)
+        ]

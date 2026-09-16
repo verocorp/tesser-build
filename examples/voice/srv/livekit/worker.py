@@ -17,6 +17,7 @@ import calls.adapters.handlers as calls_handlers
 import protocol
 
 SPEAK_TURN_METHOD: typing.Final[str] = "speak_turn"
+END_PERSON_TURN_METHOD: typing.Final[str] = "end_person_turn"
 _PERSON_IDENTITY: typing.Final[str] = "person"
 _SIP_CALL_STATUS: typing.Final[str] = "sip.callStatus"
 _SIP_CALL_ACTIVE: typing.Final[str] = "active"
@@ -34,14 +35,17 @@ class CallAgent(livekit_agents.Agent, ts.Host):
         super().__init__(instructions="")
         self._person_events = person_events
         self._call_id = call_id
+        self._deliveries: set[asyncio.Task[None]] = set()
 
     def on_user_input_transcribed(self, user_input_transcribed_event: livekit_agents.UserInputTranscribedEvent) -> None:
         if user_input_transcribed_event.is_final and user_input_transcribed_event.transcript.strip():
-            asyncio.ensure_future(
+            delivery = asyncio.ensure_future(
                 self._person_events.person_utterance(
                     protocol.PersonUtterance(call_id=self._call_id, text=user_input_transcribed_event.transcript)
                 )
             )
+            self._deliveries.add(delivery)
+            delivery.add_done_callback(self._deliveries.discard)
 
     async def acknowledge(self, raw_arguments: dict[str, object]) -> str:
         return _ACKNOWLEDGED
@@ -84,6 +88,11 @@ class CallAgent(livekit_agents.Agent, ts.Host):
             raise failure
         return self.encode(speech_handle.chat_items)  # tesser:debt TB051
 
+    async def end_person_turn(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:
+        await self.session.commit_user_turn(skip_reply=True)
+        await asyncio.gather(*self._deliveries)
+        return ""
+
 
 class LivekitWorker(ts.Host):
 
@@ -110,6 +119,7 @@ class LivekitWorker(ts.Host):
         agent_session = self.agent_session()  # tesser:debt TB051
         agent_session.on("user_input_transcribed", call_agent.on_user_input_transcribed)
         job_context.room.local_participant.register_rpc_method(SPEAK_TURN_METHOD, call_agent.speak_turn)
+        job_context.room.local_participant.register_rpc_method(END_PERSON_TURN_METHOD, call_agent.end_person_turn)
         await agent_session.start(
             agent=call_agent, room=job_context.room, room_options=self.room_options()  # tesser:debt TB051
         )

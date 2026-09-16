@@ -65,11 +65,13 @@ class Calls(ts.Component):
             ),
             application.SpeechActions(
                 gateways.LivekitSpeech(
-                    livekit_rtc.Room,
-                    config.livekit_url,
-                    config.livekit_api_key,
-                    config.livekit_api_secret,
-                    config.livekit_agent_name,
+                    gateways.LivekitAgentRpc(
+                        livekit_rtc.Room,
+                        config.livekit_url,
+                        config.livekit_api_key,
+                        config.livekit_api_secret,
+                        config.livekit_agent_name,
+                    )
                 )
             ),
         )

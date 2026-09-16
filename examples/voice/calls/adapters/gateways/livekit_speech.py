@@ -10,6 +10,7 @@ import livekit.rtc as livekit_rtc
 import calls.application.ports as ports
 
 SPEAK_TURN_METHOD: typing.Final[str] = "speak_turn"
+END_PERSON_TURN_METHOD: typing.Final[str] = "end_person_turn"
 PERSON_GAVE_NAME_TOOL: typing.Final[str] = "person_gave_name"
 _PERSON_GAVE_NAME_SCHEMA: typing.Final[dict[str, object]] = {
     "name": PERSON_GAVE_NAME_TOOL,
@@ -46,7 +47,13 @@ class MapToSpeakTurnResponse(ts.Mapper, ports.SpeakTurnResponse):
         super().__init__(call_id=call_id, text=" ".join(said), person_names=tuple(names))
 
 
-class LivekitSpeech(ts.Gateway):
+class MapToEndPersonTurnResponse(ts.Mapper, ports.EndPersonTurnResponse):
+
+    def __init__(self, end_person_turn_request: ports.EndPersonTurnRequest) -> None:
+        super().__init__(call_id=end_person_turn_request.call_id)
+
+
+class LivekitAgentRpc(ts.Gateway):
 
     def __init__(
         self,
@@ -62,14 +69,14 @@ class LivekitSpeech(ts.Gateway):
         self._api_secret = api_secret
         self._agent_identity = agent_identity
 
-    async def speak_turn(self, speak_turn_request: ports.SpeakTurnRequest) -> ports.SpeakTurnResponse:
+    async def ask(self, call_id: str, method: str, payload: str) -> str:
         token = (
             livekit_api.AccessToken(self._api_key, self._api_secret)
-            .with_identity(f"{_SPEECH_IDENTITY}-{speak_turn_request.call_id}")
+            .with_identity(f"{_SPEECH_IDENTITY}-{call_id}")
             .with_grants(
                 livekit_api.VideoGrants(
                     room_join=True,
-                    room=speak_turn_request.call_id,
+                    room=call_id,
                     can_publish=False,
                     can_subscribe=False,
                     can_publish_data=True,
@@ -77,6 +84,25 @@ class LivekitSpeech(ts.Gateway):
             )
             .to_jwt()
         )
+        room = self._room_type()  # tesser:debt TB085
+        await room.connect(self._url, token)
+        try:
+            return await room.local_participant.perform_rpc(
+                destination_identity=self._agent_identity,
+                method=method,
+                payload=payload,
+                response_timeout=_RESPONSE_TIMEOUT_SECONDS,
+            )
+        finally:
+            await room.disconnect()
+
+
+class LivekitSpeech(ts.Gateway):
+
+    def __init__(self, livekit_agent_rpc: LivekitAgentRpc) -> None:
+        self._livekit_agent_rpc = livekit_agent_rpc
+
+    async def speak_turn(self, speak_turn_request: ports.SpeakTurnRequest) -> ports.SpeakTurnResponse:
         payload = json.dumps(
             {
                 "persona": speak_turn_request.persona,
@@ -87,15 +113,15 @@ class LivekitSpeech(ts.Gateway):
                 "tools": [_PERSON_GAVE_NAME_SCHEMA],
             }
         )
-        room = self._room_type()  # tesser:debt TB085
-        await room.connect(self._url, token)
-        try:
-            reply = await room.local_participant.perform_rpc(
-                destination_identity=self._agent_identity,
-                method=SPEAK_TURN_METHOD,
-                payload=payload,
-                response_timeout=_RESPONSE_TIMEOUT_SECONDS,
-            )
-        finally:
-            await room.disconnect()
+        reply = await self._livekit_agent_rpc.ask(speak_turn_request.call_id, SPEAK_TURN_METHOD, payload)
         return MapToSpeakTurnResponse(speak_turn_request.call_id, reply)
+
+    async def end_person_turn(
+        self, end_person_turn_request: ports.EndPersonTurnRequest
+    ) -> ports.EndPersonTurnResponse:
+        await self._livekit_agent_rpc.ask(
+            end_person_turn_request.call_id,
+            END_PERSON_TURN_METHOD,
+            json.dumps({"call_id": end_person_turn_request.call_id}),
+        )
+        return MapToEndPersonTurnResponse(end_person_turn_request)

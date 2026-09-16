@@ -35,6 +35,11 @@ class FakeSpeechApplicationClient(client.SpeechApplicationClient):
     async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
         return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi", person_names=())
 
+    async def end_person_turn(
+        self, end_person_turn_request: relays.EndPersonTurnRequest
+    ) -> relays.EndPersonTurnResponse:
+        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
+
 
 @ts.fake
 class FakeRestateIngress:  # tesser:debt TB072

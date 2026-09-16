@@ -64,7 +64,7 @@ class TestCalls:
         assert registered == {
             "CallActions": ["record_call"],
             "DialingActions": ["dial_person", "hang_up"],
-            "SpeechActions": ["speak_turn"],
+            "SpeechActions": ["end_person_turn", "speak_turn"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
             "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
         }

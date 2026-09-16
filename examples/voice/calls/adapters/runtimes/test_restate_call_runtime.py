@@ -44,6 +44,13 @@ class FakeSpeechApplicationClient(client.SpeechApplicationClient):
 
     def __init__(self) -> None:
         self.spoken: list[relays.SpeakTurnRequest] = []
+        self.ended: list[relays.EndPersonTurnRequest] = []
+
+    async def end_person_turn(
+        self, end_person_turn_request: relays.EndPersonTurnRequest
+    ) -> relays.EndPersonTurnResponse:
+        self.ended.append(end_person_turn_request)
+        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
 
     async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
         self.spoken.append(speak_turn_request)
@@ -111,6 +118,8 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
             return await self._fake_dialing_application_client.dial_person(arg)
         if isinstance(arg, relays.HangUpRequest):
             return await self._fake_dialing_application_client.hang_up(arg)
+        if isinstance(arg, relays.EndPersonTurnRequest):
+            return await self._fake_speech_application_client.end_person_turn(arg)
         assert isinstance(arg, relays.SpeakTurnRequest)
         return await self._fake_speech_application_client.speak_turn(arg)
 
@@ -192,7 +201,7 @@ class TestRestateCallRuntime:
         assert registered == {
             "CallActions": ["record_call"],
             "DialingActions": ["dial_person", "hang_up"],
-            "SpeechActions": ["speak_turn"],
+            "SpeechActions": ["end_person_turn", "speak_turn"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
             "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
         }
@@ -256,6 +265,16 @@ class TestRestateCallRuntime:
         ).speak_turn_handler(typing.cast(restate.Context, None), speak_turn_request)
 
         assert fake_speech_application_client.spoken == [speak_turn_request]
+
+    async def test_the_end_person_turn_handler_hands_the_request_to_the_application_client(self) -> None:
+        fake_speech_application_client = FakeSpeechApplicationClient()
+        end_person_turn_request = relays.EndPersonTurnRequest(call=domain.Call(call_spec()))
+
+        await runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), fake_speech_application_client
+        ).end_person_turn_handler(typing.cast(restate.Context, None), end_person_turn_request)
+
+        assert fake_speech_application_client.ended == [end_person_turn_request]
 
     async def test_the_conduct_call_handler_runs_the_whole_call_inside_this_invocation(self) -> None:
         fake_call_application_client = FakeCallApplicationClient()

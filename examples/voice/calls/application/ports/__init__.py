@@ -13,6 +13,8 @@ from calls.application.ports.dialing import DialPersonResponse as DialPersonResp
 from calls.application.ports.dialing import Dialing as Dialing
 from calls.application.ports.dialing import HangUpRequest as HangUpRequest
 from calls.application.ports.dialing import HangUpResponse as HangUpResponse
+from calls.application.ports.speech import EndPersonTurnRequest as EndPersonTurnRequest
+from calls.application.ports.speech import EndPersonTurnResponse as EndPersonTurnResponse
 from calls.application.ports.speech import SpeakTurnRequest as SpeakTurnRequest
 from calls.application.ports.speech import SpeakTurnResponse as SpeakTurnResponse
 from calls.application.ports.speech import Speech as Speech

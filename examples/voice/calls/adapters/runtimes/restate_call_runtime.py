@@ -125,6 +125,32 @@ class RestateSpeakTurnResponseSerde(ts.Serde, restate_serde.Serde[relays.SpeakTu
         return relays.SpeakTurnResponseSnapshot().deserialize(buf)
 
 
+class RestateEndPersonTurnRequestSerde(ts.Serde, restate_serde.Serde[relays.EndPersonTurnRequest]):
+
+    def serialize(self, end_person_turn_request: relays.EndPersonTurnRequest | None) -> bytes:
+        if end_person_turn_request is None:
+            return b""
+        return relays.EndPersonTurnRequestSnapshot().serialize(end_person_turn_request)
+
+    def deserialize(self, buf: bytes) -> relays.EndPersonTurnRequest | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.EndPersonTurnRequestSnapshot().deserialize(buf)
+
+
+class RestateEndPersonTurnResponseSerde(ts.Serde, restate_serde.Serde[relays.EndPersonTurnResponse]):
+
+    def serialize(self, end_person_turn_response: relays.EndPersonTurnResponse | None) -> bytes:
+        if end_person_turn_response is None:
+            return b""
+        return relays.EndPersonTurnResponseSnapshot().serialize(end_person_turn_response)
+
+    def deserialize(self, buf: bytes) -> relays.EndPersonTurnResponse | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.EndPersonTurnResponseSnapshot().deserialize(buf)
+
+
 class RestateHangUpRequestSerde(ts.Serde, restate_serde.Serde[relays.HangUpRequest]):
 
     def serialize(self, hang_up_request: relays.HangUpRequest | None) -> bytes:
@@ -280,6 +306,15 @@ class RestateCallRuntime(ts.Runtime):
         ) -> relays.SpeakTurnResponse:
             return await speech_application_client.speak_turn(speak_turn_request)
 
+        @self.speech_actions_service.handler(
+            input_serde=RestateEndPersonTurnRequestSerde(),
+            output_serde=RestateEndPersonTurnResponseSerde(),
+        )
+        async def end_person_turn(  # tesser:debt TB023
+            restate_context: restate.Context, end_person_turn_request: relays.EndPersonTurnRequest
+        ) -> relays.EndPersonTurnResponse:
+            return await speech_application_client.end_person_turn(end_person_turn_request)
+
         @self.call_orchestrator_workflow.main(
             input_serde=RestateConductCallRequestSerde(),
             output_serde=RestateConductCallResponseSerde(),
@@ -378,6 +413,7 @@ class RestateCallRuntime(ts.Runtime):
         self.dial_person_handler = dial_person
         self.hang_up_handler = hang_up
         self.speak_turn_handler = speak_turn
+        self.end_person_turn_handler = end_person_turn
         self.conduct_call_handler = conduct_call
         self.person_answered_handler = person_answered
         self.person_utterance_handler = person_utterance
