@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import typing
+import os
+import uuid
 
 import tesser.testing as ts
-import restate
+import httpx
 
 import {{context}}.adapters.runners as runners
 import {{context}}.adapters.runtimes as runtimes
@@ -18,28 +19,30 @@ class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
         return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
 
 
-@ts.fake
-class FakeRestateWorkflowContext:  # tesser:debt TB072
-
-    def __init__(self) -> None:
-        self.called: list[tuple[object, object]] = []
-
-    async def service_call(self, tpe: object, arg: object) -> object:
-        self.called.append((tpe, arg))
-        return relays.{{Record}}Response({{identity}}={{identity_sample}})
-
-
 class TestRestateInvocation{{Record}}Relay:
 
-    async def test_running_{{record}}_journals_a_call_to_the_runtimes_handler(self) -> None:
+    async def test_{{record}}_reaches_the_actions_service_as_a_call_the_engine_journals(self) -> None:
         restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        {{record}}_request = relays.{{Record}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+        {{identity}} = str(uuid.uuid4())
+        admin = os.environ.get("RESTATE_ADMIN", "http://localhost:9070")
+        parent_target = "{{Aggregate}}Orchestrator/" + {{identity}} + "/{{conduct}}"
 
-        await runners.RestateInvocation{{Record}}Relay(
-            typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_{{aggregate}}_runtime
-        ).run_{{record}}({{record}}_request)
+        await runners.RestateIngress{{Conduct}}Relay(
+            os.environ["{{ingress_env}}"], restate_{{aggregate}}_runtime
+        ).run_{{conduct}}(
+            relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
+        )
 
-        assert fake_restate_workflow_context.called == [
-            (restate_{{aggregate}}_runtime.{{record}}_handler, {{record}}_request)
-        ]
+        async with httpx.AsyncClient(base_url=admin) as async_client:
+            response = await async_client.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT target, invoked_by_service_name FROM sys_invocation "
+                    "WHERE invoked_by_target = '" + parent_target + "'"
+                },
+            )
+
+        assert [
+            (row["target"], row["invoked_by_service_name"]) for row in response.json()["rows"]
+        ] == [("{{Aggregate}}Actions/{{record}}", "{{Aggregate}}Orchestrator")]

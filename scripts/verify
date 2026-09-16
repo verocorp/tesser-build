@@ -320,8 +320,8 @@ run_generated_tree() {
     return 1
   fi
   step "$spec: pytest (against Postgres at $storage_env and Restate at $ingress_env)"
-  (cd "$out" && env "$storage_env=$storage" "$ingress_env=$ingress" PYTHONPATH=".:$ROOT/tesser-py" \
-    pytest -q -p no:cacheprovider)
+  (cd "$out" && env "$storage_env=$storage" "$ingress_env=$ingress" "RESTATE_ADMIN=$admin" \
+    PYTHONPATH=".:$ROOT/tesser-py" pytest -q -p no:cacheprovider)
   local status=$?
   kill -INT "$host" 2>/dev/null
   wait "$host" 2>/dev/null

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import socket
-import threading
+import os
+import uuid
 
 import tesser.testing as ts
+import httpx
 
 import {{context}}.adapters.runners as runners
 import {{context}}.adapters.runtimes as runtimes
@@ -18,66 +19,30 @@ class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
         return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
 
 
-@ts.fake
-class FakeRestateIngress:  # tesser:debt TB072
-
-    def __init__(self, answer: bytes) -> None:
-        self._answer = answer
-        self._listener = socket.socket()
-        self._listener.bind(("127.0.0.1", 0))
-        self._listener.listen(1)
-        self.port = self._listener.getsockname()[1]
-        self.seen: list[bytes] = []
-        self._thread = threading.Thread(target=self.serve, daemon=True)  # tesser:debt TB051
-
-    @property
-    def base_url(self) -> str:
-        return f"http://127.0.0.1:{self.port}"
-
-    def start(self) -> None:
-        self._thread.start()
-
-    def serve(self) -> None:
-        conn, _ = self._listener.accept()
-        with conn:
-            raw = b""
-            while b"\r\n\r\n" not in raw:
-                raw += conn.recv(4096)
-            head, _, body = raw.partition(b"\r\n\r\n")
-            declared = 0
-            for line in head.split(b"\r\n"):
-                if line.lower().startswith(b"content-length:"):
-                    declared = int(line.split(b":", 1)[1])
-            while len(body) < declared:
-                body += conn.recv(4096)
-            self.seen.append(head)
-            self.seen.append(body)
-            conn.sendall(
-                b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: "
-                + str(len(self._answer)).encode()
-                + b"\r\n\r\n"
-                + self._answer
-            )
-
-    def close(self) -> None:
-        self._thread.join(5)
-        self._listener.close()
-
-
 class TestRestateIngress{{Conduct}}Relay:
 
-    async def test_running_{{conduct}}_calls_the_workflow_keyed_by_the_{{identity}}(self) -> None:
-        fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            relays.{{Conduct}}ResponseSnapshot().serialize(relays.{{Conduct}}Response({{identity}}={{identity_sample}}))
-        )
-        fake_restate_ingress.start()
+    async def test_{{conduct}}_runs_the_workflow_the_engine_keys_by_the_{{identity}}(self) -> None:
+        restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
+        {{identity}} = str(uuid.uuid4())
+        admin = os.environ.get("RESTATE_ADMIN", "http://localhost:9070")
 
         {{conduct}}_response = await runners.RestateIngress{{Conduct}}Relay(
-            fake_restate_ingress.base_url, runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
-        ).run_{{conduct}}(relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}}))
-        fake_restate_ingress.close()
-
-        assert {{conduct}}_response.{{identity}} == {{identity_sample}}
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == (
-            b"POST /{{Aggregate}}Orchestrator/{{identity_raw}}/{{conduct}} HTTP/1.1"
+            os.environ["{{ingress_env}}"], restate_{{aggregate}}_runtime
+        ).run_{{conduct}}(
+            relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
         )
+
+        async with httpx.AsyncClient(base_url=admin) as async_client:
+            response = await async_client.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT target_service_name, target_service_key FROM sys_invocation "
+                    "WHERE target = '{{Aggregate}}Orchestrator/" + {{identity}} + "/{{conduct}}'"
+                },
+            )
+
+        assert {{conduct}}_response.{{identity}} == {{identity}}
+        assert [
+            (row["target_service_name"], row["target_service_key"]) for row in response.json()["rows"]
+        ] == [("{{Aggregate}}Orchestrator", {{identity}})]

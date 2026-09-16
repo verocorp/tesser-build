@@ -21,14 +21,6 @@ class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
         return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
 
 
-@ts.fake
-class FakeRestateWorkflowContext:  # tesser:debt TB072
-
-    async def service_call(self, tpe: object, arg: object) -> object:
-        assert isinstance(arg, relays.{{Record}}Request)
-        return await Fake{{Aggregate}}ApplicationClient().{{record}}(arg)
-
-
 class TestRestate{{Aggregate}}Runtime:
 
     def test_it_registers_one_actions_service_and_one_orchestrator_workflow(self) -> None:
@@ -67,12 +59,3 @@ class TestRestate{{Aggregate}}Runtime:
         )
 
         assert fake_{{aggregate}}_application_client.recorded == [{{record}}_request]
-
-    async def test_the_{{conduct}}_handler_runs_the_orchestrator_inside_this_invocation(self) -> None:
-        {{conduct}}_request = relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
-
-        {{conduct}}_response = await runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient()).{{conduct}}_handler(  # tesser:debt TB085
-            typing.cast(restate.WorkflowContext, FakeRestateWorkflowContext()), {{conduct}}_request
-        )
-
-        assert {{conduct}}_response.{{identity}} == {{identity_sample}}
