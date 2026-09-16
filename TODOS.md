@@ -44,6 +44,15 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   take after `end_person_turn` returns, which needs a mailbox handler that
   answers "nothing buffered" immediately instead of installing a waiter; a
   zero-second sleep does not work because it races the `object_send`.
+- **A mailbox handler invokes no operation (TB085 after #199).** The
+  `CallUtterances` object's `person_utterance`, `take_person_utterance`
+  and `stop_taking_person_utterance` handlers move state and resolve
+  awakeables; they call no application client, so #199's "a handler
+  invokes the operation it is named for" has nothing to read. The
+  mailbox is engine plumbing the runtime owns, not a relay operation.
+  Decide whether a Virtual Object handler that serves only the runtime
+  is exempt, or whether the mailbox belongs elsewhere. Four TB085
+  markers in `restate_call_runtime.py` meanwhile.
 - **Is `mock_tools` a test double under TB030?** livekit-agents ships
   `mock_tools` as a contextvar that substitutes tool bodies, not a
   runtime patcher. The gateway sibling test hand-fakes the SDK instead

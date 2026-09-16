@@ -274,7 +274,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestateRecordCallRequestSerde(),
             output_serde=RestateRecordCallResponseSerde(),
         )
-        async def record_call(  # tesser:debt TB023
+        async def record_call(
             restate_context: restate.Context, record_call_request: relays.RecordCallRequest
         ) -> relays.RecordCallResponse:
             return await call_application_client.record_call(record_call_request)
@@ -283,7 +283,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestateDialPersonRequestSerde(),
             output_serde=RestateDialPersonResponseSerde(),
         )
-        async def dial_person(  # tesser:debt TB023
+        async def dial_person(
             restate_context: restate.Context, dial_person_request: relays.DialPersonRequest
         ) -> relays.DialPersonResponse:
             return await dialing_application_client.dial_person(dial_person_request)
@@ -292,7 +292,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestateHangUpRequestSerde(),
             output_serde=RestateHangUpResponseSerde(),
         )
-        async def hang_up(  # tesser:debt TB023
+        async def hang_up(
             restate_context: restate.Context, hang_up_request: relays.HangUpRequest
         ) -> relays.HangUpResponse:
             return await dialing_application_client.hang_up(hang_up_request)
@@ -301,7 +301,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestateSpeakTurnRequestSerde(),
             output_serde=RestateSpeakTurnResponseSerde(),
         )
-        async def speak_turn(  # tesser:debt TB023
+        async def speak_turn(
             restate_context: restate.Context, speak_turn_request: relays.SpeakTurnRequest
         ) -> relays.SpeakTurnResponse:
             return await speech_application_client.speak_turn(speak_turn_request)
@@ -310,7 +310,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestateEndPersonTurnRequestSerde(),
             output_serde=RestateEndPersonTurnResponseSerde(),
         )
-        async def end_person_turn(  # tesser:debt TB023
+        async def end_person_turn(
             restate_context: restate.Context, end_person_turn_request: relays.EndPersonTurnRequest
         ) -> relays.EndPersonTurnResponse:
             return await speech_application_client.end_person_turn(end_person_turn_request)
@@ -319,7 +319,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestateConductCallRequestSerde(),
             output_serde=RestateConductCallResponseSerde(),
         )
-        async def conduct_call(  # tesser:debt TB023
+        async def conduct_call(
             restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
         ) -> relays.ConductCallResponse:
             restate_invocation_call_relays = runners.RestateInvocationCallRelays(restate_workflow_context, self)
@@ -338,7 +338,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestatePersonAnsweredRequestSerde(),
             output_serde=RestatePersonAnsweredResponseSerde(),
         )
-        async def person_answered(  # tesser:debt TB023 TB085
+        async def person_answered(  # tesser:debt TB085
             restate_workflow_shared_context: restate.WorkflowSharedContext,
             person_answered_request: relays.PersonAnsweredRequest,
         ) -> relays.PersonAnsweredResponse:
@@ -355,7 +355,7 @@ class RestateCallRuntime(ts.Runtime):
             input_serde=RestatePersonUtteranceRequestSerde(),
             output_serde=RestatePersonUtteranceResponseSerde(),
         )
-        async def person_utterance(  # tesser:debt TB023 TB085
+        async def person_utterance(  # tesser:debt TB085
             restate_object_context: restate.ObjectContext, person_utterance_request: relays.PersonUtteranceRequest
         ) -> relays.PersonUtteranceResponse:
             waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
@@ -376,7 +376,7 @@ class RestateCallRuntime(ts.Runtime):
             return relays.PersonUtteranceResponse(call_id=person_utterance_request.call_id)
 
         @self.call_utterances_object.handler()
-        async def take_person_utterance(  # tesser:debt TB023
+        async def take_person_utterance(  # tesser:debt TB085
             restate_object_context: restate.ObjectContext, awakeable_id: str
         ) -> None:
             waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
@@ -396,7 +396,7 @@ class RestateCallRuntime(ts.Runtime):
                 restate_object_context.set(_WAITING_AWAKEABLE, awakeable_id)
 
         @self.call_utterances_object.handler()
-        async def stop_taking_person_utterance(  # tesser:debt TB023
+        async def stop_taking_person_utterance(  # tesser:debt TB085
             restate_object_context: restate.ObjectContext, awakeable_id: str
         ) -> None:
             waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
