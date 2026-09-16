@@ -64,10 +64,14 @@ the Go `comments` analyzer), the annotations norm (`TB021` — an annotation is
 written unquoted, because the resolver treats a quoted one as opaque;
 `TB022` — a type names what the value is, so `Any`, `Callable`, and
 `Awaitable` are findings wherever a module names them, in an annotation or
-anywhere else), the function-placement norm (`TB023` — a function is declared
-at module level or as a method, so a `lambda` anywhere and a `def` inside
-another function are findings; every rule about a function keys on its
-placement and a nested one has none), the import norm (`TB050`–`TB069` — every module in
+anywhere else), the function-placement norm (`TB023` — outside `adapters/`, a
+function is declared at module level or as a method, so a `lambda` anywhere and
+a `def` inside another function are findings; every rule about a function keys
+on its placement and a nested one has none. An `adapters/` implementation
+module is out of scope, because an adapter implements a contract it does not
+own — an SDK that registers a handler by decorating a function at construction
+time leaves no relocation to make — and a test beside one is still read), the
+import norm (`TB050`–`TB069` — every module in
 the tree carries an import row keyed on where it sits; there are no exempt
 modules, so a root module and a `conftest` are leaves that import nothing from
 the tree), and the testing norm (`TB030` — a test double is a hand-written
