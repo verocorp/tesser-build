@@ -337,8 +337,24 @@ What is still open:
   `.github/workflows/test.yml` says in as many words that "no restate-server
   runs in CI" for that job — so real-engine tests mean giving it a service
   container. The asyncpg job is currently the only `services:` block in the
-  workflow. The generator's templates carry the same three doubles and migrate
-  for free, because its arm already runs a real Restate.
+  workflow. **The generator's templates are already migrated** (#201): the three
+  doubles are gone and a generated tree carries zero markers, because its arm
+  already runs a real Restate. Chris 2026-09-16: durable-execution migrates
+  **after** #201 merges.
+
+- [x] **The generator's five open choices are RULED (Chris 2026-09-16: "those 5
+  are fine").** Recorded here because a PR body is not in the repo. The spec
+  format is **TOML**, not the prose format originally sketched; field types are
+  **`str`/`int` only**; **not-found handling is deliberately not generated** —
+  the starting point is the happy path, and a generated `<collection>[0]` will
+  `IndexError` on a missing row; the template renderer (a Mustache subset)
+  **lives in the domain**; engine and store are **fixed to Restate and
+  Postgres**, with no spec switch for either. Earlier rulings in the same wave:
+  domain names live in the spec and are workshopped, never renamed after
+  generation; no default values, a key is either in or out; unknown spec keys
+  are refused; ids come from a per-aggregate identity repository seeded for
+  determinism, not from the store; the identity seed is configuration the
+  running app draws fresh per start.
 
 - [ ] **3 `TB023` markers** in `examples/durable-execution/` — the nested `def`s
   in the FastAPI route registrations in `srv/http/main.py`. The Restate handler
