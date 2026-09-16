@@ -93,22 +93,22 @@ class TestCallAgent:
         assert acknowledged == "recorded"
 
 
-class TestCallWorker:
+class TestLivekitWorker:
 
     async def test_the_session_generates_no_reply_of_its_own(self) -> None:
-        call_worker = livekit.CallWorker(
+        livekit_worker = livekit.LivekitWorker(
             FakePersonEvents(), "caller", "deepgram/nova-3", "openai/gpt-4.1-mini", "cartesia/sonic-2"
         )
 
-        agent_session = call_worker.agent_session()
+        agent_session = livekit_worker.agent_session()
 
         assert agent_session.turn_detection == "manual"
 
     def test_the_session_listens_to_the_person_and_nobody_else(self) -> None:
-        call_worker = livekit.CallWorker(
+        livekit_worker = livekit.LivekitWorker(
             FakePersonEvents(), "caller", "deepgram/nova-3", "openai/gpt-4.1-mini", "cartesia/sonic-2"
         )
 
-        room_options = call_worker.room_options()
+        room_options = livekit_worker.room_options()
 
         assert room_options.participant_identity == "person"

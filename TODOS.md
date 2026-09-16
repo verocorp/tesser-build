@@ -2,6 +2,44 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the voice example's LiveKit integration (2026-09-15/16, Chris)
+
+Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).
+Chris ruled no rule or analyzer changes until the example is built and
+right; collisions carry `# tesser:debt` markers meanwhile.
+
+- **Which language each `ts.*` kind and each directory speaks.** HIGH
+  PRIORITY. The context's ubiquitous language is `domain/`,
+  `application/`, `client/`. `srv/` is not part of it: a host speaks the
+  host's language and the app's (an HTTP host defines URL paths, which are
+  the app's words; the LiveKit host speaks LiveKit's, so its worker is a
+  `Worker` or `LivekitWorker`, never a `CallWorker`). Adapters sit between
+  and translate. Write this down per `ts.*` kind and per directory in the
+  skill (strategic-design.md / python.md), so an agent naming a class in
+  `srv/` does not reach for an aggregate's name. Trigger: `CallWorker` in
+  `examples/voice/srv/livekit/worker.py` (renamed `LivekitWorker`
+  2026-09-16).
+- **Agents conflate similarly named concepts across boundaries.** HIGH
+  PRIORITY, same family as the item above. `calls` is the context and
+  `Call` the aggregate; LiveKit's "agent" and our agent are different
+  things; LiveKit's "transcript" is not our `Utterance`. The skill needs a
+  section that teaches an agent to keep an integration's vocabulary out of
+  the domain and the domain's out of the host, with these three as the
+  worked examples.
+- **Where evals live (TB070).** Chris ruled evals go in
+  `<context>/tests/evals/eval_livekit_*.py` and drive the real
+  integration through application/domain code; gateway evals were tried
+  and dropped as tedious and unhelpful. TB070's placement table has no
+  row for `<context>/tests/evals/`; whatever it imports will carry TB070
+  debt until the rule gains the row. Also decide how evals are excluded
+  from the default `pytest -q` and gated separately (env flag, marker, or
+  path).
+- **Is `mock_tools` a test double under TB030?** livekit-agents ships
+  `mock_tools` as a contextvar that substitutes tool bodies, not a
+  runtime patcher. The gateway sibling test hand-fakes the SDK instead
+  (no stubber exists). Rule on whether an SDK-provided substitution
+  mechanism counts as a mocking library.
+
 ## Left open by the operation-naming enactment (2026-09-13, Chris)
 
 The conventions are `docs/design-operation-naming.md`; the enactment is

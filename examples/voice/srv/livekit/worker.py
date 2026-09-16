@@ -85,7 +85,7 @@ class CallAgent(livekit_agents.Agent, ts.Host):
         return self.encode(speech_handle.chat_items)  # tesser:debt TB051
 
 
-class CallWorker(ts.Host):
+class LivekitWorker(ts.Host):
 
     def __init__(self, person_events: protocol.PersonEvents, agent_name: str, stt: str, llm: str, tts: str) -> None:
         self._person_events = person_events
@@ -125,7 +125,7 @@ class LivekitHost(ts.Host):
     def run(self, argv: list[str]) -> int:
         voice_app = app.load()
         agent_name = os.environ["LIVEKIT_AGENT_NAME"]
-        call_worker = CallWorker(
+        livekit_worker = LivekitWorker(
             calls_handlers.LivekitHandler(voice_app.calls.client),
             agent_name,
             os.environ.get("LIVEKIT_STT_MODEL", _DEFAULT_STT),
@@ -138,7 +138,9 @@ class LivekitHost(ts.Host):
             api_key=os.environ["LIVEKIT_API_KEY"],
             api_secret=os.environ["LIVEKIT_API_SECRET"],
         )
-        agent_server.rtc_session(call_worker.entrypoint, agent_name=agent_name, on_request=call_worker.on_request)
+        agent_server.rtc_session(
+            livekit_worker.entrypoint, agent_name=agent_name, on_request=livekit_worker.on_request
+        )
         with asyncio.Runner() as runner:
             runner.run(voice_app.open())
             try:
