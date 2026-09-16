@@ -34,6 +34,16 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   debt until the rule gains the row. Also decide how evals are excluded
   from the default `pytest -q` and gated separately (env flag, marker, or
   path).
+- **A flushed utterance after silence lands in the next turn.** When the
+  orchestrator decides `PERSON_SILENT` and runs `end_person_turn`, the
+  worker's `commit_user_turn` flushes any pending STT text as one more
+  final, which reaches the mailbox before the RPC returns (the worker
+  gathers its deliveries first). The orchestrator has already moved to
+  `AGENTS_TURN`, so that text is read as the opening of the person's next
+  turn. Accepted for now (Chris 2026-09-16). To improve: one non-waiting
+  take after `end_person_turn` returns, which needs a mailbox handler that
+  answers "nothing buffered" immediately instead of installing a waiter; a
+  zero-second sleep does not work because it races the `object_send`.
 - **Is `mock_tools` a test double under TB030?** livekit-agents ships
   `mock_tools` as a contextvar that substitutes tool bodies, not a
   runtime patcher. The gateway sibling test hand-fakes the SDK instead
