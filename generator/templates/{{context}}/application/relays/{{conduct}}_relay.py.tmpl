@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import json
+import typing
+
+import tesser.application as ts
+
+import tesser.errors as errors
+
+
+class {{Conduct}}Request(ts.Request):
+
+    def __init__(self, {{#record_fields}}{{field}}: {{py_type}}{{comma}}{{/record_fields}}) -> None:
+{{#record_fields}}
+        self.{{field}} = {{field}}
+{{/record_fields}}
+
+
+class {{Conduct}}RequestSnapshot(ts.Serde):
+
+    def serialize(self, {{conduct}}_request: {{Conduct}}Request) -> bytes:
+        return json.dumps(
+            {
+{{#record_fields}}
+                "{{field}}": {{conduct}}_request.{{field}},
+{{/record_fields}}
+            }
+        ).encode()
+
+    def deserialize(self, buf: bytes) -> {{Conduct}}Request:
+        snapshot = json.loads(buf)
+        if not (
+            isinstance(snapshot, dict)
+{{#record_fields}}
+            and isinstance(snapshot.get("{{field}}"), {{py_type}})
+{{/record_fields}}
+        ):
+            raise errors.invalid(
+                "invalid_snapshot", "a {{conduct_words}} request is {{#record_fields}}{{prose}}a {{field}}{{/record_fields}}"
+            )
+        return {{Conduct}}Request(
+{{#record_fields}}
+            {{field}}=snapshot["{{field}}"],
+{{/record_fields}}
+        )
+
+
+class {{Conduct}}Response(ts.Response):
+
+    def __init__(self, {{identity}}: str) -> None:
+        self.{{identity}} = {{identity}}
+
+
+class {{Conduct}}ResponseSnapshot(ts.Serde):
+
+    def serialize(self, {{conduct}}_response: {{Conduct}}Response) -> bytes:
+        return json.dumps({"{{identity}}": {{conduct}}_response.{{identity}}}).encode()
+
+    def deserialize(self, buf: bytes) -> {{Conduct}}Response:
+        snapshot = json.loads(buf)
+        if not (isinstance(snapshot, dict) and isinstance(snapshot.get("{{identity}}"), str)):
+            raise errors.invalid("invalid_snapshot", "a {{conduct_words}} response is a {{identity}}")
+        return {{Conduct}}Response({{identity}}=snapshot["{{identity}}"])
+
+
+class {{Conduct}}Relay(ts.Relay, typing.Protocol):
+
+    async def run_{{conduct}}(self, {{conduct}}_request: {{Conduct}}Request) -> {{Conduct}}Response: ...

@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import contextlib
+import typing
+
+import asyncpg
+
+import tesser.adapters as ts
+
+import {{context}}.application.ports as ports
+import pgdatabase.database as pgdatabase_database
+
+_SCHEMA: typing.Final[str] = (
+    "CREATE TABLE IF NOT EXISTS {{context}} "
+    "({{#record_fields}}{{field}} {{sql_type}}{{#is_identity}} PRIMARY KEY{{/is_identity}}{{^is_identity}} NOT NULL{{/is_identity}}{{comma}}{{/record_fields}})"
+)
+_SAVE: typing.Final[str] = (
+    "INSERT INTO {{context}} ({{#record_fields}}{{field}}{{comma}}{{/record_fields}}) "
+    "VALUES ({{#record_fields}}${{position}}{{comma}}{{/record_fields}})"
+)
+_LOAD: typing.Final[str] = (
+    "SELECT {{#record_fields}}{{field}}{{comma}}{{/record_fields}} FROM {{context}} WHERE {{identity}} = $1"
+)
+
+
+class Postgres{{Aggregate}}Repository(ts.Repository):
+
+    def __init__(self, connection: asyncpg.pool.PoolConnectionProxy[asyncpg.Record]) -> None:
+        self._connection = connection
+
+    async def {{save}}(self, {{save}}_request: ports.{{Save}}Request) -> ports.{{Save}}Response:
+        await self._connection.execute(
+            _SAVE,
+{{#record_fields}}
+            {{save}}_request.{{field}},
+{{/record_fields}}
+        )
+        return ports.{{Save}}Response({{identity}}={{save}}_request.{{identity}})
+
+    async def {{load}}(self, {{load}}_request: ports.{{Load}}Request) -> ports.{{Load}}Response:
+        rows = await self._connection.fetch(_LOAD, {{load}}_request.{{identity}})
+        return ports.{{Load}}Response(
+            {{collection}}=tuple(
+                ports.{{Aggregate}}(
+{{#record_fields}}
+                    {{field}}=row["{{field}}"],
+{{/record_fields}}
+                )
+                for row in rows
+            )
+        )
+
+
+class Postgres{{Aggregate}}Store(ts.Repository):
+
+    def __init__(self, database: pgdatabase_database.Database) -> None:
+        self._database = database
+        self._schema_ready = False
+
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> typing.AsyncIterator[ports.{{Aggregate}}Repository]:
+        async with self._database.acquire() as connection:
+            if not self._schema_ready:
+                await connection.execute(_SCHEMA)
+                self._schema_ready = True
+            async with connection.transaction():
+                yield Postgres{{Aggregate}}Repository(connection)

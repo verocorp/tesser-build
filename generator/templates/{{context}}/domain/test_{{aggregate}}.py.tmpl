@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+import {{context}}.domain as domain
+
+
+class Test{{Aggregate}}:
+
+    def test_a_{{aggregate}}_constructs_from_its_spec(self) -> None:
+        {{aggregate}}_spec = domain.{{Aggregate}}Spec({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+
+        {{aggregate}} = domain.{{Aggregate}}({{aggregate}}_spec)
+
+        assert str({{aggregate}}.identity) == {{aggregate}}_spec.{{identity}}
+{{#fields}}
+        assert {{py_type}}({{aggregate}}.{{field}}) == {{aggregate}}_spec.{{field}}
+{{/fields}}
+
+
+class Test{{Identity}}:
+
+    def test_a_{{identity}}_equals_by_value(self) -> None:
+        first = domain.{{Identity}}({{identity_sample}})
+        second = domain.{{Identity}}({{identity_sample}})
+
+        assert first == second
+        assert first != domain.{{Identity}}({{identity_sample2}})

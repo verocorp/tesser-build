@@ -12,7 +12,12 @@ repairs it carries, and the post-write hook that puts it in an agent's loop,
 from an install instead of a checkout), a Python runtime library (`tesser-py/` — `tesser.domain.ValueObject`,
 the repo's first shipped runtime dependency rather than a build-time checker;
 candidate mutation-testable VO base — the mutmut-visibility claim is asserted
-by the ecosystem test in `tesser-py/tests/ecosystem/mutmut/`), an executable
+by the ecosystem test in `tesser-py/tests/ecosystem/mutmut/`), a generator
+(`generator/` — writes a starting tesser app tree from a TOML spec: a context
+whose service runs a Restate workflow, whose orchestrator runs one action, and
+whose action writes to Postgres, with its sibling tests and a client-only
+acceptance test; gated by generating every spec in `generator/specs/` and
+running the generated tree's own gates), an executable
 rationale layer (`rationale/`), an agent
 skill (`skills/tesser-build/` — Go + Python construction guidance, copy-in distributed
 to consumers), and human docs (`docs/start-here.md`, `docs/faq.md`). If you are
@@ -187,8 +192,8 @@ Three things to know:
   shipped analyzer runs a zero-findings gate over every example tree
   (the eight `examples/*` `app` rows in `manifest.json`: `asyncpg`,
   `durable-execution`, `errorspy`, `llmport`, `minimal`, `ports`,
-  `python-app`, `serdepy` — the other four `app` rows are `layout`,
-  `specs-app`, `tesser-py`, and `tessercheck-py`), so a
+  `python-app`, `serdepy` — the other five `app` rows are `generator`,
+  `layout`, `specs-app`, `tesser-py`, and `tessercheck-py`), so a
   layout change in an example can break the analyzer without touching a file
   under `tessercheck-py/`. That is not hypothetical — it is how PR #56
   failed.

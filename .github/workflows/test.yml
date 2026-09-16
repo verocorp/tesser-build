@@ -23,6 +23,50 @@ jobs:
       - name: layout — repo check + tessercheck + mypy --strict + pytest
         run: scripts/verify layout
 
+  generator:
+    # The generator app (generator/) writes a tesser app tree from a TOML spec.
+    # Its own gates run, then every spec in generator/specs/ is generated and
+    # the generated tree is gated like an example: tessercheck zero findings,
+    # mypy --strict, and pytest against the Postgres and Restate service
+    # containers, with the generated Restate endpoint served on the runner and
+    # registered through host.docker.internal.
+    name: generator app (tessercheck + mypy --strict + pytest, then every spec generated and gated against Postgres and Restate)
+    runs-on: ubuntu-latest
+    services:
+      restate:
+        image: restatedev/restate:1.7
+        ports:
+          - 8080:8080
+          - 9070:9070
+        options: >-
+          --add-host=host.docker.internal:host-gateway
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tesser
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: tesser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tesser"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev tooling
+        run: pip install -r generator/requirements-dev.txt
+      - name: generator — tessercheck + mypy --strict + pytest, then every generated tree
+        env:
+          GENERATED_STORAGE: postgres://tesser@localhost:5432/tesser
+          RESTATE_INGRESS: http://localhost:8080
+          RESTATE_ADMIN: http://localhost:9070
+        run: scripts/verify generator
+
   test:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+import tesser.application as ts
+
+import {{context}}.application.ports as ports
+import {{context}}.application.relays as relays
+import {{context}}.client as client
+import {{context}}.domain as domain
+
+
+class MapTo{{Aggregate}}Spec(ts.Mapper, domain.{{Aggregate}}Spec):
+
+    def __init__(
+        self,
+        {{write}}_request: client.{{Write}}Request,
+        {{issue}}_response: ports.{{Issue}}Response,
+    ) -> None:
+        super().__init__(
+            {{identity}}={{issue}}_response.{{identity}},
+{{#fields}}
+            {{field}}={{write}}_request.{{field}},
+{{/fields}}
+        )
+
+
+class MapTo{{Conduct}}Request(ts.Mapper, relays.{{Conduct}}Request):
+
+    def __init__(self, {{aggregate}}: domain.{{Aggregate}}) -> None:
+        super().__init__(
+{{#record_fields}}
+            {{field}}={{py_type}}({{aggregate}}.{{accessor}}),
+{{/record_fields}}
+        )
+
+
+class MapTo{{Write}}Response(ts.Mapper, client.{{Write}}Response):
+
+    def __init__(self, {{conduct}}_response: relays.{{Conduct}}Response) -> None:
+        super().__init__({{identity}}={{conduct}}_response.{{identity}})
+
+
+class MapTo{{Load}}Request(ts.Mapper, ports.{{Load}}Request):
+
+    def __init__(self, {{identity}}: domain.{{Identity}}) -> None:
+        super().__init__({{identity}}=str({{identity}}))
+
+
+class MapTo{{Aggregate}}(ts.Mapper, client.{{Aggregate}}):
+
+    def __init__(self, {{aggregate}}: ports.{{Aggregate}}) -> None:
+        super().__init__({{#read_fields}}{{field}}={{aggregate}}.{{field}}{{comma}}{{/read_fields}})
+
+
+class MapTo{{Read}}Response(ts.Mapper, client.{{Read}}Response):
+
+    def __init__(self, {{load}}_response: ports.{{Load}}Response) -> None:
+        super().__init__({{aggregate}}=MapTo{{Aggregate}}({{load}}_response.{{collection}}[0]))
+
+
+class {{Aggregate}}Service(ts.ApplicationService):
+
+    def __init__(
+        self,
+        {{conduct}}_relay: relays.{{Conduct}}Relay,
+        {{aggregate}}_identity_repository: ports.{{Aggregate}}IdentityRepository,
+        {{aggregate}}_store: ports.{{Aggregate}}Store,
+    ) -> None:
+        self._{{conduct}}_relay = {{conduct}}_relay
+        self._{{aggregate}}_identity_repository = {{aggregate}}_identity_repository
+        self._{{aggregate}}_store = {{aggregate}}_store
+
+    async def {{write}}(self, {{write}}_request: client.{{Write}}Request) -> client.{{Write}}Response:
+        {{issue}}_response = await self._{{aggregate}}_identity_repository.{{issue}}(ports.{{Issue}}Request())
+        {{aggregate}} = domain.{{Aggregate}}(MapTo{{Aggregate}}Spec({{write}}_request, {{issue}}_response))
+        {{conduct}}_response = await self._{{conduct}}_relay.run_{{conduct}}(MapTo{{Conduct}}Request({{aggregate}}))
+        return MapTo{{Write}}Response({{conduct}}_response)
+
+    async def {{read}}(self, {{read}}_request: client.{{Read}}Request) -> client.{{Read}}Response:
+        {{identity}} = domain.{{Identity}}({{read}}_request.{{identity}})
+        async with self._{{aggregate}}_store.transaction() as {{aggregate}}_repository:
+            {{load}}_response = await {{aggregate}}_repository.{{load}}(MapTo{{Load}}Request({{identity}}))
+        return MapTo{{Read}}Response({{load}}_response)

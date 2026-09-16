@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+import os
+
+import asyncpg
+
+import {{context}}.adapters.repositories as repositories
+import {{context}}.application.ports as ports
+import pgdatabase.database as pgdatabase_database
+
+
+class TestPostgres{{Aggregate}}Store:
+
+    async def test_a_saved_{{aggregate}}_is_loaded_in_a_later_transaction(self) -> None:
+        dsn = os.environ["{{storage_env}}"]
+        connection = await asyncpg.connect(dsn)
+        await connection.execute("DROP TABLE IF EXISTS {{context}}")
+        await connection.close()
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
+        await database.open()
+        postgres_{{aggregate}}_store = repositories.Postgres{{Aggregate}}Store(database)
+
+        async with postgres_{{aggregate}}_store.transaction() as {{aggregate}}_repository:
+            await {{aggregate}}_repository.{{save}}(
+                ports.{{Save}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+            )
+        async with postgres_{{aggregate}}_store.transaction() as {{aggregate}}_repository:
+            {{load}}_response = await {{aggregate}}_repository.{{load}}(
+                ports.{{Load}}Request({{identity}}={{identity_sample}})
+            )
+        await database.close()
+
+        assert {{load}}_response.{{collection}} == (
+            ports.{{Aggregate}}({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}}),
+        )

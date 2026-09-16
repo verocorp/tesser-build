@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import tesser.component as ts
+
+import {{context}}.adapters.repositories as repositories
+import {{context}}.adapters.runners as runners
+import {{context}}.adapters.runtimes as runtimes
+import {{context}}.application as application
+import {{context}}.client as client
+import pgdatabase.database as pgdatabase_database
+
+
+class Spec(ts.Spec):
+
+    def __init__(self, storage: str, ingress: str, identity_seed: int) -> None:
+        self.storage = storage
+        self.ingress = ingress
+        self.identity_seed = identity_seed
+
+
+class Config(ts.Config):
+
+    def __init__(self, spec: Spec) -> None:
+        self.storage = spec.storage
+        self.ingress = spec.ingress
+        self.identity_seed = spec.identity_seed
+        self.database = pgdatabase_database.DatabaseRequest(spec.storage)
+
+
+class {{Context}}(ts.Component):
+
+    def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
+        self._postgres_{{aggregate}}_store = repositories.Postgres{{Aggregate}}Store(database)
+        self.restate_{{aggregate}}_runtime: runtimes.Restate{{Aggregate}}Runtime = runtimes.Restate{{Aggregate}}Runtime(
+            application.{{Aggregate}}Actions(self._postgres_{{aggregate}}_store)
+        )
+        self.client: client.{{Context}}Client = application.{{Aggregate}}Service(
+            runners.RestateIngress{{Conduct}}Relay(config.ingress, self.restate_{{aggregate}}_runtime),
+            repositories.Uuid{{Aggregate}}IdentityRepository(config.identity_seed),
+            self._postgres_{{aggregate}}_store,
+        )
+
+    async def close(self) -> None:
+        return None

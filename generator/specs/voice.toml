@@ -1,0 +1,42 @@
+app_name = "voice"
+bounded_context_name = "calls"
+aggregate_root_class_name = "Call"
+durable_execution_engine = "restate"
+database = "postgres"
+identity_field_name = "call_id"
+identity_port_operation_name = "issue_call_id"
+
+[aggregate_fields]
+person_name = "str"
+phone_number = "str"
+
+[sample_values]
+call_id = ["call-1", "call-2"]
+person_name = ["Ada", "Grace"]
+phone_number = ["+15555550100", "+15555550101"]
+
+[client]
+write_operation_name = "place_call"
+read_operation_name = "get_call"
+read_response_fields = ["call_id", "person_name"]
+
+[orchestrator]
+operation_name = "conduct_call"
+
+[action]
+operation_name = "record_call"
+
+[repository]
+save_operation_name = "save_call"
+load_operation_name = "load_call"
+load_response_collection_name = "calls"
+
+[acceptance_test]
+test_class_name = "TestPlacingCalls"
+test_method_name = "test_a_call_is_successfully_made"
+asserted_field = "person_name"
+random_values = ["Ada", "Grace", "Alan", "Barbara"]
+
+[environment_variables]
+storage_url = "CALLS_STORAGE"
+restate_ingress_url = "RESTATE_INGRESS"

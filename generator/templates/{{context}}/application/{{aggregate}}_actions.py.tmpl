@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+import tesser.application as ts
+
+import {{context}}.application.ports as ports
+import {{context}}.application.relays as relays
+
+
+class MapTo{{Save}}Request(ts.Mapper, ports.{{Save}}Request):
+
+    def __init__(self, {{record}}_request: relays.{{Record}}Request) -> None:
+        super().__init__(
+{{#record_fields}}
+            {{field}}={{record}}_request.{{field}},
+{{/record_fields}}
+        )
+
+
+class MapTo{{Record}}Response(ts.Mapper, relays.{{Record}}Response):
+
+    def __init__(self, {{save}}_response: ports.{{Save}}Response) -> None:
+        super().__init__({{identity}}={{save}}_response.{{identity}})
+
+
+class {{Aggregate}}Actions(ts.Actions):
+
+    def __init__(self, {{aggregate}}_store: ports.{{Aggregate}}Store) -> None:
+        self._{{aggregate}}_store = {{aggregate}}_store
+
+    async def {{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        async with self._{{aggregate}}_store.transaction() as {{aggregate}}_repository:
+            {{save}}_response = await {{aggregate}}_repository.{{save}}(MapTo{{Save}}Request({{record}}_request))
+        return MapTo{{Record}}Response({{save}}_response)

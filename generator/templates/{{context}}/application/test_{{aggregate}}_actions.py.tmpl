@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import contextlib
+import typing
+
+import tesser.testing as ts
+
+import {{context}}.application as application
+import {{context}}.application.ports as ports
+import {{context}}.application.relays as relays
+
+
+@ts.fake
+class Fake{{Aggregate}}Repository(ports.{{Aggregate}}Repository):
+
+    def __init__(self, {{collection}}: dict[str, ports.{{Aggregate}}]) -> None:
+        self._{{collection}} = {{collection}}
+
+    async def {{save}}(self, {{save}}_request: ports.{{Save}}Request) -> ports.{{Save}}Response:
+        self._{{collection}}[{{save}}_request.{{identity}}] = ports.{{Aggregate}}(
+{{#record_fields}}
+            {{field}}={{save}}_request.{{field}},
+{{/record_fields}}
+        )
+        return ports.{{Save}}Response({{identity}}={{save}}_request.{{identity}})
+
+    async def {{load}}(self, {{load}}_request: ports.{{Load}}Request) -> ports.{{Load}}Response:
+        return ports.{{Load}}Response({{collection}}=(self._{{collection}}[{{load}}_request.{{identity}}],))
+
+
+@ts.fake
+class Fake{{Aggregate}}Store(ports.{{Aggregate}}Store):
+
+    def __init__(self) -> None:
+        self.{{collection}}: dict[str, ports.{{Aggregate}}] = {}
+
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> typing.AsyncIterator[ports.{{Aggregate}}Repository]:
+        yield Fake{{Aggregate}}Repository(self.{{collection}})
+
+
+class Test{{Aggregate}}Actions:
+
+    async def test_{{record}}_saves_the_{{aggregate}}_under_its_{{identity}}(self) -> None:
+        fake_{{aggregate}}_store = Fake{{Aggregate}}Store()
+        {{aggregate}}_actions = application.{{Aggregate}}Actions(fake_{{aggregate}}_store)
+
+        await {{aggregate}}_actions.{{record}}(
+            relays.{{Record}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+        )
+
+        assert fake_{{aggregate}}_store.{{collection}}[{{identity_sample}}] == ports.{{Aggregate}}(
+            {{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}}
+        )
+
+    async def test_{{record}}_answers_the_{{identity}}_it_saved(self) -> None:
+        {{aggregate}}_actions = application.{{Aggregate}}Actions(Fake{{Aggregate}}Store())
+
+        {{record}}_response = await {{aggregate}}_actions.{{record}}(
+            relays.{{Record}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+        )
+
+        assert {{record}}_response.{{identity}} == {{identity_sample}}

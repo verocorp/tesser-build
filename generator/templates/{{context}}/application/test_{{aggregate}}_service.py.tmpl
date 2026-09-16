@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import contextlib
+import typing
+
+import tesser.testing as ts
+
+import {{context}}.application as application
+import {{context}}.application.ports as ports
+import {{context}}.application.relays as relays
+import {{context}}.client as client
+
+
+@ts.fake
+class Fake{{Conduct}}Relay(relays.{{Conduct}}Relay):
+
+    def __init__(self) -> None:
+        self.conducted: list[relays.{{Conduct}}Request] = []
+
+    async def run_{{conduct}}(self, {{conduct}}_request: relays.{{Conduct}}Request) -> relays.{{Conduct}}Response:
+        self.conducted.append({{conduct}}_request)
+        return relays.{{Conduct}}Response({{identity}}={{conduct}}_request.{{identity}})
+
+
+@ts.fake
+class Fake{{Aggregate}}IdentityRepository(ports.{{Aggregate}}IdentityRepository):
+
+    async def {{issue}}(self, {{issue}}_request: ports.{{Issue}}Request) -> ports.{{Issue}}Response:
+        return ports.{{Issue}}Response({{identity}}={{identity_sample2}})
+
+
+@ts.fake
+class Fake{{Aggregate}}Repository(ports.{{Aggregate}}Repository):
+
+    def __init__(self, {{collection}}: dict[str, ports.{{Aggregate}}]) -> None:
+        self._{{collection}} = {{collection}}
+
+    async def {{save}}(self, {{save}}_request: ports.{{Save}}Request) -> ports.{{Save}}Response:
+        self._{{collection}}[{{save}}_request.{{identity}}] = ports.{{Aggregate}}(
+{{#record_fields}}
+            {{field}}={{save}}_request.{{field}},
+{{/record_fields}}
+        )
+        return ports.{{Save}}Response({{identity}}={{save}}_request.{{identity}})
+
+    async def {{load}}(self, {{load}}_request: ports.{{Load}}Request) -> ports.{{Load}}Response:
+        return ports.{{Load}}Response({{collection}}=(self._{{collection}}[{{load}}_request.{{identity}}],))
+
+
+@ts.fake
+class Fake{{Aggregate}}Store(ports.{{Aggregate}}Store):
+
+    def __init__(self) -> None:
+        self.{{collection}}: dict[str, ports.{{Aggregate}}] = {}
+
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> typing.AsyncIterator[ports.{{Aggregate}}Repository]:
+        yield Fake{{Aggregate}}Repository(self.{{collection}})
+
+
+class Test{{Aggregate}}Service:
+
+    async def test_{{write}}_conducts_the_{{aggregate}}_under_the_{{identity}}_its_identity_repository_issued(self) -> None:
+        fake_{{conduct}}_relay = Fake{{Conduct}}Relay()
+        {{aggregate}}_service = application.{{Aggregate}}Service(
+            fake_{{conduct}}_relay, Fake{{Aggregate}}IdentityRepository(), Fake{{Aggregate}}Store()
+        )
+
+        {{write}}_response = await {{aggregate}}_service.{{write}}(
+            client.{{Write}}Request({{#fields}}{{field}}={{sample}}{{comma}}{{/fields}})
+        )
+
+        assert [
+            ({{#record_fields}}conducted.{{field}}{{comma}}{{/record_fields}})
+            for conducted in fake_{{conduct}}_relay.conducted
+        ] == [({{#record_fields}}{{#is_identity}}{{identity_sample2}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})]
+        assert {{write}}_response.{{identity}} == {{identity_sample2}}
+
+    async def test_a_saved_{{aggregate}}_is_read_back_by_its_{{identity}}(self) -> None:
+        fake_{{aggregate}}_store = Fake{{Aggregate}}Store()
+        fake_{{aggregate}}_store.{{collection}}[{{identity_sample}}] = ports.{{Aggregate}}(
+            {{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}}
+        )
+        {{aggregate}}_service = application.{{Aggregate}}Service(
+            Fake{{Conduct}}Relay(), Fake{{Aggregate}}IdentityRepository(), fake_{{aggregate}}_store
+        )
+
+        {{read}}_response = await {{aggregate}}_service.{{read}}(client.{{Read}}Request({{identity}}={{identity_sample}}))
+
+{{#read_fields}}
+        assert {{read}}_response.{{aggregate}}.{{field}} == {{sample}}
+{{/read_fields}}

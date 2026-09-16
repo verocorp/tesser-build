@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.testing as ts
+import restate
+
+import {{context}}.adapters.runtimes as runtimes
+import {{context}}.application.client as client
+import {{context}}.application.relays as relays
+
+
+@ts.fake
+class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
+
+    def __init__(self) -> None:
+        self.recorded: list[relays.{{Record}}Request] = []
+
+    async def {{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        self.recorded.append({{record}}_request)
+        return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
+
+
+class TestRestate{{Aggregate}}Runtime:
+
+    def test_it_registers_one_actions_service_and_one_orchestrator_workflow(self) -> None:
+        restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
+
+        registered = {
+            restate_{{aggregate}}_runtime.{{aggregate}}_actions_service.name: sorted(
+                restate_{{aggregate}}_runtime.{{aggregate}}_actions_service.handlers
+            ),
+            restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow.name: sorted(
+                restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow.handlers
+            ),
+        }
+
+        assert registered == {"{{Aggregate}}Actions": ["{{record}}"], "{{Aggregate}}Orchestrator": ["{{conduct}}"]}
+
+    def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
+        restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
+
+        policies = [
+            restate_{{aggregate}}_runtime.{{aggregate}}_actions_service.invocation_retry_policy,
+            restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow.invocation_retry_policy,
+        ]
+
+        assert [(policy.max_attempts, policy.on_max_attempts) for policy in policies if policy is not None] == [
+            (5, "pause"),
+            (5, "pause"),
+        ]
+
+    async def test_the_{{record}}_handler_hands_the_request_to_the_application_client(self) -> None:
+        fake_{{aggregate}}_application_client = Fake{{Aggregate}}ApplicationClient()
+        {{record}}_request = relays.{{Record}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
+
+        await runtimes.Restate{{Aggregate}}Runtime(fake_{{aggregate}}_application_client).{{record}}_handler(
+            typing.cast(restate.Context, None), {{record}}_request
+        )
+
+        assert fake_{{aggregate}}_application_client.recorded == [{{record}}_request]

@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+import random
+
+import tesser.testing as ts
+
+import app as app
+import {{context}}.client as {{context}}_client
+
+
+@ts.helper
+def {{write}}_request(
+    {{#fields}}{{field}}: {{py_type}} = {{sample}}{{comma}}{{/fields}}
+) -> {{context}}_client.{{Write}}Request:
+    return {{context}}_client.{{Write}}Request({{#fields}}{{field}}={{field}}{{comma}}{{/fields}})
+
+
+class {{test_class}}:
+
+    async def {{test_method}}(self) -> None:
+        {{app}}_app = app.load()
+        await {{app}}_app.open()
+        {{asserts}} = random.choice({{random_choices}})
+
+        {{write}}_response = await {{app}}_app.{{context}}.client.{{write}}({{write}}_request({{asserts}}={{asserts}}))
+        {{read}}_response = await {{app}}_app.{{context}}.client.{{read}}(
+            {{context}}_client.{{Read}}Request({{identity}}={{write}}_response.{{identity}})
+        )
+        await {{app}}_app.close()
+
+        assert {{read}}_response.{{aggregate}}.{{asserts}} == {{asserts}}

@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+import os
+import uuid
+
+import tesser.testing as ts
+import httpx
+
+import {{context}}.adapters.runners as runners
+import {{context}}.adapters.runtimes as runtimes
+import {{context}}.application.client as client
+import {{context}}.application.relays as relays
+
+
+@ts.fake
+class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
+
+    async def {{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
+
+
+class TestRestateIngress{{Conduct}}Relay:
+
+    async def test_{{conduct}}_runs_the_workflow_the_engine_keys_by_the_{{identity}}(self) -> None:
+        restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
+        {{identity}} = str(uuid.uuid4())
+        admin = os.environ.get("RESTATE_ADMIN", "http://localhost:9070")
+
+        {{conduct}}_response = await runners.RestateIngress{{Conduct}}Relay(
+            os.environ["{{ingress_env}}"], restate_{{aggregate}}_runtime
+        ).run_{{conduct}}(
+            relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
+        )
+
+        async with httpx.AsyncClient(base_url=admin) as async_client:
+            response = await async_client.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT target_service_name, target_service_key FROM sys_invocation "
+                    "WHERE target = '{{Aggregate}}Orchestrator/" + {{identity}} + "/{{conduct}}'"
+                },
+            )
+
+        assert {{conduct}}_response.{{identity}} == {{identity}}
+        assert [
+            (row["target_service_name"], row["target_service_key"]) for row in response.json()["rows"]
+        ] == [("{{Aggregate}}Orchestrator", {{identity}})]

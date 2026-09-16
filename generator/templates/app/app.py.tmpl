@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import os
+import secrets
+import typing
+
+import tesser.app as ts
+
+import {{context}}.component as {{context}}_component
+import pgdatabase.database as pgdatabase_database
+import tesser.errors as errors
+
+_IDENTITY_SEED_BITS: typing.Final[int] = 128
+
+
+class Spec(ts.Spec):
+
+    def __init__(self, {{context}}: {{context}}_component.Config) -> None:
+        self.{{context}} = {{context}}
+
+
+class AppConfig(ts.Config):
+
+    def __init__(self, spec: Spec) -> None:
+        self.{{context}} = spec.{{context}}
+
+
+class {{App}}App(ts.App):
+
+    def __init__(self, app_config: AppConfig) -> None:
+        self.database = pgdatabase_database.Database(app_config.{{context}}.database)
+        self.{{context}} = {{context}}_component.{{Context}}(app_config.{{context}}, self.database)
+
+    async def open(self) -> None:
+        await self.database.open()
+
+    async def close(self) -> None:
+        await self.{{context}}.close()
+        await self.database.close()
+
+
+class AppConfigRepository(ts.ConfigRepository, typing.Protocol):
+
+    def get(self) -> AppConfig: ...
+
+
+class EnvConfigRepository(AppConfigRepository):
+
+    def get(self) -> AppConfig:
+        {{context}}_storage = os.environ.get("{{storage_env}}")
+        if {{context}}_storage is None:
+            raise errors.invalid("missing_env", "{{storage_env}} is required")
+        ingress = os.environ.get("{{ingress_env}}")
+        if ingress is None:
+            raise errors.invalid("missing_env", "{{ingress_env}} is required")
+        return AppConfig(
+            Spec(
+                {{context}}={{context}}_component.Config(
+                    {{context}}_component.Spec(
+                        storage={{context}}_storage,
+                        ingress=ingress,
+                        identity_seed=secrets.randbits(_IDENTITY_SEED_BITS),
+                    )
+                )
+            )
+        )
+
+
+class AppLoader(ts.Loader):
+
+    def __init__(self, app_config_repository: AppConfigRepository) -> None:
+        self._app_config_repository = app_config_repository
+
+    def load(self) -> {{App}}App:
+        return {{App}}App(self._app_config_repository.get())
+
+
+@ts.load
+def load() -> {{App}}App:
+    return AppLoader(EnvConfigRepository()).load()
