@@ -404,7 +404,7 @@ class TestTakePersonName:
                 simulated_person = SimulatedPerson(url, api_key, api_secret, person_name)  # tesser:debt TB085
                 simulated_person_dialing.expecting = simulated_person
                 place_call_response = await asyncio.wait_for(
-                    calls_client.place_call(client.PlaceCallRequest(person_name="", phone_number="")), _CALL_SECONDS
+                    calls_client.place_call(client.PlaceCallRequest(phone_number="")), _CALL_SECONDS
                 )
                 get_call_response = await calls_client.get_call(
                     client.GetCallRequest(call_id=place_call_response.call_id)

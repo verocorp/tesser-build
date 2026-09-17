@@ -19,10 +19,7 @@ class MapToCallSpec(ts.Mapper, domain.CallSpec):
     ) -> None:
         super().__init__(
             call_id=issue_call_id_response.call_id,
-            person=domain.PersonSpec(
-                name=place_call_request.person_name,
-                phone_number=place_call_request.phone_number,
-            ),
+            person=domain.PersonSpec(name="", phone_number=place_call_request.phone_number),
             turns=(),
             step=domain.ASK_NAME,
         )
