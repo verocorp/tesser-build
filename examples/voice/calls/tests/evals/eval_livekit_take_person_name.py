@@ -201,12 +201,7 @@ class SimulatedPersonDialing(ports.Dialing):
 
 
 @ts.fake
-class InlineCallSignals(
-    relays.PersonAnsweredRelay,
-    relays.PersonUtteranceRelay,
-    relays.AwaitPersonAnsweredRelay,
-    relays.AwaitPersonUtteranceRelay,
-):
+class InlineCallEventsRelay(relays.CallEventsRelay, relays.PersonRelay):
 
     def __init__(self, loop: asyncio.AbstractEventLoop, people: dict[str, SimulatedPerson]) -> None:
         self._loop = loop
@@ -261,26 +256,23 @@ class InlineCallSignals(
 
 
 @ts.fake
-class InlineCallInvocations(
-    relays.DialPersonRelay,
-    relays.SpeakTurnRelay,
-    relays.EndPersonTurnRelay,
-    relays.HangUpRelay,
-    relays.RecordCallRelay,
-):
+class InlineDialingRelay(relays.DialingRelay):
 
-    def __init__(
-        self,
-        call_actions: application.CallActions,
-        dialing_actions: application.DialingActions,
-        speech_actions: application.SpeechActions,
-    ) -> None:
-        self._call_actions = call_actions
+    def __init__(self, dialing_actions: application.DialingActions) -> None:
         self._dialing_actions = dialing_actions
-        self._speech_actions = speech_actions
 
     async def run_dial_person(self, dial_person_request: relays.DialPersonRequest) -> relays.DialPersonResponse:
         return await self._dialing_actions.dial_person(dial_person_request)
+
+    async def run_hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
+        return await self._dialing_actions.hang_up(hang_up_request)
+
+
+@ts.fake
+class InlineSpeechRelay(relays.SpeechRelay):
+
+    def __init__(self, speech_actions: application.SpeechActions) -> None:
+        self._speech_actions = speech_actions
 
     async def run_speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
         return await self._speech_actions.speak_turn(speak_turn_request)
@@ -290,33 +282,40 @@ class InlineCallInvocations(
     ) -> relays.EndPersonTurnResponse:
         return await self._speech_actions.end_person_turn(end_person_turn_request)
 
-    async def run_hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
-        return await self._dialing_actions.hang_up(hang_up_request)
+
+@ts.fake
+class InlineRecordCallRelay(relays.RecordCallRelay):
+
+    def __init__(self, call_actions: application.CallActions) -> None:
+        self._call_actions = call_actions
 
     async def run_record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
         return await self._call_actions.record_call(record_call_request)
 
 
 @ts.fake
-class InlineConductCall(relays.ConductCallRelay):
+class InlineConductCallRelay(relays.ConductCallRelay):
 
     def __init__(  # tesser:debt TB081
-        self, inline_call_invocations: InlineCallInvocations, inline_call_signals: InlineCallSignals
+        self,
+        inline_dialing_relay: InlineDialingRelay,
+        inline_speech_relay: InlineSpeechRelay,
+        inline_call_events_relay: InlineCallEventsRelay,
+        inline_record_call_relay: InlineRecordCallRelay,
     ) -> None:
-        self._inline_call_invocations = inline_call_invocations
-        self._inline_call_signals = inline_call_signals
+        self._inline_dialing_relay = inline_dialing_relay
+        self._inline_speech_relay = inline_speech_relay
+        self._inline_call_events_relay = inline_call_events_relay
+        self._inline_record_call_relay = inline_record_call_relay
         self.conducted: list[domain.Call] = []
 
     async def run_conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
         self.conducted.append(conduct_call_request.call)
         return await orchestrators.CallOrchestrator(
-            self._inline_call_invocations,
-            self._inline_call_signals,
-            self._inline_call_invocations,
-            self._inline_call_signals,
-            self._inline_call_invocations,
-            self._inline_call_invocations,
-            self._inline_call_invocations,
+            self._inline_dialing_relay,
+            self._inline_speech_relay,
+            self._inline_call_events_relay,
+            self._inline_record_call_relay,
         ).conduct_call(conduct_call_request)
 
 
@@ -364,24 +363,25 @@ class TestTakePersonName:
         await database.open()
         people: dict[str, SimulatedPerson] = {}
         simulated_person_dialing = SimulatedPersonDialing(url, api_key, api_secret, agent_name, people)
-        inline_call_signals = InlineCallSignals(asyncio.get_running_loop(), people)
-        inline_conduct_call = InlineConductCall(
-            InlineCallInvocations(
-                application.CallActions(repositories.PostgresCallStore(database)),
-                application.DialingActions(simulated_person_dialing),
+        inline_call_events_relay = InlineCallEventsRelay(asyncio.get_running_loop(), people)
+        inline_conduct_call_relay = InlineConductCallRelay(
+            InlineDialingRelay(application.DialingActions(simulated_person_dialing)),
+            InlineSpeechRelay(
                 application.SpeechActions(
                     gateways.LivekitSpeech(
                         gateways.LivekitAgentRpc(livekit_rtc.Room, url, api_key, api_secret, agent_name)
                     )
-                ),
+                )
             ),
-            inline_call_signals,
+            inline_call_events_relay,
+            InlineRecordCallRelay(application.CallActions(repositories.PostgresCallStore(database))),
         )
-        call_service = application.CallService(
-            inline_conduct_call, inline_call_signals, inline_call_signals, repositories.PostgresCallStore(database)
+        calls_client = component.Calls.Client(
+            application.CallService(inline_conduct_call_relay, repositories.PostgresCallStore(database)),
+            application.CallEventsService(inline_call_events_relay),
         )
         livekit_worker = srv_livekit.LivekitWorker(
-            handlers.LivekitHandler(call_service),
+            handlers.LivekitHandler(calls_client),
             agent_name,
             os.environ.get("LIVEKIT_STT_MODEL", _DEFAULT_STT),
             os.environ.get("LIVEKIT_LLM_MODEL", _DEFAULT_LLM),
@@ -404,12 +404,12 @@ class TestTakePersonName:
                 simulated_person = SimulatedPerson(url, api_key, api_secret, person_name)  # tesser:debt TB085
                 simulated_person_dialing.expecting = simulated_person
                 place_call_response = await asyncio.wait_for(
-                    call_service.place_call(client.PlaceCallRequest(person_name="", phone_number="")), _CALL_SECONDS
+                    calls_client.place_call(client.PlaceCallRequest(person_name="", phone_number="")), _CALL_SECONDS
                 )
-                get_call_response = await call_service.get_call(
+                get_call_response = await calls_client.get_call(
                     client.GetCallRequest(call_id=place_call_response.call_id)
                 )
-                conducted = inline_conduct_call.conducted[-1]
+                conducted = inline_conduct_call_relay.conducted[-1]
                 transcripts.append(transcript(conducted))
                 print(f"\n[{person_name}] kept={get_call_response.call.person_name!r} said={simulated_person.said} heard={transcript(conducted)}")
                 kept.append(get_call_response.call.person_name == person_name)

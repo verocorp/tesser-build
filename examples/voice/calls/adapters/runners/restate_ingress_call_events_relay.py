@@ -14,19 +14,11 @@ _READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
 _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOUT_SECONDS)
 
 
-class RestateIngressCallRelays(ts.Runner):  # tesser:debt TB085
+class RestateIngressCallEventsRelay(ts.Runner):
 
     def __init__(self, ingress: str, restate_call_runtime: runtimes.RestateCallRuntime) -> None:
         self._ingress = ingress
         self._restate_call_runtime = restate_call_runtime
-
-    async def run_conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
-        async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
-            return await restate_client.Client(async_client).workflow_call(
-                self._restate_call_runtime.conduct_call_handler,
-                key=urllib_parse.quote(str(conduct_call_request.call.identity), safe=""),
-                arg=conduct_call_request,
-            )
 
     async def run_person_answered(
         self, person_answered_request: relays.PersonAnsweredRequest

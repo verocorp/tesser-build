@@ -8,6 +8,26 @@ Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).
 Chris ruled no rule or analyzer changes until the example is built and
 right; collisions carry `# tesser:debt` markers meanwhile.
 
+- **A relay carries the operations of the thing it acts on, not one
+  operation (Chris, 2026-09-17).** Ruled while walking the voice example:
+  "classes should never be designed to hold one operation, though they may
+  only hold one." The voice tree's ten single-operation relays became six,
+  cut the way ports and actions classes already are: `DialingRelay`,
+  `SpeechRelay`, `RecordCallRelay`, `PersonRelay` (the two waits),
+  `ConductCallRelay`, and `CallEventsRelay` (the two inbound reports). The
+  orchestrator takes four relays instead of seven, and the service split by
+  responsibility into `CallService` (place, get; holds the store and the
+  conduct relay) and `CallEventsService` (report person answered, report
+  person utterance; holds one relay), composed behind `CallsClient` by a
+  nested `Calls.Client` as durable-execution does. The runners split the
+  other way, one per relay, so #194's runner rule holds with no markers.
+  This reverses half of #194's 2026-09-14 ruling: TB085's "a relay carries
+  one operation, because its name is the operation it carries" fires on the
+  three two-operation relays and they carry markers. To do: re-cut that row
+  as "a relay is named for the thing its operations act on", the rule ports
+  and actions already follow, and move durable-execution and minimal to the
+  same cut. The recorded reason for #194 (a relay must not be named for a
+  pattern) still holds under the new cut.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the
@@ -42,6 +62,16 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   what the agent said, so the name only arrives if the agent asked. It is
   excluded by filename (`eval_*.py` is not a pytest default) and gated by
   `VOICE_EVALS=1`.
+- **A doubled agent line is an LLM retry inside `generate_reply`.** Seen
+  twice in the eval (2026-09-16 and 2026-09-17, sim5.log for Michael): the
+  worker logs "failed to generate LLM completion: Request timed out,
+  retrying", the SDK retries, and both attempts' messages land in
+  `speech_handle.chat_items`. `CallAgent.encode` emits every message item,
+  so the agent's turn text reads as two greetings joined by a newline. The
+  person heard only the second, so the transcript the domain keeps is not
+  what was said. To fix, at the worker: keep the message items of the
+  attempt that was spoken, which needs a red test that feeds `encode` two
+  messages and asserts one. Not a domain bug.
 - **A flushed utterance after silence lands in the next turn.** When the
   orchestrator decides `PERSON_SILENT` and runs `end_person_turn`, the
   worker's `commit_user_turn` flushes any pending STT text as one more

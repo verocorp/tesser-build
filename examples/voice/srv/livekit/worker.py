@@ -31,16 +31,16 @@ _TURN_HANDLING: typing.Final[livekit_agents.TurnHandlingOptions] = {"turn_detect
 
 class CallAgent(livekit_agents.Agent, ts.Host):
 
-    def __init__(self, person_events: protocol.PersonEvents, call_id: str) -> None:
+    def __init__(self, call_events: protocol.CallEvents, call_id: str) -> None:
         super().__init__(instructions="")
-        self._person_events = person_events
+        self._call_events = call_events
         self._call_id = call_id
         self._deliveries: set[asyncio.Task[None]] = set()
 
     def on_user_input_transcribed(self, user_input_transcribed_event: livekit_agents.UserInputTranscribedEvent) -> None:
         if user_input_transcribed_event.is_final and user_input_transcribed_event.transcript.strip():
             delivery = asyncio.ensure_future(
-                self._person_events.person_utterance(
+                self._call_events.person_utterance(
                     protocol.PersonUtterance(call_id=self._call_id, text=user_input_transcribed_event.transcript)
                 )
             )
@@ -96,8 +96,8 @@ class CallAgent(livekit_agents.Agent, ts.Host):
 
 class LivekitWorker(ts.Host):
 
-    def __init__(self, person_events: protocol.PersonEvents, agent_name: str, stt: str, llm: str, tts: str) -> None:
-        self._person_events = person_events
+    def __init__(self, call_events: protocol.CallEvents, agent_name: str, stt: str, llm: str, tts: str) -> None:
+        self._call_events = call_events
         self._agent_name = agent_name
         self._stt = stt
         self._llm = llm
@@ -115,7 +115,7 @@ class LivekitWorker(ts.Host):
     async def entrypoint(self, job_context: livekit_agents.JobContext) -> None:
         await job_context.connect()
         call_id = job_context.room.name
-        call_agent = CallAgent(self._person_events, call_id)
+        call_agent = CallAgent(self._call_events, call_id)
         agent_session = self.agent_session()  # tesser:debt TB051
         agent_session.on("user_input_transcribed", call_agent.on_user_input_transcribed)
         job_context.room.local_participant.register_rpc_method(SPEAK_TURN_METHOD, call_agent.speak_turn)
@@ -127,7 +127,7 @@ class LivekitWorker(ts.Host):
         await livekit_participant.wait_for_participant_attribute(
             job_context.room, identity=_PERSON_IDENTITY, attribute=_SIP_CALL_STATUS, value=_SIP_CALL_ACTIVE
         )
-        await self._person_events.person_answered(protocol.PersonAnswered(call_id=call_id))
+        await self._call_events.person_answered(protocol.PersonAnswered(call_id=call_id))
 
 
 class LivekitHost(ts.Host):

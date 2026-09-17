@@ -12,7 +12,7 @@ import srv.livekit as livekit
 
 
 @ts.fake
-class FakePersonEvents(protocol.PersonEvents):
+class FakeCallEvents(protocol.CallEvents):
 
     def __init__(self) -> None:
         self.answered: list[protocol.PersonAnswered] = []
@@ -28,29 +28,29 @@ class FakePersonEvents(protocol.PersonEvents):
 class TestCallAgent:
 
     async def test_a_final_transcript_is_routed_out_as_the_persons_utterance(self) -> None:
-        fake_person_events = FakePersonEvents()
-        call_agent = livekit.CallAgent(fake_person_events, "c7")
+        fake_call_events = FakeCallEvents()
+        call_agent = livekit.CallAgent(fake_call_events, "c7")
 
         call_agent.on_user_input_transcribed(
             livekit_agents.UserInputTranscribedEvent(transcript="my name is Grace", is_final=True)
         )
         await asyncio.sleep(0)
 
-        assert [(uttered.call_id, uttered.text) for uttered in fake_person_events.uttered] == [
+        assert [(uttered.call_id, uttered.text) for uttered in fake_call_events.uttered] == [
             ("c7", "my name is Grace")
         ]
 
     async def test_an_interim_transcript_is_not_routed(self) -> None:
-        fake_person_events = FakePersonEvents()
-        call_agent = livekit.CallAgent(fake_person_events, "c7")
+        fake_call_events = FakeCallEvents()
+        call_agent = livekit.CallAgent(fake_call_events, "c7")
 
         call_agent.on_user_input_transcribed(livekit_agents.UserInputTranscribedEvent(transcript="my na", is_final=False))
         await asyncio.sleep(0)
 
-        assert fake_person_events.uttered == []
+        assert fake_call_events.uttered == []
 
     def test_the_chat_context_is_the_persona_then_the_turns_in_their_roles(self) -> None:
-        call_agent = livekit.CallAgent(FakePersonEvents(), "c7")
+        call_agent = livekit.CallAgent(FakeCallEvents(), "c7")
 
         chat_context = call_agent.chat_context(
             "a friendly receptionist",
@@ -66,7 +66,7 @@ class TestCallAgent:
         ]
 
     def test_the_turns_chat_items_are_encoded_in_the_order_they_happened(self) -> None:
-        call_agent = livekit.CallAgent(FakePersonEvents(), "c7")
+        call_agent = livekit.CallAgent(FakeCallEvents(), "c7")
         chat_items: list[livekit_llm.ChatItem] = [
             livekit_llm.FunctionCall(call_id="call_1", name="person_gave_name", arguments='{"name": "Grace"}', created_at=2.0),
             livekit_llm.FunctionCallOutput(
@@ -86,7 +86,7 @@ class TestCallAgent:
         ]
 
     async def test_a_tool_call_is_acknowledged_and_nothing_else(self) -> None:
-        call_agent = livekit.CallAgent(FakePersonEvents(), "c7")
+        call_agent = livekit.CallAgent(FakeCallEvents(), "c7")
 
         acknowledged = await call_agent.acknowledge({"name": "Grace"})
 
@@ -97,7 +97,7 @@ class TestLivekitWorker:
 
     async def test_the_session_generates_no_reply_of_its_own(self) -> None:
         livekit_worker = livekit.LivekitWorker(
-            FakePersonEvents(), "caller", "deepgram/nova-3", "openai/gpt-4.1-mini", "cartesia/sonic-2"
+            FakeCallEvents(), "caller", "deepgram/nova-3", "openai/gpt-4.1-mini", "cartesia/sonic-2"
         )
 
         agent_session = livekit_worker.agent_session()
@@ -106,7 +106,7 @@ class TestLivekitWorker:
 
     def test_the_session_listens_to_the_person_and_nobody_else(self) -> None:
         livekit_worker = livekit.LivekitWorker(
-            FakePersonEvents(), "caller", "deepgram/nova-3", "openai/gpt-4.1-mini", "cartesia/sonic-2"
+            FakeCallEvents(), "caller", "deepgram/nova-3", "openai/gpt-4.1-mini", "cartesia/sonic-2"
         )
 
         room_options = livekit_worker.room_options()

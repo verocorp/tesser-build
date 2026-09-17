@@ -94,7 +94,7 @@ def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+1555
     )
 
 
-class TestRestateIngressCallRelays:
+class TestRestateIngressConductCallRelay:
 
     async def test_running_conduct_call_calls_the_workflow_keyed_by_the_call_id(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
@@ -102,39 +102,13 @@ class TestRestateIngressCallRelays:
         )
         fake_restate_ingress.start()
 
-        conduct_call_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient())
+        conduct_call_response = await runners.RestateIngressConductCallRelay(
+            fake_restate_ingress.base_url,
+            runtimes.RestateCallRuntime(
+                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+            ),
         ).run_conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(call_id="c7"))))
         fake_restate_ingress.close()
 
         assert conduct_call_response.call_id == "c7"
         assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/conduct_call HTTP/1.1"
-
-    async def test_running_person_answered_calls_the_workflows_shared_handler_keyed_by_the_call_id(self) -> None:
-        fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            relays.PersonAnsweredResponseSnapshot().serialize(relays.PersonAnsweredResponse(call_id="c7"))
-        )
-        fake_restate_ingress.start()
-
-        person_answered_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient())
-        ).run_person_answered(relays.PersonAnsweredRequest(call_id="c7"))
-        fake_restate_ingress.close()
-
-        assert person_answered_response.call_id == "c7"
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/person_answered HTTP/1.1"
-
-    async def test_running_a_person_utterance_calls_the_mailbox_keyed_by_the_call_id(self) -> None:
-        fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            relays.PersonUtteranceResponseSnapshot().serialize(relays.PersonUtteranceResponse(call_id="c7"))
-        )
-        fake_restate_ingress.start()
-
-        person_utterance_response = await runners.RestateIngressCallRelays(
-            fake_restate_ingress.base_url, runtimes.RestateCallRuntime(FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient())
-        ).run_person_utterance(relays.PersonUtteranceRequest(call_id="c7", text="Ada"))
-        fake_restate_ingress.close()
-
-        assert person_utterance_response.call_id == "c7"
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallUtterances/c7/person_utterance HTTP/1.1"
-        assert fake_restate_ingress.seen[1] == b'{"call_id": "c7", "text": "Ada"}'
