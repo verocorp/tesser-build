@@ -25,7 +25,9 @@ class TestPlacingCalls:
         await voice_app.open()
         person_name = random.choice(("Ada", "Grace", "Alan", "Barbara"))
 
-        place_call_response = await voice_app.calls.client.place_call(place_call_request(person_name=person_name))
+        place_call_response = await voice_app.calls.client.place_call(
+            place_call_request(person_name=person_name, phone_number=os.environ["VOICE_PERSON_PHONE"])
+        )
         get_call_response = await voice_app.calls.client.get_call(
             calls_client.GetCallRequest(call_id=place_call_response.call_id)
         )
