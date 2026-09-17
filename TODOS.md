@@ -62,6 +62,16 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   what the agent said, so the name only arrives if the agent asked. It is
   excluded by filename (`eval_*.py` is not a pytest default) and gated by
   `VOICE_EVALS=1`.
+- **A doubled agent line is an LLM retry inside `generate_reply`.** Seen
+  twice in the eval (2026-09-16 and 2026-09-17, sim5.log for Michael): the
+  worker logs "failed to generate LLM completion: Request timed out,
+  retrying", the SDK retries, and both attempts' messages land in
+  `speech_handle.chat_items`. `CallAgent.encode` emits every message item,
+  so the agent's turn text reads as two greetings joined by a newline. The
+  person heard only the second, so the transcript the domain keeps is not
+  what was said. To fix, at the worker: keep the message items of the
+  attempt that was spoken, which needs a red test that feeds `encode` two
+  messages and asserts one. Not a domain bug.
 - **A flushed utterance after silence lands in the next turn.** When the
   orchestrator decides `PERSON_SILENT` and runs `end_person_turn`, the
   worker's `commit_user_turn` flushes any pending STT text as one more
