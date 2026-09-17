@@ -91,6 +91,15 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   Decide whether a Virtual Object handler that serves only the runtime
   is exempt, or whether the mailbox belongs elsewhere. Four TB085
   markers in `restate_call_runtime.py` meanwhile.
+- **`Person(name, phone_number)` is the wrong shape.** A call is placed
+  to a phone number only (Chris, 2026-09-17); the name is what the call
+  exists to learn. `PlaceCallRequest` lost `person_name`, so
+  `MapToCallSpec` now passes `name=""` — a stand-in for a name not yet
+  learned, which is a domain object holding a value it does not have. The
+  number is dialed and the name is learned on the call, so the two do not
+  belong in one spec. Chris to rule on the shape: `Call` holds a
+  `PersonPhoneNumber` and gains a `Person` only when `agent_said` brings a
+  name, or the name becomes an outcome.
 - **Is `mock_tools` a test double under TB030?** livekit-agents ships
   `mock_tools` as a contextvar that substitutes tool bodies, not a
   runtime patcher. The gateway sibling test hand-fakes the SDK instead

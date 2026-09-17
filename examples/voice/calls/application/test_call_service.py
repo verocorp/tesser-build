@@ -61,22 +61,22 @@ class FakeCallStore(ports.CallStore):
 
 
 @ts.helper
-def place_call_request(person_name: str = "Ada", phone_number: str = "+15555550100") -> client.PlaceCallRequest:
-    return client.PlaceCallRequest(person_name=person_name, phone_number=phone_number)
+def place_call_request(phone_number: str = "+15555550100") -> client.PlaceCallRequest:
+    return client.PlaceCallRequest(phone_number=phone_number)
 
 
 class TestCallService:
 
-    async def test_placing_a_call_conducts_it_for_the_person_it_was_placed_for(self) -> None:
+    async def test_placing_a_call_conducts_it_to_the_number_it_was_placed_to(self) -> None:
         fake_conduct_call_relay = FakeConductCallRelay()
         call_service = application.CallService(fake_conduct_call_relay, FakeCallStore())
 
-        place_call_response = await call_service.place_call(place_call_request(person_name="Grace"))
+        place_call_response = await call_service.place_call(place_call_request(phone_number="+15555550199"))
 
         assert [
-            (str(conducted.call.identity), str(conducted.call.person.name))
+            (str(conducted.call.identity), str(conducted.call.person.phone_number))
             for conducted in fake_conduct_call_relay.conducted
-        ] == [(place_call_response.call_id, "Grace")]
+        ] == [(place_call_response.call_id, "+15555550199")]
 
     async def test_a_placed_call_starts_by_asking_for_the_name(self) -> None:
         fake_conduct_call_relay = FakeConductCallRelay()

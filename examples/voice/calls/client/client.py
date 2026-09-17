@@ -7,8 +7,7 @@ import tesser.context as ts
 
 class PlaceCallRequest(ts.Request):
 
-    def __init__(self, person_name: str, phone_number: str) -> None:
-        self.person_name = person_name
+    def __init__(self, phone_number: str) -> None:
         self.phone_number = phone_number
 
 
