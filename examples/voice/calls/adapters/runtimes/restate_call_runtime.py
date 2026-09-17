@@ -322,16 +322,11 @@ class RestateCallRuntime(ts.Runtime):
         async def conduct_call(
             restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
         ) -> relays.ConductCallResponse:
-            restate_invocation_call_relays = runners.RestateInvocationCallRelays(restate_workflow_context, self)
-            restate_await_call_relays = runners.RestateAwaitCallRelays(restate_workflow_context, self)
             return await orchestrators.CallOrchestrator(
-                restate_invocation_call_relays,
-                restate_await_call_relays,
-                restate_invocation_call_relays,
-                restate_await_call_relays,
-                restate_invocation_call_relays,
-                restate_invocation_call_relays,
-                restate_invocation_call_relays,
+                runners.RestateInvocationDialingRelay(restate_workflow_context, self),
+                runners.RestateInvocationSpeechRelay(restate_workflow_context, self),
+                runners.RestateInvocationPersonRelay(restate_workflow_context, self),
+                runners.RestateInvocationRecordCallRelay(restate_workflow_context, self),
             ).conduct_call(conduct_call_request)
 
         @self.call_orchestrator_workflow.handler(

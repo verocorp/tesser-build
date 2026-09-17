@@ -64,44 +64,10 @@ class MapToGetCallResponse(ts.Mapper, client.GetCallResponse):
         super().__init__(call=MapToCall(call))
 
 
-class MapToPersonAnsweredRequest(ts.Mapper, relays.PersonAnsweredRequest):
-
-    def __init__(self, report_person_answered_request: client.ReportPersonAnsweredRequest) -> None:
-        super().__init__(call_id=report_person_answered_request.call_id)
-
-
-class MapToReportPersonAnsweredResponse(ts.Mapper, client.ReportPersonAnsweredResponse):
-
-    def __init__(self, person_answered_response: relays.PersonAnsweredResponse) -> None:
-        super().__init__(call_id=person_answered_response.call_id)
-
-
-class MapToPersonUtteranceRequest(ts.Mapper, relays.PersonUtteranceRequest):
-
-    def __init__(self, report_person_utterance_request: client.ReportPersonUtteranceRequest) -> None:
-        super().__init__(
-            call_id=report_person_utterance_request.call_id, text=report_person_utterance_request.text
-        )
-
-
-class MapToReportPersonUtteranceResponse(ts.Mapper, client.ReportPersonUtteranceResponse):
-
-    def __init__(self, person_utterance_response: relays.PersonUtteranceResponse) -> None:
-        super().__init__(call_id=person_utterance_response.call_id)
-
-
 class CallService(ts.ApplicationService):
 
-    def __init__(
-        self,
-        conduct_call_relay: relays.ConductCallRelay,
-        person_answered_relay: relays.PersonAnsweredRelay,
-        person_utterance_relay: relays.PersonUtteranceRelay,
-        call_store: ports.CallStore,
-    ) -> None:
+    def __init__(self, conduct_call_relay: relays.ConductCallRelay, call_store: ports.CallStore) -> None:
         self._conduct_call_relay = conduct_call_relay
-        self._person_answered_relay = person_answered_relay
-        self._person_utterance_relay = person_utterance_relay
         self._call_store = call_store
 
     async def place_call(self, place_call_request: client.PlaceCallRequest) -> client.PlaceCallResponse:
@@ -122,19 +88,3 @@ class CallService(ts.ApplicationService):
                 raise client.CallNotFound(f"no call {get_call_request.call_id!r}")
             case _ as never:
                 typing.assert_never(never)
-
-    async def report_person_answered(
-        self, report_person_answered_request: client.ReportPersonAnsweredRequest
-    ) -> client.ReportPersonAnsweredResponse:
-        person_answered_response = await self._person_answered_relay.run_person_answered(
-            MapToPersonAnsweredRequest(report_person_answered_request)
-        )
-        return MapToReportPersonAnsweredResponse(person_answered_response)
-
-    async def report_person_utterance(
-        self, report_person_utterance_request: client.ReportPersonUtteranceRequest
-    ) -> client.ReportPersonUtteranceResponse:
-        person_utterance_response = await self._person_utterance_relay.run_person_utterance(
-            MapToPersonUtteranceRequest(report_person_utterance_request)
-        )
-        return MapToReportPersonUtteranceResponse(person_utterance_response)

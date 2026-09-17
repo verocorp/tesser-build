@@ -8,6 +8,26 @@ Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).
 Chris ruled no rule or analyzer changes until the example is built and
 right; collisions carry `# tesser:debt` markers meanwhile.
 
+- **A relay carries the operations of the thing it acts on, not one
+  operation (Chris, 2026-09-17).** Ruled while walking the voice example:
+  "classes should never be designed to hold one operation, though they may
+  only hold one." The voice tree's ten single-operation relays became six,
+  cut the way ports and actions classes already are: `DialingRelay`,
+  `SpeechRelay`, `RecordCallRelay`, `PersonRelay` (the two waits),
+  `ConductCallRelay`, and `CallEventsRelay` (the two inbound reports). The
+  orchestrator takes four relays instead of seven, and the service split by
+  responsibility into `CallService` (place, get; holds the store and the
+  conduct relay) and `CallEventsService` (report person answered, report
+  person utterance; holds one relay), composed behind `CallsClient` by a
+  nested `Calls.Client` as durable-execution does. The runners split the
+  other way, one per relay, so #194's runner rule holds with no markers.
+  This reverses half of #194's 2026-09-14 ruling: TB085's "a relay carries
+  one operation, because its name is the operation it carries" fires on the
+  three two-operation relays and they carry markers. To do: re-cut that row
+  as "a relay is named for the thing its operations act on", the rule ports
+  and actions already follow, and move durable-execution and minimal to the
+  same cut. The recorded reason for #194 (a relay must not be named for a
+  pattern) still holds under the new cut.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the

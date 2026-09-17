@@ -49,6 +49,32 @@ class Config(ts.Config):
 
 class Calls(ts.Component):
 
+    class Client:
+
+        def __init__(
+            self,
+            call_service: application.CallService,
+            call_events_service: application.CallEventsService,
+        ) -> None:
+            self._call_service = call_service
+            self._call_events_service = call_events_service
+
+        async def place_call(self, place_call_request: client.PlaceCallRequest) -> client.PlaceCallResponse:
+            return await self._call_service.place_call(place_call_request)
+
+        async def get_call(self, get_call_request: client.GetCallRequest) -> client.GetCallResponse:
+            return await self._call_service.get_call(get_call_request)
+
+        async def report_person_answered(
+            self, report_person_answered_request: client.ReportPersonAnsweredRequest
+        ) -> client.ReportPersonAnsweredResponse:
+            return await self._call_events_service.report_person_answered(report_person_answered_request)
+
+        async def report_person_utterance(
+            self, report_person_utterance_request: client.ReportPersonUtteranceRequest
+        ) -> client.ReportPersonUtteranceResponse:
+            return await self._call_events_service.report_person_utterance(report_person_utterance_request)
+
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_call_store = repositories.PostgresCallStore(database)
         self.restate_call_runtime: runtimes.RestateCallRuntime = runtimes.RestateCallRuntime(
@@ -75,12 +101,14 @@ class Calls(ts.Component):
                 )
             ),
         )
-        restate_ingress_call_relays = runners.RestateIngressCallRelays(config.ingress, self.restate_call_runtime)
-        self.client: client.CallsClient = application.CallService(
-            restate_ingress_call_relays,
-            restate_ingress_call_relays,
-            restate_ingress_call_relays,
-            self._postgres_call_store,
+        self.client: client.CallsClient = Calls.Client(
+            application.CallService(
+                runners.RestateIngressConductCallRelay(config.ingress, self.restate_call_runtime),
+                self._postgres_call_store,
+            ),
+            application.CallEventsService(
+                runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime)
+            ),
         )
 
     async def close(self) -> None:

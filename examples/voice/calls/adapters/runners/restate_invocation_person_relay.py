@@ -9,7 +9,7 @@ import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
-class RestateAwaitCallRelays(ts.Runner):  # tesser:debt TB085
+class RestateInvocationPersonRelay(ts.Runner):
 
     def __init__(
         self,

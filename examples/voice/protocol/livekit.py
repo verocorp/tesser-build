@@ -22,7 +22,7 @@ class PersonUtterance(ts.Request):
     text: str
 
 
-class PersonEvents(ts.Port, typing.Protocol):
+class CallEvents(ts.Port, typing.Protocol):
 
     async def person_answered(self, person_answered: PersonAnswered, /) -> None: ...
 

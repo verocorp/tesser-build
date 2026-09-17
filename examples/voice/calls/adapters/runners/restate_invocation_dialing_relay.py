@@ -7,7 +7,7 @@ import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
-class RestateInvocationCallRelays(ts.Runner):  # tesser:debt TB085
+class RestateInvocationDialingRelay(ts.Runner):
 
     def __init__(
         self,
@@ -22,24 +22,7 @@ class RestateInvocationCallRelays(ts.Runner):  # tesser:debt TB085
             self._restate_call_runtime.dial_person_handler, dial_person_request
         )
 
-    async def run_speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        return await self._restate_workflow_context.service_call(
-            self._restate_call_runtime.speak_turn_handler, speak_turn_request
-        )
-
-    async def run_end_person_turn(
-        self, end_person_turn_request: relays.EndPersonTurnRequest
-    ) -> relays.EndPersonTurnResponse:
-        return await self._restate_workflow_context.service_call(
-            self._restate_call_runtime.end_person_turn_handler, end_person_turn_request
-        )
-
     async def run_hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
         return await self._restate_workflow_context.service_call(
             self._restate_call_runtime.hang_up_handler, hang_up_request
-        )
-
-    async def run_record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
-        return await self._restate_workflow_context.service_call(
-            self._restate_call_runtime.record_call_handler, record_call_request
         )

@@ -78,3 +78,54 @@ class TestSpeakTurnResponseSnapshot:
         ):
             with pytest.raises(errors.DomainError):
                 relays.SpeakTurnResponseSnapshot().deserialize(raw)
+
+
+class TestEndPersonTurnRequestSnapshot:
+
+    def test_a_request_is_the_calls_snapshot(self) -> None:
+        raw = relays.EndPersonTurnRequestSnapshot().serialize(
+            relays.EndPersonTurnRequest(call=domain.Call(call_spec()))
+        )
+
+        assert raw == (
+            b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "+15555550100"}, "turns": [], "step": "ask_name"}'
+        )
+
+    def test_a_request_comes_back_carrying_the_same_call(self) -> None:
+        end_person_turn_request_snapshot = relays.EndPersonTurnRequestSnapshot()
+        end_person_turn_request = relays.EndPersonTurnRequest(call=domain.Call(call_spec(call_id="c7")))
+
+        returned = end_person_turn_request_snapshot.deserialize(
+            end_person_turn_request_snapshot.serialize(end_person_turn_request)
+        )
+
+        assert returned.call.identity == domain.CallId("c7")
+        assert returned.call.person == end_person_turn_request.call.person
+
+    def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
+        for raw in (b"{}", b'{"call_id": 1}', b'["c1"]'):
+            with pytest.raises(errors.DomainError):
+                relays.EndPersonTurnRequestSnapshot().deserialize(raw)
+
+
+class TestEndPersonTurnResponseSnapshot:
+
+    def test_a_response_is_its_call_id(self) -> None:
+        raw = relays.EndPersonTurnResponseSnapshot().serialize(relays.EndPersonTurnResponse(call_id="c1"))
+
+        assert raw == b'{"call_id": "c1"}'
+
+    def test_a_response_comes_back_equal(self) -> None:
+        end_person_turn_response_snapshot = relays.EndPersonTurnResponseSnapshot()
+        end_person_turn_response = relays.EndPersonTurnResponse(call_id="c1")
+
+        returned = end_person_turn_response_snapshot.deserialize(
+            end_person_turn_response_snapshot.serialize(end_person_turn_response)
+        )
+
+        assert returned == end_person_turn_response
+
+    def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
+        for raw in (b"{}", b'{"call_id": 1}', b'["c1"]'):
+            with pytest.raises(errors.DomainError):
+                relays.EndPersonTurnResponseSnapshot().deserialize(raw)
