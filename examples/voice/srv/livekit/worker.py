@@ -50,26 +50,6 @@ class CallAgent(livekit_agents.Agent, ts.Host):
     async def acknowledge(self, raw_arguments: dict[str, object]) -> str:
         return _ACKNOWLEDGED
 
-    def chat_context(self, persona: str, turns: list[dict[str, str]]) -> livekit_llm.ChatContext:
-        chat_context = livekit_llm.ChatContext.empty()
-        chat_context.add_message(role="system", content=persona)
-        for turn in turns:
-            chat_context.add_message(
-                role="assistant" if turn["spoken_by"] == _AGENT_ROLE else "user", content=turn["text"]
-            )
-        return chat_context
-
-    def encode(self, chat_items: list[livekit_llm.ChatItem]) -> str:
-        encoded: list[dict[str, str]] = []
-        for chat_item in sorted(chat_items, key=self.created_at):  # tesser:debt TB051
-            if isinstance(chat_item, livekit_llm.ChatMessage):
-                encoded.append({"type": "message", "text": chat_item.text_content or ""})
-            elif isinstance(chat_item, livekit_llm.FunctionCall):
-                encoded.append({"type": "function_call", "name": chat_item.name, "arguments": chat_item.arguments})
-            elif isinstance(chat_item, livekit_llm.FunctionCallOutput):
-                encoded.append({"type": "function_call_output", "name": chat_item.name, "output": chat_item.output})
-        return json.dumps(encoded)
-
     def created_at(self, chat_item: livekit_llm.ChatItem) -> float:
         return chat_item.created_at
 
@@ -78,15 +58,26 @@ class CallAgent(livekit_agents.Agent, ts.Host):
         await self.update_tools(
             [livekit_llm.function_tool(self.acknowledge, raw_schema=schema) for schema in payload["tools"]]  # tesser:debt TB051
         )
-        speech_handle = self.session.generate_reply(
-            chat_ctx=self.chat_context(payload["persona"], payload["turns"]),  # tesser:debt TB051
-            instructions=payload["instructions"],
-        )
+        chat_context = livekit_llm.ChatContext.empty()
+        chat_context.add_message(role="system", content=payload["persona"])
+        for turn in payload["turns"]:
+            chat_context.add_message(
+                role="assistant" if turn["spoken_by"] == _AGENT_ROLE else "user", content=turn["text"]
+            )
+        speech_handle = self.session.generate_reply(chat_ctx=chat_context, instructions=payload["instructions"])
         await speech_handle
         failure = speech_handle.exception()
         if failure is not None:
             raise failure
-        return self.encode(speech_handle.chat_items)  # tesser:debt TB051
+        encoded: list[dict[str, str]] = []
+        for chat_item in sorted(speech_handle.chat_items, key=self.created_at):  # tesser:debt TB051
+            if isinstance(chat_item, livekit_llm.ChatMessage):
+                encoded.append({"type": "message", "text": chat_item.text_content or ""})
+            elif isinstance(chat_item, livekit_llm.FunctionCall):
+                encoded.append({"type": "function_call", "name": chat_item.name, "arguments": chat_item.arguments})
+            elif isinstance(chat_item, livekit_llm.FunctionCallOutput):
+                encoded.append({"type": "function_call_output", "name": chat_item.name, "output": chat_item.output})
+        return json.dumps(encoded)
 
     async def end_person_turn(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:
         await self.session.commit_user_turn(skip_reply=True)

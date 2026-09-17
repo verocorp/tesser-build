@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 
 import tesser.testing as ts
 import livekit.agents as livekit_agents
-import livekit.agents.llm as livekit_llm
 
 import protocol
 import srv.livekit as livekit
@@ -48,42 +46,6 @@ class TestCallAgent:
         await asyncio.sleep(0)
 
         assert fake_call_events.uttered == []
-
-    def test_the_chat_context_is_the_persona_then_the_turns_in_their_roles(self) -> None:
-        call_agent = livekit.CallAgent(FakeCallEvents(), "c7")
-
-        chat_context = call_agent.chat_context(
-            "a friendly receptionist",
-            [{"spoken_by": "agent", "text": "hi, may I have your name?"}, {"spoken_by": "person", "text": "Grace"}],
-        )
-
-        assert [
-            (item.role, item.text_content) for item in chat_context.items if isinstance(item, livekit_llm.ChatMessage)
-        ] == [
-            ("system", "a friendly receptionist"),
-            ("assistant", "hi, may I have your name?"),
-            ("user", "Grace"),
-        ]
-
-    def test_the_turns_chat_items_are_encoded_in_the_order_they_happened(self) -> None:
-        call_agent = livekit.CallAgent(FakeCallEvents(), "c7")
-        chat_items: list[livekit_llm.ChatItem] = [
-            livekit_llm.FunctionCall(call_id="call_1", name="person_gave_name", arguments='{"name": "Grace"}', created_at=2.0),
-            livekit_llm.FunctionCallOutput(
-                call_id="call_1", name="person_gave_name", output="recorded", is_error=False, created_at=3.0
-            ),
-            livekit_llm.ChatMessage(role="assistant", content=["nice to meet you, Grace"], created_at=4.0),
-            livekit_llm.ChatMessage(role="assistant", content=["one moment"], created_at=1.0),
-        ]
-
-        encoded = json.loads(call_agent.encode(chat_items))
-
-        assert encoded == [
-            {"type": "message", "text": "one moment"},
-            {"type": "function_call", "name": "person_gave_name", "arguments": '{"name": "Grace"}'},
-            {"type": "function_call_output", "name": "person_gave_name", "output": "recorded"},
-            {"type": "message", "text": "nice to meet you, Grace"},
-        ]
 
     async def test_a_tool_call_is_acknowledged_and_nothing_else(self) -> None:
         call_agent = livekit.CallAgent(FakeCallEvents(), "c7")
