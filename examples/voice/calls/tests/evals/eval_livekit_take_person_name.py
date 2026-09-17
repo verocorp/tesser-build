@@ -38,8 +38,8 @@ _PERSON_INSTRUCTIONS: typing.Final[str] = (
     "You are {name}, and you just answered a phone call. Reply with one short spoken sentence. "
     "Give your name only if the caller asks for it; until then, answer what was said without saying your name."
 )
-_PERSON_NAMES: typing.Final[tuple[str, ...]] = ("Ada", "Grace", "Alan", "Barbara", "Edsger")
-_MUST_PASS: typing.Final[int] = 4
+_PERSON_NAMES: typing.Final[tuple[str, ...]] = ("Sarah", "David", "Michael")
+_MUST_PASS: typing.Final[int] = 3
 _CALL_SECONDS: typing.Final[float] = 180.0
 _REGISTRATION_SECONDS: typing.Final[float] = 30.0
 _HEARING_SECONDS: typing.Final[float] = 5.0
