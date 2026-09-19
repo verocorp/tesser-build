@@ -1,3 +1,4 @@
-from protocol.livekit import PersonAnswered as PersonAnswered
-from protocol.livekit import CallEvents as CallEvents
-from protocol.livekit import PersonUtterance as PersonUtterance
+from protocol.livekit import JobContext as JobContext
+from protocol.livekit import JobRequest as JobRequest
+from protocol.livekit import VoiceAcceptJobRequest as VoiceAcceptJobRequest
+from protocol.livekit import VoiceStartJobRequest as VoiceStartJobRequest

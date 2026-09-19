@@ -1,19 +1,47 @@
 from __future__ import annotations
 
+import tesser.testing as ts
+import livekit.rtc as livekit_rtc
+
 import protocol
 
 
-class TestPersonUtterance:
+@ts.fake
+class FakeJobRequest(protocol.JobRequest):
 
-    def test_an_utterance_names_the_call_it_was_heard_on(self) -> None:
-        person_utterance = protocol.PersonUtterance(call_id="c7", text="my name is Ada")
-
-        assert (person_utterance.call_id, person_utterance.text) == ("c7", "my name is Ada")
+    async def accept(self, *, identity: str) -> None:
+        return None
 
 
-class TestPersonAnswered:
+@ts.fake
+class FakeJobContext(protocol.JobContext):
 
-    def test_an_answer_names_the_call_it_was_on(self) -> None:
-        person_answered = protocol.PersonAnswered(call_id="c7")
+    def __init__(self) -> None:
+        self._room = livekit_rtc.Room()
 
-        assert person_answered.call_id == "c7"
+    @property
+    def room(self) -> livekit_rtc.Room:
+        return self._room
+
+    async def connect(self) -> None:
+        return None
+
+
+class TestVoiceAcceptJobRequest:
+
+    def test_carries_the_job_offer_that_can_be_accepted(self) -> None:
+        fake_job_request = FakeJobRequest()
+
+        voice_accept_job_request = protocol.VoiceAcceptJobRequest(fake_job_request)
+
+        assert voice_accept_job_request.job_request is fake_job_request
+
+
+class TestVoiceStartJobRequest:
+
+    async def test_carries_the_assigned_jobs_connection(self) -> None:
+        fake_job_context = FakeJobContext()
+
+        voice_start_job_request = protocol.VoiceStartJobRequest(fake_job_context)
+
+        assert voice_start_job_request.job_context is fake_job_context

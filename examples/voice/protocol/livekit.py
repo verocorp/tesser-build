@@ -3,27 +3,33 @@ from __future__ import annotations
 import typing
 
 import tesser.srv as ts
+import livekit.rtc as livekit_rtc
 
 
-class PersonAnswered(ts.Request):
+class JobRequest(ts.Port, typing.Protocol):
 
-    def __init__(self, call_id: str) -> None:
-        super().__init__(call_id=call_id)
-
-    call_id: str
+    async def accept(self, *, identity: str) -> None: ...
 
 
-class PersonUtterance(ts.Request):
+class JobContext(ts.Port, typing.Protocol):
 
-    def __init__(self, call_id: str, text: str) -> None:
-        super().__init__(call_id=call_id, text=text)
+    @property
+    def room(self) -> livekit_rtc.Room: ...
 
-    call_id: str
-    text: str
+    async def connect(self) -> None: ...
 
 
-class CallEvents(ts.Port, typing.Protocol):
+class VoiceAcceptJobRequest(ts.Request):
 
-    async def person_answered(self, person_answered: PersonAnswered, /) -> None: ...
+    def __init__(self, job_request: JobRequest) -> None:
+        super().__init__(job_request=job_request)
 
-    async def person_utterance(self, person_utterance: PersonUtterance, /) -> None: ...
+    job_request: JobRequest
+
+
+class VoiceStartJobRequest(ts.Request):
+
+    def __init__(self, job_context: JobContext) -> None:
+        super().__init__(job_context=job_context)
+
+    job_context: JobContext

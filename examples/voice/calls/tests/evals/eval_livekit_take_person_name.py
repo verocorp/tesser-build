@@ -380,17 +380,19 @@ class TestTakePersonName:
             application.CallService(inline_conduct_call_relay, repositories.PostgresCallStore(database)),
             application.CallEventsService(inline_call_events_relay),
         )
-        livekit_worker = srv_livekit.LivekitWorker(
-            handlers.LivekitHandler(calls_client),
-            agent_name,
-            os.environ.get("LIVEKIT_STT_MODEL", _DEFAULT_STT),
-            os.environ.get("LIVEKIT_LLM_MODEL", _DEFAULT_LLM),
-            os.environ.get("LIVEKIT_TTS_MODEL", _DEFAULT_TTS),
+        livekit_app = srv_livekit.LivekitApp(
+            handlers.LivekitHandler(
+                calls_client,
+                agent_name,
+                os.environ.get("LIVEKIT_STT_MODEL", _DEFAULT_STT),
+                os.environ.get("LIVEKIT_LLM_MODEL", _DEFAULT_LLM),
+                os.environ.get("LIVEKIT_TTS_MODEL", _DEFAULT_TTS),
+            )
         )
         agent_server = livekit_agents.AgentServer(
             job_executor_type=livekit_agents.JobExecutorType.THREAD, ws_url=url, api_key=api_key, api_secret=api_secret
         )
-        agent_server.rtc_session(livekit_worker.entrypoint, agent_name=agent_name, on_request=livekit_worker.on_request)
+        agent_server.rtc_session(livekit_app.start_job, agent_name=agent_name, on_request=livekit_app.accept_job)
         registration = Registration()  # tesser:debt TB085
         agent_server.on("worker_registered", registration.on_worker_registered)
         serving = asyncio.ensure_future(agent_server.run())
