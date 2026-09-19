@@ -101,8 +101,10 @@ class Calls(ts.Component):
                 self._postgres_call_store,
             ),
         )
+        restate_ingress_call_events_relay = runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime)
         self.livekit_call_runtime: runtimes.LivekitCallRuntime = runtimes.LivekitCallRuntime(
-            runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime),
+            restate_ingress_call_events_relay,
+            application.CallEventsService(restate_ingress_call_events_relay),
             config.livekit_agent_name,
             config.livekit_stt_model,
             config.livekit_llm_model,

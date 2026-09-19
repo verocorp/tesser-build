@@ -382,6 +382,7 @@ class TestTakePersonName:
         livekit_app = srv_livekit.LivekitApp(
             runtimes.LivekitCallRuntime(
                 inline_call_events_relay,
+                application.CallEventsService(inline_call_events_relay),
                 agent_name,
                 os.environ.get("LIVEKIT_STT_MODEL", _DEFAULT_STT),
                 os.environ.get("LIVEKIT_LLM_MODEL", _DEFAULT_LLM),

@@ -11,6 +11,7 @@ import livekit.agents.utils.participant as livekit_participant
 import livekit.agents.voice.room_io as livekit_room_io
 import livekit.rtc as livekit_rtc
 
+import calls.application.client as client
 import calls.application.relays as relays
 
 SPEAK_TURN_METHOD: typing.Final[str] = "speak_turn"
@@ -25,16 +26,16 @@ _TURN_HANDLING: typing.Final[livekit_agents.TurnHandlingOptions] = {"turn_detect
 
 class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
 
-    def __init__(self, call_events_relay: relays.CallEventsRelay, call_id: str) -> None:  # tesser:debt TB081
+    def __init__(self, call_events_application_client: client.CallEventsApplicationClient, call_id: str) -> None:
         super().__init__(instructions="")
-        self._call_events_relay = call_events_relay
+        self._call_events_application_client = call_events_application_client
         self._call_id = call_id
         self._deliveries: set[asyncio.Task[relays.PersonUtteranceResponse]] = set()
 
     def on_user_input_transcribed(self, user_input_transcribed_event: livekit_agents.UserInputTranscribedEvent) -> None:  # tesser:debt TB085
-        if user_input_transcribed_event.is_final and user_input_transcribed_event.transcript.strip():
+        if user_input_transcribed_event.is_final:
             delivery = asyncio.ensure_future(
-                self._call_events_relay.run_person_utterance(
+                self._call_events_application_client.person_utterance(
                     relays.PersonUtteranceRequest(call_id=self._call_id, text=user_input_transcribed_event.transcript)
                 )
             )
@@ -81,8 +82,17 @@ class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
 
 class LivekitCallRuntime(ts.Runtime):
 
-    def __init__(self, call_events_relay: relays.CallEventsRelay, agent_name: str, stt: str, llm: str, tts: str) -> None:  # tesser:debt TB081
+    def __init__(  # tesser:debt TB081
+        self,
+        call_events_relay: relays.CallEventsRelay,
+        call_events_application_client: client.CallEventsApplicationClient,
+        agent_name: str,
+        stt: str,
+        llm: str,
+        tts: str,
+    ) -> None:
         self._call_events_relay = call_events_relay
+        self._call_events_application_client = call_events_application_client
         self._agent_name = agent_name
         self._stt = stt
         self._llm = llm
@@ -94,7 +104,7 @@ class LivekitCallRuntime(ts.Runtime):
     async def start_job(self, job_context: livekit_agents.JobContext) -> None:  # tesser:debt TB085
         await job_context.connect()
         call_id = job_context.room.name
-        call_agent = CallAgent(self._call_events_relay, call_id)
+        call_agent = CallAgent(self._call_events_application_client, call_id)
         agent_session: livekit_agents.AgentSession[None] = livekit_agents.AgentSession(
             stt=self._stt, llm=self._llm, tts=self._tts, turn_handling=_TURN_HANDLING
         )
