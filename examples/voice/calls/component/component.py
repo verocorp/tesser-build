@@ -24,6 +24,9 @@ class Spec(ts.Spec):
         livekit_api_secret: str,
         livekit_agent_name: str,
         livekit_sip_trunk_id: str,
+        livekit_stt_model: str = "deepgram/nova-3",
+        livekit_llm_model: str = "openai/gpt-4.1-mini",
+        livekit_tts_model: str = "cartesia/sonic-2",
     ) -> None:
         self.storage = storage
         self.ingress = ingress
@@ -32,6 +35,9 @@ class Spec(ts.Spec):
         self.livekit_api_secret = livekit_api_secret
         self.livekit_agent_name = livekit_agent_name
         self.livekit_sip_trunk_id = livekit_sip_trunk_id
+        self.livekit_stt_model = livekit_stt_model
+        self.livekit_llm_model = livekit_llm_model
+        self.livekit_tts_model = livekit_tts_model
 
 
 class Config(ts.Config):
@@ -44,6 +50,9 @@ class Config(ts.Config):
         self.livekit_api_secret = spec.livekit_api_secret
         self.livekit_agent_name = spec.livekit_agent_name
         self.livekit_sip_trunk_id = spec.livekit_sip_trunk_id
+        self.livekit_stt_model = spec.livekit_stt_model
+        self.livekit_llm_model = spec.livekit_llm_model
+        self.livekit_tts_model = spec.livekit_tts_model
         self.database = pgdatabase_database.DatabaseRequest(spec.storage)
 
 
@@ -51,29 +60,14 @@ class Calls(ts.Component):
 
     class Client:
 
-        def __init__(
-            self,
-            call_service: application.CallService,
-            call_events_service: application.CallEventsService,
-        ) -> None:
+        def __init__(self, call_service: application.CallService) -> None:
             self._call_service = call_service
-            self._call_events_service = call_events_service
 
         async def place_call(self, place_call_request: client.PlaceCallRequest) -> client.PlaceCallResponse:
             return await self._call_service.place_call(place_call_request)
 
         async def get_call(self, get_call_request: client.GetCallRequest) -> client.GetCallResponse:
             return await self._call_service.get_call(get_call_request)
-
-        async def report_person_answered(
-            self, report_person_answered_request: client.ReportPersonAnsweredRequest
-        ) -> client.ReportPersonAnsweredResponse:
-            return await self._call_events_service.report_person_answered(report_person_answered_request)
-
-        async def report_person_utterance(
-            self, report_person_utterance_request: client.ReportPersonUtteranceRequest
-        ) -> client.ReportPersonUtteranceResponse:
-            return await self._call_events_service.report_person_utterance(report_person_utterance_request)
 
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_call_store = repositories.PostgresCallStore(database)
@@ -106,9 +100,13 @@ class Calls(ts.Component):
                 runners.RestateIngressConductCallRelay(config.ingress, self.restate_call_runtime),
                 self._postgres_call_store,
             ),
-            application.CallEventsService(
-                runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime)
-            ),
+        )
+        self.livekit_call_runtime: runtimes.LivekitCallRuntime = runtimes.LivekitCallRuntime(
+            runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime),
+            config.livekit_agent_name,
+            config.livekit_stt_model,
+            config.livekit_llm_model,
+            config.livekit_tts_model,
         )
 
     async def close(self) -> None:

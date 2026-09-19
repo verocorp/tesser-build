@@ -6,7 +6,3 @@ from calls.client.client import GetCallRequest as GetCallRequest
 from calls.client.client import GetCallResponse as GetCallResponse
 from calls.client.client import PlaceCallRequest as PlaceCallRequest
 from calls.client.client import PlaceCallResponse as PlaceCallResponse
-from calls.client.client import ReportPersonAnsweredRequest as ReportPersonAnsweredRequest
-from calls.client.client import ReportPersonAnsweredResponse as ReportPersonAnsweredResponse
-from calls.client.client import ReportPersonUtteranceRequest as ReportPersonUtteranceRequest
-from calls.client.client import ReportPersonUtteranceResponse as ReportPersonUtteranceResponse

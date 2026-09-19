@@ -15,7 +15,7 @@ import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
 
 import calls.adapters.gateways as gateways
-import calls.adapters.handlers as handlers
+import calls.adapters.runtimes as runtimes
 import calls.adapters.repositories as repositories
 import calls.application as application
 import calls.application.orchestrators as orchestrators
@@ -378,11 +378,10 @@ class TestTakePersonName:
         )
         calls_client = component.Calls.Client(
             application.CallService(inline_conduct_call_relay, repositories.PostgresCallStore(database)),
-            application.CallEventsService(inline_call_events_relay),
         )
         livekit_app = srv_livekit.LivekitApp(
-            handlers.LivekitHandler(
-                calls_client,
+            runtimes.LivekitCallRuntime(
+                inline_call_events_relay,
                 agent_name,
                 os.environ.get("LIVEKIT_STT_MODEL", _DEFAULT_STT),
                 os.environ.get("LIVEKIT_LLM_MODEL", _DEFAULT_LLM),

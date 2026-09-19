@@ -36,31 +36,6 @@ class GetCallResponse(ts.Response):
         self.call = call
 
 
-class ReportPersonAnsweredRequest(ts.Request):
-
-    def __init__(self, call_id: str) -> None:
-        self.call_id = call_id
-
-
-class ReportPersonAnsweredResponse(ts.Response):
-
-    def __init__(self, call_id: str) -> None:
-        self.call_id = call_id
-
-
-class ReportPersonUtteranceRequest(ts.Request):
-
-    def __init__(self, call_id: str, text: str) -> None:
-        self.call_id = call_id
-        self.text = text
-
-
-class ReportPersonUtteranceResponse(ts.Response):
-
-    def __init__(self, call_id: str) -> None:
-        self.call_id = call_id
-
-
 class CallNotFound(ts.Error):
 
     def __init__(self, message: str) -> None:
@@ -76,11 +51,3 @@ class CallsClient(ts.Client, typing.Protocol):
     async def place_call(self, place_call_request: PlaceCallRequest) -> PlaceCallResponse: ...
 
     async def get_call(self, get_call_request: GetCallRequest) -> GetCallResponse: ...
-
-    async def report_person_answered(
-        self, report_person_answered_request: ReportPersonAnsweredRequest
-    ) -> ReportPersonAnsweredResponse: ...
-
-    async def report_person_utterance(
-        self, report_person_utterance_request: ReportPersonUtteranceRequest
-    ) -> ReportPersonUtteranceResponse: ...
