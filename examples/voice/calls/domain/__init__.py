@@ -21,3 +21,6 @@ from calls.domain.call import Turn as Turn
 from calls.domain.call import TurnSpec as TurnSpec
 from calls.domain.call import UTTERANCE as UTTERANCE
 from calls.domain.call import Utterance as Utterance
+from calls.domain.call import TranscriptionDecision as TranscriptionDecision
+from calls.domain.call import UserInputTranscribed as UserInputTranscribed
+from calls.domain.call import UserInputTranscribedSpec as UserInputTranscribedSpec

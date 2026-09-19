@@ -30,17 +30,19 @@ class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
         super().__init__(instructions="")
         self._call_events_application_client = call_events_application_client
         self._call_id = call_id
-        self._deliveries: set[asyncio.Task[relays.PersonUtteranceResponse]] = set()
+        self._deliveries: set[asyncio.Task[client.UserInputTranscribedResponse]] = set()
 
     def on_user_input_transcribed(self, user_input_transcribed_event: livekit_agents.UserInputTranscribedEvent) -> None:  # tesser:debt TB085
-        if user_input_transcribed_event.is_final:
-            delivery = asyncio.ensure_future(
-                self._call_events_application_client.person_utterance(
-                    relays.PersonUtteranceRequest(call_id=self._call_id, text=user_input_transcribed_event.transcript)
+        delivery = asyncio.ensure_future(
+            self._call_events_application_client.user_input_transcribed(
+                client.UserInputTranscribedRequest(
+                    call_id=self._call_id,
+                    event=user_input_transcribed_event,
                 )
             )
-            self._deliveries.add(delivery)
-            delivery.add_done_callback(self._deliveries.discard)
+        )
+        self._deliveries.add(delivery)
+        delivery.add_done_callback(self._deliveries.discard)
 
     async def acknowledge(self, raw_arguments: dict[str, object]) -> str:  # tesser:debt TB085
         return _ACKNOWLEDGED

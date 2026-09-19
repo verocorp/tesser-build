@@ -2,3 +2,6 @@ from calls.application.client.call_actions import CallApplicationClient as CallA
 from calls.application.client.dialing_actions import DialingApplicationClient as DialingApplicationClient
 from calls.application.client.speech_actions import SpeechApplicationClient as SpeechApplicationClient
 from calls.application.client.call_events import CallEventsApplicationClient as CallEventsApplicationClient
+from calls.application.client.call_events import UserInputTranscribedEvent as UserInputTranscribedEvent
+from calls.application.client.call_events import UserInputTranscribedRequest as UserInputTranscribedRequest
+from calls.application.client.call_events import UserInputTranscribedResponse as UserInputTranscribedResponse

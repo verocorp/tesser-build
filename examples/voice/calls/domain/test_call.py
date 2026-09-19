@@ -366,3 +366,46 @@ class TestConversation:
 
         assert first == second
         assert first != domain.Conversation(domain.ConversationSpec(turns=()))
+
+
+@ts.helper
+def _user_input_transcribed_spec(
+    call_id: str = "c7", transcript: str = "my name is Grace", is_final: bool = True
+) -> domain.UserInputTranscribedSpec:
+    return domain.UserInputTranscribedSpec(call_id=call_id, transcript=transcript, is_final=is_final)
+
+
+class TestUserInputTranscribed:
+
+    def test_a_final_event_preserves_the_call_and_normalizes_the_utterance(self) -> None:
+        user_input_transcribed_spec = _user_input_transcribed_spec(transcript=" \tmy name is Grace\n")
+
+        user_input_transcribed = domain.UserInputTranscribed(user_input_transcribed_spec)
+
+        assert user_input_transcribed.call_id == domain.CallId(user_input_transcribed_spec.call_id)
+        assert user_input_transcribed.utterances == (domain.Utterance(user_input_transcribed_spec.transcript),)
+        assert user_input_transcribed.decide() is domain.TranscriptionDecision.DELIVER
+
+    def test_an_interim_event_produces_no_deliverable_utterance(self) -> None:
+        user_input_transcribed = domain.UserInputTranscribed(_user_input_transcribed_spec(is_final=False))
+
+        assert user_input_transcribed.utterances == ()
+        assert user_input_transcribed.decide() is domain.TranscriptionDecision.IGNORE
+
+    def test_a_blank_final_event_produces_no_deliverable_utterance(self) -> None:
+        user_input_transcribed = domain.UserInputTranscribed(_user_input_transcribed_spec(transcript=" \t\n"))
+
+        assert user_input_transcribed.utterances == ()
+        assert user_input_transcribed.decide() is domain.TranscriptionDecision.IGNORE
+
+    def test_events_with_the_same_normalized_utterance_and_call_are_equal(self) -> None:
+        first = domain.UserInputTranscribed(_user_input_transcribed_spec(transcript=" Grace "))
+        second = domain.UserInputTranscribed(_user_input_transcribed_spec(transcript="Grace"))
+
+        assert first == second
+
+    def test_events_for_different_calls_are_not_equal(self) -> None:
+        first = domain.UserInputTranscribed(_user_input_transcribed_spec(call_id="c1"))
+        second = domain.UserInputTranscribed(_user_input_transcribed_spec(call_id="c2"))
+
+        assert first != second

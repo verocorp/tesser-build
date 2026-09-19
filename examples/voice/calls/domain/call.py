@@ -127,6 +127,48 @@ class Utterance(ts.ValueObject):
         return serialization.canonical_str(self._text)
 
 
+class UserInputTranscribedSpec(ts.Spec):
+
+    def __init__(self, call_id: str, transcript: str, is_final: bool) -> None:
+        self.call_id = call_id
+        self.transcript = transcript
+        self.is_final = is_final
+
+
+class TranscriptionDecision(ts.Outcome):
+    DELIVER = enum.auto()
+    IGNORE = enum.auto()
+
+
+class UserInputTranscribed(ts.ValueObject):
+
+    _call_id: CallId
+    _utterances: tuple[Utterance, ...]
+
+    def __init__(self, spec: UserInputTranscribedSpec) -> None:
+        object.__setattr__(self, "_call_id", CallId(spec.call_id))
+        object.__setattr__(self, "_utterances", ())
+        if spec.is_final:
+            try:
+                utterance = Utterance(spec.transcript)
+            except ValueError:
+                return
+            object.__setattr__(self, "_utterances", (utterance,))
+
+    @property
+    def call_id(self) -> CallId:
+        return self._call_id
+
+    @property
+    def utterances(self) -> tuple[Utterance, ...]:
+        return self._utterances
+
+    def decide(self) -> TranscriptionDecision:
+        if self._utterances:
+            return TranscriptionDecision.DELIVER
+        return TranscriptionDecision.IGNORE
+
+
 class TurnSpec(ts.Spec):
 
     def __init__(self, speaker: str, utterances: tuple[str, ...]) -> None:

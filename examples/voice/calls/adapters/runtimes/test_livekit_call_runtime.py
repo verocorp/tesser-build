@@ -36,13 +36,13 @@ class FakeCallEventsRelay(relays.CallEventsRelay):
 class FakeCallEventsApplicationClient(client.CallEventsApplicationClient):
 
     def __init__(self) -> None:
-        self.uttered: list[relays.PersonUtteranceRequest] = []
+        self.transcribed: list[client.UserInputTranscribedRequest] = []
 
-    async def person_utterance(
-        self, person_utterance_request: relays.PersonUtteranceRequest
-    ) -> relays.PersonUtteranceResponse:
-        self.uttered.append(person_utterance_request)
-        return relays.PersonUtteranceResponse(call_id=person_utterance_request.call_id)
+    async def user_input_transcribed(
+        self, user_input_transcribed_request: client.UserInputTranscribedRequest
+    ) -> client.UserInputTranscribedResponse:
+        self.transcribed.append(user_input_transcribed_request)
+        return client.UserInputTranscribedResponse(call_id=user_input_transcribed_request.call_id)
 
 
 class TestLivekitCallRuntime:
@@ -65,27 +65,28 @@ class TestLivekitCallRuntime:
 
 class TestCallAgent:
 
-    async def test_a_final_transcript_reaches_the_application_client_without_normalization(self) -> None:
+    async def test_a_final_event_reaches_the_application_client_unchanged(self) -> None:
         fake_call_events_application_client = FakeCallEventsApplicationClient()
         call_agent = runtimes.CallAgent(fake_call_events_application_client, "c7")
-
-        call_agent.on_user_input_transcribed(
-            livekit_agents.UserInputTranscribedEvent(transcript="  my name is Grace \n", is_final=True)
+        user_input_transcribed_event = livekit_agents.UserInputTranscribedEvent(
+            transcript="  my name is Grace \n", is_final=True
         )
+
+        call_agent.on_user_input_transcribed(user_input_transcribed_event)
         await asyncio.sleep(0)
 
-        assert [(uttered.call_id, uttered.text) for uttered in fake_call_events_application_client.uttered] == [
-            ("c7", "  my name is Grace \n")
-        ]
+        assert fake_call_events_application_client.transcribed[0].call_id == "c7"
+        assert fake_call_events_application_client.transcribed[0].event is user_input_transcribed_event
 
-    async def test_an_interim_transcript_is_not_routed(self) -> None:
+    async def test_an_interim_event_also_reaches_the_application_client(self) -> None:
         fake_call_events_application_client = FakeCallEventsApplicationClient()
         call_agent = runtimes.CallAgent(fake_call_events_application_client, "c7")
+        user_input_transcribed_event = livekit_agents.UserInputTranscribedEvent(transcript="my na", is_final=False)
 
-        call_agent.on_user_input_transcribed(livekit_agents.UserInputTranscribedEvent(transcript="my na", is_final=False))
+        call_agent.on_user_input_transcribed(user_input_transcribed_event)
         await asyncio.sleep(0)
 
-        assert fake_call_events_application_client.uttered == []
+        assert fake_call_events_application_client.transcribed[0].event is user_input_transcribed_event
 
     async def test_a_tool_call_is_acknowledged_and_nothing_else(self) -> None:
         call_agent = runtimes.CallAgent(FakeCallEventsApplicationClient(), "c7")
