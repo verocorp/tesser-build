@@ -7,7 +7,6 @@ import tesser.errors as errors
 
 
 class TestPersonAnsweredRequestSnapshot:
-
     def test_a_request_is_its_call_id(self) -> None:
         raw = relays.PersonAnsweredRequestSnapshot().serialize(relays.PersonAnsweredRequest(call_id="c1"))
 
@@ -30,7 +29,6 @@ class TestPersonAnsweredRequestSnapshot:
 
 
 class TestPersonAnsweredResponseSnapshot:
-
     def test_a_response_is_its_call_id(self) -> None:
         raw = relays.PersonAnsweredResponseSnapshot().serialize(relays.PersonAnsweredResponse(call_id="c1"))
 
@@ -52,49 +50,49 @@ class TestPersonAnsweredResponseSnapshot:
                 relays.PersonAnsweredResponseSnapshot().deserialize(raw)
 
 
-class TestPersonUtteranceRequestSnapshot:
-
+class TestPersonInputRequestSnapshot:
     def test_a_request_is_its_call_id_and_text(self) -> None:
-        raw = relays.PersonUtteranceRequestSnapshot().serialize(
-            relays.PersonUtteranceRequest(call_id="c1", text="my name is Ada")
+        raw = relays.PersonInputRequestSnapshot().serialize(
+            relays.PersonInputRequest(kind=relays.INPUT_TURN_COMPLETED, call_id="c1", text="my name is Ada")
         )
 
-        assert raw == b'{"call_id": "c1", "text": "my name is Ada"}'
+        assert raw == b'{"call_id": "c1", "kind": "turn_completed", "text": "my name is Ada"}'
 
     def test_a_request_comes_back_equal(self) -> None:
-        person_utterance_request_snapshot = relays.PersonUtteranceRequestSnapshot()
-        person_utterance_request = relays.PersonUtteranceRequest(call_id="c1", text="my name is Ada")
-
-        returned = person_utterance_request_snapshot.deserialize(
-            person_utterance_request_snapshot.serialize(person_utterance_request)
+        person_input_request_snapshot = relays.PersonInputRequestSnapshot()
+        person_input_request = relays.PersonInputRequest(
+            kind=relays.INPUT_TURN_COMPLETED, call_id="c1", text="my name is Ada"
         )
 
-        assert returned == person_utterance_request
+        returned = person_input_request_snapshot.deserialize(
+            person_input_request_snapshot.serialize(person_input_request)
+        )
+
+        assert returned == person_input_request
 
     def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (b"{}", b'{"call_id": "c1"}', b'{"call_id": "c1", "text": 1}', b'["c1"]'):
             with pytest.raises(errors.DomainError):
-                relays.PersonUtteranceRequestSnapshot().deserialize(raw)
+                relays.PersonInputRequestSnapshot().deserialize(raw)
 
 
-class TestPersonUtteranceResponseSnapshot:
-
+class TestPersonInputResponseSnapshot:
     def test_a_response_is_its_call_id(self) -> None:
-        raw = relays.PersonUtteranceResponseSnapshot().serialize(relays.PersonUtteranceResponse(call_id="c1"))
+        raw = relays.PersonInputResponseSnapshot().serialize(relays.PersonInputResponse(call_id="c1"))
 
         assert raw == b'{"call_id": "c1"}'
 
     def test_a_response_comes_back_equal(self) -> None:
-        person_utterance_response_snapshot = relays.PersonUtteranceResponseSnapshot()
-        person_utterance_response = relays.PersonUtteranceResponse(call_id="c1")
+        person_input_response_snapshot = relays.PersonInputResponseSnapshot()
+        person_input_response = relays.PersonInputResponse(call_id="c1")
 
-        returned = person_utterance_response_snapshot.deserialize(
-            person_utterance_response_snapshot.serialize(person_utterance_response)
+        returned = person_input_response_snapshot.deserialize(
+            person_input_response_snapshot.serialize(person_input_response)
         )
 
-        assert returned == person_utterance_response
+        assert returned == person_input_response
 
     def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (b"{}", b'{"call_id": 1}', b'["c1"]'):
             with pytest.raises(errors.DomainError):
-                relays.PersonUtteranceResponseSnapshot().deserialize(raw)
+                relays.PersonInputResponseSnapshot().deserialize(raw)

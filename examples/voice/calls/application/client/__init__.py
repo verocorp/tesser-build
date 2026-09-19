@@ -2,6 +2,12 @@ from calls.application.client.call_actions import CallApplicationClient as CallA
 from calls.application.client.dialing_actions import DialingApplicationClient as DialingApplicationClient
 from calls.application.client.speech_actions import SpeechApplicationClient as SpeechApplicationClient
 from calls.application.client.call_events import CallEventsApplicationClient as CallEventsApplicationClient
-from calls.application.client.call_events import UserInputTranscribedEvent as UserInputTranscribedEvent
-from calls.application.client.call_events import UserInputTranscribedRequest as UserInputTranscribedRequest
-from calls.application.client.call_events import UserInputTranscribedResponse as UserInputTranscribedResponse
+from calls.application.client.call_events import UserTurnMessage as UserTurnMessage
+from calls.application.client.call_events import UserTurnCompletedRequest as UserTurnCompletedRequest
+from calls.application.client.call_events import UserTurnCompletedResponse as UserTurnCompletedResponse
+from calls.application.client.interpretation_actions import (
+    InterpretationApplicationClient as InterpretationApplicationClient,
+)
+from calls.application.client.call_events import UserStateChangedEvent as UserStateChangedEvent
+from calls.application.client.call_events import UserStateChangedRequest as UserStateChangedRequest
+from calls.application.client.call_events import UserStateChangedResponse as UserStateChangedResponse

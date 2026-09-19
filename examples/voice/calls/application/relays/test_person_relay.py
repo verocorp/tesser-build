@@ -7,7 +7,6 @@ import tesser.errors as errors
 
 
 class TestAwaitPersonAnsweredRequestSnapshot:
-
     def test_a_request_is_its_call_id(self) -> None:
         raw = relays.AwaitPersonAnsweredRequestSnapshot().serialize(relays.AwaitPersonAnsweredRequest(call_id="c1"))
 
@@ -30,11 +29,8 @@ class TestAwaitPersonAnsweredRequestSnapshot:
 
 
 class TestAwaitPersonAnsweredResponseSnapshot:
-
     def test_a_response_is_its_call_id(self) -> None:
-        raw = relays.AwaitPersonAnsweredResponseSnapshot().serialize(
-            relays.AwaitPersonAnsweredResponse(call_id="c1")
-        )
+        raw = relays.AwaitPersonAnsweredResponseSnapshot().serialize(relays.AwaitPersonAnsweredResponse(call_id="c1"))
 
         assert raw == b'{"call_id": "c1"}'
 
@@ -54,59 +50,57 @@ class TestAwaitPersonAnsweredResponseSnapshot:
                 relays.AwaitPersonAnsweredResponseSnapshot().deserialize(raw)
 
 
-class TestAwaitPersonUtteranceRequestSnapshot:
-
+class TestAwaitPersonInputRequestSnapshot:
     def test_a_request_is_its_call_id_and_the_seconds_it_waits_within(self) -> None:
-        raw = relays.AwaitPersonUtteranceRequestSnapshot().serialize(
-            relays.AwaitPersonUtteranceRequest(call_id="c1", within_seconds=8)
+        raw = relays.AwaitPersonInputRequestSnapshot().serialize(
+            relays.AwaitPersonInputRequest(call_id="c1", within_seconds=8)
         )
 
         assert raw == b'{"call_id": "c1", "within_seconds": 8}'
 
     def test_a_request_comes_back_equal(self) -> None:
-        await_person_utterance_request_snapshot = relays.AwaitPersonUtteranceRequestSnapshot()
-        await_person_utterance_request = relays.AwaitPersonUtteranceRequest(call_id="c1", within_seconds=8)
+        await_person_input_request_snapshot = relays.AwaitPersonInputRequestSnapshot()
+        await_person_input_request = relays.AwaitPersonInputRequest(call_id="c1", within_seconds=8)
 
-        returned = await_person_utterance_request_snapshot.deserialize(
-            await_person_utterance_request_snapshot.serialize(await_person_utterance_request)
+        returned = await_person_input_request_snapshot.deserialize(
+            await_person_input_request_snapshot.serialize(await_person_input_request)
         )
 
-        assert returned == await_person_utterance_request
+        assert returned == await_person_input_request
 
     def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (b"{}", b'{"call_id": "c1"}', b'{"call_id": "c1", "within_seconds": "8"}', b'["c1"]'):
             with pytest.raises(errors.DomainError):
-                relays.AwaitPersonUtteranceRequestSnapshot().deserialize(raw)
+                relays.AwaitPersonInputRequestSnapshot().deserialize(raw)
 
 
-class TestAwaitPersonUtteranceResponseSnapshot:
-
+class TestAwaitPersonInputResponseSnapshot:
     def test_a_response_is_its_call_id_what_was_heard_and_the_text(self) -> None:
-        raw = relays.AwaitPersonUtteranceResponseSnapshot().serialize(
-            relays.AwaitPersonUtteranceResponse(call_id="c1", heard=relays.HEARD_UTTERANCE, text="my name is Ada")
+        raw = relays.AwaitPersonInputResponseSnapshot().serialize(
+            relays.AwaitPersonInputResponse(call_id="c1", kind=relays.INPUT_TURN_COMPLETED, text="my name is Ada")
         )
 
-        assert raw == b'{"call_id": "c1", "heard": "utterance", "text": "my name is Ada"}'
+        assert raw == b'{"call_id": "c1", "kind": "turn_completed", "text": "my name is Ada"}'
 
     def test_a_response_comes_back_equal(self) -> None:
-        await_person_utterance_response_snapshot = relays.AwaitPersonUtteranceResponseSnapshot()
-        await_person_utterance_response = relays.AwaitPersonUtteranceResponse(
-            call_id="c1", heard=relays.HEARD_SILENCE, text=""
+        await_person_input_response_snapshot = relays.AwaitPersonInputResponseSnapshot()
+        await_person_input_response = relays.AwaitPersonInputResponse(
+            call_id="c1", kind=relays.INPUT_NO_RESPONSE, text=""
         )
 
-        returned = await_person_utterance_response_snapshot.deserialize(
-            await_person_utterance_response_snapshot.serialize(await_person_utterance_response)
+        returned = await_person_input_response_snapshot.deserialize(
+            await_person_input_response_snapshot.serialize(await_person_input_response)
         )
 
-        assert returned == await_person_utterance_response
+        assert returned == await_person_input_response
 
     def test_a_response_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (
             b"{}",
             b'{"call_id": "c1", "text": "Ada"}',
-            b'{"call_id": "c1", "heard": 1, "text": "Ada"}',
-            b'{"call_id": "c1", "heard": "utterance", "text": 1}',
+            b'{"call_id": "c1", "kind": 1, "text": "Ada"}',
+            b'{"call_id": "c1", "kind": "turn_completed", "text": 1}',
             b'["c1"]',
         ):
             with pytest.raises(errors.DomainError):
-                relays.AwaitPersonUtteranceResponseSnapshot().deserialize(raw)
+                relays.AwaitPersonInputResponseSnapshot().deserialize(raw)

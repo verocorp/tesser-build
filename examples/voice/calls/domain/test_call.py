@@ -18,206 +18,136 @@ def call_spec(
 
 
 @ts.helper
-def agent_turn_spec(text: str = "hi, may I have your name?", person_name: str = "") -> domain.AgentTurnSpec:
-    return domain.AgentTurnSpec(text=text, person_names=(person_name,) if person_name else ())
+def agent_turn_spec(text: str = "hi, may I have your name?") -> domain.AgentTurnSpec:
+    return domain.AgentTurnSpec(text=text)
 
 
 @ts.helper
-def heard_spec(text: str = "my name is Grace") -> domain.HeardSpec:
-    return domain.HeardSpec(heard=domain.UTTERANCE if text else domain.SILENCE, text=text)
+def person_input_spec(kind: str = "turn_completed", text: str = "my name is Grace") -> domain.PersonInputSpec:
+    return domain.PersonInputSpec(kind=kind, text=text)
 
 
 class TestCall:
-
     def test_a_call_constructs_from_its_spec(self) -> None:
-        person_spec = domain.PersonSpec(name="Ada", phone_number="+15555550100")
-        call_spec = domain.CallSpec(call_id="c1", person=person_spec, turns=(), step="ask_name")
-
-        call = domain.Call(call_spec)
-
-        assert str(call.identity) == call_spec.call_id
-        assert str(call.person.name) == person_spec.name
-        assert str(call.person.phone_number) == person_spec.phone_number
-        assert str(call.step) == "ask_name"
-
-    def test_a_call_carries_the_turns_it_was_given_in_order(self) -> None:
         call_spec = domain.CallSpec(
-            call_id="c1",
-            person=domain.PersonSpec(name="Ada", phone_number="+15555550100"),
-            turns=(
-                domain.TurnSpec(speaker="agent", utterances=("hi, may I have your name?",)),
-                domain.TurnSpec(speaker="person", utterances=("my name is", "Ada")),
-            ),
-            step="ask_name",
+            call_id="c1", person=domain.PersonSpec(name="Ada", phone_number="+15555550100"), turns=(), step="ask_name"
+        )
+        call = domain.Call(call_spec)
+        assert str(call.identity) == call_spec.call_id
+        assert str(call.person.name) == call_spec.person.name
+        assert str(call.person.phone_number) == call_spec.person.phone_number
+        assert str(call.step) == call_spec.step
+        assert call.conversation == domain.Conversation(domain.ConversationSpec(call_spec.turns))
+
+    def test_after_agent_playback_the_call_waits_for_a_response(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec()))
+        assert call.progress() is domain.CallProgress.AWAITING_RESPONSE
+
+    def test_speech_start_changes_the_wait_without_needing_a_transcript(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec()))
+        call.receive(domain.PersonInput(person_input_spec(kind="speech_started", text="")))
+        assert call.progress() is domain.CallProgress.PERSON_SPEAKING
+        assert len(call.conversation.turns) == 1
+
+    def test_a_completed_turn_is_ready_for_interpretation_immediately(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec()))
+        call.receive(domain.PersonInput(person_input_spec(text="my name is Grace")))
+        assert call.progress() is domain.CallProgress.INTERPRETING_TURN
+        assert call.conversation.turns[-1] == domain.Turn(
+            domain.TurnSpec(speaker="person", utterances=("my name is Grace",))
         )
 
-        call = domain.Call(call_spec)
+    def test_no_response_is_distinct_from_a_completed_turn(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec()))
+        call.receive(domain.PersonInput(person_input_spec(kind="no_response", text="")))
+        assert call.progress() is domain.CallProgress.NO_RESPONSE
+        assert len(call.conversation.turns) == 1
 
-        assert [[str(utterance) for utterance in turn.utterances] for turn in call.conversation.turns] == [
-            ["hi, may I have your name?"],
-            ["my name is", "Ada"],
-        ]
+    def test_a_late_deadline_does_not_end_active_speech(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec()))
+        call.receive(domain.PersonInput(person_input_spec(kind="speech_started", text="")))
+        call.receive(domain.PersonInput(person_input_spec(kind="no_response", text="")))
+        assert call.progress() is domain.CallProgress.PERSON_SPEAKING
 
-    def test_two_calls_placed_for_the_same_person_hold_an_equal_person(self) -> None:
-        first = domain.Call(call_spec(call_id="c1"))
-        second = domain.Call(call_spec(call_id="c2"))
-
-        assert first.person == second.person
-
-    def test_a_call_in_which_nothing_has_been_said_is_the_agents_turn(self) -> None:
-        call = domain.Call(call_spec(step="ask_name"))
-
+    def test_no_response_allows_a_followup_prompt(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec()))
+        call.receive(domain.PersonInput(person_input_spec(kind="no_response", text="")))
+        call.response_missing()
         assert call.progress() is domain.CallProgress.AGENTS_TURN
 
-    def test_after_the_agent_speaks_it_is_the_persons_turn(self) -> None:
-        call = domain.Call(call_spec())
-
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
-
-        assert call.progress() is domain.CallProgress.PERSONS_TURN
-
-    def test_after_the_person_is_heard_it_is_still_the_persons_turn(self) -> None:
-        call = domain.Call(call_spec())
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
-
-        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
-
-        assert call.progress() is domain.CallProgress.PERSONS_TURN
-
-    def test_when_the_person_falls_silent_the_call_says_so(self) -> None:
-        call = domain.Call(call_spec())
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
-        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
-
-        call.heard(domain.Heard(heard_spec(text="")))
-
-        assert call.progress() is domain.CallProgress.PERSON_SILENT
-
-    def test_once_the_persons_turn_has_ended_it_is_the_agents_turn(self) -> None:
-        call = domain.Call(call_spec())
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
-        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
-        call.heard(domain.Heard(heard_spec(text="")))
-
-        call.person_turn_ended()
-
-        assert call.progress() is domain.CallProgress.AGENTS_TURN
-
-    def test_an_agent_turn_with_nothing_said_leaves_it_the_agents_turn(self) -> None:
-        call = domain.Call(call_spec())
-
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="   ")))
-
-        assert call.progress() is domain.CallProgress.AGENTS_TURN
-
-    def test_what_the_agent_says_joins_the_conversation_as_the_agents_turn(self) -> None:
-        call = domain.Call(call_spec())
-
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
-
-        assert [(str(turn.speaker), [str(u) for u in turn.utterances]) for turn in call.conversation.turns] == [
-            ("agent", ["hi, may I have your name?"])
-        ]
-
-    def test_what_the_person_is_heard_saying_joins_the_conversation_as_the_persons_turn(self) -> None:
-        call = domain.Call(call_spec())
-
-        call.heard(domain.Heard(heard_spec(text="my name is Grace")))
-
-        assert [(str(turn.speaker), [str(u) for u in turn.utterances]) for turn in call.conversation.turns] == [
-            ("person", ["my name is Grace"])
-        ]
-
-    def test_everything_heard_before_the_person_falls_silent_is_one_turn(self) -> None:
-        call = domain.Call(call_spec())
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="hi, may I have your name?")))
-
-        call.heard(domain.Heard(heard_spec(text="my name is")))
-        call.heard(domain.Heard(heard_spec(text="Grace")))
-
-        assert [(str(turn.speaker), [str(u) for u in turn.utterances]) for turn in call.conversation.turns] == [
-            ("agent", ["hi, may I have your name?"]),
-            ("person", ["my name is", "Grace"]),
-        ]
-
-    def test_what_is_heard_after_the_persons_turn_ended_starts_a_new_turn(self) -> None:
-        call = domain.Call(call_spec())
-        call.heard(domain.Heard(heard_spec(text="hello?")))
-        call.heard(domain.Heard(heard_spec(text="")))
-        call.person_turn_ended()
-
-        call.heard(domain.Heard(heard_spec(text="anyone there?")))
-
-        assert [[str(u) for u in turn.utterances] for turn in call.conversation.turns] == [["hello?"], ["anyone there?"]]
-
-    def test_silence_adds_nothing_to_the_conversation(self) -> None:
-        call = domain.Call(call_spec())
-
-        call.heard(domain.Heard(heard_spec(text="")))
-
-        assert call.conversation.turns == ()
-
-    def test_an_agent_turn_with_nothing_said_adds_no_turn(self) -> None:
-        call = domain.Call(call_spec())
-
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="   ")))
-
-        assert call.conversation.turns == ()
-
-    def test_a_name_the_agent_recorded_becomes_the_persons_name(self) -> None:
+    def test_interpretation_records_a_name_before_the_farewell_is_spoken(self) -> None:
         call = domain.Call(call_spec(name="Ada"))
-
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="nice to meet you, Grace", person_name="Grace")))
-
+        call.receive(domain.PersonInput(person_input_spec()))
+        call.interpreted(domain.InterpretedTurn(domain.InterpretedTurnSpec(person_names=("Grace",))))
         assert str(call.person.name) == "Grace"
-
-    def test_a_name_the_agent_recorded_ends_the_call(self) -> None:
-        call = domain.Call(call_spec())
-
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="nice to meet you, Grace", person_name="Grace")))
-
+        assert call.progress() is domain.CallProgress.AGENTS_TURN
+        assert "Grace" in str(call.instructions)
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text="Goodbye Grace")))
         assert call.progress() is domain.CallProgress.ENDED
 
-    def test_an_agent_turn_with_no_name_recorded_keeps_asking(self) -> None:
-        call = domain.Call(call_spec(name="Ada"))
+    def test_an_unrecognized_name_allows_another_question(self) -> None:
+        call = domain.Call(call_spec())
+        call.receive(domain.PersonInput(person_input_spec(text="What?")))
+        call.interpreted(domain.InterpretedTurn(domain.InterpretedTurnSpec(person_names=())))
+        assert call.progress() is domain.CallProgress.AGENTS_TURN
+        assert str(call.step) == "ask_name"
 
-        call.agent_said(domain.AgentTurn(agent_turn_spec(text="sorry, what was your name?")))
+    def test_empty_agent_output_does_not_start_the_response_window(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec(text=" ")))
+        assert call.progress() is domain.CallProgress.AGENTS_TURN
+        assert call.conversation.turns == ()
 
-        assert (str(call.step), str(call.person.name)) == ("ask_name", "Ada")
-
-    def test_the_instructions_follow_the_step(self) -> None:
-        asking = domain.Call(call_spec(step="ask_name"))
-        done = domain.Call(call_spec(step="done"))
-
-        assert "person_gave_name" in str(asking.instructions)
-        assert "Say nothing" in str(done.instructions)
+    def test_listening_and_speaking_have_different_instructions(self) -> None:
+        call = domain.Call(call_spec())
+        assert call.listening_instructions != call.instructions
+        assert "JSON" in str(call.listening_instructions)
+        assert "ask for their name" in str(call.instructions)
 
     def test_a_step_the_domain_does_not_know_is_refused(self) -> None:
-        with pytest.raises(errors.DomainError) as raised:
+        with pytest.raises(errors.DomainError):
             domain.Call(call_spec(step="haggle"))
 
-        assert raised.value.code == "invalid_step"
+    def test_an_empty_completed_turn_releases_the_speech_wait_without_an_interpretation(self) -> None:
+        call = domain.Call(call_spec())
+        call.agent_said(domain.AgentTurn(agent_turn_spec()))
+        call.receive(domain.PersonInput(person_input_spec(kind="speech_started", text="")))
+        call.receive(domain.PersonInput(person_input_spec(text="")))
+        assert call.progress() is domain.CallProgress.AGENTS_TURN
 
 
-class TestHeard:
+class TestPersonInput:
+    def test_completed_input_preserves_the_normalized_text_and_kind(self) -> None:
+        person_input_spec = domain.PersonInputSpec(kind="turn_completed", text=" Grace ")
+        person_input = domain.PersonInput(person_input_spec)
+        assert person_input.utterances == (domain.Utterance(person_input_spec.text),)
+        assert person_input.decide() is domain.PersonInputDecision.TURN_COMPLETED
+        assert person_input == domain.PersonInput(domain.PersonInputSpec(kind="turn_completed", text="Grace"))
 
-    def test_an_utterance_heard_carries_the_words(self) -> None:
-        heard = domain.Heard(domain.HeardSpec(heard="utterance", text="my name is Grace"))
+    def test_empty_completed_turn_preserves_the_boundary_without_an_utterance(self) -> None:
+        person_input = domain.PersonInput(person_input_spec(text=" "))
+        assert person_input.decide() is domain.PersonInputDecision.TURN_COMPLETED
+        assert person_input.utterances == ()
 
-        assert [str(utterance) for utterance in heard.utterances] == ["my name is Grace"]
-
-    def test_silence_carries_no_utterance(self) -> None:
-        heard = domain.Heard(domain.HeardSpec(heard="silence", text=""))
-
-        assert heard.utterances == ()
-
-    def test_something_neither_an_utterance_nor_silence_is_refused(self) -> None:
+    def test_unknown_kind_is_invalid(self) -> None:
         with pytest.raises(ValueError):
-            domain.Heard(domain.HeardSpec(heard="static", text=""))
+            domain.PersonInput(person_input_spec(kind="static"))
+
+
+class TestInterpretedTurn:
+    def test_names_are_normalized_and_empty_names_ignored(self) -> None:
+        interpreted_turn = domain.InterpretedTurn(domain.InterpretedTurnSpec(person_names=(" Grace ", " ")))
+        assert interpreted_turn.person_names == (domain.PersonName("Grace"),)
+        assert interpreted_turn == domain.InterpretedTurn(domain.InterpretedTurnSpec(person_names=("Grace",)))
 
 
 class TestCallPresence:
-
     def test_a_call_the_store_found_decides_that_it_was_found(self) -> None:
         call_presence = domain.CallPresence(domain.CallPresenceSpec(presence="found"))
 
@@ -236,7 +166,6 @@ class TestCallPresence:
 
 
 class TestCallId:
-
     def test_a_call_id_equals_by_value(self) -> None:
         first = domain.CallId("c1")
         second = domain.CallId("c1")
@@ -246,7 +175,6 @@ class TestCallId:
 
 
 class TestPersona:
-
     def test_a_persona_equals_by_value(self) -> None:
         first = domain.Persona("a friendly receptionist")
         second = domain.Persona("a friendly receptionist")
@@ -265,7 +193,6 @@ class TestPersona:
 
 
 class TestSpeaker:
-
     def test_a_speaker_equals_by_value(self) -> None:
         first = domain.Speaker("agent")
         second = domain.Speaker("agent")
@@ -279,7 +206,6 @@ class TestSpeaker:
 
 
 class TestUtterance:
-
     def test_an_utterance_reads_back_as_the_words_said(self) -> None:
         utterance = domain.Utterance("  my name is Ada ")
 
@@ -291,7 +217,6 @@ class TestUtterance:
 
 
 class TestTurn:
-
     def test_a_turn_holds_its_utterances_in_order(self) -> None:
         turn_spec = domain.TurnSpec(speaker="person", utterances=("my name is", "Ada"))
 
@@ -313,7 +238,6 @@ class TestTurn:
 
 
 class TestConversation:
-
     def test_a_conversation_holds_its_turns_in_order(self) -> None:
         conversation_spec = domain.ConversationSpec(
             turns=(
@@ -369,43 +293,65 @@ class TestConversation:
 
 
 @ts.helper
-def _user_input_transcribed_spec(
-    call_id: str = "c7", transcript: str = "my name is Grace", is_final: bool = True
-) -> domain.UserInputTranscribedSpec:
-    return domain.UserInputTranscribedSpec(call_id=call_id, transcript=transcript, is_final=is_final)
+def _user_turn_completed_spec(
+    call_id: str = "c7", text: str | None = "my name is Grace"
+) -> domain.UserTurnCompletedSpec:
+    return domain.UserTurnCompletedSpec(call_id=call_id, text=text)
 
 
-class TestUserInputTranscribed:
+class TestUserTurnCompleted:
+    def test_a_completed_turn_preserves_the_call_and_normalizes_the_utterance(self) -> None:
+        user_turn_completed_spec = _user_turn_completed_spec(text=" \tmy name is Grace\n")
 
-    def test_a_final_event_preserves_the_call_and_normalizes_the_utterance(self) -> None:
-        user_input_transcribed_spec = _user_input_transcribed_spec(transcript=" \tmy name is Grace\n")
+        user_turn_completed = domain.UserTurnCompleted(user_turn_completed_spec)
 
-        user_input_transcribed = domain.UserInputTranscribed(user_input_transcribed_spec)
+        assert user_turn_completed.call_id == domain.CallId(user_turn_completed_spec.call_id)
+        assert user_turn_completed.utterances == (domain.Utterance("my name is Grace"),)
 
-        assert user_input_transcribed.call_id == domain.CallId(user_input_transcribed_spec.call_id)
-        assert user_input_transcribed.utterances == (domain.Utterance(user_input_transcribed_spec.transcript),)
-        assert user_input_transcribed.decide() is domain.TranscriptionDecision.DELIVER
+    def test_a_turn_without_text_produces_no_deliverable_utterance(self) -> None:
+        user_turn_completed = domain.UserTurnCompleted(_user_turn_completed_spec(text=None))
 
-    def test_an_interim_event_produces_no_deliverable_utterance(self) -> None:
-        user_input_transcribed = domain.UserInputTranscribed(_user_input_transcribed_spec(is_final=False))
+        assert user_turn_completed.utterances == ()
 
-        assert user_input_transcribed.utterances == ()
-        assert user_input_transcribed.decide() is domain.TranscriptionDecision.IGNORE
+    def test_a_blank_turn_produces_no_deliverable_utterance(self) -> None:
+        user_turn_completed = domain.UserTurnCompleted(_user_turn_completed_spec(text=" \t\n"))
 
-    def test_a_blank_final_event_produces_no_deliverable_utterance(self) -> None:
-        user_input_transcribed = domain.UserInputTranscribed(_user_input_transcribed_spec(transcript=" \t\n"))
-
-        assert user_input_transcribed.utterances == ()
-        assert user_input_transcribed.decide() is domain.TranscriptionDecision.IGNORE
+        assert user_turn_completed.utterances == ()
 
     def test_events_with_the_same_normalized_utterance_and_call_are_equal(self) -> None:
-        first = domain.UserInputTranscribed(_user_input_transcribed_spec(transcript=" Grace "))
-        second = domain.UserInputTranscribed(_user_input_transcribed_spec(transcript="Grace"))
+        first = domain.UserTurnCompleted(_user_turn_completed_spec(text=" Grace "))
+        second = domain.UserTurnCompleted(_user_turn_completed_spec(text="Grace"))
 
         assert first == second
 
     def test_events_for_different_calls_are_not_equal(self) -> None:
-        first = domain.UserInputTranscribed(_user_input_transcribed_spec(call_id="c1"))
-        second = domain.UserInputTranscribed(_user_input_transcribed_spec(call_id="c2"))
+        first = domain.UserTurnCompleted(_user_turn_completed_spec(call_id="c1"))
+        second = domain.UserTurnCompleted(_user_turn_completed_spec(call_id="c2"))
 
         assert first != second
+
+
+class TestUserStateChanged:
+    def test_speaking_delivers_the_call_identity(self) -> None:
+        user_state_changed_spec = domain.UserStateChangedSpec(call_id="c7", new_state="speaking")
+        user_state_changed = domain.UserStateChanged(user_state_changed_spec)
+
+        assert user_state_changed.call_id == domain.CallId(user_state_changed_spec.call_id)
+        assert user_state_changed.decide() is domain.InputDeliveryDecision.DELIVER
+
+    @pytest.mark.parametrize("new_state", ["listening", "away"])
+    def test_other_known_states_are_ignored(self, new_state: str) -> None:
+        user_state_changed = domain.UserStateChanged(domain.UserStateChangedSpec(call_id="c7", new_state=new_state))
+
+        assert user_state_changed.decide() is domain.InputDeliveryDecision.IGNORE
+
+    def test_unknown_state_is_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            domain.UserStateChanged(domain.UserStateChangedSpec(call_id="c7", new_state="thinking"))
+
+    def test_equality_includes_the_call_and_state(self) -> None:
+        user_state_changed = domain.UserStateChanged(domain.UserStateChangedSpec(call_id="c7", new_state="speaking"))
+
+        assert user_state_changed == domain.UserStateChanged(domain.UserStateChangedSpec(call_id="c7", new_state="speaking"))
+        assert user_state_changed != domain.UserStateChanged(domain.UserStateChangedSpec(call_id="c8", new_state="speaking"))
+        assert user_state_changed != domain.UserStateChanged(domain.UserStateChangedSpec(call_id="c7", new_state="listening"))

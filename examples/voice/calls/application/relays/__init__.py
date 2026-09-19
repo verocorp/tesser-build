@@ -3,10 +3,10 @@ from calls.application.relays.call_events_relay import PersonAnsweredRequest as 
 from calls.application.relays.call_events_relay import PersonAnsweredRequestSnapshot as PersonAnsweredRequestSnapshot
 from calls.application.relays.call_events_relay import PersonAnsweredResponse as PersonAnsweredResponse
 from calls.application.relays.call_events_relay import PersonAnsweredResponseSnapshot as PersonAnsweredResponseSnapshot
-from calls.application.relays.call_events_relay import PersonUtteranceRequest as PersonUtteranceRequest
-from calls.application.relays.call_events_relay import PersonUtteranceRequestSnapshot as PersonUtteranceRequestSnapshot
-from calls.application.relays.call_events_relay import PersonUtteranceResponse as PersonUtteranceResponse
-from calls.application.relays.call_events_relay import PersonUtteranceResponseSnapshot as PersonUtteranceResponseSnapshot
+from calls.application.relays.call_events_relay import PersonInputRequest as PersonInputRequest
+from calls.application.relays.call_events_relay import PersonInputRequestSnapshot as PersonInputRequestSnapshot
+from calls.application.relays.call_events_relay import PersonInputResponse as PersonInputResponse
+from calls.application.relays.call_events_relay import PersonInputResponseSnapshot as PersonInputResponseSnapshot
 from calls.application.relays.conduct_call_relay import ConductCallRelay as ConductCallRelay
 from calls.application.relays.conduct_call_relay import ConductCallRequest as ConductCallRequest
 from calls.application.relays.conduct_call_relay import ConductCallRequestSnapshot as ConductCallRequestSnapshot
@@ -21,28 +21,34 @@ from calls.application.relays.dialing_relay import HangUpRequest as HangUpReques
 from calls.application.relays.dialing_relay import HangUpRequestSnapshot as HangUpRequestSnapshot
 from calls.application.relays.dialing_relay import HangUpResponse as HangUpResponse
 from calls.application.relays.dialing_relay import HangUpResponseSnapshot as HangUpResponseSnapshot
-from calls.application.relays.person_relay import HEARD_SILENCE as HEARD_SILENCE
-from calls.application.relays.person_relay import HEARD_UTTERANCE as HEARD_UTTERANCE
+from calls.application.relays.person_relay import INPUT_NO_RESPONSE as INPUT_NO_RESPONSE
+from calls.application.relays.person_relay import INPUT_TURN_COMPLETED as INPUT_TURN_COMPLETED
 from calls.application.relays.person_relay import AwaitPersonAnsweredRequest as AwaitPersonAnsweredRequest
-from calls.application.relays.person_relay import AwaitPersonAnsweredRequestSnapshot as AwaitPersonAnsweredRequestSnapshot
+from calls.application.relays.person_relay import (
+    AwaitPersonAnsweredRequestSnapshot as AwaitPersonAnsweredRequestSnapshot,
+)
 from calls.application.relays.person_relay import AwaitPersonAnsweredResponse as AwaitPersonAnsweredResponse
-from calls.application.relays.person_relay import AwaitPersonAnsweredResponseSnapshot as AwaitPersonAnsweredResponseSnapshot
-from calls.application.relays.person_relay import AwaitPersonUtteranceRequest as AwaitPersonUtteranceRequest
-from calls.application.relays.person_relay import AwaitPersonUtteranceRequestSnapshot as AwaitPersonUtteranceRequestSnapshot
-from calls.application.relays.person_relay import AwaitPersonUtteranceResponse as AwaitPersonUtteranceResponse
-from calls.application.relays.person_relay import AwaitPersonUtteranceResponseSnapshot as AwaitPersonUtteranceResponseSnapshot
+from calls.application.relays.person_relay import (
+    AwaitPersonAnsweredResponseSnapshot as AwaitPersonAnsweredResponseSnapshot,
+)
+from calls.application.relays.person_relay import AwaitPersonInputRequest as AwaitPersonInputRequest
+from calls.application.relays.person_relay import AwaitPersonInputRequestSnapshot as AwaitPersonInputRequestSnapshot
+from calls.application.relays.person_relay import AwaitPersonInputResponse as AwaitPersonInputResponse
+from calls.application.relays.person_relay import AwaitPersonInputResponseSnapshot as AwaitPersonInputResponseSnapshot
 from calls.application.relays.person_relay import PersonRelay as PersonRelay
 from calls.application.relays.record_call_relay import RecordCallRelay as RecordCallRelay
 from calls.application.relays.record_call_relay import RecordCallRequest as RecordCallRequest
 from calls.application.relays.record_call_relay import RecordCallRequestSnapshot as RecordCallRequestSnapshot
 from calls.application.relays.record_call_relay import RecordCallResponse as RecordCallResponse
 from calls.application.relays.record_call_relay import RecordCallResponseSnapshot as RecordCallResponseSnapshot
-from calls.application.relays.speech_relay import EndPersonTurnRequest as EndPersonTurnRequest
-from calls.application.relays.speech_relay import EndPersonTurnRequestSnapshot as EndPersonTurnRequestSnapshot
-from calls.application.relays.speech_relay import EndPersonTurnResponse as EndPersonTurnResponse
-from calls.application.relays.speech_relay import EndPersonTurnResponseSnapshot as EndPersonTurnResponseSnapshot
+from calls.application.relays.interpretation_relay import InterpretTurnRequest as InterpretTurnRequest
+from calls.application.relays.interpretation_relay import InterpretTurnRequestSnapshot as InterpretTurnRequestSnapshot
+from calls.application.relays.interpretation_relay import InterpretTurnResponse as InterpretTurnResponse
+from calls.application.relays.interpretation_relay import InterpretTurnResponseSnapshot as InterpretTurnResponseSnapshot
 from calls.application.relays.speech_relay import SpeakTurnRequest as SpeakTurnRequest
 from calls.application.relays.speech_relay import SpeakTurnRequestSnapshot as SpeakTurnRequestSnapshot
 from calls.application.relays.speech_relay import SpeakTurnResponse as SpeakTurnResponse
 from calls.application.relays.speech_relay import SpeakTurnResponseSnapshot as SpeakTurnResponseSnapshot
 from calls.application.relays.speech_relay import SpeechRelay as SpeechRelay
+from calls.application.relays.interpretation_relay import InterpretationRelay as InterpretationRelay
+from calls.application.relays.person_relay import INPUT_SPEECH_STARTED as INPUT_SPEECH_STARTED

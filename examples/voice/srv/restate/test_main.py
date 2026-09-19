@@ -11,7 +11,6 @@ import urllib.request as urllib_request
 
 
 class TestRestateHost:
-
     def test_the_served_restate_endpoint_discovers_the_actions_service_and_the_orchestrator_workflow(self) -> None:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
@@ -43,7 +42,8 @@ class TestRestateHost:
         assert {s["name"]: sorted(h["name"] for h in s["handlers"]) for s in services} == {
             "CallActions": ["record_call"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
-            "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
+            "CallInputs": ["person_input", "stop_taking_person_input", "take_person_input"],
             "DialingActions": ["dial_person", "hang_up"],
-            "SpeechActions": ["end_person_turn", "speak_turn"],
+            "SpeechActions": ["speak_turn"],
+            "InterpretationActions": ["interpret_turn"],
         }

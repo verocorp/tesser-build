@@ -15,7 +15,6 @@ _BIND: typing.Final[str] = "0.0.0.0:9080"
 
 
 class RestateHost(ts.Host):
-
     def run(self, argv: list[str]) -> int:
         voice_app = app.load()
         config = hypercorn_config.Config()
@@ -27,8 +26,9 @@ class RestateHost(ts.Host):
                     voice_app.calls.restate_call_runtime.call_actions_service,
                     voice_app.calls.restate_call_runtime.dialing_actions_service,
                     voice_app.calls.restate_call_runtime.speech_actions_service,
+                    voice_app.calls.restate_call_runtime.interpretation_actions_service,
                     voice_app.calls.restate_call_runtime.call_orchestrator_workflow,
-                    voice_app.calls.restate_call_runtime.call_utterances_object,
+                    voice_app.calls.restate_call_runtime.call_inputs_object,
                 ]
             ),
         )

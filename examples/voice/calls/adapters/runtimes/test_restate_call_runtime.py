@@ -14,7 +14,6 @@ import calls.domain as domain
 
 @ts.fake
 class FakeCallApplicationClient(client.CallApplicationClient):
-
     def __init__(self) -> None:
         self.recorded: list[relays.RecordCallRequest] = []
 
@@ -25,7 +24,6 @@ class FakeCallApplicationClient(client.CallApplicationClient):
 
 @ts.fake
 class FakeDialingApplicationClient(client.DialingApplicationClient):
-
     def __init__(self) -> None:
         self.dialed: list[relays.DialPersonRequest] = []
         self.hung_up: list[relays.HangUpRequest] = []
@@ -40,32 +38,26 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
 
 
 @ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient):
-
+class FakeSpeechApplicationClient(client.SpeechApplicationClient, client.InterpretationApplicationClient):
     def __init__(self) -> None:
         self.spoken: list[relays.SpeakTurnRequest] = []
-        self.ended: list[relays.EndPersonTurnRequest] = []
+        self.ended: list[relays.InterpretTurnRequest] = []
 
-    async def end_person_turn(
-        self, end_person_turn_request: relays.EndPersonTurnRequest
-    ) -> relays.EndPersonTurnResponse:
-        self.ended.append(end_person_turn_request)
-        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
+    async def interpret_turn(self, interpret_turn_request: relays.InterpretTurnRequest) -> relays.InterpretTurnResponse:
+        self.ended.append(interpret_turn_request)
+        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
 
     async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
         self.spoken.append(speak_turn_request)
         if len(self.spoken) == 2:
             return relays.SpeakTurnResponse(
-                call_id=str(speak_turn_request.call.identity), text="nice to meet you, Grace", person_names=("Grace",)
+                call_id=str(speak_turn_request.call.identity), text="nice to meet you, Grace"
             )
-        return relays.SpeakTurnResponse(
-            call_id=str(speak_turn_request.call.identity), text="hi, may I have your name?", person_names=()
-        )
+        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi, may I have your name?")
 
 
 @ts.fake
 class FakeDurableFuture:  # tesser:debt TB072
-
     def __init__(self, resolved: object) -> None:
         self._resolved = resolved
 
@@ -76,7 +68,6 @@ class FakeDurableFuture:  # tesser:debt TB072
 
 @ts.fake
 class FakeDurablePromise:  # tesser:debt TB072
-
     def __init__(self, resolved: list[tuple[str, object]], name: str, value: object) -> None:
         self._resolved = resolved
         self._name = name
@@ -99,7 +90,6 @@ class FakeDurablePromise:  # tesser:debt TB072
 
 @ts.fake
 class FakeRestateWorkflowContext:  # tesser:debt TB072
-
     def __init__(
         self,
         fake_call_application_client: FakeCallApplicationClient,
@@ -119,8 +109,8 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
             return await self._fake_dialing_application_client.dial_person(arg)
         if isinstance(arg, relays.HangUpRequest):
             return await self._fake_dialing_application_client.hang_up(arg)
-        if isinstance(arg, relays.EndPersonTurnRequest):
-            return await self._fake_speech_application_client.end_person_turn(arg)
+        if isinstance(arg, relays.InterpretTurnRequest):
+            return await self._fake_speech_application_client.interpret_turn(arg)
         assert isinstance(arg, relays.SpeakTurnRequest)
         return await self._fake_speech_application_client.speak_turn(arg)
 
@@ -131,12 +121,10 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         self.awakened += 1
         if self.awakened % 2 == 1:
             return "sign_1", FakeDurableFuture(
-                relays.AwaitPersonUtteranceResponse(
-                    call_id="c7", heard=relays.HEARD_UTTERANCE, text="my name is Grace"
-                )
+                relays.AwaitPersonInputResponse(call_id="c7", kind=relays.INPUT_TURN_COMPLETED, text="my name is Grace")
             )
         return "sign_2", FakeDurableFuture(
-            relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_SILENCE, text="")
+            relays.AwaitPersonInputResponse(call_id="c7", kind=relays.INPUT_NO_RESPONSE, text="")
         )
 
     def object_send(self, tpe: object, key: str, arg: object, send_delay: datetime.timedelta | None = None) -> None:
@@ -145,7 +133,6 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
 
 @ts.fake
 class FakeRestateWorkflowSharedContext:  # tesser:debt TB072
-
     def __init__(self) -> None:
         self.resolved: list[tuple[str, object]] = []
 
@@ -155,7 +142,6 @@ class FakeRestateWorkflowSharedContext:  # tesser:debt TB072
 
 @ts.fake
 class FakeRestateObjectContext:  # tesser:debt TB072
-
     def __init__(self, key: str, state: dict[str, object]) -> None:
         self._key = key
         self.state = state
@@ -189,10 +175,12 @@ def call_spec(call_id: str = "c7", name: str = "Ada", phone_number: str = "+1555
 
 
 class TestRestateCallRuntime:
-
     def test_it_registers_the_actions_services_the_orchestrator_workflow_and_the_utterance_mailbox(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         )
 
         registered = {
@@ -201,22 +189,27 @@ class TestRestateCallRuntime:
                 restate_call_runtime.call_actions_service,
                 restate_call_runtime.dialing_actions_service,
                 restate_call_runtime.speech_actions_service,
+                restate_call_runtime.interpretation_actions_service,
                 restate_call_runtime.call_orchestrator_workflow,
-                restate_call_runtime.call_utterances_object,
+                restate_call_runtime.call_inputs_object,
             )
         }
 
         assert registered == {
             "CallActions": ["record_call"],
             "DialingActions": ["dial_person", "hang_up"],
-            "SpeechActions": ["end_person_turn", "speak_turn"],
+            "SpeechActions": ["speak_turn"],
+            "InterpretationActions": ["interpret_turn"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
-            "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
+            "CallInputs": ["person_input", "stop_taking_person_input", "take_person_input"],
         }
 
     def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         )
 
         policies = [
@@ -225,21 +218,25 @@ class TestRestateCallRuntime:
                 restate_call_runtime.call_actions_service,
                 restate_call_runtime.dialing_actions_service,
                 restate_call_runtime.speech_actions_service,
+                restate_call_runtime.interpretation_actions_service,
                 restate_call_runtime.call_orchestrator_workflow,
-                restate_call_runtime.call_utterances_object,
+                restate_call_runtime.call_inputs_object,
             )
         ]
 
         assert [(policy.max_attempts, policy.on_max_attempts) for policy in policies if policy is not None] == [
             (5, "pause")
-        ] * 5
+        ] * 6
 
     async def test_the_record_call_handler_hands_the_request_to_the_application_client(self) -> None:
         fake_call_application_client = FakeCallApplicationClient()
         record_call_request = relays.RecordCallRequest(call=domain.Call(call_spec()))
 
         await runtimes.RestateCallRuntime(
-            fake_call_application_client, FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+            fake_call_application_client,
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         ).record_call_handler(typing.cast(restate.Context, None), record_call_request)
 
         assert fake_call_application_client.recorded == [record_call_request]
@@ -249,7 +246,10 @@ class TestRestateCallRuntime:
         dial_person_request = relays.DialPersonRequest(call=domain.Call(call_spec()))
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), fake_dialing_application_client, FakeSpeechApplicationClient()
+            FakeCallApplicationClient(),
+            fake_dialing_application_client,
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         ).dial_person_handler(typing.cast(restate.Context, None), dial_person_request)
 
         assert fake_dialing_application_client.dialed == [dial_person_request]
@@ -259,7 +259,10 @@ class TestRestateCallRuntime:
         hang_up_request = relays.HangUpRequest(call=domain.Call(call_spec()))
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), fake_dialing_application_client, FakeSpeechApplicationClient()
+            FakeCallApplicationClient(),
+            fake_dialing_application_client,
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         ).hang_up_handler(typing.cast(restate.Context, None), hang_up_request)
 
         assert fake_dialing_application_client.hung_up == [hang_up_request]
@@ -269,20 +272,26 @@ class TestRestateCallRuntime:
         speak_turn_request = relays.SpeakTurnRequest(call=domain.Call(call_spec()))
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), fake_speech_application_client
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            fake_speech_application_client,
+            fake_speech_application_client,
         ).speak_turn_handler(typing.cast(restate.Context, None), speak_turn_request)
 
         assert fake_speech_application_client.spoken == [speak_turn_request]
 
-    async def test_the_end_person_turn_handler_hands_the_request_to_the_application_client(self) -> None:
+    async def test_the_interpret_turn_handler_hands_the_request_to_the_application_client(self) -> None:
         fake_speech_application_client = FakeSpeechApplicationClient()
-        end_person_turn_request = relays.EndPersonTurnRequest(call=domain.Call(call_spec()))
+        interpret_turn_request = relays.InterpretTurnRequest(call=domain.Call(call_spec()))
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), fake_speech_application_client
-        ).end_person_turn_handler(typing.cast(restate.Context, None), end_person_turn_request)
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            fake_speech_application_client,
+            fake_speech_application_client,
+        ).interpret_turn_handler(typing.cast(restate.Context, None), interpret_turn_request)
 
-        assert fake_speech_application_client.ended == [end_person_turn_request]
+        assert fake_speech_application_client.ended == [interpret_turn_request]
 
     async def test_the_conduct_call_handler_runs_the_whole_call_inside_this_invocation(self) -> None:
         fake_call_application_client = FakeCallApplicationClient()
@@ -293,7 +302,10 @@ class TestRestateCallRuntime:
         )
 
         conduct_call_response = await runtimes.RestateCallRuntime(  # tesser:debt TB085
-            fake_call_application_client, fake_dialing_application_client, fake_speech_application_client
+            fake_call_application_client,
+            fake_dialing_application_client,
+            fake_speech_application_client,
+            fake_speech_application_client,
         ).conduct_call_handler(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
             relays.ConductCallRequest(call=domain.Call(call_spec(call_id="c7"))),
@@ -307,7 +319,10 @@ class TestRestateCallRuntime:
 
     async def test_the_person_answered_handler_resolves_the_workflows_promise(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         )
         fake_restate_workflow_shared_context = FakeRestateWorkflowSharedContext()  # tesser:debt TB085
 
@@ -321,60 +336,82 @@ class TestRestateCallRuntime:
         ]
 
     async def test_an_utterance_nobody_is_waiting_for_is_buffered_in_order(self) -> None:
-        fake_restate_object_context = FakeRestateObjectContext("c7", {"buffered": ["my name is"]})  # tesser:debt TB085
-
-        await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        ).person_utterance_handler(
-            typing.cast(restate.ObjectContext, fake_restate_object_context),
-            relays.PersonUtteranceRequest(call_id="c7", text="Ada"),
+        fake_restate_object_context = FakeRestateObjectContext(  # tesser:debt TB085
+            "c7", {"buffered": [{"kind": "turn_completed", "text": "my name is"}]}
         )
 
-        assert fake_restate_object_context.state == {"buffered": ["my name is", "Ada"]}
+        await runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        ).person_input_handler(
+            typing.cast(restate.ObjectContext, fake_restate_object_context),
+            relays.PersonInputRequest(kind=relays.INPUT_TURN_COMPLETED, call_id="c7", text="Ada"),
+        )
+
+        assert fake_restate_object_context.state == {
+            "buffered": [{"kind": "turn_completed", "text": "my name is"}, {"kind": "turn_completed", "text": "Ada"}]
+        }
 
     async def test_an_utterance_someone_is_waiting_for_resolves_their_awakeable(self) -> None:
         fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_1"})  # tesser:debt TB085
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        ).person_utterance_handler(
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        ).person_input_handler(
             typing.cast(restate.ObjectContext, fake_restate_object_context),
-            relays.PersonUtteranceRequest(call_id="c7", text="Ada"),
+            relays.PersonInputRequest(kind=relays.INPUT_TURN_COMPLETED, call_id="c7", text="Ada"),
         )
 
         assert fake_restate_object_context.resolved == [
-            ("sign_1", relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_UTTERANCE, text="Ada"))
+            ("sign_1", relays.AwaitPersonInputResponse(call_id="c7", kind=relays.INPUT_TURN_COMPLETED, text="Ada"))
         ]
         assert fake_restate_object_context.state == {}
 
     async def test_taking_with_utterances_buffered_resolves_the_awakeable_with_the_oldest(self) -> None:
-        fake_restate_object_context = FakeRestateObjectContext("c7", {"buffered": ["my name is", "Ada"]})  # tesser:debt TB085
+        fake_restate_object_context = FakeRestateObjectContext(  # tesser:debt TB085
+            "c7",
+            {"buffered": [{"kind": "turn_completed", "text": "my name is"}, {"kind": "turn_completed", "text": "Ada"}]},
+        )
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        ).take_person_utterance_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1")
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        ).take_person_input_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1")
 
         assert fake_restate_object_context.resolved == [
             (
                 "sign_1",
-                relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_UTTERANCE, text="my name is"),
+                relays.AwaitPersonInputResponse(call_id="c7", kind=relays.INPUT_TURN_COMPLETED, text="my name is"),
             )
         ]
-        assert fake_restate_object_context.state == {"buffered": ["Ada"]}
+        assert fake_restate_object_context.state == {"buffered": [{"kind": "turn_completed", "text": "Ada"}]}
 
     async def test_taking_with_nothing_buffered_leaves_the_awakeable_waiting(self) -> None:
         fake_restate_object_context = FakeRestateObjectContext("c7", {})  # tesser:debt TB085
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        ).take_person_utterance_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1")
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        ).take_person_input_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1")
 
         assert fake_restate_object_context.state == {"waiting": "sign_1"}
         assert fake_restate_object_context.resolved == []
 
     async def test_a_second_answer_for_a_call_already_answered_is_acknowledged_not_failed(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         )
         fake_restate_workflow_shared_context = FakeRestateWorkflowSharedContext()  # tesser:debt TB085
 
@@ -390,8 +427,11 @@ class TestRestateCallRuntime:
         fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_1"})  # tesser:debt TB085
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        ).take_person_utterance_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_2")
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        ).take_person_input_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_2")
 
         assert fake_restate_object_context.state["waiting"] == "sign_1"
         assert fake_restate_object_context.rejected == ["sign_2"]
@@ -400,13 +440,14 @@ class TestRestateCallRuntime:
         fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_1"})  # tesser:debt TB085
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        ).stop_taking_person_utterance_handler(
-            typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1"
-        )
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        ).stop_taking_person_input_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1")
 
         assert fake_restate_object_context.resolved == [
-            ("sign_1", relays.AwaitPersonUtteranceResponse(call_id="c7", heard=relays.HEARD_SILENCE, text=""))
+            ("sign_1", relays.AwaitPersonInputResponse(call_id="c7", kind=relays.INPUT_NO_RESPONSE, text=""))
         ]
         assert fake_restate_object_context.state == {}
 
@@ -414,10 +455,38 @@ class TestRestateCallRuntime:
         fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "sign_2"})  # tesser:debt TB085
 
         await runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        ).stop_taking_person_utterance_handler(
-            typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1"
-        )
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        ).stop_taking_person_input_handler(typing.cast(restate.ObjectContext, fake_restate_object_context), "sign_1")
 
         assert fake_restate_object_context.resolved == []
         assert fake_restate_object_context.state == {"waiting": "sign_2"}
+
+    async def test_speech_start_invalidates_the_old_deadline_while_the_completed_turn_is_still_pending(self) -> None:
+        restate_call_runtime = runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
+        )
+        fake_restate_object_context = FakeRestateObjectContext("c7", {"waiting": "start_deadline"})  # tesser:debt TB085
+        restate_object_context = typing.cast(restate.ObjectContext, fake_restate_object_context)
+
+        await restate_call_runtime.person_input_handler(
+            restate_object_context, relays.PersonInputRequest(call_id="c7", kind=relays.INPUT_SPEECH_STARTED, text="")
+        )
+        await restate_call_runtime.take_person_input_handler(restate_object_context, "completed_turn")
+        await restate_call_runtime.stop_taking_person_input_handler(restate_object_context, "start_deadline")
+
+        assert fake_restate_object_context.state == {"waiting": "completed_turn"}
+        assert len(fake_restate_object_context.resolved) == 1
+        await restate_call_runtime.person_input_handler(
+            restate_object_context,
+            relays.PersonInputRequest(call_id="c7", kind=relays.INPUT_TURN_COMPLETED, text="Grace"),
+        )
+        assert fake_restate_object_context.resolved[-1] == (
+            "completed_turn",
+            relays.AwaitPersonInputResponse(call_id="c7", kind=relays.INPUT_TURN_COMPLETED, text="Grace"),
+        )

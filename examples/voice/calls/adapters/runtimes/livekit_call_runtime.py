@@ -15,34 +15,41 @@ import calls.application.client as client
 import calls.application.relays as relays
 
 SPEAK_TURN_METHOD: typing.Final[str] = "speak_turn"
-END_PERSON_TURN_METHOD: typing.Final[str] = "end_person_turn"
 _PERSON_IDENTITY: typing.Final[str] = "person"
 _SIP_CALL_STATUS: typing.Final[str] = "sip.callStatus"
 _SIP_CALL_ACTIVE: typing.Final[str] = "active"
 _ACKNOWLEDGED: typing.Final[str] = "recorded"
 _AGENT_ROLE: typing.Final[str] = "agent"
-_TURN_HANDLING: typing.Final[livekit_agents.TurnHandlingOptions] = {"turn_detection": "manual"}
+_TURN_HANDLING: typing.Final[livekit_agents.TurnHandlingOptions] = {"preemptive_generation": {"enabled": False}}
 
 
 class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
-
     def __init__(self, call_events_application_client: client.CallEventsApplicationClient, call_id: str) -> None:
         super().__init__(instructions="")
         self._call_events_application_client = call_events_application_client
         self._call_id = call_id
-        self._deliveries: set[asyncio.Task[client.UserInputTranscribedResponse]] = set()
+        self._deliveries: set[asyncio.Task[client.UserStateChangedResponse]] = set()
 
-    def on_user_input_transcribed(self, user_input_transcribed_event: livekit_agents.UserInputTranscribedEvent) -> None:  # tesser:debt TB085
+    def on_user_state_changed(  # tesser:debt TB085
+        self, user_state_changed_event: livekit_agents.UserStateChangedEvent
+    ) -> None:
         delivery = asyncio.ensure_future(
-            self._call_events_application_client.user_input_transcribed(
-                client.UserInputTranscribedRequest(
-                    call_id=self._call_id,
-                    event=user_input_transcribed_event,
-                )
+            self._call_events_application_client.user_state_changed(
+                client.UserStateChangedRequest(call_id=self._call_id, event=user_state_changed_event)
             )
         )
         self._deliveries.add(delivery)
-        delivery.add_done_callback(self._deliveries.discard)
+
+    async def on_user_turn_completed(  # tesser:debt TB085
+        self, turn_ctx: livekit_llm.ChatContext, new_message: livekit_llm.ChatMessage
+    ) -> None:
+        deliveries = tuple(self._deliveries)
+        await asyncio.gather(*deliveries)
+        self._deliveries.difference_update(deliveries)
+        await self._call_events_application_client.user_turn_completed(
+            client.UserTurnCompletedRequest(call_id=self._call_id, message=new_message)
+        )
+        raise livekit_llm.StopResponse()
 
     async def acknowledge(self, raw_arguments: dict[str, object]) -> str:  # tesser:debt TB085
         return _ACKNOWLEDGED
@@ -53,7 +60,9 @@ class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
     async def speak_turn(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:  # tesser:debt TB085
         payload = json.loads(rpc_invocation_data.payload)
         await self.update_tools(
-            [livekit_llm.function_tool(self.acknowledge, raw_schema=schema) for schema in payload["tools"]]  # tesser:debt TB051
+            [
+                livekit_llm.function_tool(self.acknowledge, raw_schema=schema) for schema in payload["tools"]  # tesser:debt TB051
+            ]
         )
         chat_context = livekit_llm.ChatContext.empty()
         chat_context.add_message(role="system", content=payload["persona"])
@@ -76,14 +85,8 @@ class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
                 encoded.append({"type": "function_call_output", "name": chat_item.name, "output": chat_item.output})
         return json.dumps(encoded)
 
-    async def end_person_turn(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:  # tesser:debt TB085
-        await self.session.commit_user_turn(skip_reply=True)
-        await asyncio.gather(*self._deliveries)
-        return ""
-
 
 class LivekitCallRuntime(ts.Runtime):
-
     def __init__(  # tesser:debt TB081
         self,
         call_events_relay: relays.CallEventsRelay,
@@ -110,9 +113,8 @@ class LivekitCallRuntime(ts.Runtime):
         agent_session: livekit_agents.AgentSession[None] = livekit_agents.AgentSession(
             stt=self._stt, llm=self._llm, tts=self._tts, turn_handling=_TURN_HANDLING
         )
-        agent_session.on("user_input_transcribed", call_agent.on_user_input_transcribed)
+        agent_session.on("user_state_changed", call_agent.on_user_state_changed)
         job_context.room.local_participant.register_rpc_method(SPEAK_TURN_METHOD, call_agent.speak_turn)
-        job_context.room.local_participant.register_rpc_method(END_PERSON_TURN_METHOD, call_agent.end_person_turn)
         await agent_session.start(
             agent=call_agent,
             room=job_context.room,

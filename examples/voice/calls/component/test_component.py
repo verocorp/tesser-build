@@ -29,7 +29,6 @@ def _spec(
 
 
 class TestConfig:
-
     def test_a_postgres_coordinate_requests_that_database(self) -> None:
         config = component.Config(_spec(storage="postgres://a@b/c"))
 
@@ -62,7 +61,6 @@ class TestConfig:
 
 
 class TestCalls:
-
     async def test_the_component_publishes_the_restate_runtime_it_wired(self) -> None:
         config = component.Config(_spec(storage="postgres://nobody@nowhere/none"))
 
@@ -73,8 +71,9 @@ class TestCalls:
                 calls.restate_call_runtime.call_actions_service,
                 calls.restate_call_runtime.dialing_actions_service,
                 calls.restate_call_runtime.speech_actions_service,
+                calls.restate_call_runtime.interpretation_actions_service,
                 calls.restate_call_runtime.call_orchestrator_workflow,
-                calls.restate_call_runtime.call_utterances_object,
+                calls.restate_call_runtime.call_inputs_object,
             )
         }
         await calls.close()
@@ -82,7 +81,8 @@ class TestCalls:
         assert registered == {
             "CallActions": ["record_call"],
             "DialingActions": ["dial_person", "hang_up"],
-            "SpeechActions": ["end_person_turn", "speak_turn"],
+            "SpeechActions": ["speak_turn"],
+            "InterpretationActions": ["interpret_turn"],
             "CallOrchestrator": ["conduct_call", "person_answered"],
-            "CallUtterances": ["person_utterance", "stop_taking_person_utterance", "take_person_utterance"],
+            "CallInputs": ["person_input", "stop_taking_person_input", "take_person_input"],
         }

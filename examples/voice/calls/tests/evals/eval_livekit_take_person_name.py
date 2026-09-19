@@ -54,7 +54,6 @@ _DEFAULT_TTS: typing.Final[str] = "cartesia/sonic-2"
 
 @ts.fake
 class SimulatedPerson:
-
     def __init__(self, url: str, api_key: str, api_secret: str, name: str) -> None:
         self._url = url
         self._api_key = api_key
@@ -164,7 +163,6 @@ class SimulatedPerson:
 
 @ts.fake
 class SimulatedPersonDialing(ports.Dialing):
-
     def __init__(
         self, url: str, api_key: str, api_secret: str, agent_name: str, people: dict[str, SimulatedPerson]
     ) -> None:
@@ -202,24 +200,23 @@ class SimulatedPersonDialing(ports.Dialing):
 
 @ts.fake
 class InlineCallEventsRelay(relays.CallEventsRelay, relays.PersonRelay):
-
     def __init__(self, loop: asyncio.AbstractEventLoop, people: dict[str, SimulatedPerson]) -> None:
         self._loop = loop
         self._people = people
         self._answered: dict[str, asyncio.Event] = {}
-        self._utterances: dict[str, asyncio.Queue[str]] = {}
+        self._utterances: dict[str, asyncio.Queue[relays.PersonInputRequest]] = {}
 
     def answered(self, call_id: str) -> asyncio.Event:
         return self._answered.setdefault(call_id, asyncio.Event())
 
-    def utterances(self, call_id: str) -> asyncio.Queue[str]:
+    def utterances(self, call_id: str) -> asyncio.Queue[relays.PersonInputRequest]:
         return self._utterances.setdefault(call_id, asyncio.Queue())
 
     def mark_answered(self, call_id: str) -> None:
         self.answered(call_id).set()  # tesser:debt TB051
 
-    def enqueue(self, call_id: str, text: str) -> None:
-        self.utterances(call_id).put_nowait(text)  # tesser:debt TB051
+    def enqueue(self, person_input_request: relays.PersonInputRequest) -> None:
+        self.utterances(person_input_request.call_id).put_nowait(person_input_request)  # tesser:debt TB051
 
     async def run_person_answered(
         self, person_answered_request: relays.PersonAnsweredRequest
@@ -227,13 +224,12 @@ class InlineCallEventsRelay(relays.CallEventsRelay, relays.PersonRelay):
         self._loop.call_soon_threadsafe(self.mark_answered, person_answered_request.call_id)  # tesser:debt TB051
         return relays.PersonAnsweredResponse(call_id=person_answered_request.call_id)
 
-    async def run_person_utterance(
-        self, person_utterance_request: relays.PersonUtteranceRequest
-    ) -> relays.PersonUtteranceResponse:
+    async def run_person_input(self, person_input_request: relays.PersonInputRequest) -> relays.PersonInputResponse:
         self._loop.call_soon_threadsafe(
-            self.enqueue, person_utterance_request.call_id, person_utterance_request.text  # tesser:debt TB051
+            self.enqueue,  # tesser:debt TB051
+            person_input_request,
         )
-        return relays.PersonUtteranceResponse(call_id=person_utterance_request.call_id)
+        return relays.PersonInputResponse(call_id=person_input_request.call_id)
 
     async def await_person_answered(
         self, await_person_answered_request: relays.AwaitPersonAnsweredRequest
@@ -241,23 +237,26 @@ class InlineCallEventsRelay(relays.CallEventsRelay, relays.PersonRelay):
         await self.answered(await_person_answered_request.call_id).wait()  # tesser:debt TB051
         return relays.AwaitPersonAnsweredResponse(call_id=await_person_answered_request.call_id)
 
-    async def await_person_utterance(
-        self, await_person_utterance_request: relays.AwaitPersonUtteranceRequest
-    ) -> relays.AwaitPersonUtteranceResponse:
-        call_id = await_person_utterance_request.call_id
-        await self._people[call_id].reply()
+    async def await_person_input(
+        self, await_person_input_request: relays.AwaitPersonInputRequest
+    ) -> relays.AwaitPersonInputResponse:
+        call_id = await_person_input_request.call_id
+        if await_person_input_request.within_seconds is not None:
+            await self._people[call_id].reply()
         try:
-            text = await asyncio.wait_for(
-                self.utterances(call_id).get(), await_person_utterance_request.within_seconds  # tesser:debt TB051
+            person_input_request = await asyncio.wait_for(
+                self.utterances(call_id).get(),  # tesser:debt TB051
+                await_person_input_request.within_seconds,
             )
         except TimeoutError:
-            return relays.AwaitPersonUtteranceResponse(call_id=call_id, heard=relays.HEARD_SILENCE, text="")
-        return relays.AwaitPersonUtteranceResponse(call_id=call_id, heard=relays.HEARD_UTTERANCE, text=text)
+            return relays.AwaitPersonInputResponse(call_id=call_id, kind=relays.INPUT_NO_RESPONSE, text="")
+        return relays.AwaitPersonInputResponse(
+            call_id=call_id, kind=person_input_request.kind, text=person_input_request.text
+        )
 
 
 @ts.fake
 class InlineDialingRelay(relays.DialingRelay):
-
     def __init__(self, dialing_actions: application.DialingActions) -> None:
         self._dialing_actions = dialing_actions
 
@@ -270,22 +269,26 @@ class InlineDialingRelay(relays.DialingRelay):
 
 @ts.fake
 class InlineSpeechRelay(relays.SpeechRelay):
-
     def __init__(self, speech_actions: application.SpeechActions) -> None:
         self._speech_actions = speech_actions
 
     async def run_speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
         return await self._speech_actions.speak_turn(speak_turn_request)
 
-    async def run_end_person_turn(
-        self, end_person_turn_request: relays.EndPersonTurnRequest
-    ) -> relays.EndPersonTurnResponse:
-        return await self._speech_actions.end_person_turn(end_person_turn_request)
+
+@ts.fake
+class InlineInterpretationRelay(relays.InterpretationRelay):
+    def __init__(self, interpretation_actions: application.InterpretationActions) -> None:
+        self._interpretation_actions = interpretation_actions
+
+    async def run_interpret_turn(
+        self, interpret_turn_request: relays.InterpretTurnRequest
+    ) -> relays.InterpretTurnResponse:
+        return await self._interpretation_actions.interpret_turn(interpret_turn_request)
 
 
 @ts.fake
 class InlineRecordCallRelay(relays.RecordCallRelay):
-
     def __init__(self, call_actions: application.CallActions) -> None:
         self._call_actions = call_actions
 
@@ -295,18 +298,19 @@ class InlineRecordCallRelay(relays.RecordCallRelay):
 
 @ts.fake
 class InlineConductCallRelay(relays.ConductCallRelay):
-
     def __init__(  # tesser:debt TB081
         self,
         inline_dialing_relay: InlineDialingRelay,
         inline_speech_relay: InlineSpeechRelay,
         inline_call_events_relay: InlineCallEventsRelay,
         inline_record_call_relay: InlineRecordCallRelay,
+        inline_interpretation_relay: InlineInterpretationRelay,
     ) -> None:
         self._inline_dialing_relay = inline_dialing_relay
         self._inline_speech_relay = inline_speech_relay
         self._inline_call_events_relay = inline_call_events_relay
         self._inline_record_call_relay = inline_record_call_relay
+        self._inline_interpretation_relay = inline_interpretation_relay
         self.conducted: list[domain.Call] = []
 
     async def run_conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
@@ -316,12 +320,12 @@ class InlineConductCallRelay(relays.ConductCallRelay):
             self._inline_speech_relay,
             self._inline_call_events_relay,
             self._inline_record_call_relay,
+            self._inline_interpretation_relay,
         ).conduct_call(conduct_call_request)
 
 
 @ts.fake
 class Registration:
-
     def __init__(self) -> None:
         self.registered = asyncio.Event()
 
@@ -340,7 +344,6 @@ def last_agent_line(call: domain.Call) -> str:
 
 
 class TestTakePersonName:
-
     async def test_the_agent_asks_for_the_persons_name_keeps_it_and_says_it_back(self) -> None:
         if os.environ.get("VOICE_EVALS") != "1":
             pytest.skip("an eval drives real LiveKit and real models: set VOICE_EVALS=1 with LIVEKIT_* credentials")
@@ -364,6 +367,7 @@ class TestTakePersonName:
         people: dict[str, SimulatedPerson] = {}
         simulated_person_dialing = SimulatedPersonDialing(url, api_key, api_secret, agent_name, people)
         inline_call_events_relay = InlineCallEventsRelay(asyncio.get_running_loop(), people)
+        interpretation_llm = livekit_inference.LLM(_DEFAULT_LLM, api_key=api_key, api_secret=api_secret)
         inline_conduct_call_relay = InlineConductCallRelay(
             InlineDialingRelay(application.DialingActions(simulated_person_dialing)),
             InlineSpeechRelay(
@@ -375,6 +379,9 @@ class TestTakePersonName:
             ),
             inline_call_events_relay,
             InlineRecordCallRelay(application.CallActions(repositories.PostgresCallStore(database))),
+            InlineInterpretationRelay(
+                application.InterpretationActions(gateways.LivekitInterpretation(interpretation_llm))
+            ),
         )
         calls_client = component.Calls.Client(
             application.CallService(inline_conduct_call_relay, repositories.PostgresCallStore(database)),
@@ -413,12 +420,15 @@ class TestTakePersonName:
                 )
                 conducted = inline_conduct_call_relay.conducted[-1]
                 transcripts.append(transcript(conducted))
-                print(f"\n[{person_name}] kept={get_call_response.call.person_name!r} said={simulated_person.said} heard={transcript(conducted)}")
+                print(
+                    f"\n[{person_name}] kept={get_call_response.call.person_name!r} said={simulated_person.said} kind={transcript(conducted)}"
+                )
                 kept.append(get_call_response.call.person_name == person_name)
                 greeted.append(person_name.lower() in last_agent_line(conducted).lower())
         finally:
             await agent_server.aclose()
             serving.cancel()
+            await interpretation_llm.aclose()
             await database.close()
 
         assert sum(kept) >= _MUST_PASS and sum(greeted) >= _MUST_PASS, transcripts

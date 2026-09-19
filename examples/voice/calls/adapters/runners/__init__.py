@@ -1,6 +1,21 @@
-from calls.adapters.runners.restate_ingress_call_events_relay import RestateIngressCallEventsRelay as RestateIngressCallEventsRelay
-from calls.adapters.runners.restate_ingress_conduct_call_relay import RestateIngressConductCallRelay as RestateIngressConductCallRelay
-from calls.adapters.runners.restate_invocation_dialing_relay import RestateInvocationDialingRelay as RestateInvocationDialingRelay
-from calls.adapters.runners.restate_invocation_person_relay import RestateInvocationPersonRelay as RestateInvocationPersonRelay
-from calls.adapters.runners.restate_invocation_record_call_relay import RestateInvocationRecordCallRelay as RestateInvocationRecordCallRelay
-from calls.adapters.runners.restate_invocation_speech_relay import RestateInvocationSpeechRelay as RestateInvocationSpeechRelay
+from calls.adapters.runners.restate_ingress_call_events_relay import (
+    RestateIngressCallEventsRelay as RestateIngressCallEventsRelay,
+)
+from calls.adapters.runners.restate_ingress_conduct_call_relay import (
+    RestateIngressConductCallRelay as RestateIngressConductCallRelay,
+)
+from calls.adapters.runners.restate_invocation_dialing_relay import (
+    RestateInvocationDialingRelay as RestateInvocationDialingRelay,
+)
+from calls.adapters.runners.restate_invocation_person_relay import (
+    RestateInvocationPersonRelay as RestateInvocationPersonRelay,
+)
+from calls.adapters.runners.restate_invocation_record_call_relay import (
+    RestateInvocationRecordCallRelay as RestateInvocationRecordCallRelay,
+)
+from calls.adapters.runners.restate_invocation_speech_relay import (
+    RestateInvocationSpeechRelay as RestateInvocationSpeechRelay,
+)
+from calls.adapters.runners.restate_invocation_interpretation_relay import (
+    RestateInvocationInterpretationRelay as RestateInvocationInterpretationRelay,
+)

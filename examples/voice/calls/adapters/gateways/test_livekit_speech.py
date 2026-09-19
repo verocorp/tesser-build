@@ -12,21 +12,17 @@ import calls.application.ports as ports
 
 @ts.fake
 class FakeLocalParticipant:  # tesser:debt TB072
-
     def __init__(self, reply: str, performed: list[dict[str, str]]) -> None:
         self._reply = reply
         self._performed = performed
 
-    async def perform_rpc(
-        self, destination_identity: str, method: str, payload: str, response_timeout: float
-    ) -> str:
+    async def perform_rpc(self, destination_identity: str, method: str, payload: str, response_timeout: float) -> str:
         self._performed.append({"destination_identity": destination_identity, "method": method, "payload": payload})
         return self._reply
 
 
 @ts.fake
 class FakeRoom:  # tesser:debt TB072
-
     reply: typing.ClassVar[str] = "[]"
     connected: typing.ClassVar[list[tuple[str, str]]] = []
     performed: typing.ClassVar[list[dict[str, str]]] = []
@@ -58,7 +54,6 @@ def speak_turn_request(
 
 
 class TestLivekitAgentRpc:
-
     async def test_the_agent_in_the_room_named_for_the_call_is_asked(self) -> None:
         FakeRoom.reply = "[]"
         FakeRoom.performed = []
@@ -95,13 +90,14 @@ class TestLivekitAgentRpc:
 
 
 class TestLivekitSpeech:
-
     async def test_speaking_a_turn_asks_the_agent_to_speak_a_turn(self) -> None:
         FakeRoom.reply = "[]"
         FakeRoom.performed = []
 
         await gateways.LivekitSpeech(
-            gateways.LivekitAgentRpc(typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent")
+            gateways.LivekitAgentRpc(
+                typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent"
+            )
         ).speak_turn(speak_turn_request(call_id="c7"))
 
         assert [(p["destination_identity"], p["method"]) for p in FakeRoom.performed] == [("agent", "speak_turn")]
@@ -111,7 +107,9 @@ class TestLivekitSpeech:
         FakeRoom.performed = []
 
         await gateways.LivekitSpeech(
-            gateways.LivekitAgentRpc(typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent")
+            gateways.LivekitAgentRpc(
+                typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent"
+            )
         ).speak_turn(speak_turn_request(persona="a friendly receptionist", instructions="ask"))
         payload = json.loads(FakeRoom.performed[-1]["payload"])
 
@@ -121,7 +119,7 @@ class TestLivekitSpeech:
             {"spoken_by": "person", "text": "my name is Ada"},
         ]
         assert payload["instructions"] == "ask"
-        assert [tool["name"] for tool in payload["tools"]] == ["person_gave_name"]
+        assert payload["tools"] == []
 
     async def test_what_the_agent_said_comes_back_as_the_turns_text(self) -> None:
         FakeRoom.reply = json.dumps(
@@ -129,69 +127,9 @@ class TestLivekitSpeech:
         )
 
         speak_turn_response = await gateways.LivekitSpeech(
-            gateways.LivekitAgentRpc(typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent")
+            gateways.LivekitAgentRpc(
+                typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent"
+            )
         ).speak_turn(speak_turn_request())
 
         assert speak_turn_response.text == "Nice to meet you. Thanks, Ada."
-
-    async def test_a_name_the_agent_recorded_comes_back_as_a_person_name(self) -> None:
-        FakeRoom.reply = json.dumps(
-            [
-                {"type": "function_call", "name": "person_gave_name", "arguments": '{"name": "Ada"}'},
-                {"type": "function_call_output", "name": "person_gave_name", "output": "recorded"},
-                {"type": "message", "text": "Thanks, Ada."},
-            ]
-        )
-
-        speak_turn_response = await gateways.LivekitSpeech(
-            gateways.LivekitAgentRpc(typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent")
-        ).speak_turn(speak_turn_request())
-
-        assert speak_turn_response.person_names == ("Ada",)
-
-    async def test_a_turn_with_no_name_recorded_carries_no_person_name(self) -> None:
-        FakeRoom.reply = json.dumps([{"type": "message", "text": "Sorry, what was that?"}])
-
-        speak_turn_response = await gateways.LivekitSpeech(
-            gateways.LivekitAgentRpc(typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent")
-        ).speak_turn(speak_turn_request())
-
-        assert speak_turn_response.person_names == ()
-
-    async def test_a_tool_call_whose_arguments_cannot_be_read_records_no_name(self) -> None:
-        for arguments in ("{bad", None, '{"name": 42}'):
-            FakeRoom.reply = json.dumps(
-                [
-                    {"type": "function_call", "name": "person_gave_name", "arguments": arguments},
-                    {"type": "message", "text": "sorry, could you repeat that?"},
-                ]
-            )
-
-            speak_turn_response = await gateways.LivekitSpeech(
-                gateways.LivekitAgentRpc(
-                    typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent"
-                )
-            ).speak_turn(speak_turn_request())
-
-            assert (speak_turn_response.text, speak_turn_response.person_names) == ("sorry, could you repeat that?", ())
-
-    async def test_ending_the_persons_turn_asks_the_agent_to_end_it(self) -> None:
-        FakeRoom.reply = ""
-        FakeRoom.performed = []
-
-        await gateways.LivekitSpeech(
-            gateways.LivekitAgentRpc(typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent")
-        ).end_person_turn(ports.EndPersonTurnRequest(call_id="c7"))
-
-        assert [(p["destination_identity"], p["method"], p["payload"]) for p in FakeRoom.performed] == [
-            ("agent", "end_person_turn", '{"call_id": "c7"}')
-        ]
-
-    async def test_ending_the_persons_turn_answers_the_call_id(self) -> None:
-        FakeRoom.reply = ""
-
-        end_person_turn_response = await gateways.LivekitSpeech(
-            gateways.LivekitAgentRpc(typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent")
-        ).end_person_turn(ports.EndPersonTurnRequest(call_id="c7"))
-
-        assert end_person_turn_response.call_id == "c7"

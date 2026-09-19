@@ -15,7 +15,6 @@ _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOU
 
 
 class RestateIngressCallEventsRelay(ts.Runner):
-
     def __init__(self, ingress: str, restate_call_runtime: runtimes.RestateCallRuntime) -> None:
         self._ingress = ingress
         self._restate_call_runtime = restate_call_runtime
@@ -30,12 +29,10 @@ class RestateIngressCallEventsRelay(ts.Runner):
                 arg=person_answered_request,
             )
 
-    async def run_person_utterance(
-        self, person_utterance_request: relays.PersonUtteranceRequest
-    ) -> relays.PersonUtteranceResponse:
+    async def run_person_input(self, person_input_request: relays.PersonInputRequest) -> relays.PersonInputResponse:
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
             return await restate_client.Client(async_client).object_call(
-                self._restate_call_runtime.person_utterance_handler,
-                key=urllib_parse.quote(person_utterance_request.call_id, safe=""),
-                arg=person_utterance_request,
+                self._restate_call_runtime.person_input_handler,
+                key=urllib_parse.quote(person_input_request.call_id, safe=""),
+                arg=person_input_request,
             )

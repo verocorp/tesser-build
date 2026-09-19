@@ -10,7 +10,6 @@ import calls.application.relays as relays
 
 
 class RestateInvocationPersonRelay(ts.Runner):
-
     def __init__(
         self,
         restate_workflow_context: restate.WorkflowContext,
@@ -27,21 +26,22 @@ class RestateInvocationPersonRelay(ts.Runner):
             serde=runtimes.RestateAwaitPersonAnsweredResponseSerde(),
         ).value()
 
-    async def await_person_utterance(
-        self, await_person_utterance_request: relays.AwaitPersonUtteranceRequest
-    ) -> relays.AwaitPersonUtteranceResponse:
+    async def await_person_input(
+        self, await_person_input_request: relays.AwaitPersonInputRequest
+    ) -> relays.AwaitPersonInputResponse:
         awakeable_id, awaited = self._restate_workflow_context.awakeable(
-            serde=runtimes.RestateAwaitPersonUtteranceResponseSerde()
+            serde=runtimes.RestateAwaitPersonInputResponseSerde()
         )
         self._restate_workflow_context.object_send(
-            self._restate_call_runtime.take_person_utterance_handler,
-            key=await_person_utterance_request.call_id,
+            self._restate_call_runtime.take_person_input_handler,
+            key=await_person_input_request.call_id,
             arg=awakeable_id,
         )
-        self._restate_workflow_context.object_send(
-            self._restate_call_runtime.stop_taking_person_utterance_handler,
-            key=await_person_utterance_request.call_id,
-            arg=awakeable_id,
-            send_delay=datetime.timedelta(seconds=await_person_utterance_request.within_seconds),
-        )
+        if await_person_input_request.within_seconds is not None:
+            self._restate_workflow_context.object_send(
+                self._restate_call_runtime.stop_taking_person_input_handler,
+                key=await_person_input_request.call_id,
+                arg=awakeable_id,
+                send_delay=datetime.timedelta(seconds=await_person_input_request.within_seconds),
+            )
         return await awaited

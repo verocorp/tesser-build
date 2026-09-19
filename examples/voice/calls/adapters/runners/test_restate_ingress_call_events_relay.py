@@ -13,14 +13,12 @@ import calls.application.relays as relays
 
 @ts.fake
 class FakeCallApplicationClient(client.CallApplicationClient):
-
     async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
         return relays.RecordCallResponse(call_id=str(record_call_request.call.identity))
 
 
 @ts.fake
 class FakeDialingApplicationClient(client.DialingApplicationClient):
-
     async def dial_person(self, dial_person_request: relays.DialPersonRequest) -> relays.DialPersonResponse:
         return relays.DialPersonResponse(call_id=str(dial_person_request.call.identity))
 
@@ -29,20 +27,16 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
 
 
 @ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient):
-
+class FakeSpeechApplicationClient(client.SpeechApplicationClient, client.InterpretationApplicationClient):
     async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi", person_names=())
+        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi")
 
-    async def end_person_turn(
-        self, end_person_turn_request: relays.EndPersonTurnRequest
-    ) -> relays.EndPersonTurnResponse:
-        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
+    async def interpret_turn(self, interpret_turn_request: relays.InterpretTurnRequest) -> relays.InterpretTurnResponse:
+        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
 
 
 @ts.fake
 class FakeRestateIngress:  # tesser:debt TB072
-
     def __init__(self, answer: bytes) -> None:
         self._answer = answer
         self._listener = socket.socket()
@@ -87,7 +81,6 @@ class FakeRestateIngress:  # tesser:debt TB072
 
 
 class TestRestateIngressCallEventsRelay:
-
     async def test_running_person_answered_calls_the_workflows_shared_handler_keyed_by_the_call_id(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
             relays.PersonAnsweredResponseSnapshot().serialize(relays.PersonAnsweredResponse(call_id="c7"))
@@ -97,7 +90,10 @@ class TestRestateIngressCallEventsRelay:
         person_answered_response = await runners.RestateIngressCallEventsRelay(
             fake_restate_ingress.base_url,
             runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+                FakeCallApplicationClient(),
+                FakeDialingApplicationClient(),
+                FakeSpeechApplicationClient(),
+                FakeSpeechApplicationClient(),
             ),
         ).run_person_answered(relays.PersonAnsweredRequest(call_id="c7"))
         fake_restate_ingress.close()
@@ -105,20 +101,23 @@ class TestRestateIngressCallEventsRelay:
         assert person_answered_response.call_id == "c7"
         assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/person_answered HTTP/1.1"
 
-    async def test_running_a_person_utterance_calls_the_mailbox_keyed_by_the_call_id(self) -> None:
+    async def test_running_a_person_input_calls_the_mailbox_keyed_by_the_call_id(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            relays.PersonUtteranceResponseSnapshot().serialize(relays.PersonUtteranceResponse(call_id="c7"))
+            relays.PersonInputResponseSnapshot().serialize(relays.PersonInputResponse(call_id="c7"))
         )
         fake_restate_ingress.start()
 
-        person_utterance_response = await runners.RestateIngressCallEventsRelay(
+        person_input_response = await runners.RestateIngressCallEventsRelay(
             fake_restate_ingress.base_url,
             runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+                FakeCallApplicationClient(),
+                FakeDialingApplicationClient(),
+                FakeSpeechApplicationClient(),
+                FakeSpeechApplicationClient(),
             ),
-        ).run_person_utterance(relays.PersonUtteranceRequest(call_id="c7", text="Ada"))
+        ).run_person_input(relays.PersonInputRequest(kind=relays.INPUT_TURN_COMPLETED, call_id="c7", text="Ada"))
         fake_restate_ingress.close()
 
-        assert person_utterance_response.call_id == "c7"
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallUtterances/c7/person_utterance HTTP/1.1"
-        assert fake_restate_ingress.seen[1] == b'{"call_id": "c7", "text": "Ada"}'
+        assert person_input_response.call_id == "c7"
+        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallInputs/c7/person_input HTTP/1.1"
+        assert fake_restate_ingress.seen[1] == b'{"call_id": "c7", "kind": "turn_completed", "text": "Ada"}'

@@ -9,7 +9,6 @@ import calls.domain as domain
 
 @ts.fake
 class FakeDialingRelay(relays.DialingRelay):
-
     def __init__(self, journal: list[str]) -> None:
         self._journal = journal
 
@@ -24,42 +23,36 @@ class FakeDialingRelay(relays.DialingRelay):
 
 @ts.fake
 class FakeSpeechRelay(relays.SpeechRelay):
-
-    def __init__(self, journal: list[str], name_on_turn: int) -> None:
+    def __init__(self, journal: list[str]) -> None:
         self._journal = journal
-        self._name_on_turn = name_on_turn
-        self.spoken: list[list[list[str]]] = []
-        self.ended = 0
+        self.spoken: list[relays.SpeakTurnRequest] = []
 
     async def run_speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        self.spoken.append(
-            [[str(u) for u in turn.utterances] for turn in speak_turn_request.call.conversation.turns]
-        )
-        self._journal.append(f"speak {len(self.spoken)}")
-        if len(self.spoken) == self._name_on_turn:
-            return relays.SpeakTurnResponse(
-                call_id=str(speak_turn_request.call.identity), text="nice to meet you, Grace", person_names=("Grace",)
-            )
-        return relays.SpeakTurnResponse(
-            call_id=str(speak_turn_request.call.identity), text="hi, may I have your name?", person_names=()
-        )
+        self.spoken.append(speak_turn_request)
+        self._journal.append("speak")
+        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="Hello")
 
-    async def run_end_person_turn(
-        self, end_person_turn_request: relays.EndPersonTurnRequest
-    ) -> relays.EndPersonTurnResponse:
-        self.ended += 1
-        self._journal.append("end person turn")
-        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
+
+@ts.fake
+class FakeInterpretationRelay(relays.InterpretationRelay):
+    def __init__(self, journal: list[str]) -> None:
+        self._journal = journal
+        self.interpreted: list[relays.InterpretTurnRequest] = []
+
+    async def run_interpret_turn(
+        self, interpret_turn_request: relays.InterpretTurnRequest
+    ) -> relays.InterpretTurnResponse:
+        self.interpreted.append(interpret_turn_request)
+        self._journal.append("interpret")
+        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
 
 
 @ts.fake
 class FakePersonRelay(relays.PersonRelay):
-
-    def __init__(self, journal: list[str], said: list[str]) -> None:
+    def __init__(self, journal: list[str], kinds: list[str]) -> None:
         self._journal = journal
-        self._said = said
-        self.awaited = 0
-        self.within_seconds: list[int] = []
+        self._kinds = kinds
+        self.within_seconds: list[int | None] = []
 
     async def await_person_answered(
         self, await_person_answered_request: relays.AwaitPersonAnsweredRequest
@@ -67,23 +60,21 @@ class FakePersonRelay(relays.PersonRelay):
         self._journal.append("answered")
         return relays.AwaitPersonAnsweredResponse(call_id=await_person_answered_request.call_id)
 
-    async def await_person_utterance(
-        self, await_person_utterance_request: relays.AwaitPersonUtteranceRequest
-    ) -> relays.AwaitPersonUtteranceResponse:
-        self.within_seconds.append(await_person_utterance_request.within_seconds)
-        text = self._said[self.awaited % len(self._said)]
-        self.awaited += 1
-        self._journal.append(f"hear {self.awaited}" if text else f"silence {self.awaited}")
-        return relays.AwaitPersonUtteranceResponse(
-            call_id=await_person_utterance_request.call_id,
-            heard=relays.HEARD_UTTERANCE if text else relays.HEARD_SILENCE,
-            text=text,
+    async def await_person_input(
+        self, await_person_input_request: relays.AwaitPersonInputRequest
+    ) -> relays.AwaitPersonInputResponse:
+        self.within_seconds.append(await_person_input_request.within_seconds)
+        kind = self._kinds.pop(0)
+        self._journal.append(kind)
+        return relays.AwaitPersonInputResponse(
+            call_id=await_person_input_request.call_id,
+            kind=kind,
+            text="my name is Grace" if kind == relays.INPUT_TURN_COMPLETED else "",
         )
 
 
 @ts.fake
 class FakeRecordCallRelay(relays.RecordCallRelay):
-
     def __init__(self, journal: list[str]) -> None:
         self._journal = journal
         self.recorded: list[relays.RecordCallRequest] = []
@@ -102,14 +93,46 @@ def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+1555
 
 
 class TestCallOrchestrator:
-
-    async def test_a_call_is_dialed_answered_spoken_heard_ended_hung_up_and_recorded_in_that_order(self) -> None:
+    async def test_completed_turn_is_interpreted_and_answered_without_waiting_for_silence(self) -> None:
         journal: list[str] = []
+        fake_person_relay = FakePersonRelay(journal, [relays.INPUT_SPEECH_STARTED, relays.INPUT_TURN_COMPLETED])
+        fake_record_call_relay = FakeRecordCallRelay(journal)
         call_orchestrator = orchestrators.CallOrchestrator(
             FakeDialingRelay(journal),
-            FakeSpeechRelay(journal, name_on_turn=2),
-            FakePersonRelay(journal, said=["my name is Grace", ""]),
+            FakeSpeechRelay(journal),
+            fake_person_relay,
+            fake_record_call_relay,
+            FakeInterpretationRelay(journal),
+        )
+
+        conduct_call_response = await call_orchestrator.conduct_call(
+            relays.ConductCallRequest(call=domain.Call(call_spec()))
+        )
+
+        assert journal == [
+            "dial +15555550100",
+            "answered",
+            "speak",
+            "speech_started",
+            "turn_completed",
+            "interpret",
+            "speak",
+            "hang up",
+            "record",
+        ]
+        assert fake_person_relay.within_seconds == [8, None]
+        assert str(fake_record_call_relay.recorded[0].call.person.name) == "Grace"
+        assert conduct_call_response.call_id == "c1"
+
+    async def test_no_response_prompts_again_without_interpreting_nonexistent_input(self) -> None:
+        journal: list[str] = []
+        fake_person_relay = FakePersonRelay(journal, [relays.INPUT_NO_RESPONSE, relays.INPUT_TURN_COMPLETED])
+        call_orchestrator = orchestrators.CallOrchestrator(
+            FakeDialingRelay(journal),
+            FakeSpeechRelay(journal),
+            fake_person_relay,
             FakeRecordCallRelay(journal),
+            FakeInterpretationRelay(journal),
         )
 
         await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
@@ -117,149 +140,30 @@ class TestCallOrchestrator:
         assert journal == [
             "dial +15555550100",
             "answered",
-            "speak 1",
-            "hear 1",
-            "silence 2",
-            "end person turn",
-            "speak 2",
+            "speak",
+            "no_response",
+            "speak",
+            "turn_completed",
+            "interpret",
+            "speak",
             "hang up",
             "record",
         ]
-
-    async def test_the_name_the_agent_recorded_is_the_name_the_call_is_recorded_with(self) -> None:
-        journal: list[str] = []
-        fake_record_call_relay = FakeRecordCallRelay(journal)
-        call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakeSpeechRelay(journal, name_on_turn=2),
-            FakePersonRelay(journal, said=["my name is Grace", ""]),
-            fake_record_call_relay,
-        )
-
-        await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(name="Ada"))))
-
-        assert [str(recorded.call.person.name) for recorded in fake_record_call_relay.recorded] == ["Grace"]
-
-    async def test_each_turn_the_agent_speaks_hears_the_whole_conversation_so_far(self) -> None:
-        journal: list[str] = []
-        fake_speech_relay = FakeSpeechRelay(journal, name_on_turn=2)
-        call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            fake_speech_relay,
-            FakePersonRelay(journal, said=["my name is Grace", ""]),
-            FakeRecordCallRelay(journal),
-        )
-
-        await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
-
-        assert fake_speech_relay.spoken == [[], [["hi, may I have your name?"], ["my name is Grace"]]]
-
-    async def test_everything_the_person_says_before_falling_silent_reaches_the_agent_as_one_turn(self) -> None:
-        journal: list[str] = []
-        fake_speech_relay = FakeSpeechRelay(journal, name_on_turn=2)
-        call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            fake_speech_relay,
-            FakePersonRelay(journal, said=["my name is", "Grace", ""]),
-            FakeRecordCallRelay(journal),
-        )
-
-        await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
-
-        assert fake_speech_relay.spoken[1] == [["hi, may I have your name?"], ["my name is", "Grace"]]
-
-    async def test_the_persons_turn_is_ended_once_for_each_silence(self) -> None:
-        journal: list[str] = []
-        fake_speech_relay = FakeSpeechRelay(journal, name_on_turn=3)
-        call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            fake_speech_relay,
-            FakePersonRelay(journal, said=["my name is Grace", ""]),
-            FakeRecordCallRelay(journal),
-        )
-
-        await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
-
-        assert fake_speech_relay.ended == 2
-
-    async def test_the_agent_keeps_asking_until_a_name_is_given(self) -> None:
-        journal: list[str] = []
-        fake_person_relay = FakePersonRelay(journal, said=["my name is Grace", ""])
-        call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakeSpeechRelay(journal, name_on_turn=3),
-            fake_person_relay,
-            FakeRecordCallRelay(journal),
-        )
-
-        await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
-
-        assert fake_person_relay.awaited == 4
-
-    async def test_the_person_is_waited_on_within_the_silence_the_orchestrator_allows(self) -> None:
-        journal: list[str] = []
-        fake_person_relay = FakePersonRelay(journal, said=["my name is Grace", ""])
-        call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakeSpeechRelay(journal, name_on_turn=2),
-            fake_person_relay,
-            FakeRecordCallRelay(journal),
-        )
-
-        await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
-
         assert fake_person_relay.within_seconds == [8, 8]
 
-    async def test_conducting_a_call_answers_the_call_id_that_was_recorded(self) -> None:
+    async def test_repeated_speech_starts_do_not_rearm_the_no_response_deadline(self) -> None:
         journal: list[str] = []
+        fake_person_relay = FakePersonRelay(
+            journal, [relays.INPUT_SPEECH_STARTED, relays.INPUT_SPEECH_STARTED, relays.INPUT_TURN_COMPLETED]
+        )
         call_orchestrator = orchestrators.CallOrchestrator(
             FakeDialingRelay(journal),
-            FakeSpeechRelay(journal, name_on_turn=1),
-            FakePersonRelay(journal, said=["my name is Grace", ""]),
+            FakeSpeechRelay(journal),
+            fake_person_relay,
             FakeRecordCallRelay(journal),
-        )
-
-        conduct_call_response = await call_orchestrator.conduct_call(
-            relays.ConductCallRequest(call=domain.Call(call_spec(call_id="c7")))
-        )
-
-        assert conduct_call_response.call_id == "c7"
-
-
-@ts.fake
-class FakeSilentThenSpeechRelay(relays.SpeechRelay):
-
-    def __init__(self, journal: list[str]) -> None:
-        self._journal = journal
-        self.spoken = 0
-
-    async def run_speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        self.spoken += 1
-        self._journal.append(f"speak {self.spoken}")
-        if self.spoken == 1:
-            return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="", person_names=())
-        return relays.SpeakTurnResponse(
-            call_id=str(speak_turn_request.call.identity), text="nice to meet you, Grace", person_names=("Grace",)
-        )
-
-    async def run_end_person_turn(
-        self, end_person_turn_request: relays.EndPersonTurnRequest
-    ) -> relays.EndPersonTurnResponse:
-        self._journal.append("end person turn")
-        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
-
-
-class TestCallOrchestratorWhenTheAgentIsSilent:
-
-    async def test_a_turn_in_which_the_agent_said_nothing_is_spoken_again_rather_than_waited_on(self) -> None:
-        journal: list[str] = []
-        call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakeSilentThenSpeechRelay(journal),
-            FakePersonRelay(journal, said=["my name is Grace", ""]),
-            FakeRecordCallRelay(journal),
+            FakeInterpretationRelay(journal),
         )
 
         await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
 
-        assert journal[:4] == ["dial +15555550100", "answered", "speak 1", "speak 2"]
+        assert fake_person_relay.within_seconds == [8, None, None]

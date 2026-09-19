@@ -14,14 +14,12 @@ import calls.domain as domain
 
 @ts.fake
 class FakeCallApplicationClient(client.CallApplicationClient):
-
     async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
         return relays.RecordCallResponse(call_id=str(record_call_request.call.identity))
 
 
 @ts.fake
 class FakeDialingApplicationClient(client.DialingApplicationClient):
-
     async def dial_person(self, dial_person_request: relays.DialPersonRequest) -> relays.DialPersonResponse:
         return relays.DialPersonResponse(call_id=str(dial_person_request.call.identity))
 
@@ -30,20 +28,16 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
 
 
 @ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient):
-
+class FakeSpeechApplicationClient(client.SpeechApplicationClient, client.InterpretationApplicationClient):
     async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi", person_names=())
+        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi")
 
-    async def end_person_turn(
-        self, end_person_turn_request: relays.EndPersonTurnRequest
-    ) -> relays.EndPersonTurnResponse:
-        return relays.EndPersonTurnResponse(call_id=str(end_person_turn_request.call.identity))
+    async def interpret_turn(self, interpret_turn_request: relays.InterpretTurnRequest) -> relays.InterpretTurnResponse:
+        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
 
 
 @ts.fake
 class FakeRestateWorkflowContext:  # tesser:debt TB072
-
     def __init__(self) -> None:
         self.called: list[tuple[object, object]] = []
 
@@ -60,10 +54,12 @@ def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+1555
 
 
 class TestRestateInvocationRecordCallRelay:
-
     async def test_running_record_call_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeSpeechApplicationClient(),
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         record_call_request = relays.RecordCallRequest(call=domain.Call(call_spec()))

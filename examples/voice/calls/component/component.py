@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tesser.component as ts
+import livekit.agents.inference as livekit_inference
 import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
 
@@ -14,7 +15,6 @@ import pgdatabase.database as pgdatabase_database
 
 
 class Spec(ts.Spec):
-
     def __init__(
         self,
         storage: str,
@@ -41,7 +41,6 @@ class Spec(ts.Spec):
 
 
 class Config(ts.Config):
-
     def __init__(self, spec: Spec) -> None:
         self.storage = spec.storage
         self.ingress = spec.ingress
@@ -57,9 +56,7 @@ class Config(ts.Config):
 
 
 class Calls(ts.Component):
-
     class Client:
-
         def __init__(self, call_service: application.CallService) -> None:
             self._call_service = call_service
 
@@ -70,6 +67,9 @@ class Calls(ts.Component):
             return await self._call_service.get_call(get_call_request)
 
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
+        self._interpretation_llm = livekit_inference.LLM(
+            config.livekit_llm_model, api_key=config.livekit_api_key, api_secret=config.livekit_api_secret
+        )
         self._postgres_call_store = repositories.PostgresCallStore(database)
         self.restate_call_runtime: runtimes.RestateCallRuntime = runtimes.RestateCallRuntime(
             application.CallActions(self._postgres_call_store),
@@ -94,6 +94,7 @@ class Calls(ts.Component):
                     )
                 )
             ),
+            application.InterpretationActions(gateways.LivekitInterpretation(self._interpretation_llm)),
         )
         self.client: client.CallsClient = Calls.Client(
             application.CallService(
@@ -101,7 +102,9 @@ class Calls(ts.Component):
                 self._postgres_call_store,
             ),
         )
-        restate_ingress_call_events_relay = runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime)
+        restate_ingress_call_events_relay = runners.RestateIngressCallEventsRelay(
+            config.ingress, self.restate_call_runtime
+        )
         self.livekit_call_runtime: runtimes.LivekitCallRuntime = runtimes.LivekitCallRuntime(
             restate_ingress_call_events_relay,
             application.CallEventsService(restate_ingress_call_events_relay),
@@ -112,4 +115,4 @@ class Calls(ts.Component):
         )
 
     async def close(self) -> None:
-        return None
+        await self._interpretation_llm.aclose()

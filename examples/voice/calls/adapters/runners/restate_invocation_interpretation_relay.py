@@ -7,7 +7,7 @@ import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
-class RestateInvocationSpeechRelay(ts.Runner):
+class RestateInvocationInterpretationRelay(ts.Runner):
     def __init__(
         self,
         restate_workflow_context: restate.WorkflowContext,
@@ -16,7 +16,9 @@ class RestateInvocationSpeechRelay(ts.Runner):
         self._restate_workflow_context = restate_workflow_context
         self._restate_call_runtime = restate_call_runtime
 
-    async def run_speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
+    async def run_interpret_turn(
+        self, interpret_turn_request: relays.InterpretTurnRequest
+    ) -> relays.InterpretTurnResponse:
         return await self._restate_workflow_context.service_call(
-            self._restate_call_runtime.speak_turn_handler, speak_turn_request
+            self._restate_call_runtime.interpret_turn_handler, interpret_turn_request
         )
