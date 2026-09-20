@@ -75,6 +75,18 @@ def dial_person_request(call_id: str = "c7", phone_number: str = "+15555550100")
 
 class TestLivekitDialing:
 
+    async def test_a_room_call_dispatches_the_agent_without_dialing_sip(self) -> None:
+        FakeLiveKitAPI.dispatched = []
+        FakeLiveKitAPI.dialed = []
+        livekit_dialing = gateways.LivekitDialing(
+            typing.cast(type[livekit_api.LiveKitAPI], FakeLiveKitAPI), "ws://livekit", "key", "secret", "caller", ""
+        )
+
+        await livekit_dialing.dial_person(dial_person_request(call_id="c7", phone_number=""))
+
+        assert [(d.agent_name, d.room) for d in FakeLiveKitAPI.dispatched] == [("caller", "c7")]
+        assert FakeLiveKitAPI.dialed == []
+
     async def test_dialing_dispatches_the_named_agent_into_the_room_named_for_the_call(self) -> None:
         FakeLiveKitAPI.dispatched = []
         livekit_dialing = gateways.LivekitDialing(

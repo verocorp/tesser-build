@@ -10,8 +10,7 @@ import restate.client as restate_client
 import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
-_READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
-_RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOUT_SECONDS)
+_RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
 
 
 class RestateIngressConductCallRelay(ts.Runner):

@@ -53,15 +53,11 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   row for `<context>/tests/evals/`; whatever it imports will carry TB070
   debt until the rule gains the row. Also decide how evals are excluded
   from the default `pytest -q` and gated separately (env flag, marker, or
-  path). The first one exists:
-  `calls/tests/evals/eval_livekit_take_person_name.py` (2026-09-16) runs
-  the worker host in-process and replaces the engine with in-process
-  relays, so it carries TB070 on the module, TB081 on the inline runtime
-  that hands relays to the orchestrator, and it imports `srv.livekit`.
-  Its person is a model with an instruction whose lines are generated from
-  what the agent said, so the name only arrives if the agent asked. It is
-  excluded by filename (`eval_*.py` is not a pytest default) and gated by
-  `VOICE_EVALS=1`.
+  path). The original name-taking eval was promoted to the app acceptance
+  test `examples/voice/tests/test_livekit_take_person_name.py` (2026-09-20).
+  It now uses `app.load()`, the real Restate workflow and actions, Postgres,
+  and LiveKit. Only the person is simulated, as a room participant. Pytest
+  collects it normally and `VOICE_EVALS=1` enables its external model calls.
 - **A doubled agent line is an LLM retry inside `generate_reply`.** Seen
   twice in the eval (2026-09-16 and 2026-09-17, sim5.log for Michael): the
   worker logs "failed to generate LLM completion: Request timed out,

@@ -120,8 +120,9 @@ class LivekitCallRuntime(ts.Runtime):
             room=job_context.room,
             room_options=livekit_room_io.RoomOptions(participant_identity=_PERSON_IDENTITY),
         )
-        await livekit_participant.wait_for_participant(job_context.room, identity=_PERSON_IDENTITY)
-        await livekit_participant.wait_for_participant_attribute(
-            job_context.room, identity=_PERSON_IDENTITY, attribute=_SIP_CALL_STATUS, value=_SIP_CALL_ACTIVE
-        )
+        remote_participant = await livekit_participant.wait_for_participant(job_context.room, identity=_PERSON_IDENTITY)
+        if remote_participant.kind == livekit_rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+            await livekit_participant.wait_for_participant_attribute(
+                job_context.room, identity=_PERSON_IDENTITY, attribute=_SIP_CALL_STATUS, value=_SIP_CALL_ACTIVE
+            )
         await self._call_events_relay.run_person_answered(relays.PersonAnsweredRequest(call_id=call_id))

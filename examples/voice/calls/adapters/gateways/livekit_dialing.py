@@ -34,15 +34,16 @@ class LivekitDialing(ts.Gateway):
             await livekit.agent_dispatch.create_dispatch(
                 livekit_api.CreateAgentDispatchRequest(agent_name=self._agent_name, room=dial_person_request.call_id)
             )
-            await livekit.sip.create_sip_participant(
-                livekit_api.CreateSIPParticipantRequest(
-                    sip_trunk_id=self._sip_trunk_id,
-                    sip_call_to=dial_person_request.phone_number,
-                    room_name=dial_person_request.call_id,
-                    participant_identity=_PERSON_IDENTITY,
-                    wait_until_answered=False,
+            if dial_person_request.phone_number:
+                await livekit.sip.create_sip_participant(
+                    livekit_api.CreateSIPParticipantRequest(
+                        sip_trunk_id=self._sip_trunk_id,
+                        sip_call_to=dial_person_request.phone_number,
+                        room_name=dial_person_request.call_id,
+                        participant_identity=_PERSON_IDENTITY,
+                        wait_until_answered=False,
+                    )
                 )
-            )
         finally:
             await livekit.aclose()
         return ports.DialPersonResponse(call_id=dial_person_request.call_id)
