@@ -19,11 +19,13 @@ VOICE_EVALS=1 LIVEKIT_AGENT_NAME=caller-acceptance scripts/verify voice
 ```
 
 Use an agent name not served by another worker. The verification script starts
-the production Restate HTTP host and registers it with Restate. The acceptance
-test starts a LiveKit worker using the loaded app's runtime and the production
-LiveKit router. Its entrypoint also joins the simulated person before starting
-the agent session. The person reacts to received room messages independently
-of the workflow's input waits.
+the production Restate HTTP host and registers it with Restate, and with
+`VOICE_EVALS=1` it also starts the production LiveKit agent server
+(`srv.livekit.agent_server`) under that agent name. The tests are clients of
+both: each one places a call through the loaded app while a simulated person
+(`simulated/person.py`, a directory the analyzer does not govern) watches
+LiveKit for the room the agent was dispatched into, joins it as `person`, and
+answers either when asked or over the question.
 
 Defaults are Postgres at `localhost:5434` and Restate ingress/admin at
 `localhost:28080`/`localhost:29070`. Override them with `CALLS_STORAGE`,
