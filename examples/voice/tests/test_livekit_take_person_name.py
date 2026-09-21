@@ -16,16 +16,21 @@ import app as app
 import calls.client as calls_client
 import srv.livekit as srv_livekit
 
+
 @ts.fake
 class SimulatedPerson:  # tesser:debt TB072
-    def __init__(self, url: str, api_key: str, api_secret: str, agent_name: str, name: str) -> None:
+    def __init__(self, url: str, api_key: str, api_secret: str, agent_name: str, name: str, answers: str) -> None:
         self._url = url
         self._api_key = api_key
         self._api_secret = api_secret
         self.name = name
         self._agent_name = agent_name
+        self._answers = answers
         self.room_name = ""
         self.heard: list[str] = []
+        self.said: list[str] = []
+        self.events: list[tuple[str, str]] = []
+        self.dropped = asyncio.Event()
         self._inbox: asyncio.Queue[str] = asyncio.Queue()
         self._conversation: asyncio.Task[None] | None = None
         self._llm = livekit_inference.LLM("openai/gpt-4.1-mini", api_key=api_key, api_secret=api_secret)
@@ -44,7 +49,6 @@ class SimulatedPerson:  # tesser:debt TB072
             ),
         )
         self._readings: set[asyncio.Task[None]] = set()
-        self.said: list[str] = []
 
     async def join(self, room_name: str) -> None:
         self.room_name = room_name
@@ -55,12 +59,17 @@ class SimulatedPerson:  # tesser:debt TB072
             .to_jwt()
         )
         self._room.register_text_stream_handler("lk.transcription", self.on_transcription)  # tesser:debt TB051
+        self._room.on("disconnected", self.on_disconnected)  # tesser:debt TB051
         await self._room.connect(self._url, token)
         await self._room.local_participant.publish_track(
             livekit_rtc.LocalAudioTrack.create_audio_track("voice", self._source),
             livekit_rtc.TrackPublishOptions(source=livekit_rtc.TrackSource.SOURCE_MICROPHONE),
         )
         self._conversation = asyncio.create_task(self.converse())  # tesser:debt TB051
+
+    def on_disconnected(self, reason: livekit_rtc.DisconnectReason.ValueType) -> None:
+        self.events.append(("dropped", livekit_rtc.DisconnectReason.Name(reason)))
+        self.dropped.set()
 
     def on_transcription(self, reader: livekit_rtc.TextStreamReader, participant_identity: str) -> None:
         if participant_identity != self._agent_name:
@@ -69,15 +78,28 @@ class SimulatedPerson:  # tesser:debt TB072
         self._readings.add(reading)
 
     async def read_transcription(self, reader: livekit_rtc.TextStreamReader) -> None:
-        text = await reader.read_all()
-        if text.strip():
-            self.heard.append(text)
+        chunks: list[str] = []
+        async for chunk in reader:
+            if not chunks and self._answers == "over_the_question" and not self.said:
+                self._inbox.put_nowait(chunk)
+            chunks.append(chunk)
+        text = "".join(chunks)
+        if not text.strip():
+            return
+        self.heard.append(text)
+        self.events.append(("heard", text))
+        if self._answers == "when_asked":
             self._inbox.put_nowait(text)
 
     async def converse(self) -> None:
         while True:
             heard = await self._inbox.get()
-            await self.say(await self.think(heard))  # tesser:debt TB051
+            await self.say(await self.reply(heard))  # tesser:debt TB051
+
+    async def reply(self, heard: str) -> str:
+        if self._answers == "over_the_question":
+            return f"My name is {self.name}."
+        return await self.think(heard)  # tesser:debt TB051
 
     async def think(self, heard: str) -> str:
         self._chat_context.add_message(role="user", content=heard)
@@ -122,18 +144,35 @@ class SimulatedPerson:  # tesser:debt TB072
 
 
 @ts.fake
-class ParticipantHost:  # tesser:debt TB072
-    def __init__(self, livekit_app: srv_livekit.LivekitApp, loop: asyncio.AbstractEventLoop) -> None:
-        self._livekit_app = livekit_app
-        self._loop = loop
-        self.people: asyncio.Queue[SimulatedPerson] = asyncio.Queue()
-        self.registered = asyncio.Event()
+class ServedApp:  # tesser:debt TB072
+    def __init__(self) -> None:
+        self.url = os.environ["LIVEKIT_URL"]
+        self.api_key = os.environ["LIVEKIT_API_KEY"]
+        self.api_secret = os.environ["LIVEKIT_API_SECRET"]
+        self.agent_name = os.environ["LIVEKIT_AGENT_NAME"]
+        self.voice_app = app.load()
+        self._livekit_app = srv_livekit.LivekitApp(self.voice_app.calls.livekit_call_runtime)
+        self._loop = asyncio.get_running_loop()
+        self._people: asyncio.Queue[SimulatedPerson] = asyncio.Queue()
+        self._registered = asyncio.Event()
+        self._agent_server = livekit_agents.AgentServer(
+            job_executor_type=livekit_agents.JobExecutorType.THREAD,
+            ws_url=self.url,
+            api_key=self.api_key,
+            api_secret=self.api_secret,
+            port=0,
+        )
+        self._agent_server.rtc_session(
+            self.start_job, agent_name=self.agent_name, on_request=self._livekit_app.accept_job  # tesser:debt TB051
+        )
+        self._agent_server.on("worker_registered", self.on_worker_registered)  # tesser:debt TB051
+        self._serving: asyncio.Task[None] | None = None
 
     def on_worker_registered(self, worker_id: str, server_info: object) -> None:
-        self.registered.set()
+        self._registered.set()
 
     async def join_person(self, room_name: str) -> None:
-        person = await self.people.get()
+        person = await self._people.get()
         await person.join(room_name)
 
     async def start_job(self, job_context: livekit_agents.JobContext) -> None:
@@ -142,51 +181,85 @@ class ParticipantHost:  # tesser:debt TB072
         )
         await self._livekit_app.start_job(job_context)
 
+    async def open(self) -> None:
+        await self.voice_app.open()
+        self._serving = asyncio.create_task(self._agent_server.run())
+        await asyncio.wait_for(self._registered.wait(), 30.0)
+
+    def person(self, name: str, answers: str) -> SimulatedPerson:
+        return SimulatedPerson(self.url, self.api_key, self.api_secret, self.agent_name, name, answers)
+
+    async def call(self, person: SimulatedPerson) -> tuple[calls_client.PlaceCallResponse, calls_client.GetCallResponse]:
+        self._people.put_nowait(person)
+        try:
+            place_call_response = await asyncio.wait_for(
+                self.voice_app.calls.client.place_call(calls_client.PlaceCallRequest(phone_number="")), 180.0
+            )
+            await asyncio.wait_for(person.dropped.wait(), 30.0)
+            get_call_response = await self.voice_app.calls.client.get_call(
+                calls_client.GetCallRequest(call_id=place_call_response.call_id)
+            )
+        finally:
+            await person.leave()
+        return place_call_response, get_call_response
+
+    async def close(self) -> None:
+        await self._agent_server.aclose()
+        if self._serving is not None:
+            await asyncio.gather(self._serving, return_exceptions=True)
+        await self.voice_app.close()
+
 
 class TestTakePersonName:
-    async def test_the_loaded_app_saves_the_name_and_the_person_hears_it_back(self) -> None:
+    async def test_the_agent_asks_hears_and_greets_the_person_by_the_name_it_heard(self) -> None:
         if os.environ.get("VOICE_EVALS") != "1":
             pytest.skip("set VOICE_EVALS=1 and run scripts/verify voice with LiveKit credentials, Postgres and Restate")
-        url = os.environ["LIVEKIT_URL"]
-        api_key = os.environ["LIVEKIT_API_KEY"]
-        api_secret = os.environ["LIVEKIT_API_SECRET"]
-        agent_name = os.environ["LIVEKIT_AGENT_NAME"]
-        voice_app = app.load()
-        await voice_app.open()
-        livekit_app = srv_livekit.LivekitApp(voice_app.calls.livekit_call_runtime)
-        participant_host = ParticipantHost(livekit_app, asyncio.get_running_loop())  # tesser:debt TB085
-        agent_server = livekit_agents.AgentServer(
-            job_executor_type=livekit_agents.JobExecutorType.THREAD,
-            ws_url=url,
-            api_key=api_key,
-            api_secret=api_secret,
-            port=0,
-        )
-        agent_server.rtc_session(
-            participant_host.start_job, agent_name=agent_name, on_request=livekit_app.accept_job
-        )
-        agent_server.on("worker_registered", participant_host.on_worker_registered)
-        serving = asyncio.create_task(agent_server.run())
+        served_app = ServedApp()  # tesser:debt TB085
+        await served_app.open()
         try:
-            await asyncio.wait_for(participant_host.registered.wait(), 30.0)
             for person_name in ("Sarah", "David", "Michael"):
-                simulated_person = SimulatedPerson(url, api_key, api_secret, agent_name, person_name)  # tesser:debt TB085
-                participant_host.people.put_nowait(simulated_person)
-                try:
-                    place_call_response = await asyncio.wait_for(
-                        voice_app.calls.client.place_call(calls_client.PlaceCallRequest(phone_number="")), 180.0
-                    )
-                    get_call_response = await voice_app.calls.client.get_call(
-                        calls_client.GetCallRequest(call_id=place_call_response.call_id)
-                    )
-                finally:
-                    await simulated_person.leave()
+                person = served_app.person(person_name, "when_asked")
 
-                assert simulated_person.room_name == place_call_response.call_id
+                place_call_response, get_call_response = await served_app.call(person)
+
+                assert person.room_name == place_call_response.call_id
                 assert get_call_response.call.person_name == person_name
-                assert simulated_person.heard, simulated_person.said
-                assert person_name.casefold() in simulated_person.heard[-1].casefold(), simulated_person.heard
+                assert person.heard, person.said
+                assert person_name.casefold() in person.heard[-1].casefold(), person.heard
         finally:
-            await agent_server.aclose()
-            await asyncio.gather(serving, return_exceptions=True)
-            await voice_app.close()
+            await served_app.close()
+
+    async def test_the_person_hears_the_whole_goodbye_before_the_line_drops(self) -> None:
+        if os.environ.get("VOICE_EVALS") != "1":
+            pytest.skip("set VOICE_EVALS=1 and run scripts/verify voice with LiveKit credentials, Postgres and Restate")
+        served_app = ServedApp()  # tesser:debt TB085
+        await served_app.open()
+        try:
+            person = served_app.person("Sarah", "when_asked")
+
+            await served_app.call(person)
+
+            heard_at = [at for at, (kind, _) in enumerate(person.events) if kind == "heard"]
+            dropped_at = [at for at, (kind, _) in enumerate(person.events) if kind == "dropped"]
+            assert heard_at and dropped_at, person.events
+            assert heard_at[-1] < dropped_at[0], person.events
+            assert "sarah" in person.events[heard_at[-1]][1].casefold(), person.events
+            assert person.events[dropped_at[0]][1] == "ROOM_DELETED", person.events
+        finally:
+            await served_app.close()
+
+    async def test_an_answer_spoken_over_the_question_is_not_lost(self) -> None:
+        if os.environ.get("VOICE_EVALS") != "1":
+            pytest.skip("set VOICE_EVALS=1 and run scripts/verify voice with LiveKit credentials, Postgres and Restate")
+        served_app = ServedApp()  # tesser:debt TB085
+        await served_app.open()
+        try:
+            person = served_app.person("Sarah", "over_the_question")
+
+            _, get_call_response = await served_app.call(person)
+
+            assert person.said == ["My name is Sarah."], person.said
+            assert get_call_response.call.person_name == "Sarah"
+            assert "sarah" in person.heard[-1].casefold(), person.heard
+        finally:
+            await served_app.close()
