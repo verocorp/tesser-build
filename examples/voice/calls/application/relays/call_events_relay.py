@@ -8,84 +8,80 @@ import tesser.application as ts
 import tesser.errors as errors
 
 
-class PersonAnsweredRequest(ts.Request):
+class PersonJoinedRequest(ts.Request):
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
 
 
-class PersonAnsweredRequestSnapshot(ts.Serde):
-    def serialize(self, person_answered_request: PersonAnsweredRequest) -> bytes:
-        return json.dumps({"call_id": person_answered_request.call_id}).encode()
+class PersonJoinedRequestSnapshot(ts.Serde):
+    def serialize(self, person_joined_request: PersonJoinedRequest) -> bytes:
+        return json.dumps({"call_id": person_joined_request.call_id}).encode()
 
-    def deserialize(self, buf: bytes) -> PersonAnsweredRequest:
+    def deserialize(self, buf: bytes) -> PersonJoinedRequest:
         snapshot = json.loads(buf)
         if not (isinstance(snapshot, dict) and isinstance(snapshot.get("call_id"), str)):
-            raise errors.invalid("invalid_snapshot", "a person answered request is a call_id")
-        return PersonAnsweredRequest(call_id=snapshot["call_id"])
+            raise errors.invalid("invalid_snapshot", "a person joined request is a call_id")
+        return PersonJoinedRequest(call_id=snapshot["call_id"])
 
 
-class PersonAnsweredResponse(ts.Response):
+class PersonJoinedResponse(ts.Response):
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
 
 
-class PersonAnsweredResponseSnapshot(ts.Serde):
-    def serialize(self, person_answered_response: PersonAnsweredResponse) -> bytes:
-        return json.dumps({"call_id": person_answered_response.call_id}).encode()
+class PersonJoinedResponseSnapshot(ts.Serde):
+    def serialize(self, person_joined_response: PersonJoinedResponse) -> bytes:
+        return json.dumps({"call_id": person_joined_response.call_id}).encode()
 
-    def deserialize(self, buf: bytes) -> PersonAnsweredResponse:
+    def deserialize(self, buf: bytes) -> PersonJoinedResponse:
         snapshot = json.loads(buf)
         if not (isinstance(snapshot, dict) and isinstance(snapshot.get("call_id"), str)):
-            raise errors.invalid("invalid_snapshot", "a person answered response is a call_id")
-        return PersonAnsweredResponse(call_id=snapshot["call_id"])
+            raise errors.invalid("invalid_snapshot", "a person joined response is a call_id")
+        return PersonJoinedResponse(call_id=snapshot["call_id"])
 
 
-class PersonInputRequest(ts.Request):
-    def __init__(self, call_id: str, kind: str, text: str) -> None:
+class PersonTurnCompletedRequest(ts.Request):
+    def __init__(self, call_id: str, text: str) -> None:
         self.call_id = call_id
-        self.kind = kind
         self.text = text
 
 
-class PersonInputRequestSnapshot(ts.Serde):
-    def serialize(self, person_input_request: PersonInputRequest) -> bytes:
+class PersonTurnCompletedRequestSnapshot(ts.Serde):
+    def serialize(self, person_turn_completed_request: PersonTurnCompletedRequest) -> bytes:
         return json.dumps(
-            {
-                "call_id": person_input_request.call_id,
-                "kind": person_input_request.kind,
-                "text": person_input_request.text,
-            }
+            {"call_id": person_turn_completed_request.call_id, "text": person_turn_completed_request.text}
         ).encode()
 
-    def deserialize(self, buf: bytes) -> PersonInputRequest:
+    def deserialize(self, buf: bytes) -> PersonTurnCompletedRequest:
         snapshot = json.loads(buf)
         if not (
             isinstance(snapshot, dict)
             and isinstance(snapshot.get("call_id"), str)
-            and isinstance(snapshot.get("kind"), str)
             and isinstance(snapshot.get("text"), str)
         ):
-            raise errors.invalid("invalid_snapshot", "a person utterance request is a call_id and a text")
-        return PersonInputRequest(call_id=snapshot["call_id"], kind=snapshot["kind"], text=snapshot["text"])
+            raise errors.invalid("invalid_snapshot", "a person turn completed request is a call_id and a text")
+        return PersonTurnCompletedRequest(call_id=snapshot["call_id"], text=snapshot["text"])
 
 
-class PersonInputResponse(ts.Response):
+class PersonTurnCompletedResponse(ts.Response):
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
 
 
-class PersonInputResponseSnapshot(ts.Serde):
-    def serialize(self, person_input_response: PersonInputResponse) -> bytes:
-        return json.dumps({"call_id": person_input_response.call_id}).encode()
+class PersonTurnCompletedResponseSnapshot(ts.Serde):
+    def serialize(self, person_turn_completed_response: PersonTurnCompletedResponse) -> bytes:
+        return json.dumps({"call_id": person_turn_completed_response.call_id}).encode()
 
-    def deserialize(self, buf: bytes) -> PersonInputResponse:
+    def deserialize(self, buf: bytes) -> PersonTurnCompletedResponse:
         snapshot = json.loads(buf)
         if not (isinstance(snapshot, dict) and isinstance(snapshot.get("call_id"), str)):
-            raise errors.invalid("invalid_snapshot", "a person utterance response is a call_id")
-        return PersonInputResponse(call_id=snapshot["call_id"])
+            raise errors.invalid("invalid_snapshot", "a person turn completed response is a call_id")
+        return PersonTurnCompletedResponse(call_id=snapshot["call_id"])
 
 
 class CallEventsRelay(ts.Relay, typing.Protocol):  # tesser:debt TB085
-    async def run_person_answered(self, person_answered_request: PersonAnsweredRequest) -> PersonAnsweredResponse: ...
+    async def run_person_joined(self, person_joined_request: PersonJoinedRequest) -> PersonJoinedResponse: ...
 
-    async def run_person_input(self, person_input_request: PersonInputRequest) -> PersonInputResponse: ...
+    async def run_person_turn_completed(
+        self, person_turn_completed_request: PersonTurnCompletedRequest
+    ) -> PersonTurnCompletedResponse: ...

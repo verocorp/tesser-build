@@ -20,7 +20,6 @@ class TestCallsContext:
                 livekit_api_key="unused",
                 livekit_api_secret="unused",
                 livekit_agent_name="caller",
-                livekit_sip_trunk_id="unused",
             )
         )
         database = pgdatabase_database.Database(config.database)

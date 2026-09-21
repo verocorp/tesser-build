@@ -28,12 +28,11 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
 
 
 @ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient, client.InterpretationApplicationClient):
-    async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi")
-
-    async def interpret_turn(self, interpret_turn_request: relays.InterpretTurnRequest) -> relays.InterpretTurnResponse:
-        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
+class FakeSpeechApplicationClient(client.SpeechApplicationClient):
+    async def say_utterance(
+        self, say_utterance_request: relays.SayUtteranceRequest
+    ) -> relays.SayUtteranceResponse:
+        return relays.SayUtteranceResponse(call_id=say_utterance_request.call_id)
 
 
 @ts.fake
@@ -45,14 +44,10 @@ class FakeRestateIngress:  # tesser:debt TB072
         self._listener.listen(1)
         self.port = self._listener.getsockname()[1]
         self.seen: list[bytes] = []
-        self._thread = threading.Thread(target=self.serve, daemon=True)  # tesser:debt TB051
 
     @property
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
-
-    def start(self) -> None:
-        self._thread.start()
 
     def serve(self) -> None:
         conn, _ = self._listener.accept()
@@ -77,15 +72,12 @@ class FakeRestateIngress:  # tesser:debt TB072
             )
 
     def close(self) -> None:
-        self._thread.join(5)
         self._listener.close()
 
 
 @ts.helper
-def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
-    return domain.CallSpec(
-        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="ask_name"
-    )
+def call_spec(call_id: str = "c1", person_name: str = "") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestRestateIngressConductCallRelay:
@@ -93,17 +85,16 @@ class TestRestateIngressConductCallRelay:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
             relays.ConductCallResponseSnapshot().serialize(relays.ConductCallResponse(call_id="c7"))
         )
-        fake_restate_ingress.start()
+        thread = threading.Thread(target=fake_restate_ingress.serve, daemon=True)
+        thread.start()
 
         conduct_call_response = await runners.RestateIngressConductCallRelay(
             fake_restate_ingress.base_url,
             runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(),
-                FakeDialingApplicationClient(),
-                FakeSpeechApplicationClient(),
-                FakeSpeechApplicationClient(),
+                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
             ),
         ).run_conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(call_id="c7"))))
+        thread.join(5)
         fake_restate_ingress.close()
 
         assert conduct_call_response.call_id == "c7"

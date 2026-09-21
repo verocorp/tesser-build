@@ -31,6 +31,3 @@ Defaults are Postgres at `localhost:5434` and Restate ingress/admin at
 `localhost:28080`/`localhost:29070`. Override them with `CALLS_STORAGE`,
 `RESTATE_INGRESS`, and `RESTATE_ADMIN`. This test uses paid LiveKit/model APIs
 and is skipped unless `VOICE_EVALS=1`.
-
-The separate `test_take_person_name.py` tests SIP dialing with a real person
-and remains gated by `VOICE_LIVE_CALLS=1`.

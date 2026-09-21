@@ -19,20 +19,20 @@ class RestateIngressCallEventsRelay(ts.Runner):
         self._ingress = ingress
         self._restate_call_runtime = restate_call_runtime
 
-    async def run_person_answered(
-        self, person_answered_request: relays.PersonAnsweredRequest
-    ) -> relays.PersonAnsweredResponse:
+    async def run_person_joined(self, person_joined_request: relays.PersonJoinedRequest) -> relays.PersonJoinedResponse:
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
             return await restate_client.Client(async_client).workflow_call(
-                self._restate_call_runtime.person_answered_handler,
-                key=urllib_parse.quote(person_answered_request.call_id, safe=""),
-                arg=person_answered_request,
+                self._restate_call_runtime.person_joined_handler,
+                key=urllib_parse.quote(person_joined_request.call_id, safe=""),
+                arg=person_joined_request,
             )
 
-    async def run_person_input(self, person_input_request: relays.PersonInputRequest) -> relays.PersonInputResponse:
+    async def run_person_turn_completed(
+        self, person_turn_completed_request: relays.PersonTurnCompletedRequest
+    ) -> relays.PersonTurnCompletedResponse:
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
-            return await restate_client.Client(async_client).object_call(
-                self._restate_call_runtime.person_input_handler,
-                key=urllib_parse.quote(person_input_request.call_id, safe=""),
-                arg=person_input_request,
+            return await restate_client.Client(async_client).workflow_call(
+                self._restate_call_runtime.person_turn_completed_handler,
+                key=urllib_parse.quote(person_turn_completed_request.call_id, safe=""),
+                arg=person_turn_completed_request,
             )

@@ -10,10 +10,8 @@ import tesser.errors as errors
 
 
 @ts.helper
-def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
-    return domain.CallSpec(
-        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="ask_name"
-    )
+def call_spec(call_id: str = "c1", person_name: str = "Ada") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestDialPersonRequestSnapshot:
@@ -21,9 +19,7 @@ class TestDialPersonRequestSnapshot:
     def test_a_request_is_the_calls_snapshot(self) -> None:
         raw = relays.DialPersonRequestSnapshot().serialize(relays.DialPersonRequest(call=domain.Call(call_spec())))
 
-        assert raw == (
-            b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "+15555550100"}, "turns": [], "step": "ask_name"}'
-        )
+        assert raw == b'{"call_id": "c1", "person_name": "Ada"}'
 
     def test_a_request_comes_back_carrying_the_same_call(self) -> None:
         dial_person_request_snapshot = relays.DialPersonRequestSnapshot()
@@ -32,7 +28,7 @@ class TestDialPersonRequestSnapshot:
         returned = dial_person_request_snapshot.deserialize(dial_person_request_snapshot.serialize(dial_person_request))
 
         assert returned.call.identity == domain.CallId("c7")
-        assert returned.call.person == dial_person_request.call.person
+        assert returned.call.person_name == dial_person_request.call.person_name
 
     def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (b"{}", b'{"call_id": 1}', b'["c1"]'):
@@ -66,9 +62,7 @@ class TestHangUpRequestSnapshot:
     def test_a_request_is_the_calls_snapshot(self) -> None:
         raw = relays.HangUpRequestSnapshot().serialize(relays.HangUpRequest(call=domain.Call(call_spec())))
 
-        assert raw == (
-            b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "+15555550100"}, "turns": [], "step": "ask_name"}'
-        )
+        assert raw == b'{"call_id": "c1", "person_name": "Ada"}'
 
     def test_a_request_comes_back_carrying_the_same_call(self) -> None:
         hang_up_request_snapshot = relays.HangUpRequestSnapshot()
@@ -77,7 +71,7 @@ class TestHangUpRequestSnapshot:
         returned = hang_up_request_snapshot.deserialize(hang_up_request_snapshot.serialize(hang_up_request))
 
         assert returned.call.identity == domain.CallId("c7")
-        assert returned.call.person == hang_up_request.call.person
+        assert returned.call.person_name == hang_up_request.call.person_name
 
     def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (b"{}", b'{"call_id": 1}', b'["c1"]'):

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import typing
 
 import aiohttp
 import livekit.agents.inference as livekit_inference
-import livekit.agents.llm as livekit_llm
 import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
 
@@ -20,6 +20,7 @@ _CALL_SECONDS: typing.Final[float] = 180.0
 _POLL_SECONDS: typing.Final[float] = 0.5
 _TRAILING_SILENCE_SECONDS: typing.Final[float] = 1.5
 _FRAME_SECONDS: typing.Final[float] = 0.02
+_log: typing.Final[logging.Logger] = logging.getLogger("simulated.person")
 
 
 class Person:
@@ -38,21 +39,12 @@ class Person:
         self._inbox: asyncio.Queue[str] = asyncio.Queue()
         self._conversation: asyncio.Task[None] | None = None
         self._readings: set[asyncio.Task[None]] = set()
-        self._llm = livekit_inference.LLM("openai/gpt-4.1-mini", api_key=api_key, api_secret=api_secret)
         self._http_session = aiohttp.ClientSession()
         self._tts = livekit_inference.TTS(
             "cartesia/sonic-2", api_key=api_key, api_secret=api_secret, http_session=self._http_session
         )
         self._source = livekit_rtc.AudioSource(self._tts.sample_rate, self._tts.num_channels)
         self._room = livekit_rtc.Room()
-        self._chat_context = livekit_llm.ChatContext.empty()
-        self._chat_context.add_message(
-            role="system",
-            content=(
-                f"You are {name}, and you just answered a call. Reply with one short spoken sentence. "
-                "Give your name only if the caller asks for it; until then, answer without saying your name."
-            ),
-        )
 
     async def answer(self) -> None:
         try:
@@ -74,6 +66,7 @@ class Person:
                     participants = await api.room.list_participants(livekit_api.ListParticipantsRequest(room=room.name))
                     identities = {participant.identity for participant in participants.participants}
                     if self._agent_name in identities and _IDENTITY not in identities:
+                        _log.info("%s found room %s", self.name, room.name)
                         return str(room.name)
                 await asyncio.sleep(_POLL_SECONDS)
         finally:
@@ -95,9 +88,11 @@ class Person:
             livekit_rtc.TrackPublishOptions(source=livekit_rtc.TrackSource.SOURCE_MICROPHONE),
         )
         self._conversation = asyncio.create_task(self._converse())
+        _log.info("%s joined %s", self.name, room_name)
 
     def _on_disconnected(self, reason: livekit_rtc.DisconnectReason.ValueType) -> None:
         self.events.append((DROPPED, livekit_rtc.DisconnectReason.Name(reason)))
+        _log.info("%s dropped: %s", self.name, livekit_rtc.DisconnectReason.Name(reason))
         self._dropped.set()
 
     def _on_transcription(self, reader: livekit_rtc.TextStreamReader, participant_identity: str) -> None:
@@ -108,6 +103,7 @@ class Person:
     async def _read_transcription(self, reader: livekit_rtc.TextStreamReader) -> None:
         chunks: list[str] = []
         async for chunk in reader:
+            _log.info("%s hears chunk %r", self.name, chunk)
             if not chunks and self._answers == OVER_THE_QUESTION and not self.said:
                 self._inbox.put_nowait(chunk)
             chunks.append(chunk)
@@ -116,30 +112,16 @@ class Person:
             return
         self.heard.append(text)
         self.events.append((HEARD, text))
-        if self._answers == WHEN_ASKED:
+        if self._answers == WHEN_ASKED and not self.said:
             self._inbox.put_nowait(text)
 
     async def _converse(self) -> None:
-        while True:
-            heard = await self._inbox.get()
-            if self._answers == OVER_THE_QUESTION:
-                await self._say(f"My name is {self.name}.")
-            else:
-                await self._say(await self._think(heard))
-
-    async def _think(self, heard: str) -> str:
-        self._chat_context.add_message(role="user", content=heard)
-        parts: list[str] = []
-        async with self._llm.chat(chat_ctx=self._chat_context) as stream:
-            async for chunk in stream:
-                if chunk.delta is not None and chunk.delta.content:
-                    parts.append(chunk.delta.content)
-        said = "".join(parts).strip()
-        self._chat_context.add_message(role="assistant", content=said)
-        return said
+        await self._inbox.get()
+        await self._say(f"{self.name}.")
 
     async def _say(self, text: str) -> None:
         self.said.append(text)
+        _log.info("%s says %r", self.name, text)
         async with self._tts.synthesize(text) as stream:
             async for synthesized in stream:
                 await self._source.capture_frame(synthesized.frame)
@@ -149,6 +131,7 @@ class Person:
                 livekit_rtc.AudioFrame.create(self._tts.sample_rate, self._tts.num_channels, samples_per_frame)
             )
         await self._source.wait_for_playout()
+        _log.info("%s finished saying %r", self.name, text)
 
     async def _leave(self) -> None:
         try:
@@ -164,6 +147,5 @@ class Person:
                 await asyncio.gather(*self._readings)
             finally:
                 await self._source.aclose()
-                await self._llm.aclose()
                 await self._tts.aclose()
                 await self._http_session.close()

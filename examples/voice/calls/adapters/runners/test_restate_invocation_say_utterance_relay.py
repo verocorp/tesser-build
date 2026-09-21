@@ -9,7 +9,6 @@ import calls.adapters.runners as runners
 import calls.adapters.runtimes as runtimes
 import calls.application.client as client
 import calls.application.relays as relays
-import calls.domain as domain
 
 
 @ts.fake
@@ -28,12 +27,11 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
 
 
 @ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient, client.InterpretationApplicationClient):
-    async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi")
-
-    async def interpret_turn(self, interpret_turn_request: relays.InterpretTurnRequest) -> relays.InterpretTurnResponse:
-        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
+class FakeSpeechApplicationClient(client.SpeechApplicationClient):
+    async def say_utterance(
+        self, say_utterance_request: relays.SayUtteranceRequest
+    ) -> relays.SayUtteranceResponse:
+        return relays.SayUtteranceResponse(call_id=say_utterance_request.call_id)
 
 
 @ts.fake
@@ -43,29 +41,21 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
 
     async def service_call(self, tpe: object, arg: object) -> object:
         self.called.append((tpe, arg))
-        return relays.SpeakTurnResponse(call_id="c1", text="hi")
+        return relays.SayUtteranceResponse(call_id="c1")
 
 
-@ts.helper
-def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
-    return domain.CallSpec(
-        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="ask_name"
-    )
-
-
-class TestRestateInvocationSpeechRelay:
-    async def test_running_speak_turn_journals_a_call_to_the_runtimes_handler(self) -> None:
+class TestRestateInvocationSayUtteranceRelay:
+    async def test_running_say_utterance_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(),
-            FakeDialingApplicationClient(),
-            FakeSpeechApplicationClient(),
-            FakeSpeechApplicationClient(),
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        speak_turn_request = relays.SpeakTurnRequest(call=domain.Call(call_spec()))
+        say_utterance_request = relays.SayUtteranceRequest(call_id="c1", text="Hello. Please tell me your first name.")
 
-        await runners.RestateInvocationSpeechRelay(
+        await runners.RestateInvocationSayUtteranceRelay(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
-        ).run_speak_turn(speak_turn_request)
+        ).run_say_utterance(say_utterance_request)
 
-        assert fake_restate_workflow_context.called == [(restate_call_runtime.speak_turn_handler, speak_turn_request)]
+        assert fake_restate_workflow_context.called == [
+            (restate_call_runtime.say_utterance_handler, say_utterance_request)
+        ]

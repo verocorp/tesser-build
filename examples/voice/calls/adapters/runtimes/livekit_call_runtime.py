@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import json
 import typing
 
 import tesser.adapters as ts
@@ -14,13 +12,8 @@ import livekit.rtc as livekit_rtc
 import calls.application.client as client
 import calls.application.relays as relays
 
-SPEAK_TURN_METHOD: typing.Final[str] = "speak_turn"
+SAY_METHOD: typing.Final[str] = "say"
 _PERSON_IDENTITY: typing.Final[str] = "person"
-_SIP_CALL_STATUS: typing.Final[str] = "sip.callStatus"
-_SIP_CALL_ACTIVE: typing.Final[str] = "active"
-_ACKNOWLEDGED: typing.Final[str] = "recorded"
-_AGENT_ROLE: typing.Final[str] = "agent"
-_TURN_HANDLING: typing.Final[livekit_agents.TurnHandlingOptions] = {"preemptive_generation": {"enabled": False}}
 
 
 class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
@@ -28,79 +21,31 @@ class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
         super().__init__(instructions="")
         self._call_events_application_client = call_events_application_client
         self._call_id = call_id
-        self._deliveries: set[asyncio.Task[client.UserStateChangedResponse]] = set()
-
-    def on_user_state_changed(  # tesser:debt TB085
-        self, user_state_changed_event: livekit_agents.UserStateChangedEvent
-    ) -> None:
-        delivery = asyncio.ensure_future(
-            self._call_events_application_client.user_state_changed(
-                client.UserStateChangedRequest(call_id=self._call_id, event=user_state_changed_event)
-            )
-        )
-        self._deliveries.add(delivery)
 
     async def on_user_turn_completed(  # tesser:debt TB085
         self, turn_ctx: livekit_llm.ChatContext, new_message: livekit_llm.ChatMessage
     ) -> None:
-        deliveries = tuple(self._deliveries)
-        await asyncio.gather(*deliveries)
-        self._deliveries.difference_update(deliveries)
-        await self._call_events_application_client.user_turn_completed(
-            client.UserTurnCompletedRequest(call_id=self._call_id, message=new_message)
+        await self._call_events_application_client.person_turn_completed(
+            relays.PersonTurnCompletedRequest(call_id=self._call_id, text=new_message.text_content or "")
         )
         raise livekit_llm.StopResponse()
 
-    async def acknowledge(self, raw_arguments: dict[str, object]) -> str:  # tesser:debt TB085
-        return _ACKNOWLEDGED
-
-    def created_at(self, chat_item: livekit_llm.ChatItem) -> float:  # tesser:debt TB085
-        return chat_item.created_at
-
-    async def speak_turn(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:  # tesser:debt TB085
-        payload = json.loads(rpc_invocation_data.payload)
-        await self.update_tools(
-            [
-                livekit_llm.function_tool(self.acknowledge, raw_schema=schema) for schema in payload["tools"]  # tesser:debt TB051
-            ]
-        )
-        chat_context = livekit_llm.ChatContext.empty()
-        chat_context.add_message(role="system", content=payload["persona"])
-        for turn in payload["turns"]:
-            chat_context.add_message(
-                role="assistant" if turn["spoken_by"] == _AGENT_ROLE else "user", content=turn["text"]
-            )
-        speech_handle = self.session.generate_reply(chat_ctx=chat_context, instructions=payload["instructions"])
-        await speech_handle
-        failure = speech_handle.exception()
-        if failure is not None:
-            raise failure
-        encoded: list[dict[str, str]] = []
-        for chat_item in sorted(speech_handle.chat_items, key=self.created_at):  # tesser:debt TB051
-            if isinstance(chat_item, livekit_llm.ChatMessage):
-                encoded.append({"type": "message", "text": chat_item.text_content or ""})
-            elif isinstance(chat_item, livekit_llm.FunctionCall):
-                encoded.append({"type": "function_call", "name": chat_item.name, "arguments": chat_item.arguments})
-            elif isinstance(chat_item, livekit_llm.FunctionCallOutput):
-                encoded.append({"type": "function_call_output", "name": chat_item.name, "output": chat_item.output})
-        return json.dumps(encoded)
+    async def say(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:  # tesser:debt TB085
+        await self.session.say(rpc_invocation_data.payload)
+        return ""
 
 
 class LivekitCallRuntime(ts.Runtime):
-    def __init__(  # tesser:debt TB081
+    def __init__(
         self,
-        call_events_relay: relays.CallEventsRelay,
         call_events_application_client: client.CallEventsApplicationClient,
         agent_name: str,
         stt: str,
-        llm: str,
         tts: str,
     ) -> None:
-        self._call_events_relay = call_events_relay
         self._call_events_application_client = call_events_application_client
         self._agent_name = agent_name
         self._stt = stt
-        self._llm = llm
         self._tts = tts
 
     async def accept_job(self, job_request: livekit_agents.JobRequest) -> None:  # tesser:debt TB085
@@ -111,18 +56,13 @@ class LivekitCallRuntime(ts.Runtime):
         call_id = job_context.room.name
         call_agent = CallAgent(self._call_events_application_client, call_id)
         agent_session: livekit_agents.AgentSession[None] = livekit_agents.AgentSession(
-            stt=self._stt, llm=self._llm, tts=self._tts, turn_handling=_TURN_HANDLING
+            stt=self._stt, tts=self._tts, aec_warmup_duration=None
         )
-        agent_session.on("user_state_changed", call_agent.on_user_state_changed)
-        job_context.room.local_participant.register_rpc_method(SPEAK_TURN_METHOD, call_agent.speak_turn)
+        job_context.room.local_participant.register_rpc_method(SAY_METHOD, call_agent.say)
         await agent_session.start(
             agent=call_agent,
             room=job_context.room,
             room_options=livekit_room_io.RoomOptions(participant_identity=_PERSON_IDENTITY),
         )
-        remote_participant = await livekit_participant.wait_for_participant(job_context.room, identity=_PERSON_IDENTITY)
-        if remote_participant.kind == livekit_rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
-            await livekit_participant.wait_for_participant_attribute(
-                job_context.room, identity=_PERSON_IDENTITY, attribute=_SIP_CALL_STATUS, value=_SIP_CALL_ACTIVE
-            )
-        await self._call_events_relay.run_person_answered(relays.PersonAnsweredRequest(call_id=call_id))
+        await livekit_participant.wait_for_participant(job_context.room, identity=_PERSON_IDENTITY)
+        await self._call_events_application_client.person_joined(relays.PersonJoinedRequest(call_id=call_id))

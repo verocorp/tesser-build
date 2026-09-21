@@ -29,7 +29,7 @@ class TestTakePersonName:
                 answering = asyncio.create_task(person.answer())
                 try:
                     place_call_response = await asyncio.wait_for(
-                        voice_app.calls.client.place_call(calls_client.PlaceCallRequest(phone_number="")), 180.0
+                        voice_app.calls.client.place_call(calls_client.PlaceCallRequest()), 180.0
                     )
                     await asyncio.wait_for(answering, 30.0)
                 finally:
@@ -63,7 +63,7 @@ class TestTakePersonName:
             answering = asyncio.create_task(person.answer())
             try:
                 await asyncio.wait_for(
-                    voice_app.calls.client.place_call(calls_client.PlaceCallRequest(phone_number="")), 180.0
+                    voice_app.calls.client.place_call(calls_client.PlaceCallRequest()), 180.0
                 )
                 await asyncio.wait_for(answering, 30.0)
             finally:
@@ -96,7 +96,7 @@ class TestTakePersonName:
             answering = asyncio.create_task(person.answer())
             try:
                 place_call_response = await asyncio.wait_for(
-                    voice_app.calls.client.place_call(calls_client.PlaceCallRequest(phone_number="")), 180.0
+                    voice_app.calls.client.place_call(calls_client.PlaceCallRequest()), 180.0
                 )
                 await asyncio.wait_for(answering, 30.0)
             finally:
@@ -106,7 +106,7 @@ class TestTakePersonName:
                 calls_client.GetCallRequest(call_id=place_call_response.call_id)
             )
 
-            assert person.said == ["My name is Sarah."], person.said
+            assert person.said == ["Sarah."], person.said
             assert get_call_response.call.person_name == "Sarah"
             assert "sarah" in person.heard[-1].casefold(), person.heard
         finally:

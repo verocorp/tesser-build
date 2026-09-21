@@ -7,9 +7,8 @@ import tesser.application as ts
 
 class DialPersonRequest(ts.Request):
 
-    def __init__(self, call_id: str, phone_number: str) -> None:
+    def __init__(self, call_id: str) -> None:
         self.call_id = call_id
-        self.phone_number = phone_number
 
 
 class DialPersonResponse(ts.Response):

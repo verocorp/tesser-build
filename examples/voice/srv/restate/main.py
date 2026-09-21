@@ -26,9 +26,7 @@ class RestateHost(ts.Host):
                     voice_app.calls.restate_call_runtime.call_actions_service,
                     voice_app.calls.restate_call_runtime.dialing_actions_service,
                     voice_app.calls.restate_call_runtime.speech_actions_service,
-                    voice_app.calls.restate_call_runtime.interpretation_actions_service,
                     voice_app.calls.restate_call_runtime.call_orchestrator_workflow,
-                    voice_app.calls.restate_call_runtime.call_inputs_object,
                 ]
             ),
         )

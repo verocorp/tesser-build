@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import datetime
-
 import tesser.adapters as ts
 import restate
 
@@ -18,30 +16,18 @@ class RestateInvocationPersonRelay(ts.Runner):
         self._restate_workflow_context = restate_workflow_context
         self._restate_call_runtime = restate_call_runtime
 
-    async def await_person_answered(
-        self, await_person_answered_request: relays.AwaitPersonAnsweredRequest
-    ) -> relays.AwaitPersonAnsweredResponse:
+    async def await_person_joined(
+        self, await_person_joined_request: relays.AwaitPersonJoinedRequest
+    ) -> relays.AwaitPersonJoinedResponse:
         return await self._restate_workflow_context.promise(
-            self._restate_call_runtime.person_answered_promise,
-            serde=runtimes.RestateAwaitPersonAnsweredResponseSerde(),
+            self._restate_call_runtime.person_joined_promise,
+            serde=runtimes.RestateAwaitPersonJoinedResponseSerde(),
         ).value()
 
-    async def await_person_input(
-        self, await_person_input_request: relays.AwaitPersonInputRequest
-    ) -> relays.AwaitPersonInputResponse:
-        awakeable_id, awaited = self._restate_workflow_context.awakeable(
-            serde=runtimes.RestateAwaitPersonInputResponseSerde()
-        )
-        self._restate_workflow_context.object_send(
-            self._restate_call_runtime.take_person_input_handler,
-            key=await_person_input_request.call_id,
-            arg=awakeable_id,
-        )
-        if await_person_input_request.within_seconds is not None:
-            self._restate_workflow_context.object_send(
-                self._restate_call_runtime.stop_taking_person_input_handler,
-                key=await_person_input_request.call_id,
-                arg=awakeable_id,
-                send_delay=datetime.timedelta(seconds=await_person_input_request.within_seconds),
-            )
-        return await awaited
+    async def await_person_turn(
+        self, await_person_turn_request: relays.AwaitPersonTurnRequest
+    ) -> relays.AwaitPersonTurnResponse:
+        return await self._restate_workflow_context.promise(
+            self._restate_call_runtime.person_turn_promise,
+            serde=runtimes.RestateAwaitPersonTurnResponseSerde(),
+        ).value()

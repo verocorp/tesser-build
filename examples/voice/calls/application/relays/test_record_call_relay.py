@@ -10,10 +10,8 @@ import tesser.errors as errors
 
 
 @ts.helper
-def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
-    return domain.CallSpec(
-        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="done"
-    )
+def call_spec(call_id: str = "c1", person_name: str = "Ada") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestRecordCallRequestSnapshot:
@@ -21,18 +19,16 @@ class TestRecordCallRequestSnapshot:
     def test_a_request_is_the_calls_snapshot(self) -> None:
         raw = relays.RecordCallRequestSnapshot().serialize(relays.RecordCallRequest(call=domain.Call(call_spec())))
 
-        assert raw == (
-            b'{"call_id": "c1", "person": {"name": "Ada", "phone_number": "+15555550100"}, "turns": [], "step": "done"}'
-        )
+        assert raw == b'{"call_id": "c1", "person_name": "Ada"}'
 
     def test_a_request_comes_back_carrying_the_same_call(self) -> None:
         record_call_request_snapshot = relays.RecordCallRequestSnapshot()
-        record_call_request = relays.RecordCallRequest(call=domain.Call(call_spec(call_id="c7", name="Grace")))
+        record_call_request = relays.RecordCallRequest(call=domain.Call(call_spec(call_id="c7", person_name="Grace")))
 
         returned = record_call_request_snapshot.deserialize(record_call_request_snapshot.serialize(record_call_request))
 
         assert returned.call.identity == domain.CallId("c7")
-        assert returned.call.person == record_call_request.call.person
+        assert returned.call.person_name == record_call_request.call.person_name
 
     def test_a_request_of_the_wrong_shape_is_refused_before_the_constructor(self) -> None:
         for raw in (b"{}", b'{"call_id": 1}', b'["c1"]'):

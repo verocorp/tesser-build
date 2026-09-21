@@ -13,10 +13,9 @@ class LoadCallOutcome(enum.Enum):
 
 class Call(ts.Response):
 
-    def __init__(self, call_id: str, person_name: str, phone_number: str) -> None:
+    def __init__(self, call_id: str, person_name: str) -> None:
         self.call_id = call_id
         self.person_name = person_name
-        self.phone_number = phone_number
 
 
 class IssueCallIdRequest(ts.Request):
@@ -33,10 +32,9 @@ class IssueCallIdResponse(ts.Response):
 
 class SaveCallRequest(ts.Request):
 
-    def __init__(self, call_id: str, person_name: str, phone_number: str) -> None:
+    def __init__(self, call_id: str, person_name: str) -> None:
         self.call_id = call_id
         self.person_name = person_name
-        self.phone_number = phone_number
 
 
 class SaveCallResponse(ts.Response):

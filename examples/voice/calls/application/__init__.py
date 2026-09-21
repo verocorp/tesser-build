@@ -1,6 +1,5 @@
 from calls.application.call_actions import CallActions as CallActions
+from calls.application.call_events_service import CallEventsService as CallEventsService
 from calls.application.call_service import CallService as CallService
 from calls.application.dialing_actions import DialingActions as DialingActions
 from calls.application.speech_actions import SpeechActions as SpeechActions
-from calls.application.call_events_service import CallEventsService as CallEventsService
-from calls.application.interpretation_actions import InterpretationActions as InterpretationActions

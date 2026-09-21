@@ -69,9 +69,7 @@ class EnvConfigRepository(AppConfigRepository):
                         livekit_api_key=settings["LIVEKIT_API_KEY"],
                         livekit_api_secret=settings["LIVEKIT_API_SECRET"],
                         livekit_agent_name=settings["LIVEKIT_AGENT_NAME"],
-                        livekit_sip_trunk_id=os.environ.get("LIVEKIT_SIP_TRUNK_ID", ""),
                         livekit_stt_model=os.environ.get("LIVEKIT_STT_MODEL", "deepgram/nova-3"),
-                        livekit_llm_model=os.environ.get("LIVEKIT_LLM_MODEL", "openai/gpt-4.1-mini"),
                         livekit_tts_model=os.environ.get("LIVEKIT_TTS_MODEL", "cartesia/sonic-2"),
                     )
                 )

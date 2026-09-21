@@ -15,10 +15,8 @@ _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
 _RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
     max_attempts=5, on_max_attempts="pause"
 )
-_PERSON_ANSWERED_PROMISE: typing.Final[str] = "person_answered"
-_BUFFERED_PERSON_INPUTS: typing.Final[str] = "buffered"
-_WAITING_AWAKEABLE: typing.Final[str] = "waiting"
-_ALREADY_TAKING: typing.Final[str] = "another take of this call's utterances is already waiting"
+_PERSON_JOINED_PROMISE: typing.Final[str] = "person_joined"
+_PERSON_TURN_PROMISE: typing.Final[str] = "person_turn"
 
 
 class RestateConductCallRequestSerde(ts.Serde, restate_serde.Serde[relays.ConductCallRequest]):
@@ -93,54 +91,6 @@ class RestateDialPersonResponseSerde(ts.Serde, restate_serde.Serde[relays.DialPe
         return relays.DialPersonResponseSnapshot().deserialize(buf)
 
 
-class RestateSpeakTurnRequestSerde(ts.Serde, restate_serde.Serde[relays.SpeakTurnRequest]):
-    def serialize(self, speak_turn_request: relays.SpeakTurnRequest | None) -> bytes:
-        if speak_turn_request is None:
-            return b""
-        return relays.SpeakTurnRequestSnapshot().serialize(speak_turn_request)
-
-    def deserialize(self, buf: bytes) -> relays.SpeakTurnRequest | None:
-        if not buf:
-            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.SpeakTurnRequestSnapshot().deserialize(buf)
-
-
-class RestateSpeakTurnResponseSerde(ts.Serde, restate_serde.Serde[relays.SpeakTurnResponse]):
-    def serialize(self, speak_turn_response: relays.SpeakTurnResponse | None) -> bytes:
-        if speak_turn_response is None:
-            return b""
-        return relays.SpeakTurnResponseSnapshot().serialize(speak_turn_response)
-
-    def deserialize(self, buf: bytes) -> relays.SpeakTurnResponse | None:
-        if not buf:
-            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.SpeakTurnResponseSnapshot().deserialize(buf)
-
-
-class RestateInterpretTurnRequestSerde(ts.Serde, restate_serde.Serde[relays.InterpretTurnRequest]):
-    def serialize(self, interpret_turn_request: relays.InterpretTurnRequest | None) -> bytes:
-        if interpret_turn_request is None:
-            return b""
-        return relays.InterpretTurnRequestSnapshot().serialize(interpret_turn_request)
-
-    def deserialize(self, buf: bytes) -> relays.InterpretTurnRequest | None:
-        if not buf:
-            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.InterpretTurnRequestSnapshot().deserialize(buf)
-
-
-class RestateInterpretTurnResponseSerde(ts.Serde, restate_serde.Serde[relays.InterpretTurnResponse]):
-    def serialize(self, interpret_turn_response: relays.InterpretTurnResponse | None) -> bytes:
-        if interpret_turn_response is None:
-            return b""
-        return relays.InterpretTurnResponseSnapshot().serialize(interpret_turn_response)
-
-    def deserialize(self, buf: bytes) -> relays.InterpretTurnResponse | None:
-        if not buf:
-            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.InterpretTurnResponseSnapshot().deserialize(buf)
-
-
 class RestateHangUpRequestSerde(ts.Serde, restate_serde.Serde[relays.HangUpRequest]):
     def serialize(self, hang_up_request: relays.HangUpRequest | None) -> bytes:
         if hang_up_request is None:
@@ -165,76 +115,100 @@ class RestateHangUpResponseSerde(ts.Serde, restate_serde.Serde[relays.HangUpResp
         return relays.HangUpResponseSnapshot().deserialize(buf)
 
 
-class RestatePersonAnsweredRequestSerde(ts.Serde, restate_serde.Serde[relays.PersonAnsweredRequest]):
-    def serialize(self, person_answered_request: relays.PersonAnsweredRequest | None) -> bytes:
-        if person_answered_request is None:
+class RestateSayUtteranceRequestSerde(ts.Serde, restate_serde.Serde[relays.SayUtteranceRequest]):
+    def serialize(self, say_utterance_request: relays.SayUtteranceRequest | None) -> bytes:
+        if say_utterance_request is None:
             return b""
-        return relays.PersonAnsweredRequestSnapshot().serialize(person_answered_request)
+        return relays.SayUtteranceRequestSnapshot().serialize(say_utterance_request)
 
-    def deserialize(self, buf: bytes) -> relays.PersonAnsweredRequest | None:
+    def deserialize(self, buf: bytes) -> relays.SayUtteranceRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.PersonAnsweredRequestSnapshot().deserialize(buf)
+        return relays.SayUtteranceRequestSnapshot().deserialize(buf)
 
 
-class RestatePersonAnsweredResponseSerde(ts.Serde, restate_serde.Serde[relays.PersonAnsweredResponse]):
-    def serialize(self, person_answered_response: relays.PersonAnsweredResponse | None) -> bytes:
-        if person_answered_response is None:
+class RestateSayUtteranceResponseSerde(ts.Serde, restate_serde.Serde[relays.SayUtteranceResponse]):
+    def serialize(self, say_utterance_response: relays.SayUtteranceResponse | None) -> bytes:
+        if say_utterance_response is None:
             return b""
-        return relays.PersonAnsweredResponseSnapshot().serialize(person_answered_response)
+        return relays.SayUtteranceResponseSnapshot().serialize(say_utterance_response)
 
-    def deserialize(self, buf: bytes) -> relays.PersonAnsweredResponse | None:
+    def deserialize(self, buf: bytes) -> relays.SayUtteranceResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.PersonAnsweredResponseSnapshot().deserialize(buf)
+        return relays.SayUtteranceResponseSnapshot().deserialize(buf)
 
 
-class RestatePersonInputRequestSerde(ts.Serde, restate_serde.Serde[relays.PersonInputRequest]):
-    def serialize(self, person_input_request: relays.PersonInputRequest | None) -> bytes:
-        if person_input_request is None:
+class RestatePersonJoinedRequestSerde(ts.Serde, restate_serde.Serde[relays.PersonJoinedRequest]):
+    def serialize(self, person_joined_request: relays.PersonJoinedRequest | None) -> bytes:
+        if person_joined_request is None:
             return b""
-        return relays.PersonInputRequestSnapshot().serialize(person_input_request)
+        return relays.PersonJoinedRequestSnapshot().serialize(person_joined_request)
 
-    def deserialize(self, buf: bytes) -> relays.PersonInputRequest | None:
+    def deserialize(self, buf: bytes) -> relays.PersonJoinedRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.PersonInputRequestSnapshot().deserialize(buf)
+        return relays.PersonJoinedRequestSnapshot().deserialize(buf)
 
 
-class RestatePersonInputResponseSerde(ts.Serde, restate_serde.Serde[relays.PersonInputResponse]):
-    def serialize(self, person_input_response: relays.PersonInputResponse | None) -> bytes:
-        if person_input_response is None:
+class RestatePersonJoinedResponseSerde(ts.Serde, restate_serde.Serde[relays.PersonJoinedResponse]):
+    def serialize(self, person_joined_response: relays.PersonJoinedResponse | None) -> bytes:
+        if person_joined_response is None:
             return b""
-        return relays.PersonInputResponseSnapshot().serialize(person_input_response)
+        return relays.PersonJoinedResponseSnapshot().serialize(person_joined_response)
 
-    def deserialize(self, buf: bytes) -> relays.PersonInputResponse | None:
+    def deserialize(self, buf: bytes) -> relays.PersonJoinedResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.PersonInputResponseSnapshot().deserialize(buf)
+        return relays.PersonJoinedResponseSnapshot().deserialize(buf)
 
 
-class RestateAwaitPersonAnsweredResponseSerde(ts.Serde, restate_serde.Serde[relays.AwaitPersonAnsweredResponse]):
-    def serialize(self, await_person_answered_response: relays.AwaitPersonAnsweredResponse | None) -> bytes:
-        if await_person_answered_response is None:
+class RestatePersonTurnCompletedRequestSerde(ts.Serde, restate_serde.Serde[relays.PersonTurnCompletedRequest]):
+    def serialize(self, person_turn_completed_request: relays.PersonTurnCompletedRequest | None) -> bytes:
+        if person_turn_completed_request is None:
             return b""
-        return relays.AwaitPersonAnsweredResponseSnapshot().serialize(await_person_answered_response)
+        return relays.PersonTurnCompletedRequestSnapshot().serialize(person_turn_completed_request)
 
-    def deserialize(self, buf: bytes) -> relays.AwaitPersonAnsweredResponse | None:
+    def deserialize(self, buf: bytes) -> relays.PersonTurnCompletedRequest | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.AwaitPersonAnsweredResponseSnapshot().deserialize(buf)
+        return relays.PersonTurnCompletedRequestSnapshot().deserialize(buf)
 
 
-class RestateAwaitPersonInputResponseSerde(ts.Serde, restate_serde.Serde[relays.AwaitPersonInputResponse]):
-    def serialize(self, await_person_input_response: relays.AwaitPersonInputResponse | None) -> bytes:
-        if await_person_input_response is None:
+class RestatePersonTurnCompletedResponseSerde(ts.Serde, restate_serde.Serde[relays.PersonTurnCompletedResponse]):
+    def serialize(self, person_turn_completed_response: relays.PersonTurnCompletedResponse | None) -> bytes:
+        if person_turn_completed_response is None:
             return b""
-        return relays.AwaitPersonInputResponseSnapshot().serialize(await_person_input_response)
+        return relays.PersonTurnCompletedResponseSnapshot().serialize(person_turn_completed_response)
 
-    def deserialize(self, buf: bytes) -> relays.AwaitPersonInputResponse | None:
+    def deserialize(self, buf: bytes) -> relays.PersonTurnCompletedResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.AwaitPersonInputResponseSnapshot().deserialize(buf)
+        return relays.PersonTurnCompletedResponseSnapshot().deserialize(buf)
+
+
+class RestateAwaitPersonJoinedResponseSerde(ts.Serde, restate_serde.Serde[relays.AwaitPersonJoinedResponse]):
+    def serialize(self, await_person_joined_response: relays.AwaitPersonJoinedResponse | None) -> bytes:
+        if await_person_joined_response is None:
+            return b""
+        return relays.AwaitPersonJoinedResponseSnapshot().serialize(await_person_joined_response)
+
+    def deserialize(self, buf: bytes) -> relays.AwaitPersonJoinedResponse | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.AwaitPersonJoinedResponseSnapshot().deserialize(buf)
+
+
+class RestateAwaitPersonTurnResponseSerde(ts.Serde, restate_serde.Serde[relays.AwaitPersonTurnResponse]):
+    def serialize(self, await_person_turn_response: relays.AwaitPersonTurnResponse | None) -> bytes:
+        if await_person_turn_response is None:
+            return b""
+        return relays.AwaitPersonTurnResponseSnapshot().serialize(await_person_turn_response)
+
+    def deserialize(self, buf: bytes) -> relays.AwaitPersonTurnResponse | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.AwaitPersonTurnResponseSnapshot().deserialize(buf)
 
 
 class RestateCallRuntime(ts.Runtime):
@@ -243,17 +217,13 @@ class RestateCallRuntime(ts.Runtime):
         call_application_client: client.CallApplicationClient,
         dialing_application_client: client.DialingApplicationClient,
         speech_application_client: client.SpeechApplicationClient,
-        interpretation_application_client: client.InterpretationApplicationClient,
     ) -> None:
         self.call_actions_service = restate.Service("CallActions", invocation_retry_policy=_RETRY_POLICY)
         self.dialing_actions_service = restate.Service("DialingActions", invocation_retry_policy=_RETRY_POLICY)
-        self.interpretation_actions_service = restate.Service(
-            "InterpretationActions", invocation_retry_policy=_RETRY_POLICY
-        )
         self.speech_actions_service = restate.Service("SpeechActions", invocation_retry_policy=_RETRY_POLICY)
         self.call_orchestrator_workflow = restate.Workflow("CallOrchestrator", invocation_retry_policy=_RETRY_POLICY)
-        self.call_inputs_object = restate.VirtualObject("CallInputs", invocation_retry_policy=_RETRY_POLICY)
-        self.person_answered_promise = _PERSON_ANSWERED_PROMISE
+        self.person_joined_promise = _PERSON_JOINED_PROMISE
+        self.person_turn_promise = _PERSON_TURN_PROMISE
 
         @self.call_actions_service.handler(
             input_serde=RestateRecordCallRequestSerde(),
@@ -283,22 +253,13 @@ class RestateCallRuntime(ts.Runtime):
             return await dialing_application_client.hang_up(hang_up_request)
 
         @self.speech_actions_service.handler(
-            input_serde=RestateSpeakTurnRequestSerde(),
-            output_serde=RestateSpeakTurnResponseSerde(),
+            input_serde=RestateSayUtteranceRequestSerde(),
+            output_serde=RestateSayUtteranceResponseSerde(),
         )
-        async def speak_turn(
-            restate_context: restate.Context, speak_turn_request: relays.SpeakTurnRequest
-        ) -> relays.SpeakTurnResponse:
-            return await speech_application_client.speak_turn(speak_turn_request)
-
-        @self.interpretation_actions_service.handler(
-            input_serde=RestateInterpretTurnRequestSerde(),
-            output_serde=RestateInterpretTurnResponseSerde(),
-        )
-        async def interpret_turn(
-            restate_context: restate.Context, interpret_turn_request: relays.InterpretTurnRequest
-        ) -> relays.InterpretTurnResponse:
-            return await interpretation_application_client.interpret_turn(interpret_turn_request)
+        async def say_utterance(
+            restate_context: restate.Context, say_utterance_request: relays.SayUtteranceRequest
+        ) -> relays.SayUtteranceResponse:
+            return await speech_application_client.say_utterance(say_utterance_request)
 
         @self.call_orchestrator_workflow.main(
             input_serde=RestateConductCallRequestSerde(),
@@ -309,100 +270,51 @@ class RestateCallRuntime(ts.Runtime):
         ) -> relays.ConductCallResponse:
             return await orchestrators.CallOrchestrator(
                 runners.RestateInvocationDialingRelay(restate_workflow_context, self),
-                runners.RestateInvocationSpeechRelay(restate_workflow_context, self),
                 runners.RestateInvocationPersonRelay(restate_workflow_context, self),
+                runners.RestateInvocationSayUtteranceRelay(restate_workflow_context, self),
                 runners.RestateInvocationRecordCallRelay(restate_workflow_context, self),
-                runners.RestateInvocationInterpretationRelay(restate_workflow_context, self),
             ).conduct_call(conduct_call_request)
 
         @self.call_orchestrator_workflow.handler(
-            input_serde=RestatePersonAnsweredRequestSerde(),
-            output_serde=RestatePersonAnsweredResponseSerde(),
+            input_serde=RestatePersonJoinedRequestSerde(),
+            output_serde=RestatePersonJoinedResponseSerde(),
         )
-        async def person_answered(  # tesser:debt TB085
+        async def person_joined(  # tesser:debt TB085
             restate_workflow_shared_context: restate.WorkflowSharedContext,
-            person_answered_request: relays.PersonAnsweredRequest,
-        ) -> relays.PersonAnsweredResponse:
-            person_answered_promise = restate_workflow_shared_context.promise(
-                _PERSON_ANSWERED_PROMISE, serde=RestateAwaitPersonAnsweredResponseSerde()
+            person_joined_request: relays.PersonJoinedRequest,
+        ) -> relays.PersonJoinedResponse:
+            person_joined_promise = restate_workflow_shared_context.promise(
+                _PERSON_JOINED_PROMISE, serde=RestateAwaitPersonJoinedResponseSerde()
             )
-            if await person_answered_promise.peek() is None:
-                await person_answered_promise.resolve(
-                    relays.AwaitPersonAnsweredResponse(call_id=person_answered_request.call_id)
+            if await person_joined_promise.peek() is None:
+                await person_joined_promise.resolve(
+                    relays.AwaitPersonJoinedResponse(call_id=person_joined_request.call_id)
                 )
-            return relays.PersonAnsweredResponse(call_id=person_answered_request.call_id)
+            return relays.PersonJoinedResponse(call_id=person_joined_request.call_id)
 
-        @self.call_inputs_object.handler(
-            input_serde=RestatePersonInputRequestSerde(),
-            output_serde=RestatePersonInputResponseSerde(),
+        @self.call_orchestrator_workflow.handler(
+            input_serde=RestatePersonTurnCompletedRequestSerde(),
+            output_serde=RestatePersonTurnCompletedResponseSerde(),
         )
-        async def person_input(  # tesser:debt TB085
-            restate_object_context: restate.ObjectContext, person_input_request: relays.PersonInputRequest
-        ) -> relays.PersonInputResponse:
-            waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
-            if waiting is None:
-                buffered = (
-                    await restate_object_context.get(_BUFFERED_PERSON_INPUTS, type_hint=list[dict[str, str]]) or []
+        async def person_turn_completed(  # tesser:debt TB085
+            restate_workflow_shared_context: restate.WorkflowSharedContext,
+            person_turn_completed_request: relays.PersonTurnCompletedRequest,
+        ) -> relays.PersonTurnCompletedResponse:
+            person_turn_promise = restate_workflow_shared_context.promise(
+                _PERSON_TURN_PROMISE, serde=RestateAwaitPersonTurnResponseSerde()
+            )
+            if await person_turn_promise.peek() is None:
+                await person_turn_promise.resolve(
+                    relays.AwaitPersonTurnResponse(
+                        call_id=person_turn_completed_request.call_id, text=person_turn_completed_request.text
+                    )
                 )
-                restate_object_context.set(
-                    _BUFFERED_PERSON_INPUTS,
-                    [*buffered, {"kind": person_input_request.kind, "text": person_input_request.text}],
-                )
-            else:
-                restate_object_context.clear(_WAITING_AWAKEABLE)
-                restate_object_context.resolve_awakeable(
-                    waiting,
-                    relays.AwaitPersonInputResponse(
-                        call_id=person_input_request.call_id,
-                        kind=person_input_request.kind,
-                        text=person_input_request.text,
-                    ),
-                    serde=RestateAwaitPersonInputResponseSerde(),
-                )
-            return relays.PersonInputResponse(call_id=person_input_request.call_id)
-
-        @self.call_inputs_object.handler()
-        async def take_person_input(  # tesser:debt TB085
-            restate_object_context: restate.ObjectContext, awakeable_id: str
-        ) -> None:
-            waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
-            buffered = await restate_object_context.get(_BUFFERED_PERSON_INPUTS, type_hint=list[dict[str, str]]) or []
-            if waiting is not None:
-                restate_object_context.reject_awakeable(awakeable_id, _ALREADY_TAKING)
-            elif buffered:
-                restate_object_context.set(_BUFFERED_PERSON_INPUTS, buffered[1:])
-                restate_object_context.resolve_awakeable(
-                    awakeable_id,
-                    relays.AwaitPersonInputResponse(
-                        call_id=restate_object_context.key(), kind=buffered[0]["kind"], text=buffered[0]["text"]
-                    ),
-                    serde=RestateAwaitPersonInputResponseSerde(),
-                )
-            else:
-                restate_object_context.set(_WAITING_AWAKEABLE, awakeable_id)
-
-        @self.call_inputs_object.handler()
-        async def stop_taking_person_input(  # tesser:debt TB085
-            restate_object_context: restate.ObjectContext, awakeable_id: str
-        ) -> None:
-            waiting = await restate_object_context.get(_WAITING_AWAKEABLE, type_hint=str)
-            if waiting == awakeable_id:
-                restate_object_context.clear(_WAITING_AWAKEABLE)
-                restate_object_context.resolve_awakeable(
-                    awakeable_id,
-                    relays.AwaitPersonInputResponse(
-                        call_id=restate_object_context.key(), kind=relays.INPUT_NO_RESPONSE, text=""
-                    ),
-                    serde=RestateAwaitPersonInputResponseSerde(),
-                )
+            return relays.PersonTurnCompletedResponse(call_id=person_turn_completed_request.call_id)
 
         self.record_call_handler = record_call
         self.dial_person_handler = dial_person
         self.hang_up_handler = hang_up
-        self.speak_turn_handler = speak_turn
-        self.interpret_turn_handler = interpret_turn
+        self.say_utterance_handler = say_utterance
         self.conduct_call_handler = conduct_call
-        self.person_answered_handler = person_answered
-        self.person_input_handler = person_input
-        self.take_person_input_handler = take_person_input
-        self.stop_taking_person_input_handler = stop_taking_person_input
+        self.person_joined_handler = person_joined
+        self.person_turn_completed_handler = person_turn_completed

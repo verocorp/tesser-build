@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import tesser.component as ts
-import livekit.agents.inference as livekit_inference
 import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
 
@@ -23,9 +22,7 @@ class Spec(ts.Spec):
         livekit_api_key: str,
         livekit_api_secret: str,
         livekit_agent_name: str,
-        livekit_sip_trunk_id: str,
         livekit_stt_model: str = "deepgram/nova-3",
-        livekit_llm_model: str = "openai/gpt-4.1-mini",
         livekit_tts_model: str = "cartesia/sonic-2",
     ) -> None:
         self.storage = storage
@@ -34,9 +31,7 @@ class Spec(ts.Spec):
         self.livekit_api_key = livekit_api_key
         self.livekit_api_secret = livekit_api_secret
         self.livekit_agent_name = livekit_agent_name
-        self.livekit_sip_trunk_id = livekit_sip_trunk_id
         self.livekit_stt_model = livekit_stt_model
-        self.livekit_llm_model = livekit_llm_model
         self.livekit_tts_model = livekit_tts_model
 
 
@@ -48,9 +43,7 @@ class Config(ts.Config):
         self.livekit_api_key = spec.livekit_api_key
         self.livekit_api_secret = spec.livekit_api_secret
         self.livekit_agent_name = spec.livekit_agent_name
-        self.livekit_sip_trunk_id = spec.livekit_sip_trunk_id
         self.livekit_stt_model = spec.livekit_stt_model
-        self.livekit_llm_model = spec.livekit_llm_model
         self.livekit_tts_model = spec.livekit_tts_model
         self.database = pgdatabase_database.DatabaseRequest(spec.storage)
 
@@ -67,9 +60,6 @@ class Calls(ts.Component):
             return await self._call_service.get_call(get_call_request)
 
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
-        self._interpretation_llm = livekit_inference.LLM(
-            config.livekit_llm_model, api_key=config.livekit_api_key, api_secret=config.livekit_api_secret
-        )
         self._postgres_call_store = repositories.PostgresCallStore(database)
         self.restate_call_runtime: runtimes.RestateCallRuntime = runtimes.RestateCallRuntime(
             application.CallActions(self._postgres_call_store),
@@ -80,7 +70,6 @@ class Calls(ts.Component):
                     config.livekit_api_key,
                     config.livekit_api_secret,
                     config.livekit_agent_name,
-                    config.livekit_sip_trunk_id,
                 )
             ),
             application.SpeechActions(
@@ -94,7 +83,6 @@ class Calls(ts.Component):
                     )
                 )
             ),
-            application.InterpretationActions(gateways.LivekitInterpretation(self._interpretation_llm)),
         )
         self.client: client.CallsClient = Calls.Client(
             application.CallService(
@@ -102,17 +90,14 @@ class Calls(ts.Component):
                 self._postgres_call_store,
             ),
         )
-        restate_ingress_call_events_relay = runners.RestateIngressCallEventsRelay(
-            config.ingress, self.restate_call_runtime
-        )
         self.livekit_call_runtime: runtimes.LivekitCallRuntime = runtimes.LivekitCallRuntime(
-            restate_ingress_call_events_relay,
-            application.CallEventsService(restate_ingress_call_events_relay),
+            application.CallEventsService(
+                runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime)
+            ),
             config.livekit_agent_name,
             config.livekit_stt_model,
-            config.livekit_llm_model,
             config.livekit_tts_model,
         )
 
     async def close(self) -> None:
-        await self._interpretation_llm.aclose()
+        return None

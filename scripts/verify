@@ -343,7 +343,7 @@ run_voice() {
   kill -INT "$host" 2>/dev/null
   wait "$host" 2>/dev/null
   if [ -n "$worker" ]; then
-    kill -INT "$worker" 2>/dev/null
+    kill -TERM "$worker" 2>/dev/null
     wait "$worker" 2>/dev/null
   fi
   return "$status"

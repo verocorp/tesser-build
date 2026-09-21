@@ -13,9 +13,6 @@ from calls.adapters.runners.restate_invocation_person_relay import (
 from calls.adapters.runners.restate_invocation_record_call_relay import (
     RestateInvocationRecordCallRelay as RestateInvocationRecordCallRelay,
 )
-from calls.adapters.runners.restate_invocation_speech_relay import (
-    RestateInvocationSpeechRelay as RestateInvocationSpeechRelay,
-)
-from calls.adapters.runners.restate_invocation_interpretation_relay import (
-    RestateInvocationInterpretationRelay as RestateInvocationInterpretationRelay,
+from calls.adapters.runners.restate_invocation_say_utterance_relay import (
+    RestateInvocationSayUtteranceRelay as RestateInvocationSayUtteranceRelay,
 )

@@ -18,7 +18,6 @@ def calls_spec(storage: str = "postgres://a@b/calls", ingress: str = "http://loc
         livekit_api_key="key",
         livekit_api_secret="secret",
         livekit_agent_name="caller",
-        livekit_sip_trunk_id="ST_1",
     )
 
 
@@ -55,7 +54,6 @@ class TestEnvConfigRepository:
         assert app_config.calls.livekit_url == os.environ["LIVEKIT_URL"]
         assert app_config.calls.livekit_agent_name == os.environ["LIVEKIT_AGENT_NAME"]
         assert app_config.calls.livekit_stt_model == os.environ.get("LIVEKIT_STT_MODEL", "deepgram/nova-3")
-        assert app_config.calls.livekit_llm_model == os.environ.get("LIVEKIT_LLM_MODEL", "openai/gpt-4.1-mini")
         assert app_config.calls.livekit_tts_model == os.environ.get("LIVEKIT_TTS_MODEL", "cartesia/sonic-2")
 
 

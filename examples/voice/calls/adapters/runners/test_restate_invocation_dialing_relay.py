@@ -28,12 +28,11 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
 
 
 @ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient, client.InterpretationApplicationClient):
-    async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi")
-
-    async def interpret_turn(self, interpret_turn_request: relays.InterpretTurnRequest) -> relays.InterpretTurnResponse:
-        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
+class FakeSpeechApplicationClient(client.SpeechApplicationClient):
+    async def say_utterance(
+        self, say_utterance_request: relays.SayUtteranceRequest
+    ) -> relays.SayUtteranceResponse:
+        return relays.SayUtteranceResponse(call_id=say_utterance_request.call_id)
 
 
 @ts.fake
@@ -47,19 +46,14 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
 
 
 @ts.helper
-def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
-    return domain.CallSpec(
-        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="ask_name"
-    )
+def call_spec(call_id: str = "c1", person_name: str = "") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestRestateInvocationDialingRelay:
     async def test_running_dial_person_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(),
-            FakeDialingApplicationClient(),
-            FakeSpeechApplicationClient(),
-            FakeSpeechApplicationClient(),
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         dial_person_request = relays.DialPersonRequest(call=domain.Call(call_spec()))
@@ -72,10 +66,7 @@ class TestRestateInvocationDialingRelay:
 
     async def test_running_hang_up_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(),
-            FakeDialingApplicationClient(),
-            FakeSpeechApplicationClient(),
-            FakeSpeechApplicationClient(),
+            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         hang_up_request = relays.HangUpRequest(call=domain.Call(call_spec()))

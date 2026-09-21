@@ -11,7 +11,6 @@ def _spec(
     storage: str = "postgres://a@b/c",
     ingress: str = "http://localhost:8080",
     livekit_stt_model: str = "deepgram/nova-3",
-    livekit_llm_model: str = "openai/gpt-4.1-mini",
     livekit_tts_model: str = "cartesia/sonic-2",
 ) -> component.Spec:
     return component.Spec(
@@ -21,9 +20,7 @@ def _spec(
         livekit_api_key="key",
         livekit_api_secret="secret",
         livekit_agent_name="caller",
-        livekit_sip_trunk_id="ST_1",
         livekit_stt_model=livekit_stt_model,
-        livekit_llm_model=livekit_llm_model,
         livekit_tts_model=livekit_tts_model,
     )
 
@@ -47,16 +44,14 @@ class TestConfig:
             config.livekit_api_key,
             config.livekit_api_secret,
             config.livekit_agent_name,
-            config.livekit_sip_trunk_id,
-        ) == ("ws://livekit", "key", "secret", "caller", "ST_1")
+        ) == ("ws://livekit", "key", "secret", "caller")
 
     def test_a_config_carries_the_models_for_the_livekit_runtime(self) -> None:
-        spec = _spec(livekit_stt_model="stt-model", livekit_llm_model="llm-model", livekit_tts_model="tts-model")
+        spec = _spec(livekit_stt_model="stt-model", livekit_tts_model="tts-model")
 
         config = component.Config(spec)
 
         assert config.livekit_stt_model == spec.livekit_stt_model
-        assert config.livekit_llm_model == spec.livekit_llm_model
         assert config.livekit_tts_model == spec.livekit_tts_model
 
 
@@ -71,9 +66,7 @@ class TestCalls:
                 calls.restate_call_runtime.call_actions_service,
                 calls.restate_call_runtime.dialing_actions_service,
                 calls.restate_call_runtime.speech_actions_service,
-                calls.restate_call_runtime.interpretation_actions_service,
                 calls.restate_call_runtime.call_orchestrator_workflow,
-                calls.restate_call_runtime.call_inputs_object,
             )
         }
         await calls.close()
@@ -81,8 +74,6 @@ class TestCalls:
         assert registered == {
             "CallActions": ["record_call"],
             "DialingActions": ["dial_person", "hang_up"],
-            "SpeechActions": ["speak_turn"],
-            "InterpretationActions": ["interpret_turn"],
-            "CallOrchestrator": ["conduct_call", "person_answered"],
-            "CallInputs": ["person_input", "stop_taking_person_input", "take_person_input"],
+            "SpeechActions": ["say_utterance"],
+            "CallOrchestrator": ["conduct_call", "person_joined", "person_turn_completed"],
         }

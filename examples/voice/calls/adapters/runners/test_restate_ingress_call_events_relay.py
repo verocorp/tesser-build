@@ -27,12 +27,11 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
 
 
 @ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient, client.InterpretationApplicationClient):
-    async def speak_turn(self, speak_turn_request: relays.SpeakTurnRequest) -> relays.SpeakTurnResponse:
-        return relays.SpeakTurnResponse(call_id=str(speak_turn_request.call.identity), text="hi")
-
-    async def interpret_turn(self, interpret_turn_request: relays.InterpretTurnRequest) -> relays.InterpretTurnResponse:
-        return relays.InterpretTurnResponse(call_id=str(interpret_turn_request.call.identity), person_names=("Grace",))
+class FakeSpeechApplicationClient(client.SpeechApplicationClient):
+    async def say_utterance(
+        self, say_utterance_request: relays.SayUtteranceRequest
+    ) -> relays.SayUtteranceResponse:
+        return relays.SayUtteranceResponse(call_id=say_utterance_request.call_id)
 
 
 @ts.fake
@@ -44,14 +43,10 @@ class FakeRestateIngress:  # tesser:debt TB072
         self._listener.listen(1)
         self.port = self._listener.getsockname()[1]
         self.seen: list[bytes] = []
-        self._thread = threading.Thread(target=self.serve, daemon=True)  # tesser:debt TB051
 
     @property
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
-
-    def start(self) -> None:
-        self._thread.start()
 
     def serve(self) -> None:
         conn, _ = self._listener.accept()
@@ -76,48 +71,48 @@ class FakeRestateIngress:  # tesser:debt TB072
             )
 
     def close(self) -> None:
-        self._thread.join(5)
         self._listener.close()
 
 
 class TestRestateIngressCallEventsRelay:
-    async def test_running_person_answered_calls_the_workflows_shared_handler_keyed_by_the_call_id(self) -> None:
+    async def test_running_person_joined_calls_the_workflows_shared_handler_keyed_by_the_call_id(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            relays.PersonAnsweredResponseSnapshot().serialize(relays.PersonAnsweredResponse(call_id="c7"))
+            relays.PersonJoinedResponseSnapshot().serialize(relays.PersonJoinedResponse(call_id="c7"))
         )
-        fake_restate_ingress.start()
+        thread = threading.Thread(target=fake_restate_ingress.serve, daemon=True)
+        thread.start()
 
-        person_answered_response = await runners.RestateIngressCallEventsRelay(
+        person_joined_response = await runners.RestateIngressCallEventsRelay(
             fake_restate_ingress.base_url,
             runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(),
-                FakeDialingApplicationClient(),
-                FakeSpeechApplicationClient(),
-                FakeSpeechApplicationClient(),
+                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
             ),
-        ).run_person_answered(relays.PersonAnsweredRequest(call_id="c7"))
+        ).run_person_joined(relays.PersonJoinedRequest(call_id="c7"))
+        thread.join(5)
         fake_restate_ingress.close()
 
-        assert person_answered_response.call_id == "c7"
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/person_answered HTTP/1.1"
+        assert person_joined_response.call_id == "c7"
+        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallOrchestrator/c7/person_joined HTTP/1.1"
 
-    async def test_running_a_person_input_calls_the_mailbox_keyed_by_the_call_id(self) -> None:
+    async def test_running_a_completed_person_turn_hands_the_workflow_what_the_person_said(self) -> None:
         fake_restate_ingress = FakeRestateIngress(  # tesser:debt TB085
-            relays.PersonInputResponseSnapshot().serialize(relays.PersonInputResponse(call_id="c7"))
+            relays.PersonTurnCompletedResponseSnapshot().serialize(relays.PersonTurnCompletedResponse(call_id="c7"))
         )
-        fake_restate_ingress.start()
+        thread = threading.Thread(target=fake_restate_ingress.serve, daemon=True)
+        thread.start()
 
-        person_input_response = await runners.RestateIngressCallEventsRelay(
+        person_turn_completed_response = await runners.RestateIngressCallEventsRelay(
             fake_restate_ingress.base_url,
             runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(),
-                FakeDialingApplicationClient(),
-                FakeSpeechApplicationClient(),
-                FakeSpeechApplicationClient(),
+                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
             ),
-        ).run_person_input(relays.PersonInputRequest(kind=relays.INPUT_TURN_COMPLETED, call_id="c7", text="Ada"))
+        ).run_person_turn_completed(relays.PersonTurnCompletedRequest(call_id="c7", text="Grace"))
+        thread.join(5)
         fake_restate_ingress.close()
 
-        assert person_input_response.call_id == "c7"
-        assert fake_restate_ingress.seen[0].split(b"\r\n")[0] == b"POST /CallInputs/c7/person_input HTTP/1.1"
-        assert fake_restate_ingress.seen[1] == b'{"call_id": "c7", "kind": "turn_completed", "text": "Ada"}'
+        assert person_turn_completed_response.call_id == "c7"
+        assert (
+            fake_restate_ingress.seen[0].split(b"\r\n")[0]
+            == b"POST /CallOrchestrator/c7/person_turn_completed HTTP/1.1"
+        )
+        assert fake_restate_ingress.seen[1] == b'{"call_id": "c7", "text": "Grace"}'
