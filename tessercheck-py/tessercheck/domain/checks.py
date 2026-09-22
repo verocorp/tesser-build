@@ -143,6 +143,20 @@ CALLING_MODES: typing.Final[tuple[str, ...]] = ("start_", "run_", "await_")
 
 RUN_MODE: typing.Final[str] = "run_"
 
+START_MODE: typing.Final[str] = "start_"
+
+ENGINE_CALLS: typing.Final[dict[str, str]] = {"generic_call": RUN_MODE, "generic_send": START_MODE}
+
+PROMISE_CALL: typing.Final[str] = "promise"
+
+WORKFLOW_KIND: typing.Final[str] = "Workflow"
+
+WORKFLOW_OPERATION: typing.Final[str] = "invocation"
+
+WORKFLOW_BLOCK: typing.Final[str] = "workflow"
+
+ENGINE_REGISTRATIONS: typing.Final[frozenset[str]] = frozenset({"Service", "Workflow", "VirtualObject"})
+
 AWAIT_MODE: typing.Final[str] = "await_"
 
 RUN_METHOD: typing.Final[str] = "run"
@@ -182,10 +196,9 @@ PLACEMENT_KINDS: typing.Final[dict[str, frozenset[str]]] = {
     "snapshots-file": frozenset({SNAPSHOT_BLOCK}),
 }
 
-RUNTIME_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (
-    APPLICATION_CLIENT_IMPORT,
-    ORCHESTRATORS_IMPORT,
-)
+RUNTIME_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (APPLICATION_CLIENT_IMPORT,)
+
+COMPONENT_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (ORCHESTRATORS_IMPORT,)
 
 RUNNER_BLOCK: typing.Final[str] = "runner"
 
@@ -237,9 +250,7 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
 
 RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
 
-ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
-    {RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
-)
+ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
 
 ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, or runtimes"
 
@@ -318,13 +329,8 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
-    RUNNERS_PACKAGE: (RELAYS_IMPORT, f"adapters.{RUNTIMES_PACKAGE}"),
-    RUNTIMES_PACKAGE: (
-        APPLICATION_CLIENT_IMPORT,
-        ORCHESTRATORS_IMPORT,
-        RELAYS_IMPORT,
-        f"adapters.{RUNNERS_PACKAGE}",
-    ),
+    RUNNERS_PACKAGE: (RELAYS_IMPORT,),
+    RUNTIMES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", RUNTIME_BLOCK})
@@ -640,12 +646,11 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "domain": SAME_CONTEXT_IMPORTS["domain"],
     "application": SAME_CONTEXT_IMPORTS["application"],
     "client": SAME_CONTEXT_IMPORTS["client"],
-    "component": SAME_CONTEXT_IMPORTS["component"],
+    "component": SAME_CONTEXT_IMPORTS["component"] + ("domain",),
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
-    RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE]
-    + (APPLICATION_CLIENT_IMPORT, "domain"),
+    RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE] + ("domain",),
     RUNTIMES_PACKAGE: ADAPTER_KIND_REACH[RUNTIMES_PACKAGE] + ("domain",),
     ORCHESTRATORS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
     + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, RELAYS_IMPORT),
@@ -2127,7 +2132,9 @@ class RegistrySpec(ts.Spec):
         enums: tuple[tuple[str, str], ...] = (),
         operations: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (),
         far_sides: tuple[tuple[str, str, str, str], ...] = (),
+        engine_targets: tuple[str, ...] = (),
     ) -> None:
+        self.engine_targets = engine_targets
         self.far_sides = far_sides
         self.operations = operations
         self.enums = enums
@@ -2180,8 +2187,10 @@ class Registry(ts.ValueObject):
     _enums: SymbolRows
     _operations: OperationRows
     _far_sides: FarSideRows
+    _engine_targets: NameRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_engine_targets", NameRows(spec.engine_targets))
         object.__setattr__(self, "_far_sides", FarSideRows(spec.far_sides))
         object.__setattr__(self, "_operations", OperationRows(spec.operations))
         object.__setattr__(self, "_enums", SymbolRows(spec.enums))
@@ -2275,6 +2284,9 @@ class Registry(ts.ValueObject):
 
     def far_sides(self) -> FarSideRows:
         return self._far_sides
+
+    def engine_targets(self) -> Names:
+        return self._engine_targets.names()
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
@@ -9168,8 +9180,11 @@ class Module(ts.Entity):
             if len(parts) != 4 or parts[1] != APPLICATION_ROLE or parts[2] != APPLICATION_CLIENT_PACKAGE:
                 continue
             home = ".".join((parts[0], APPLICATION_ROLE, parts[3]))
+            orchestrated = ".".join((parts[0], APPLICATION_ROLE, ORCHESTRATORS_PACKAGE, parts[3]))
             for actions_key, actions_block in blocks.items():
                 if actions_block == ACTIONS_BLOCK and actions_key[0] == home:
+                    paired[client_key] = actions_key
+                if actions_block == ORCHESTRATOR_BLOCK and actions_key[0] == orchestrated:
                     paired[client_key] = actions_key
         scope = self._scope
         context = self._name.split(".")[0]
@@ -9179,6 +9194,8 @@ class Module(ts.Entity):
                 continue
             taken: dict[str, tuple[str, str]] = {}
             held: dict[str, tuple[str, str]] = {}
+            opened: dict[str, tuple[str, str]] = {}
+            held_opened: dict[str, tuple[str, str]] = {}
             declared: list[tuple[str, str, ast.FunctionDef | ast.AsyncFunctionDef]] = []
             for item in cls.body:
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -9190,7 +9207,23 @@ class Module(ts.Entity):
                 for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
                     if arg.annotation is None:
                         continue
-                    named = scope.resolve(Text(ast.unparse(arg.annotation)))
+                    annotation = arg.annotation
+                    if (
+                        isinstance(annotation, ast.Subscript)
+                        and isinstance(annotation.slice, ast.Tuple)
+                        and len(annotation.slice.elts) == 2
+                    ):
+                        opener = scope.resolve(Text(ast.unparse(annotation.value)))
+                        yielded = scope.resolve(Text(ast.unparse(annotation.slice.elts[1])))
+                        if (
+                            opener is not None
+                            and yielded is not None
+                            and str(opener.name()) == WORKFLOW_KIND
+                            and str(opener.module()).split(".")[0] == TESSER
+                        ):
+                            opened[arg.arg] = (str(yielded.module()), str(yielded.name()))
+                        continue
+                    named = scope.resolve(Text(ast.unparse(annotation)))
                     if named is not None:
                         taken[arg.arg] = (str(named.module()), str(named.name()))
                 for stmt in ast.walk(item):
@@ -9204,6 +9237,16 @@ class Module(ts.Entity):
                         and stmt.value.id in taken
                     ):
                         held[stmt.targets[0].attr] = taken[stmt.value.id]
+                    if (
+                        isinstance(stmt, ast.Assign)
+                        and len(stmt.targets) == 1
+                        and isinstance(stmt.targets[0], ast.Attribute)
+                        and isinstance(stmt.targets[0].value, ast.Name)
+                        and stmt.targets[0].value.id == "self"
+                        and isinstance(stmt.value, ast.Name)
+                        and stmt.value.id in opened
+                    ):
+                        held_opened[stmt.targets[0].attr] = opened[stmt.value.id]
                 for stmt in item.body:
                     if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         continue
@@ -9219,6 +9262,29 @@ class Module(ts.Entity):
             sides: dict[str, set[tuple[str, str]]] = {}
             for _, group, node in declared:
                 carried = sides.setdefault(group, set())
+                bound = dict(taken)
+                for block in ast.walk(node):
+                    if not isinstance(block, (ast.With, ast.AsyncWith)):
+                        continue
+                    for with_item in block.items:
+                        opening = with_item.context_expr
+                        if not (
+                            isinstance(opening, ast.Call)
+                            and isinstance(opening.func, ast.Attribute)
+                            and opening.func.attr == WORKFLOW_OPERATION
+                            and isinstance(with_item.optional_vars, ast.Name)
+                        ):
+                            continue
+                        receiver = opening.func.value
+                        if isinstance(receiver, ast.Name) and receiver.id in opened:
+                            bound[with_item.optional_vars.id] = opened[receiver.id]
+                        elif (
+                            isinstance(receiver, ast.Attribute)
+                            and isinstance(receiver.value, ast.Name)
+                            and receiver.value.id == "self"
+                            and receiver.attr in held_opened
+                        ):
+                            bound[with_item.optional_vars.id] = held_opened[receiver.attr]
                 for call in ast.walk(node):
                     if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
                         continue
@@ -9228,7 +9294,7 @@ class Module(ts.Entity):
                         made = scope.resolve(Text(ast.unparse(receiver.func)))
                         target = (str(made.module()), str(made.name())) if made is not None else None
                     elif isinstance(receiver, ast.Name):
-                        target = taken.get(receiver.id)
+                        target = bound.get(receiver.id)
                     elif (
                         isinstance(receiver, ast.Attribute)
                         and isinstance(receiver.value, ast.Name)
@@ -10223,6 +10289,10 @@ class Module(ts.Entity):
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in RUNTIME_ONLY_IMPORTS
                 )
+                component_only = any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in COMPONENT_ONLY_IMPORTS
+                )
                 own_kernel = ".".join((context,) + CONTEXT_KERNEL_HOME)
                 if pieces[0] == context and role != CONTEXT_KERNEL_HOME[0] and (
                     target == own_kernel or target.startswith(own_kernel + ".")
@@ -10245,8 +10315,19 @@ class Module(ts.Entity):
                             lineno,
                             "TB060",
                             f"{module_name} imports {target}; only a runtime imports "
-                            "the application client and the orchestrators, because an "
-                            "action is reachable only through the engine",
+                            "the application client, because an action is reachable only "
+                            "through the engine",
+                        ))
+                    )
+                elif pieces[0] == context and component_only and role != "component":
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB060",
+                            f"{module_name} imports {target}; only a component imports the "
+                            "orchestrators, because an orchestrator is built per invocation by "
+                            "the workflow the component hands the runtime",
                         ))
                     )
                 elif pieces[0] == context and role == "adapters" and kind_reach is not None:
@@ -11033,7 +11114,11 @@ class Module(ts.Entity):
                         ))
                     )
                 else:
-                    doubles = False
+                    doubles = not stmt.bases and tuple(
+                        item.name
+                        for item in stmt.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                    ) == (WORKFLOW_OPERATION,)
                     for base in stmt.bases:
                         ref = Annotation(base).primary()
                         symbol = scope.resolve(ref) if ref is not None else None
@@ -11055,7 +11140,8 @@ class Module(ts.Entity):
                                 stmt.lineno,
                                 "TB072",
                                 f"{where} implements no application port, store, relay, protocol "
-                                "port, client, or config repository; a fake implements the contract it doubles",
+                                "port, client, or config repository, and is not a workflow's one "
+                                "invocation; a fake implements the contract it doubles",
                             ))
                         )
             else:
@@ -11246,8 +11332,22 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runners or runtimes reaches the application client and the "
-                            "orchestrators; a test reaches only what its placement allows",
+                            "runtimes reaches the application client; a test reaches only what "
+                            "its placement allows",
+                        ))
+                    )
+                elif allowed and tier != "component" and not at_home and any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in COMPONENT_ONLY_IMPORTS
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB070",
+                            f"{module_name} imports {target}, but only a test placed in "
+                            "component reaches the orchestrators; a test reaches only what its "
+                            "placement allows",
                         ))
                     )
                 elif not allowed:
@@ -11490,71 +11590,117 @@ class Module(ts.Entity):
                             "its relay's, because it implements that relay and nothing else",
                         ))
                     )
+            far_side = relay_name[: -len(RELAY_SUFFIX)]
             for member in members:
                 mode = next((prefix for prefix in CALLING_MODES if member.name.startswith(prefix)), None)
                 if mode is None:
                     continue
-                if mode == AWAIT_MODE:
-                    promise = f"{member.name[len(mode):]}{PROMISE_SUFFIX}"
-                    reached_promises = tuple(
-                        node.attr
-                        for node in ast.walk(member)
-                        if isinstance(node, ast.Attribute) and node.attr.endswith(PROMISE_SUFFIX)
-                    )
-                    if not reached_promises:
-                        found.append(
-                            Violation(ViolationSpec(
-                                self._path,
-                                member.lineno,
-                                "TB085",
-                                f"{where}.{member.name} reads no promise; an await_ method "
-                                "reads the durable promise its runtime names for the operation "
-                                "it waits on, because one operation keeps one name across a relay",
-                            ))
-                        )
-                    for read in reached_promises:
-                        if read != promise:
-                            found.append(
-                                Violation(ViolationSpec(
-                                    self._path,
-                                    member.lineno,
-                                    "TB085",
-                                    f"{where}.{member.name} reads {read}; an await_ method reads "
-                                    "the durable promise its runtime names for the operation it "
-                                    "waits on, because one operation keeps one name across a relay",
-                                ))
-                            )
-                    continue
-                handler = f"{member.name[len(mode):]}{HANDLER_SUFFIX}"
-                reached_handlers = tuple(
-                    node.attr
+                operation = member.name[len(mode):]
+                wanted = (PROMISE_CALL,) if mode == AWAIT_MODE else tuple(ENGINE_CALLS)
+                calls = tuple(
+                    (node, node.func.attr)
                     for node in ast.walk(member)
-                    if isinstance(node, ast.Attribute) and node.attr.endswith(HANDLER_SUFFIX)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in wanted
                 )
-                if not reached_handlers:
+                if not calls and mode == AWAIT_MODE:
                     found.append(
                         Violation(ViolationSpec(
                             self._path,
                             member.lineno,
                             "TB085",
-                            f"{where}.{member.name} reaches no handler; a runner method "
-                            "reaches the handler of the operation it carries, because one "
+                            f"{where}.{member.name} reads no promise; an await_ method reads the "
+                            "durable promise named for the operation it waits on, because one "
                             "operation keeps one name across a relay",
                         ))
                     )
-                for reached in reached_handlers:
-                    if reached != handler:
+                elif not calls:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            member.lineno,
+                            "TB085",
+                            f"{where}.{member.name} makes no engine call; a runner method calls the "
+                            "service named for its relay's far side and the handler named for the "
+                            "operation it carries, because one operation keeps one name across a relay",
+                        ))
+                    )
+                for call, engine_call in calls:
+                    literals = tuple(
+                        arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else None
+                        for arg in call.args[: 1 if mode == AWAIT_MODE else 2]
+                    )
+                    if len(literals) < (1 if mode == AWAIT_MODE else 2) or None in literals:
                         found.append(
                             Violation(ViolationSpec(
                                 self._path,
-                                member.lineno,
+                                call.lineno,
                                 "TB085",
-                                f"{where}.{member.name} reaches {reached}; a runner method "
-                                "reaches the handler of the operation it carries, because one "
-                                "operation keeps one name across a relay",
+                                f"{where}.{member.name} names its far side with something other than "
+                                "a string literal; a runner names the service, the handler, and the "
+                                "promise it reaches as literals, because a name the analyzer cannot "
+                                "read is a name it is not checking",
+                            ))
+                        )
+                        continue
+                    if mode == AWAIT_MODE:
+                        if literals[0] != operation:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    call.lineno,
+                                    "TB085",
+                                    f"{where}.{member.name} reads the promise {literals[0]}; an await_ "
+                                    "method reads the durable promise named for the operation it "
+                                    "waits on, because one operation keeps one name across a relay",
+                                ))
+                            )
+                        continue
+                    if ENGINE_CALLS[engine_call] != mode:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches its far side through {engine_call}; "
+                                "a run_ operation calls and waits and a start_ operation sends and "
+                                "does not, because the mode on the method is the mode on the engine",
+                            ))
+                        )
+                    if (literals[0], literals[1]) != (far_side, operation):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} calls {literals[0]}.{literals[1]}, not "
+                                f"{far_side}.{operation}; a runner method calls the service named for "
+                                "its relay's far side and the handler named for the operation it "
+                                "carries, because one operation keeps one name across a relay",
                             ))
                         )
         return tuple(found)
+
+    def _engine_target_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[str, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        context = self._name.split(".")[0]
+        rows: list[str] = []
+        for cls in self._class_defs:
+            if blocks.get((self._name, cls.name)) != RUNNER_BLOCK:
+                continue
+            for node in ast.walk(cls):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                literals = tuple(
+                    arg.value for arg in node.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                )
+                if node.func.attr in ENGINE_CALLS and len(literals) >= 2:
+                    rows.append(f"{context}|{literals[0]}|{literals[1]}")
+                elif node.func.attr == PROMISE_CALL and literals:
+                    rows.append(f"{context}|{PROMISE_CALL}|{literals[0]}")
+        return tuple(sorted(rows))
 
     def runtime_handler_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         if str(self._placement) in TEST_TIER:
@@ -11713,6 +11859,107 @@ class Module(ts.Entity):
                         )
         return tuple(found)
 
+    def runtime_obligation_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        context = self._name.split(".")[0]
+        names = registry.engine_targets()
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) != RUNTIME_BLOCK:
+                continue
+            where = f"{self._name}.{cls.name}"
+            registered: dict[str, str] = {}
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name != "__init__":
+                    continue
+                for stmt in member.body:
+                    if not (
+                        isinstance(stmt, ast.Assign)
+                        and len(stmt.targets) == 1
+                        and isinstance(stmt.targets[0], ast.Attribute)
+                        and isinstance(stmt.targets[0].value, ast.Name)
+                        and stmt.targets[0].value.id == "self"
+                        and isinstance(stmt.value, ast.Call)
+                    ):
+                        continue
+                    maker = stmt.value.func
+                    made = maker.attr if isinstance(maker, ast.Attribute) else maker.id if isinstance(maker, ast.Name) else ""
+                    if made not in ENGINE_REGISTRATIONS:
+                        continue
+                    first = stmt.value.args[0] if stmt.value.args else None
+                    if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                stmt.lineno,
+                                "TB085",
+                                f"{where} registers {stmt.targets[0].attr} under something other than a "
+                                "string literal; a runtime registers each service under a literal, because "
+                                "a name the analyzer cannot read is a name it is not checking",
+                            ))
+                        )
+                        continue
+                    registered[stmt.targets[0].attr] = first.value
+                for fn in member.body:
+                    if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    for decorator in fn.decorator_list:
+                        root = decorator.func if isinstance(decorator, ast.Call) else decorator
+                        while isinstance(root, ast.Attribute):
+                            if isinstance(root.value, ast.Name) and root.value.id == "self":
+                                break
+                            root = root.value
+                        if not isinstance(root, ast.Attribute) or root.attr not in registered:
+                            continue
+                        service = registered[root.attr]
+                        if f"{context}|{service}|{fn.name}" not in names:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    fn.lineno,
+                                    "TB085",
+                                    f"{where} registers {service}.{fn.name} and no runner in {context} "
+                                    "calls it; a runtime registers only what a runner of its context "
+                                    "reaches, because a runtime has this context on both ends, and a "
+                                    "callback that only the outside world invokes belongs to a handler",
+                                ))
+                            )
+            for node in ast.walk(cls):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == PROMISE_CALL
+                    and node.args
+                ):
+                    first = node.args[0]
+                    if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB085",
+                                f"{where} names a promise with something other than a string literal; "
+                                "a runtime names each promise as a literal, because a name the analyzer "
+                                "cannot read is a name it is not checking",
+                            ))
+                        )
+                    elif f"{context}|{PROMISE_CALL}|{first.value}" not in names:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB085",
+                                f"{where} names the promise {first.value} and no runner in {context} "
+                                "awaits it; a runtime names only the promises a runner of its context "
+                                "awaits, because a runtime has this context on both ends",
+                            ))
+                        )
+        return tuple(found)
+
     def actions_mirror_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         place = str(self._placement)
         if place in TEST_TIER:
@@ -11777,15 +12024,53 @@ class Module(ts.Entity):
                         )
             elif block is not None and str(block) == "actions_client" and place in ("app-client", "app-client-file"):
                 paired = ".".join((parts[0], APPLICATION_ROLE, parts[-1]))
-                if not any(str(symbol.module()) == paired for symbol in operation_rows.owners(Text("actions"))):
+                orchestrated = ".".join((parts[0], APPLICATION_ROLE, ORCHESTRATORS_PACKAGE, parts[-1]))
+                if not any(
+                    str(symbol.module()) == paired for symbol in operation_rows.owners(Text(ACTIONS_BLOCK))
+                ) and not any(
+                    str(symbol.module()) == orchestrated
+                    for symbol in operation_rows.owners(Text(ORCHESTRATOR_BLOCK))
+                ):
                     found.append(
                         Violation(ViolationSpec(
                             self._path,
                             cls.lineno,
                             "TB081",
-                            f"{where} has no actions class in {paired}; an actions class's public "
-                            "methods are exactly the application client's in the module of its "
-                            "name, because that client is the only way a runtime reaches it",
+                            f"{where} has no actions class in {paired} and no orchestrator in "
+                            f"{orchestrated}; an application client fronts the actions class or the "
+                            "orchestrator in the module of its name, because that client is the only "
+                            "way a runtime reaches either",
+                        ))
+                    )
+            elif (
+                block is not None
+                and str(block) == ORCHESTRATOR_BLOCK
+                and len(parts) == 4
+                and parts[1] == APPLICATION_ROLE
+                and parts[2] == ORCHESTRATORS_PACKAGE
+            ):
+                paired = ".".join((parts[0], APPLICATION_ROLE, APPLICATION_CLIENT_PACKAGE, parts[3]))
+                protocols = tuple(
+                    symbol
+                    for symbol in operation_rows.owners(Text(ACTIONS_CLIENT_BLOCK))
+                    if str(symbol.module()) == paired
+                )
+                offered = tuple(sibling for symbol in protocols for sibling in operation_rows.methods(symbol))
+                implemented = tuple(
+                    item.name
+                    for item in cls.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                )
+                if not protocols or set(offered) != set(implemented):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cls.lineno,
+                            "TB081",
+                            f"{where} is not mirrored by an application client in {paired}; an "
+                            "orchestrator's public methods are exactly the application client's in "
+                            "the module of its name, because a runtime reaches an orchestrator only "
+                            "through the client its workflow yields",
                         ))
                     )
         return tuple(found)
@@ -12896,6 +13181,17 @@ class Codebase(ts.AggregateRoot):
                     if source is not None:
                         blocks[key] = source
                         changed = True
+        for module in self._modules:
+            for cls in module.class_defs():
+                if cls.bases or (module.name(), cls.name) in blocks:
+                    continue
+                public = tuple(
+                    item.name
+                    for item in cls.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                )
+                if public == (WORKFLOW_OPERATION,):
+                    blocks[(module.name(), cls.name)] = WORKFLOW_BLOCK
         self._mapper_target = {}
         for module in self._modules:
             for cls in module.class_defs():
@@ -12995,6 +13291,9 @@ class Codebase(ts.AggregateRoot):
             if len(sides) == 1
             for side in sides
         ))
+        engine_target_rows = tuple(sorted(
+            row for module in self._modules for row in module._engine_target_rows(blocks)
+        ))
         outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
         action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
         context_rows = self._contexts
@@ -13051,6 +13350,7 @@ class Codebase(ts.AggregateRoot):
             enums=enum_rows,
             operations=operation_rows,
             far_sides=far_side_rows,
+            engine_targets=engine_target_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
@@ -13131,6 +13431,7 @@ class Codebase(ts.AggregateRoot):
             enums=enum_rows,
             operations=operation_rows,
             far_sides=far_side_rows,
+            engine_targets=engine_target_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())
@@ -13493,6 +13794,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.relay_name_violations(registry))
             found.extend(module.runner_violations(registry))
             found.extend(module.runtime_handler_violations(registry))
+            found.extend(module.runtime_obligation_violations(registry))
             found.extend(module.actions_mirror_violations(registry))
             found.extend(module.service_mirror_violations(registry))
             found.extend(module.operation_unique_violations(registry))

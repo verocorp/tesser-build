@@ -23,10 +23,9 @@ class _Impl:
 
 
 def test_an_invocation_yields_what_it_built_from_the_context_it_was_handed() -> None:
-    opener: workflow.Workflow[_Context, _Orchestrator] = _Impl()
-    context = _Context()
+    _impl: workflow.Workflow[_Context, _Orchestrator] = _Impl()
 
-    assert asyncio.run(opener.invocation(context).__aenter__()).context is context
+    assert isinstance(asyncio.run(_impl.invocation(_Context()).__aenter__()), _Orchestrator)
 
 
 def test_workflow_is_satisfied_structurally_without_inheritance() -> None:

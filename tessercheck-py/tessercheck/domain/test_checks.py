@@ -4807,7 +4807,7 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
     assert not any("test_words.py:2:" in f for f in findings), findings
 
 
-def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
+def test_a_component_sibling_test_reaches_what_the_component_does_and_its_own_domain() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in domain.Codebase(_spec(sources=(
@@ -4827,6 +4827,7 @@ def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
                 "import shop.application.service as service\n"
                 "import far.client as far_client\n"
                 "import shop.domain.thing as thing\n"
+                "import far.domain.thing as far_thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -4868,13 +4869,13 @@ def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
         ))).violations()
                )
     assert any(
-        "shop.component.test_component imports shop.domain.thing, but a test placed in component "
-        "reaches only component, application, adapters, client of its own context; "
-        "a test reaches only what its placement allows" in f
+        "shop.component.test_component imports far.domain.thing, but a test placed in component "
+        "reaches only client of a neighbouring context" in f
         for f in findings
-    )
-    assert not any("test_component.py:1:" in f for f in findings)
-    assert not any("test_component.py:2:" in f for f in findings)
+    ), findings
+    assert not any("test_component.py:1:" in f for f in findings), findings
+    assert not any("test_component.py:2:" in f for f in findings), findings
+    assert not any("test_component.py:3:" in f for f in findings), findings
 
 
 def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
@@ -12395,10 +12396,28 @@ def _kinds_spec(
         (
             "shop/application/relays/__init__.py",
             "shop.application.relays",
+            "from shop.application.relays.flow_relay import IssueQuoteRequest as IssueQuoteRequest\n"
+            "from shop.application.relays.flow_relay import IssueQuoteResponse as IssueQuoteResponse\n"
             "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
             "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
             "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n",
             True,
+        ),
+        (
+            "shop/application/relays/flow_relay.py",
+            "shop.application.relays.flow_relay",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "class IssueQuoteRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class IssueQuoteResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class FlowRelay(ts.Relay, typing.Protocol):\n"
+            "    async def run_issue_quote(self, issue_quote_request: IssueQuoteRequest)"
+            " -> IssueQuoteResponse: ...\n",
+            False,
         ),
         (
             "shop/application/relays/quote_actions_relay.py",
@@ -12419,8 +12438,20 @@ def _kinds_spec(
         (
             "shop/application/client/__init__.py",
             "shop.application.client",
+            "from shop.application.client.flow import FlowApplicationClient as FlowApplicationClient\n"
             "from shop.application.client.quotes import ShopApplicationClient as ShopApplicationClient\n",
             True,
+        ),
+        (
+            "shop/application/client/flow.py",
+            "shop.application.client.flow",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "import shop.application.relays as relays\n"
+            "class FlowApplicationClient(ts.Client, typing.Protocol):\n"
+            "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+            " -> relays.IssueQuoteResponse: ...\n",
+            False,
         ),
         (
             "shop/application/client/quotes.py",
@@ -12483,8 +12514,7 @@ def _kinds_spec(
         (
             "shop/application/orchestrators/__init__.py",
             "shop.application.orchestrators",
-            "from shop.application.orchestrators.flow import Flow as Flow\n"
-            "from shop.application.orchestrators.flow import IssueQuoteResponse as IssueQuoteResponse\n",
+            "from shop.application.orchestrators.flow import Flow as Flow\n",
             True,
         ),
         (
@@ -12493,20 +12523,18 @@ def _kinds_spec(
             "import tesser.application as ts\n"
             "import shop.application.relays as relays\n"
             "import shop.domain.thing as thing\n"
-            "class IssueQuoteResponse(ts.Response):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
             "class MapToQuotePriceRequest(ts.Mapper, relays.QuotePriceRequest):\n"
             "    def __init__(self, name: thing.Name) -> None:\n"
             "        super().__init__(text=str(name))\n"
-            "class MapToIssueQuoteResponse(ts.Mapper, IssueQuoteResponse):\n"
+            "class MapToIssueQuoteResponse(ts.Mapper, relays.IssueQuoteResponse):\n"
             "    def __init__(self, quote_price_response: relays.QuotePriceResponse) -> None:\n"
             "        super().__init__(text=quote_price_response.text)\n"
             "class Flow(ts.Orchestrator):\n"
             "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
             "        self._quote_actions_relay = quote_actions_relay\n"
-            "    async def issue_quote(self, quote_price_request: relays.QuotePriceRequest) -> IssueQuoteResponse:\n"
-            "        name = thing.Name(quote_price_request.text)\n"
+            "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+            " -> relays.IssueQuoteResponse:\n"
+            "        name = thing.Name(issue_quote_request.text)\n"
             "        quote_price_response = await self._quote_actions_relay.run_quote_price(MapToQuotePriceRequest(name))\n"
             "        return MapToIssueQuoteResponse(quote_price_response)\n",
             False,
@@ -12591,14 +12619,14 @@ def _kinds_spec(
             "shop/adapters/runners/inline_quote_actions_relay.py",
             "shop.adapters.runners.inline_quote_actions_relay",
             "import tesser.adapters as ts\n"
-            "import shop.adapters.runtimes as runtimes\n"
+            "import engine\n"
             "import shop.application.relays as relays\n"
             "class InlineQuoteActionsRelay(ts.Runner):\n"
-            "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
-            "        self._engine_runtime = engine_runtime\n"
+            "    def __init__(self, engine_context: engine.Context) -> None:\n"
+            "        self._engine_context = engine_context\n"
             "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
             " -> relays.QuotePriceResponse:\n"
-            "        return self._engine_runtime.quote_price_handler(quote_price_request)\n",
+            "        return await self._engine_context.generic_call('QuoteActions', 'quote_price', b'')\n",
             False,
         ),
         (
@@ -12618,20 +12646,25 @@ def _kinds_spec(
             "shop/adapters/runtimes/engine.py",
             "shop.adapters.runtimes.engine",
             "import tesser.adapters as ts\n"
-            "import shop.adapters.runners as runners\n"
+            "import engine\n"
             "import shop.application.client as client\n"
-            "import shop.application.orchestrators as orchestrators\n"
             "import shop.application.relays as relays\n"
             "class EngineRuntime(ts.Runtime):\n"
-            "    def __init__(self, shop_application_client: client.ShopApplicationClient) -> None:\n"
+            "    def __init__(\n"
+            "        self,\n"
+            "        shop_application_client: client.ShopApplicationClient,\n"
+            "        flow_workflow: ts.Workflow[engine.Context, client.FlowApplicationClient],\n"
+            "    ) -> None:\n"
             "        self._shop_application_client = shop_application_client\n"
+            "        self._flow_workflow = flow_workflow\n"
             "    def quote_price_handler(self, quote_price_request: relays.QuotePriceRequest)"
             " -> relays.QuotePriceResponse:\n"
             "        return self._shop_application_client.quote_price(quote_price_request)\n"
-            "    async def issue_quote_handler(self, quote_price_request: relays.QuotePriceRequest)"
-            " -> orchestrators.IssueQuoteResponse:\n"
-            "        return await orchestrators.Flow(runners.InlineQuoteActionsRelay(self))"
-            ".issue_quote(quote_price_request)\n",
+            "    async def issue_quote_handler(\n"
+            "        self, engine_context: engine.Context, issue_quote_request: relays.IssueQuoteRequest\n"
+            "    ) -> relays.IssueQuoteResponse:\n"
+            "        async with self._flow_workflow.invocation(engine_context) as flow_application_client:\n"
+            "            return await flow_application_client.issue_quote(issue_quote_request)\n",
             False,
         ),
         (
@@ -12644,20 +12677,30 @@ def _kinds_spec(
         (
             "shop/component/component.py",
             "shop.component.component",
+            "import contextlib\n"
+            "import typing\n"
             "import tesser.component as ts\n"
+            "import engine\n"
             "import shop.adapters.gateways as gateways\n"
+            "import shop.adapters.runners as runners\n"
             "import shop.adapters.runtimes as runtimes\n"
+            "import shop.application.orchestrators as orchestrators\n"
             "import shop.application.quotes as quotes\n"
             "import shop.application.service as service\n"
             "import shop.client.client as client\n"
             "class Shop(ts.Component):\n"
+            "    class Workflow:\n"
+            "        @contextlib.asynccontextmanager\n"
+            "        async def invocation(self, engine_context: engine.Context)"
+            " -> typing.AsyncIterator[orchestrators.Flow]:\n"
+            "            yield orchestrators.Flow(runners.InlineQuoteActionsRelay(engine_context))\n"
             "    def __init__(self) -> None:\n"
             "        self._quotes = gateways.QuoteGateway()\n"
             "        self._listing = gateways.CatalogGateway()\n"
             "        self._actions = quotes.QuoteActions(self._listing)\n"
             "        self.client: client.Client = service.AskService()\n"
             "        self.engine_runtimes: tuple[runtimes.EngineRuntime, ...] = (\n"
-            "            runtimes.EngineRuntime(self._actions),\n"
+            "            runtimes.EngineRuntime(self._actions, Shop.Workflow()),\n"
             "        )\n"
             "    def close(self) -> None:\n"
             "        return None\n",
@@ -13439,7 +13482,7 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
     )
 
 
-def test_only_a_runtime_reaches_the_application_client_and_the_orchestrators() -> None:
+def test_only_a_runtime_reaches_the_application_client_and_only_a_component_the_orchestrators() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -13471,6 +13514,22 @@ def test_only_a_runtime_reaches_the_application_client_and_the_orchestrators() -
                 "import shop.adapters.runtimes.engine as engine\n"
                 "class PeekHandler(ts.Handler):\n"
                 "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/peek.py",
+                "shop.adapters.runners.peek",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.runtimes.engine as engine\n"
+                "import shop.application.orchestrators as orchestrators\n",
+                False,
+            ),
+            (
+                "shop/adapters/runtimes/peek.py",
+                "shop.adapters.runtimes.peek",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.runners as runners\n"
+                "import shop.application.orchestrators as orchestrators\n",
                 False,
             ),
             (
@@ -13512,57 +13571,59 @@ def test_only_a_runtime_reaches_the_application_client_and_the_orchestrators() -
         ))).violations()
     )
     assert any(
-        "shop.application.peeker imports shop.application.client.quotes; only a "
-        "runtime imports the application client and the orchestrators, because an "
-        "action is reachable only through the engine" in f
+        "shop.application.peeker imports shop.application.client.quotes; only a runtime imports "
+        "the application client, because an action is reachable only through the engine" in f
         for f in findings
-    )
+    ), findings
     assert any(
-        "shop.application.peeker imports shop.application.orchestrators; "
-        "only a runtime imports the application client and the orchestrators" in f
+        "shop.application.peeker imports shop.application.orchestrators; only a component imports "
+        "the orchestrators, because an orchestrator is built per invocation by the workflow the "
+        "component hands the runtime" in f
         for f in findings
-    )
-    assert any(
-        "shop.component.peek imports shop.application.orchestrators; only a "
-        "runtime imports the application client and the orchestrators" in f
-        for f in findings
-    )
+    ), findings
+    assert not any("shop.component.peek imports" in f for f in findings), findings
     assert any(
         "shop.adapters.handlers.peek imports shop.application.client.quotes; only "
-        "a runtime imports the application client and the orchestrators" in f
+        "a runtime imports the application client" in f
         for f in findings
-    )
-    assert any(
-        "shop.adapters.handlers.peek imports shop.adapters.runtimes.engine; an "
-        "adapters kind package reaches only what its kind reaches" in f
-        for f in findings
-    )
-    assert any(
-        "shop.adapters.gateways.peek imports shop.adapters.runtimes.engine; an "
-        "adapters kind package reaches only what its kind reaches" in f
-        for f in findings
-    )
+    ), findings
+    for importer, imported in (
+        ("handlers.peek", "adapters.runtimes.engine"),
+        ("gateways.peek", "adapters.runtimes.engine"),
+        ("runners.peek", "adapters.runtimes.engine"),
+        ("runtimes.peek", "adapters.runners"),
+    ):
+        assert any(
+            f"shop.adapters.{importer} imports shop.{imported}; an adapters kind package reaches "
+            "only what its kind reaches" in f
+            for f in findings
+        ), (importer, findings)
+    for importer in ("runners.peek", "runtimes.peek"):
+        assert any(
+            f"shop.adapters.{importer} imports shop.application.orchestrators; only a component "
+            "imports the orchestrators" in f
+            for f in findings
+        ), (importer, findings)
     assert any(
         "shop.adapters.runtimes.test_reach imports shop.client.client, but a test "
         "placed in runtimes reaches only" in f
         for f in findings
-    )
+    ), findings
     assert any(
-        "shop.application.test_peek imports shop.application.client.quotes, but "
-        "only a test placed in runners or runtimes reaches the application client "
-        "and the orchestrators; a test reaches only what its placement allows" in f
+        "shop.application.test_peek imports shop.application.client.quotes, but only a test "
+        "placed in runtimes reaches the application client; a test reaches only what its "
+        "placement allows" in f
         for f in findings
-    )
+    ), findings
     assert any(
-        "shop.tests.test_peek imports shop.application.orchestrators, but "
-        "only a test placed in runners or runtimes reaches the application client "
-        "and the orchestrators; a test reaches only what its placement allows" in f
+        "shop.tests.test_peek imports shop.application.orchestrators, but only a test placed in "
+        "component reaches the orchestrators; a test reaches only what its placement allows" in f
         for f in findings
-    )
+    ), findings
     assert not any(
         "shop.application.orchestrators.test_flow" in f and "TB070" in f
         for f in findings
-    )
+    ), findings
 
 
 def test_a_host_reaches_a_context_through_its_handlers_and_its_runtimes() -> None:
@@ -19014,7 +19075,7 @@ def test_a_signal_relay_carries_only_await_operations() -> None:
     assert not any("await_pack_order names no calling mode" in f for f in findings), findings
 
 
-def test_an_await_method_reads_the_promise_its_runtime_names() -> None:
+def test_an_await_method_reads_the_promise_named_for_its_operation() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -19038,36 +19099,56 @@ def test_an_await_method_reads_the_promise_its_runtime_names() -> None:
                 "shop/adapters/runners/waiting.py",
                 "shop.adapters.runners.waiting",
                 "import tesser.adapters as ts\n"
-                "import shop.adapters.runtimes as runtimes\n"
+                "import engine\n"
                 "import shop.application.relays.waits as waits\n"
+                "PROMISE = 'pack_order'\n"
                 "class EngineWatchSignalRelay(ts.Runner):\n"
-                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
-                "        self._engine_runtime = engine_runtime\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
                 "    async def await_pack_order(self, await_pack_order_request: waits.AwaitPackOrderRequest)"
                 " -> waits.AwaitPackOrderResponse:\n"
-                "        return self._engine_runtime.quote_price_promise\n"
+                "        return await self._engine_context.promise('quote_price').value()\n"
                 "class StubWatchSignalRelay(ts.Runner):\n"
-                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
-                "        self._engine_runtime = engine_runtime\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
                 "    async def await_pack_order(self, await_pack_order_request: waits.AwaitPackOrderRequest)"
                 " -> waits.AwaitPackOrderResponse:\n"
-                "        return waits.AwaitPackOrderResponse(text=await_pack_order_request.text)\n",
+                "        return waits.AwaitPackOrderResponse(text=await_pack_order_request.text)\n"
+                "class NamedWatchSignalRelay(ts.Runner):\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
+                "    async def await_pack_order(self, await_pack_order_request: waits.AwaitPackOrderRequest)"
+                " -> waits.AwaitPackOrderResponse:\n"
+                "        return await self._engine_context.promise(PROMISE).value()\n"
+                "class ReadWatchSignalRelay(ts.Runner):\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
+                "    async def await_pack_order(self, await_pack_order_request: waits.AwaitPackOrderRequest)"
+                " -> waits.AwaitPackOrderResponse:\n"
+                "        return await self._engine_context.promise('pack_order').value()\n",
                 False,
             ),
         ))).violations()
     )
+    where = "shop.adapters.runners.waiting"
     assert any(
-        "shop.adapters.runners.waiting.EngineWatchSignalRelay.await_pack_order reads "
-        "quote_price_promise; an await_ method reads the durable promise its runtime names for "
-        "the operation it waits on, because one operation keeps one name across a relay" in f
+        f"{where}.EngineWatchSignalRelay.await_pack_order reads the promise quote_price; an await_ "
+        "method reads the durable promise named for the operation it waits on, because one "
+        "operation keeps one name across a relay" in f
         for f in findings
     ), findings
     assert any(
-        "shop.adapters.runners.waiting.StubWatchSignalRelay.await_pack_order reads no promise; "
-        "an await_ method reads the durable promise its runtime names for the operation it "
-        "waits on, because one operation keeps one name across a relay" in f
+        f"{where}.StubWatchSignalRelay.await_pack_order reads no promise; an await_ method reads the "
+        "durable promise named for the operation it waits on, because one operation keeps one name "
+        "across a relay" in f
         for f in findings
     ), findings
+    assert any(
+        f"{where}.NamedWatchSignalRelay.await_pack_order names its far side with something other than "
+        "a string literal" in f
+        for f in findings
+    ), findings
+    assert not any("ReadWatchSignalRelay" in f for f in findings), findings
 
 
 def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
@@ -19099,38 +19180,49 @@ def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
                 "shop/adapters/runners/engine_confirm_order_relay.py",
                 "shop.adapters.runners.engine_confirm_order_relay",
                 "import tesser.adapters as ts\n"
-                "import shop.adapters.runtimes as runtimes\n"
+                "import engine\n"
                 "import shop.application.relays.confirm_order_relay as confirm_order_relay\n"
+                "SERVICE = 'ConfirmOrder'\n"
                 "class EngineConfirmOrderRelay(ts.Runner):\n"
-                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
-                "        self._engine_runtime = engine_runtime\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
                 "    async def start_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
                 " -> confirm_order_relay.StartConfirmOrderResponse:\n"
-                "        return self._engine_runtime.cancel_order_handler(confirm_order_request)\n"
+                "        return await self._engine_context.generic_call('ConfirmOrder', 'confirm_order', b'')\n"
                 "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
                 " -> confirm_order_relay.ConfirmOrderResponse:\n"
-                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "        return await self._engine_context.generic_call('ConfirmOrder', 'cancel_order', b'')\n"
                 "    async def refund_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
                 " -> confirm_order_relay.ConfirmOrderResponse:\n"
-                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "        return await self._engine_context.generic_call('ConfirmOrder', 'confirm_order', b'')\n"
                 "class LaterConfirmOrderRelay(ts.Runner):\n"
-                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
-                "        self._engine_runtime = engine_runtime\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
                 "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
                 " -> confirm_order_relay.ConfirmOrderResponse:\n"
-                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "        return await self._engine_context.generic_call(SERVICE, 'confirm_order', b'')\n"
                 "class StubConfirmOrderRelay(ts.Runner):\n"
-                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
-                "        self._engine_runtime = engine_runtime\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
                 "    async def start_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
                 " -> confirm_order_relay.StartConfirmOrderResponse:\n"
-                "        return self._engine_runtime.confirm_order_handler(confirm_order_request)\n"
+                "        return await self._engine_context.generic_send('ConfirmOrder', 'confirm_order', b'')\n"
                 "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
                 " -> confirm_order_relay.ConfirmOrderResponse:\n"
+                "        self._engine_context.confirm_order_handler\n"
                 "        return confirm_order_relay.ConfirmOrderResponse(text=confirm_order_request.text)\n"
+                "class ElsewhereConfirmOrderRelay(ts.Runner):\n"
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n"
+                "    async def start_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.StartConfirmOrderResponse:\n"
+                "        return await self._engine_context.generic_send('Billing', 'confirm_order', b'')\n"
+                "    async def run_confirm_order(self, confirm_order_request: confirm_order_relay.ConfirmOrderRequest)"
+                " -> confirm_order_relay.ConfirmOrderResponse:\n"
+                "        return await self._engine_context.generic_call('ConfirmOrder', 'confirm_order', b'')\n"
                 "class EngineOrderRunner(ts.Runner):\n"
-                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
-                "        self._engine_runtime = engine_runtime\n",
+                "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                "        self._engine_context = engine_context\n",
                 False,
             ),
         ))).violations()
@@ -19152,21 +19244,139 @@ def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
         for f in findings
     ), findings
     assert any(
-        f"{where}.EngineConfirmOrderRelay.start_confirm_order reaches cancel_order_handler; a runner "
-        "method reaches the handler of the operation it carries, because one operation keeps one "
+        f"{where}.EngineConfirmOrderRelay.start_confirm_order reaches its far side through "
+        "generic_call; a run_ operation calls and waits and a start_ operation sends and does not, "
+        "because the mode on the method is the mode on the engine" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.EngineConfirmOrderRelay.run_confirm_order calls ConfirmOrder.cancel_order, not "
+        "ConfirmOrder.confirm_order; a runner method calls the service named for its relay's far "
+        "side and the handler named for the operation it carries, because one operation keeps one "
         "name across a relay" in f
         for f in findings
     ), findings
-    assert not any("EngineConfirmOrderRelay.run_confirm_order reaches" in f for f in findings), findings
-    assert not any("EngineConfirmOrderRelay lacks" in f for f in findings), findings
-    assert not any("EngineConfirmOrderRelay ends in no relay" in f for f in findings), findings
     assert any(
-        f"{where}.StubConfirmOrderRelay.run_confirm_order reaches no handler; a runner method "
-        "reaches the handler of the operation it carries, because one operation keeps one name "
-        "across a relay" in f
+        f"{where}.LaterConfirmOrderRelay.run_confirm_order names its far side with something other "
+        "than a string literal; a runner names the service, the handler, and the promise it reaches "
+        "as literals, because a name the analyzer cannot read is a name it is not checking" in f
         for f in findings
     ), findings
-    assert not any("StubConfirmOrderRelay.start_confirm_order reaches" in f for f in findings), findings
+    assert any(
+        f"{where}.StubConfirmOrderRelay.run_confirm_order makes no engine call; a runner method calls "
+        "the service named for its relay's far side and the handler named for the operation it "
+        "carries, because one operation keeps one name across a relay" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.ElsewhereConfirmOrderRelay.start_confirm_order calls Billing.confirm_order, not "
+        "ConfirmOrder.confirm_order" in f
+        for f in findings
+    ), findings
+    assert not any("StubConfirmOrderRelay.start_confirm_order" in f for f in findings), findings
+    assert not any("ElsewhereConfirmOrderRelay.run_confirm_order" in f for f in findings), findings
+
+
+def test_a_runtime_registers_only_what_a_runner_of_its_context_reaches() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/runtimes/booth.py",
+                "shop.adapters.runtimes.booth",
+                "import tesser.adapters as ts\n"
+                "import engine\n"
+                "import shop.application.client as client\n"
+                "import shop.application.relays as relays\n"
+                "NAME = 'Counter'\n"
+                "class BoothRuntime(ts.Runtime):\n"
+                "    def __init__(self, shop_application_client: client.ShopApplicationClient) -> None:\n"
+                "        self.quote_actions_service = engine.Service('QuoteActions')\n"
+                "        self.counter_service = engine.Service(NAME)\n"
+                "        @self.quote_actions_service.handler()\n"
+                "        async def quote_price(engine_context: engine.Context, quote_price_request: relays.QuotePriceRequest)"
+                " -> relays.QuotePriceResponse:\n"
+                "            await engine_context.promise('packed_order').peek()\n"
+                "            await engine_context.promise(NAME).peek()\n"
+                "            return shop_application_client.quote_price(quote_price_request)\n"
+                "        @self.quote_actions_service.handler()\n"
+                "        async def hold_quote(engine_context: engine.Context, quote_price_request: relays.QuotePriceRequest)"
+                " -> relays.QuotePriceResponse:\n"
+                "            return shop_application_client.quote_price(quote_price_request)\n"
+                "        self.quote_price_handler = quote_price\n"
+                "        self.hold_quote_handler = hold_quote\n",
+                False,
+            ),
+            (
+                "shop/adapters/runtimes/test_booth.py",
+                "shop.adapters.runtimes.test_booth",
+                "def test_booth_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    where = "shop.adapters.runtimes.booth.BoothRuntime"
+    assert any(
+        f"{where} registers QuoteActions.hold_quote and no runner in shop calls it; a runtime "
+        "registers only what a runner of its context reaches, because a runtime has this context "
+        "on both ends, and a callback that only the outside world invokes belongs to a handler" in f
+        for f in findings
+    ), findings
+    assert not any(f"{where} registers QuoteActions.quote_price and no runner" in f for f in findings), findings
+    assert any(
+        f"{where} registers counter_service under something other than a string literal; a runtime "
+        "registers each service under a literal, because a name the analyzer cannot read is a name "
+        "it is not checking" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where} names the promise packed_order and no runner in shop awaits it; a runtime names "
+        "only the promises a runner of its context awaits, because a runtime has this context on "
+        "both ends" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where} names a promise with something other than a string literal; a runtime names each "
+        "promise as a literal, because a name the analyzer cannot read is a name it is not checking" in f
+        for f in findings
+    ), findings
+
+
+def test_an_orchestrator_is_mirrored_by_the_application_client_in_the_module_of_its_name() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/orchestrators/lone.py",
+                "shop.application.orchestrators.lone",
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class Lone(ts.Orchestrator):\n"
+                "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+                "        self._quote_actions_relay = quote_actions_relay\n"
+                "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+                " -> relays.IssueQuoteResponse:\n"
+                "        return relays.IssueQuoteResponse(text=issue_quote_request.text)\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators/test_lone.py",
+                "shop.application.orchestrators.test_lone",
+                "def test_lone_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.orchestrators.lone.Lone is not mirrored by an application client in "
+        "shop.application.client.lone; an orchestrator's public methods are exactly the application "
+        "client's in the module of its name, because a runtime reaches an orchestrator only through "
+        "the client its workflow yields" in f
+        for f in findings
+    ), findings
+    assert not any("orchestrators.flow.Flow is not mirrored" in f for f in findings), findings
 
 
 def test_a_runtime_handler_is_its_operation_exposed_with_handler_and_invokes_it() -> None:
@@ -19379,9 +19589,9 @@ def test_an_actions_class_and_its_application_client_offer_the_same_calls() -> N
     ), findings
     assert any(
         "shop.application.client.orphan.OrphanApplicationClient has no actions class in "
-        "shop.application.orphan; an actions class's public methods are exactly the application "
-        "client's in the module of its name, because that client is the only way a runtime "
-        "reaches it" in f
+        "shop.application.orphan and no orchestrator in shop.application.orchestrators.orphan; an "
+        "application client fronts the actions class or the orchestrator in the module of its "
+        "name, because that client is the only way a runtime reaches either" in f
         for f in findings
     ), findings
     assert not any("Billing.charge_card is not on" in f for f in findings), findings

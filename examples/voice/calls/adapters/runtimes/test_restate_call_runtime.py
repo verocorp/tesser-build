@@ -213,15 +213,19 @@ class TestRestateCallRuntime:
         fake_call_orchestrator_application_client = FakeCallOrchestratorApplicationClient()
         conduct_call_request = relays.ConductCallRequest(call=domain.Call(call_spec(call_id="c7")))
 
-        conduct_call_response = await runtimes.RestateCallRuntime(
+        restate_call_runtime = runtimes.RestateCallRuntime(
             FakeCallApplicationClient(),
             FakeDialingApplicationClient(),
             FakeSpeechApplicationClient(),
             FakeCallWorkflow(fake_call_orchestrator_application_client),
-        ).conduct_call_handler(typing.cast(restate.WorkflowContext, object()), conduct_call_request)
+        )
 
+        assert (
+            await restate_call_runtime.conduct_call_handler(
+                typing.cast(restate.WorkflowContext, object()), conduct_call_request
+            )
+        ).call_id == "c7"
         assert fake_call_orchestrator_application_client.conducted == [conduct_call_request]
-        assert conduct_call_response.call_id == "c7"
 
     async def test_the_person_joined_handler_resolves_the_workflows_promise(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
