@@ -9,52 +9,45 @@ import livekit.agents.utils.participant as livekit_participant
 import livekit.agents.voice.room_io as livekit_room_io
 import livekit.rtc as livekit_rtc
 
-import calls.application.client as client
-import calls.application.relays as relays
+import calls.client as client
 
 SAY_METHOD: typing.Final[str] = "say"
 _PERSON_IDENTITY: typing.Final[str] = "person"
 
 
-class CallAgent(livekit_agents.Agent, ts.Runtime):  # tesser:debt TB052
-    def __init__(self, call_events_application_client: client.CallEventsApplicationClient, call_id: str) -> None:
+class CallAgent(livekit_agents.Agent, ts.Handler):  # tesser:debt TB052
+    def __init__(self, calls_client: client.CallsClient, call_id: str) -> None:
         super().__init__(instructions="")
-        self._call_events_application_client = call_events_application_client
+        self._calls_client = calls_client
         self._call_id = call_id
 
-    async def on_user_turn_completed(  # tesser:debt TB085
+    async def on_user_turn_completed(
         self, turn_ctx: livekit_llm.ChatContext, new_message: livekit_llm.ChatMessage
     ) -> None:
-        await self._call_events_application_client.person_turn_completed(
-            relays.PersonTurnCompletedRequest(call_id=self._call_id, text=new_message.text_content or "")
+        await self._calls_client.person_turn_completed(
+            client.PersonTurnCompletedRequest(call_id=self._call_id, text=new_message.text_content or "")
         )
         raise livekit_llm.StopResponse()
 
-    async def say(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:  # tesser:debt TB085
+    async def say(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:
         await self.session.say(rpc_invocation_data.payload)
         return ""
 
 
-class LivekitCallRuntime(ts.Runtime):
-    def __init__(
-        self,
-        call_events_application_client: client.CallEventsApplicationClient,
-        agent_name: str,
-        stt: str,
-        tts: str,
-    ) -> None:
-        self._call_events_application_client = call_events_application_client
+class LivekitHandler(ts.Handler):
+    def __init__(self, calls_client: client.CallsClient, agent_name: str, stt: str, tts: str) -> None:
+        self._calls_client = calls_client
         self._agent_name = agent_name
         self._stt = stt
         self._tts = tts
 
-    async def accept_job(self, job_request: livekit_agents.JobRequest) -> None:  # tesser:debt TB085
+    async def accept_job(self, job_request: livekit_agents.JobRequest) -> None:
         await job_request.accept(identity=self._agent_name)
 
-    async def start_job(self, job_context: livekit_agents.JobContext) -> None:  # tesser:debt TB085
+    async def start_job(self, job_context: livekit_agents.JobContext) -> None:
         await job_context.connect()
         call_id = job_context.room.name
-        call_agent = CallAgent(self._call_events_application_client, call_id)
+        call_agent = CallAgent(self._calls_client, call_id)
         agent_session: livekit_agents.AgentSession[None] = livekit_agents.AgentSession(
             stt=self._stt, tts=self._tts, aec_warmup_duration=None
         )
@@ -65,4 +58,4 @@ class LivekitCallRuntime(ts.Runtime):
             room_options=livekit_room_io.RoomOptions(participant_identity=_PERSON_IDENTITY),
         )
         await livekit_participant.wait_for_participant(job_context.room, identity=_PERSON_IDENTITY)
-        await self._call_events_application_client.person_joined(relays.PersonJoinedRequest(call_id=call_id))
+        await self._calls_client.person_joined(client.PersonJoinedRequest(call_id=call_id))

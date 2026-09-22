@@ -4,5 +4,9 @@ from calls.client.client import CallNotFound as CallNotFound
 from calls.client.client import CallsClient as CallsClient
 from calls.client.client import GetCallRequest as GetCallRequest
 from calls.client.client import GetCallResponse as GetCallResponse
+from calls.client.client import PersonJoinedRequest as PersonJoinedRequest
+from calls.client.client import PersonJoinedResponse as PersonJoinedResponse
+from calls.client.client import PersonTurnCompletedRequest as PersonTurnCompletedRequest
+from calls.client.client import PersonTurnCompletedResponse as PersonTurnCompletedResponse
 from calls.client.client import PlaceCallRequest as PlaceCallRequest
 from calls.client.client import PlaceCallResponse as PlaceCallResponse

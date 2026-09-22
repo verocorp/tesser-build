@@ -36,6 +36,31 @@ class GetCallResponse(ts.Response):
         self.call = call
 
 
+class PersonJoinedRequest(ts.Request):
+
+    def __init__(self, call_id: str) -> None:
+        self.call_id = call_id
+
+
+class PersonJoinedResponse(ts.Response):
+
+    def __init__(self, call_id: str) -> None:
+        self.call_id = call_id
+
+
+class PersonTurnCompletedRequest(ts.Request):
+
+    def __init__(self, call_id: str, text: str) -> None:
+        self.call_id = call_id
+        self.text = text
+
+
+class PersonTurnCompletedResponse(ts.Response):
+
+    def __init__(self, call_id: str) -> None:
+        self.call_id = call_id
+
+
 class CallNotFound(ts.Error):
 
     def __init__(self, message: str) -> None:
@@ -51,3 +76,9 @@ class CallsClient(ts.Client, typing.Protocol):
     async def place_call(self, place_call_request: PlaceCallRequest) -> PlaceCallResponse: ...
 
     async def get_call(self, get_call_request: GetCallRequest) -> GetCallResponse: ...
+
+    async def person_joined(self, person_joined_request: PersonJoinedRequest) -> PersonJoinedResponse: ...
+
+    async def person_turn_completed(
+        self, person_turn_completed_request: PersonTurnCompletedRequest
+    ) -> PersonTurnCompletedResponse: ...

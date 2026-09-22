@@ -28,6 +28,25 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   voice (`CallOrchestratorRelay`, `CallOrchestratorSignalRelay`,
   `CallActionsRelay`, `SpeechActionsRelay`, `DialingActionsRelay`),
   durable-execution, minimal, and the generator's templates.
+- **A foreign SDK's callback surface is a handler, not a runtime (Chris,
+  2026-09-22; enacted in the voice tree, analyzer check still to build).**
+  `LivekitCallRuntime` became `calls/adapters/handlers/livekit.py`: the
+  person on the phone is an outsider, so the surface that observes them
+  joining and speaking holds the context client, and `CallsClient` publishes
+  `person_joined` and `person_turn_completed` the way it would publish a
+  webhook. `CallEventsActions` went back to `CallEventsService`, which may
+  hold a relay, so the relay-in-actions widening is not needed and the three
+  TB081/TB082 markers on it and the four TB085 runtime-hook markers are gone.
+  The STT and TTS model names moved off the component's config onto the
+  worker host that owns them. To build: the mechanical cut that tells the
+  two kinds apart — every handler a runtime registers, and every promise it
+  names, is the far end of a relay operation in its context (`run_`,
+  `start_`, or `await_` + operation), because a runtime has us on both ends;
+  a callback no runner reaches is a handler and belongs in
+  `adapters/handlers/`; and the mirror, a handler's public methods are never
+  named for a relay operation. Both read the relay registry the far-side
+  derivation already builds. Declare-then-verify limit: writing runners for
+  an SDK is the declaration that we are on both ends.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the

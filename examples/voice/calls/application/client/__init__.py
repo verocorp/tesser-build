@@ -1,4 +1,3 @@
 from calls.application.client.call_actions import CallApplicationClient as CallApplicationClient
-from calls.application.client.call_events_actions import CallEventsApplicationClient as CallEventsApplicationClient
 from calls.application.client.dialing_actions import DialingApplicationClient as DialingApplicationClient
 from calls.application.client.speech_actions import SpeechApplicationClient as SpeechApplicationClient

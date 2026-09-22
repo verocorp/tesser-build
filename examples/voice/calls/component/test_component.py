@@ -10,8 +10,6 @@ import pgdatabase.database as pgdatabase_database
 def _spec(
     storage: str = "postgres://a@b/c",
     ingress: str = "http://localhost:8080",
-    livekit_stt_model: str = "deepgram/nova-3",
-    livekit_tts_model: str = "cartesia/sonic-2",
 ) -> component.Spec:
     return component.Spec(
         storage=storage,
@@ -20,8 +18,6 @@ def _spec(
         livekit_api_key="key",
         livekit_api_secret="secret",
         livekit_agent_name="caller",
-        livekit_stt_model=livekit_stt_model,
-        livekit_tts_model=livekit_tts_model,
     )
 
 
@@ -45,14 +41,6 @@ class TestConfig:
             config.livekit_api_secret,
             config.livekit_agent_name,
         ) == ("ws://livekit", "key", "secret", "caller")
-
-    def test_a_config_carries_the_models_for_the_livekit_runtime(self) -> None:
-        spec = _spec(livekit_stt_model="stt-model", livekit_tts_model="tts-model")
-
-        config = component.Config(spec)
-
-        assert config.livekit_stt_model == spec.livekit_stt_model
-        assert config.livekit_tts_model == spec.livekit_tts_model
 
 
 class TestCalls:
