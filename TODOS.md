@@ -47,6 +47,25 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   named for a relay operation. Both read the relay registry the far-side
   derivation already builds. Declare-then-verify limit: writing runners for
   an SDK is the declaration that we are on both ends.
+- **Consider splitting a relay module into its protocol and its messages
+  (Chris, 2026-09-22; not enacted, leaning yes).** Today one module in
+  `application/relays/` holds the relay protocol, every request and response
+  it speaks, and their snapshots — `call_orchestrator_relay.py` declares
+  thirteen classes. A runner implements the relay structurally and never
+  names the protocol, but it imports the `relays` package for the message
+  types on its signatures, so the import that says *implements* is
+  indistinguishable from one that says *uses*, and the protocol is bound in
+  every module that only wanted a message. The same is true of the service
+  and the orchestrator that *use* the relay: they name the protocol and the
+  messages from one package. Splitting would put the messages (and their
+  snapshots) where an implementer and a user both reach them and the
+  protocol where only a user does, so the import graph shows which
+  relationship a module has to the relay — the vocabulary in the
+  uses/implements/directly-uses taxonomy the analyzer would need before it
+  could enforce "an implementer does not import its interface". Decide the
+  cut (one messages module beside each relay, or a `messages/` package),
+  what the runner and the runtime then import, and whether ports get the
+  same split, since `ports/` has the identical shape.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the
