@@ -55,14 +55,15 @@ class Ordering(ts.Component):
         self._memory_payment_processor = gateways.MemoryPaymentProcessor()
         self._purchase_actions = application.PurchaseActions(self._memory_payment_processor)
         self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(
-            self._order_actions, self._purchase_actions
+            self._order_actions,
+            self._purchase_actions,
+            runners.RestateOrderWorkflow(),
+            runners.RestatePurchaseWorkflow(),
         )
         self.client: client.OrderingClient = Ordering.Client(
-            application.OrderService(
-                runners.RestateIngressOrderOrchestratorRelay(config.ingress, self.restate_order_runtime)
-            ),
+            application.OrderService(runners.RestateIngressOrderOrchestratorRelay(config.ingress)),
             application.PurchaseService(
-                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress, self.restate_order_runtime)
+                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress)
             ),
         )
 

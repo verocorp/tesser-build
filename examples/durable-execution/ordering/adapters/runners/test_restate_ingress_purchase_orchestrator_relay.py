@@ -10,42 +10,8 @@ import httpx
 import pytest
 
 import ordering.adapters.runners as runners
-import ordering.adapters.runtimes as runtimes
-import ordering.application.client as client
 import ordering.application.relays as relays
 import ordering.domain as domain
-
-
-@ts.fake
-class FakeOrderingApplicationClient(client.OrderingApplicationClient):
-
-    def price_product(
-        self, price_product_request: relays.PriceProductRequest
-    ) -> relays.PriceProductResponse:
-        return relays.PriceProductResponse(
-            outcome=relays.PriceProductOutcome.PRICED,
-            prices=(relays.Price(cents=250),),
-            reasons=(),
-        )
-
-
-@ts.fake
-class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
-
-    def take_payment(
-        self, take_payment_request: relays.TakePaymentRequest
-    ) -> relays.TakePaymentResponse:
-        return relays.TakePaymentResponse(
-            outcome=relays.TakePaymentOutcome.TAKEN,
-            order_id=take_payment_request.order_id,
-            payments=(
-                relays.Payment(
-                    reference=f"pay-{take_payment_request.order_id}",
-                    cents=take_payment_request.cents,
-                ),
-            ),
-            reasons=(),
-        )
 
 
 @ts.helper
@@ -67,10 +33,7 @@ class TestRestateIngressPurchaseOrchestratorRelay:
         order_id = str(uuid.uuid4())
         pay_for_order_response = asyncio.run(
             runners.RestateIngressPurchaseOrchestratorRelay(
-                os.environ["RESTATE_INGRESS"],
-                runtimes.RestateOrderRuntime(
-                    FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-                ),
+                os.environ["RESTATE_INGRESS"]
             ).run_pay_for_order(pay_for_order_request(order_id=order_id))
         )
         response = httpx.post(
@@ -89,16 +52,18 @@ class TestRestateIngressPurchaseOrchestratorRelay:
             (row["target"], row["invoked_by"], row["status"], row["completion_result"])
             for row in response.json()["rows"]
         ] == [
-            ("PurchaseOrchestrator/" + order_id + "/pay_for_order", "ingress", "completed", "success")
+            (
+                "PurchaseOrchestrator/" + order_id + "/pay_for_order",
+                "ingress",
+                "completed",
+                "success",
+            )
         ]
 
     def test_the_already_invoked_conflict_is_the_outcome_the_engine_crossing_adds(self) -> None:
         order_id = str(uuid.uuid4())
-        restate_ingress_purchase_orchestrator_relay = runners.RestateIngressPurchaseOrchestratorRelay(
-            os.environ["RESTATE_INGRESS"],
-            runtimes.RestateOrderRuntime(
-                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-            ),
+        restate_ingress_purchase_orchestrator_relay = (
+            runners.RestateIngressPurchaseOrchestratorRelay(os.environ["RESTATE_INGRESS"])
         )
         first = asyncio.run(
             restate_ingress_purchase_orchestrator_relay.run_pay_for_order(
@@ -133,10 +98,7 @@ class TestRestateIngressPurchaseOrchestratorRelay:
             unreachable = f"http://127.0.0.1:{closed.getsockname()[1]}"
         with pytest.raises(httpx.TransportError):
             asyncio.run(
-                runners.RestateIngressPurchaseOrchestratorRelay(
-                    unreachable,
-                    runtimes.RestateOrderRuntime(
-                        FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
-                    ),
-                ).run_pay_for_order(pay_for_order_request())
+                runners.RestateIngressPurchaseOrchestratorRelay(unreachable).run_pay_for_order(
+                    pay_for_order_request()
+                )
             )

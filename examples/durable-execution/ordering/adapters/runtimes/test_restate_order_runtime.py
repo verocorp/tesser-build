@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import typing
 
 import tesser.testing as ts
@@ -72,6 +73,81 @@ class FakeDecliningPurchaseApplicationClient(client.PurchaseApplicationClient):
         )
 
 
+@ts.fake
+class FakeOrderOrchestratorApplicationClient(client.OrderOrchestratorApplicationClient):
+
+    def __init__(self) -> None:
+        self.confirmed: list[relays.ConfirmOrderRequest] = []
+
+    async def confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse:
+        self.confirmed.append(confirm_order_request)
+        return relays.ConfirmOrderResponse(
+            outcome=relays.ConfirmOrderOutcome.CONFIRMED,
+            order_id=str(confirm_order_request.order.identity),
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=500),),
+            reasons=(),
+        )
+
+
+@ts.fake
+class FakeOrderWorkflow(client.OrderWorkflow[restate.WorkflowContext]):
+
+    def __init__(
+        self, fake_order_orchestrator_application_client: FakeOrderOrchestratorApplicationClient
+    ) -> None:
+        self._fake_order_orchestrator_application_client = (
+            fake_order_orchestrator_application_client
+        )
+        self.opened: list[restate.WorkflowContext] = []
+
+    @contextlib.asynccontextmanager
+    async def invocation(
+        self, restate_workflow_context: restate.WorkflowContext
+    ) -> typing.AsyncIterator[FakeOrderOrchestratorApplicationClient]:
+        self.opened.append(restate_workflow_context)
+        yield self._fake_order_orchestrator_application_client
+
+
+@ts.fake
+class FakePurchaseOrchestratorApplicationClient(client.PurchaseOrchestratorApplicationClient):
+
+    def __init__(self) -> None:
+        self.paid: list[relays.PayForOrderRequest] = []
+
+    async def pay_for_order(
+        self, pay_for_order_request: relays.PayForOrderRequest
+    ) -> relays.PayForOrderResponse:
+        self.paid.append(pay_for_order_request)
+        return relays.PayForOrderResponse(
+            outcome=relays.PayForOrderOutcome.PAID,
+            order_id=str(pay_for_order_request.order.identity),
+            purchases=(relays.Purchase(total_cents=500, payment_reference="pay-o1"),),
+            reasons=(),
+        )
+
+
+@ts.fake
+class FakePurchaseWorkflow(client.PurchaseWorkflow[restate.WorkflowContext]):
+
+    def __init__(
+        self,
+        fake_purchase_orchestrator_application_client: FakePurchaseOrchestratorApplicationClient,
+    ) -> None:
+        self._fake_purchase_orchestrator_application_client = (
+            fake_purchase_orchestrator_application_client
+        )
+        self.opened: list[restate.WorkflowContext] = []
+
+    @contextlib.asynccontextmanager
+    async def invocation(
+        self, restate_workflow_context: restate.WorkflowContext
+    ) -> typing.AsyncIterator[FakePurchaseOrchestratorApplicationClient]:
+        self.opened.append(restate_workflow_context)
+        yield self._fake_purchase_orchestrator_application_client
+
+
 @ts.helper
 def confirm_order_request(
     order_id: str = "o1", sku: str = "widget", quantity: int = 2
@@ -107,7 +183,10 @@ class TestRestateOrderRuntime:
 
     def test_it_registers_two_actions_services_and_two_orchestrator_workflows(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
-            FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+            FakeOrderingApplicationClient(),
+            FakePurchaseApplicationClient(),
+            FakeOrderWorkflow(FakeOrderOrchestratorApplicationClient()),
+            FakePurchaseWorkflow(FakePurchaseOrchestratorApplicationClient()),
         )
         assert (
             restate_order_runtime.order_actions_service.name,
@@ -128,7 +207,10 @@ class TestRestateOrderRuntime:
 
     def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
         restate_order_runtime = runtimes.RestateOrderRuntime(
-            FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+            FakeOrderingApplicationClient(),
+            FakePurchaseApplicationClient(),
+            FakeOrderWorkflow(FakeOrderOrchestratorApplicationClient()),
+            FakePurchaseWorkflow(FakePurchaseOrchestratorApplicationClient()),
         )
         for registered in (
             restate_order_runtime.order_actions_service,
@@ -144,7 +226,10 @@ class TestRestateOrderRuntime:
     def test_the_take_payment_handler_hands_the_request_to_the_purchase_client(self) -> None:
         take_payment_response = asyncio.run(
             runtimes.RestateOrderRuntime(
-                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                FakeOrderingApplicationClient(),
+                FakePurchaseApplicationClient(),
+                FakeOrderWorkflow(FakeOrderOrchestratorApplicationClient()),
+                FakePurchaseWorkflow(FakePurchaseOrchestratorApplicationClient()),
             ).take_payment_handler(typing.cast(restate.Context, None), take_payment_request())
         )
         assert take_payment_response.outcome is relays.TakePaymentOutcome.TAKEN
@@ -154,7 +239,10 @@ class TestRestateOrderRuntime:
     def test_a_declined_charge_ends_the_action_as_an_outcome_not_an_error(self) -> None:
         take_payment_response = asyncio.run(
             runtimes.RestateOrderRuntime(
-                FakeOrderingApplicationClient(), FakeDecliningPurchaseApplicationClient()
+                FakeOrderingApplicationClient(),
+                FakeDecliningPurchaseApplicationClient(),
+                FakeOrderWorkflow(FakeOrderOrchestratorApplicationClient()),
+                FakePurchaseWorkflow(FakePurchaseOrchestratorApplicationClient()),
             ).take_payment_handler(typing.cast(restate.Context, None), take_payment_request())
         )
         assert take_payment_response.outcome is relays.TakePaymentOutcome.DECLINED
@@ -163,7 +251,10 @@ class TestRestateOrderRuntime:
     def test_the_price_product_handler_hands_the_request_to_the_application_client(self) -> None:
         price_product_response = asyncio.run(
             runtimes.RestateOrderRuntime(
-                FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
+                FakeOrderingApplicationClient(),
+                FakePurchaseApplicationClient(),
+                FakeOrderWorkflow(FakeOrderOrchestratorApplicationClient()),
+                FakePurchaseWorkflow(FakePurchaseOrchestratorApplicationClient()),
             ).price_product_handler(
                 typing.cast(restate.Context, None), relays.PriceProductRequest(sku="gadget")
             )
@@ -173,13 +264,52 @@ class TestRestateOrderRuntime:
     def test_an_unknown_sku_ends_the_action_as_an_outcome_not_an_error(self) -> None:
         price_product_response = asyncio.run(
             runtimes.RestateOrderRuntime(
-                FakeUnpricedOrderingApplicationClient(), FakePurchaseApplicationClient()
+                FakeUnpricedOrderingApplicationClient(),
+                FakePurchaseApplicationClient(),
+                FakeOrderWorkflow(FakeOrderOrchestratorApplicationClient()),
+                FakePurchaseWorkflow(FakePurchaseOrchestratorApplicationClient()),
             ).price_product_handler(
                 typing.cast(restate.Context, None), relays.PriceProductRequest(sku="nothing")
             )
         )
         assert price_product_response.outcome is relays.PriceProductOutcome.PRICE_NOT_FOUND
         assert price_product_response.reasons == ("no price for sku 'nothing'",)
+
+    def test_the_confirm_order_handler_opens_the_order_workflow_on_this_invocations_context(
+        self,
+    ) -> None:
+        fake_order_orchestrator_application_client = FakeOrderOrchestratorApplicationClient()
+        fake_order_workflow = FakeOrderWorkflow(fake_order_orchestrator_application_client)
+        restate_workflow_context = typing.cast(restate.WorkflowContext, object())
+        confirm_order_response = asyncio.run(
+            runtimes.RestateOrderRuntime(
+                FakeOrderingApplicationClient(),
+                FakePurchaseApplicationClient(),
+                fake_order_workflow,
+                FakePurchaseWorkflow(FakePurchaseOrchestratorApplicationClient()),
+            ).confirm_order_handler(restate_workflow_context, confirm_order_request())
+        )
+        assert fake_order_workflow.opened == [restate_workflow_context]
+        assert fake_order_orchestrator_application_client.confirmed == [confirm_order_request()]
+        assert confirm_order_response.confirmed_orders[0].total_cents == 500
+
+    def test_the_pay_for_order_handler_opens_the_purchase_workflow_on_this_invocations_context(
+        self,
+    ) -> None:
+        fake_purchase_orchestrator_application_client = FakePurchaseOrchestratorApplicationClient()
+        fake_purchase_workflow = FakePurchaseWorkflow(fake_purchase_orchestrator_application_client)
+        restate_workflow_context = typing.cast(restate.WorkflowContext, object())
+        pay_for_order_response = asyncio.run(
+            runtimes.RestateOrderRuntime(
+                FakeOrderingApplicationClient(),
+                FakePurchaseApplicationClient(),
+                FakeOrderWorkflow(FakeOrderOrchestratorApplicationClient()),
+                fake_purchase_workflow,
+            ).pay_for_order_handler(restate_workflow_context, pay_for_order_request())
+        )
+        assert fake_purchase_workflow.opened == [restate_workflow_context]
+        assert fake_purchase_orchestrator_application_client.paid == [pay_for_order_request()]
+        assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAID
 
 
 class TestRestateSerdes:
