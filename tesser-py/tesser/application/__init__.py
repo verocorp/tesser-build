@@ -1,6 +1,5 @@
 from tesser.application.actions import Actions as Actions
 from tesser.application.client import Client as Client
-from tesser.application.factory import Factory as Factory
 from tesser.application.mapper import Mapper as Mapper
 from tesser.application.orchestrator import Orchestrator as Orchestrator
 from tesser.application.port import Port as Port

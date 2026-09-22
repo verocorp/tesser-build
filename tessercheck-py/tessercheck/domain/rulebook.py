@@ -13,7 +13,6 @@ import tessercheck.domain.checks as checks  # tesser:debt TB060
 _UNREADABLE: typing.Final[str] = "rulebook_unreadable"
 
 HOLE_NAMES: typing.Final[dict[str, str]] = {
-    "len(factories)": "⟨count⟩",
     "len(workflows)": "⟨count⟩",
     "engine_call": "⟨engine call⟩",
     "literals[0]": "⟨name⟩",

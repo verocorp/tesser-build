@@ -9,7 +9,6 @@ import calls.adapters.repositories as repositories
 import calls.adapters.runners as runners
 import calls.adapters.runtimes as runtimes
 import calls.application as application
-import calls.application.orchestrators as orchestrators
 import calls.client as client
 import pgdatabase.database as pgdatabase_database
 
@@ -91,7 +90,7 @@ class Calls(ts.Component):
                     )
                 )
             ),
-            runners.RestateCallWorkflow(orchestrators.CallOrchestrator),
+            runners.RestateCallWorkflow(),
         )
         self.client: client.CallsClient = Calls.Client(
             application.CallService(
