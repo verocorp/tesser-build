@@ -4807,7 +4807,7 @@ def test_a_repository_sibling_test_reaches_its_kind_and_application_only() -> No
     assert not any("test_words.py:2:" in f for f in findings), findings
 
 
-def test_a_component_sibling_test_reaches_what_the_component_does_and_its_own_domain() -> None:
+def test_a_component_sibling_test_mirrors_production_component_reach() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in domain.Codebase(_spec(sources=(
@@ -4827,7 +4827,6 @@ def test_a_component_sibling_test_reaches_what_the_component_does_and_its_own_do
                 "import shop.application.service as service\n"
                 "import far.client as far_client\n"
                 "import shop.domain.thing as thing\n"
-                "import far.domain.thing as far_thing\n"
                 "def test_x() -> None:\n"
                 "    assert True\n",
                 False,
@@ -4869,13 +4868,13 @@ def test_a_component_sibling_test_reaches_what_the_component_does_and_its_own_do
         ))).violations()
                )
     assert any(
-        "shop.component.test_component imports far.domain.thing, but a test placed in component "
-        "reaches only client of a neighbouring context" in f
+        "shop.component.test_component imports shop.domain.thing, but a test placed in component "
+        "reaches only component, application, adapters, client of its own context; "
+        "a test reaches only what its placement allows" in f
         for f in findings
-    ), findings
-    assert not any("test_component.py:1:" in f for f in findings), findings
-    assert not any("test_component.py:2:" in f for f in findings), findings
-    assert not any("test_component.py:3:" in f for f in findings), findings
+    )
+    assert not any("test_component.py:1:" in f for f in findings)
+    assert not any("test_component.py:2:" in f for f in findings)
 
 
 def test_a_client_sibling_test_reaches_only_its_own_client() -> None:
@@ -12438,7 +12437,7 @@ def _kinds_spec(
         (
             "shop/application/client/__init__.py",
             "shop.application.client",
-            "from shop.application.client.flow import FlowApplicationClient as FlowApplicationClient\n"
+            "from shop.application.client.flow import FlowWorkflow as FlowWorkflow\n"
             "from shop.application.client.quotes import ShopApplicationClient as ShopApplicationClient\n",
             True,
         ),
@@ -12450,7 +12449,9 @@ def _kinds_spec(
             "import shop.application.relays as relays\n"
             "class FlowApplicationClient(ts.Client, typing.Protocol):\n"
             "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
-            " -> relays.IssueQuoteResponse: ...\n",
+            " -> relays.IssueQuoteResponse: ...\n"
+            "class FlowWorkflow[C](ts.Workflow, typing.Protocol):\n"
+            "    def invocation(self, context: C, /) -> typing.AsyncContextManager[FlowApplicationClient]: ...\n",
             False,
         ),
         (
@@ -12612,21 +12613,29 @@ def _kinds_spec(
         (
             "shop/adapters/runners/__init__.py",
             "shop.adapters.runners",
-            "from shop.adapters.runners.inline_quote_actions_relay import InlineQuoteActionsRelay as InlineQuoteActionsRelay\n",
+            "from shop.adapters.runners.inline_quote_actions_relay import InlineFlowWorkflow as InlineFlowWorkflow\n",
             True,
         ),
         (
             "shop/adapters/runners/inline_quote_actions_relay.py",
             "shop.adapters.runners.inline_quote_actions_relay",
+            "import contextlib\n"
+            "import typing\n"
             "import tesser.adapters as ts\n"
             "import engine\n"
+            "import shop.application.orchestrators as orchestrators\n"
             "import shop.application.relays as relays\n"
             "class InlineQuoteActionsRelay(ts.Runner):\n"
             "    def __init__(self, engine_context: engine.Context) -> None:\n"
             "        self._engine_context = engine_context\n"
             "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
             " -> relays.QuotePriceResponse:\n"
-            "        return await self._engine_context.generic_call('QuoteActions', 'quote_price', b'')\n",
+            "        return await self._engine_context.generic_call('QuoteActions', 'quote_price', b'')\n"
+            "class InlineFlowWorkflow(ts.Runner):\n"
+            "    @contextlib.asynccontextmanager\n"
+            "    async def invocation(self, engine_context: engine.Context)"
+            " -> typing.AsyncIterator[orchestrators.Flow]:\n"
+            "        yield orchestrators.Flow(InlineQuoteActionsRelay(engine_context))\n",
             False,
         ),
         (
@@ -12653,7 +12662,7 @@ def _kinds_spec(
             "    def __init__(\n"
             "        self,\n"
             "        shop_application_client: client.ShopApplicationClient,\n"
-            "        flow_workflow: ts.Workflow[engine.Context, client.FlowApplicationClient],\n"
+            "        flow_workflow: client.FlowWorkflow[engine.Context],\n"
             "    ) -> None:\n"
             "        self._shop_application_client = shop_application_client\n"
             "        self._flow_workflow = flow_workflow\n"
@@ -12677,30 +12686,21 @@ def _kinds_spec(
         (
             "shop/component/component.py",
             "shop.component.component",
-            "import contextlib\n"
-            "import typing\n"
             "import tesser.component as ts\n"
-            "import engine\n"
             "import shop.adapters.gateways as gateways\n"
             "import shop.adapters.runners as runners\n"
             "import shop.adapters.runtimes as runtimes\n"
-            "import shop.application.orchestrators as orchestrators\n"
             "import shop.application.quotes as quotes\n"
             "import shop.application.service as service\n"
             "import shop.client.client as client\n"
             "class Shop(ts.Component):\n"
-            "    class Workflow:\n"
-            "        @contextlib.asynccontextmanager\n"
-            "        async def invocation(self, engine_context: engine.Context)"
-            " -> typing.AsyncIterator[orchestrators.Flow]:\n"
-            "            yield orchestrators.Flow(runners.InlineQuoteActionsRelay(engine_context))\n"
             "    def __init__(self) -> None:\n"
             "        self._quotes = gateways.QuoteGateway()\n"
             "        self._listing = gateways.CatalogGateway()\n"
             "        self._actions = quotes.QuoteActions(self._listing)\n"
             "        self.client: client.Client = service.AskService()\n"
             "        self.engine_runtimes: tuple[runtimes.EngineRuntime, ...] = (\n"
-            "            runtimes.EngineRuntime(self._actions, Shop.Workflow()),\n"
+            "            runtimes.EngineRuntime(self._actions, runners.InlineFlowWorkflow()),\n"
             "        )\n"
             "    def close(self) -> None:\n"
             "        return None\n",
@@ -13482,7 +13482,7 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
     )
 
 
-def test_only_a_runtime_reaches_the_application_client_and_only_a_component_the_orchestrators() -> None:
+def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orchestrators() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -13576,12 +13576,17 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_component_the_
         for f in findings
     ), findings
     assert any(
-        "shop.application.peeker imports shop.application.orchestrators; only a component imports "
-        "the orchestrators, because an orchestrator is built per invocation by the workflow the "
-        "component hands the runtime" in f
+        "shop.application.peeker imports shop.application.orchestrators; only a runner imports "
+        "the orchestrators, because an orchestrator is built per invocation by the workflow that "
+        "runs beside that invocation's runners" in f
         for f in findings
     ), findings
-    assert not any("shop.component.peek imports" in f for f in findings), findings
+    assert any(
+        "shop.component.peek imports shop.application.orchestrators; only a runner imports the "
+        "orchestrators" in f
+        for f in findings
+    ), findings
+    assert not any("shop.adapters.runners.peek imports shop.application.orchestrators" in f for f in findings), findings
     assert any(
         "shop.adapters.handlers.peek imports shop.application.client.quotes; only "
         "a runtime imports the application client" in f
@@ -13598,12 +13603,11 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_component_the_
             "only what its kind reaches" in f
             for f in findings
         ), (importer, findings)
-    for importer in ("runners.peek", "runtimes.peek"):
-        assert any(
-            f"shop.adapters.{importer} imports shop.application.orchestrators; only a component "
-            "imports the orchestrators" in f
-            for f in findings
-        ), (importer, findings)
+    assert any(
+        "shop.adapters.runtimes.peek imports shop.application.orchestrators; only a runner "
+        "imports the orchestrators" in f
+        for f in findings
+    ), findings
     assert any(
         "shop.adapters.runtimes.test_reach imports shop.client.client, but a test "
         "placed in runtimes reaches only" in f
@@ -13617,7 +13621,7 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_component_the_
     ), findings
     assert any(
         "shop.tests.test_peek imports shop.application.orchestrators, but only a test placed in "
-        "component reaches the orchestrators; a test reaches only what its placement allows" in f
+        "runners reaches the orchestrators; a test reaches only what its placement allows" in f
         for f in findings
     ), findings
     assert not any(
@@ -19229,8 +19233,9 @@ def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
     )
     where = "shop.adapters.runners.engine_confirm_order_relay"
     assert any(
-        f"{where}.EngineOrderRunner ends in no relay's name; a runner is its engine's word followed "
-        "by the name of the relay it implements, because its name is how its relay is found" in f
+        f"{where}.EngineOrderRunner ends in no relay's or workflow's name; a runner is its engine's "
+        "word followed by the name of the relay or workflow it implements, because its name is how "
+        "that protocol is found" in f
         for f in findings
     ), findings
     assert any(
@@ -19339,6 +19344,42 @@ def test_a_runtime_registers_only_what_a_runner_of_its_context_reaches() -> None
     assert any(
         f"{where} names a promise with something other than a string literal; a runtime names each "
         "promise as a literal, because a name the analyzer cannot read is a name it is not checking" in f
+        for f in findings
+    ), findings
+
+
+def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/lone.py",
+                "shop.application.client.lone",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class LoneApplicationClient(ts.Client, typing.Protocol):\n"
+                "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+                " -> relays.IssueQuoteResponse: ...\n"
+                "class LoneWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[relays.IssueQuoteResponse]: ...\n"
+                "class SecondWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    where = "shop.application.client.lone"
+    assert any(
+        f"{where}.LoneWorkflow does not yield the client beside it from one invocation; a workflow in "
+        "an application client module declares only invocation, and what it yields is the client that "
+        "module declares" in f
+        for f in findings
+    ), findings
+    assert not any(f"{where}.SecondWorkflow does not yield" in f for f in findings), findings
+    assert any(
+        f"{where} declares 2 workflows; an application client module declares at most one "
+        "ts.Workflow, the one that yields its client" in f
         for f in findings
     ), findings
 

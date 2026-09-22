@@ -79,7 +79,7 @@ class FakeCallOrchestratorApplicationClient(client.CallOrchestratorApplicationCl
 
 
 @ts.fake
-class FakeCallWorkflow:
+class FakeCallWorkflow(client.CallWorkflow[restate.WorkflowContext]):
     def __init__(self, fake_call_orchestrator_application_client: FakeCallOrchestratorApplicationClient) -> None:
         self._fake_call_orchestrator_application_client = fake_call_orchestrator_application_client
         self.opened: list[restate.WorkflowContext] = []

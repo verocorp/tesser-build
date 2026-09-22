@@ -24,6 +24,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Actions"): "actions",
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
+    ("tesser.application", "Workflow"): "workflow",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -149,8 +150,6 @@ ENGINE_CALLS: typing.Final[dict[str, str]] = {"generic_call": RUN_MODE, "generic
 
 PROMISE_CALL: typing.Final[str] = "promise"
 
-WORKFLOW_KIND: typing.Final[str] = "Workflow"
-
 WORKFLOW_OPERATION: typing.Final[str] = "invocation"
 
 WORKFLOW_BLOCK: typing.Final[str] = "workflow"
@@ -198,7 +197,7 @@ PLACEMENT_KINDS: typing.Final[dict[str, frozenset[str]]] = {
 
 RUNTIME_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (APPLICATION_CLIENT_IMPORT,)
 
-COMPONENT_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (ORCHESTRATORS_IMPORT,)
+RUNNER_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (ORCHESTRATORS_IMPORT,)
 
 RUNNER_BLOCK: typing.Final[str] = "runner"
 
@@ -229,7 +228,7 @@ ACTIONS_CLIENT_BLOCK: typing.Final[str] = "actions_client"
 INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = (ORCHESTRATOR_BLOCK, ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK)
 
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime"}
+    {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime", "workflow"}
 )
 
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
@@ -329,7 +328,7 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
-    RUNNERS_PACKAGE: (RELAYS_IMPORT,),
+    RUNNERS_PACKAGE: (RELAYS_IMPORT, ORCHESTRATORS_IMPORT),
     RUNTIMES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
 }
 
@@ -352,6 +351,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "actions": "application",
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
+    "workflow": APPLICATION_CLIENT_HOME,
     RELAY_BLOCK: RELAYS_HOME,
     "relay_request": RELAYS_HOME,
     "relay_response": RELAYS_HOME,
@@ -401,6 +401,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     SNAPSHOT_BLOCK: "a snapshot",
     "port": "a port",
     "store": "a store",
+    "workflow": "a workflow",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
     "request": "a request DTO",
@@ -646,7 +647,7 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "domain": SAME_CONTEXT_IMPORTS["domain"],
     "application": SAME_CONTEXT_IMPORTS["application"],
     "client": SAME_CONTEXT_IMPORTS["client"],
-    "component": SAME_CONTEXT_IMPORTS["component"] + ("domain",),
+    "component": SAME_CONTEXT_IMPORTS["component"],
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
@@ -9169,7 +9170,9 @@ class Module(ts.Entity):
             )
         return tuple(rows)
 
-    def _far_side_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, str, str], ...]:
+    def _far_side_rows(
+        self, blocks: dict[tuple[str, str], str], yields: dict[tuple[str, str], tuple[str, str]]
+    ) -> tuple[tuple[str, str, str, str], ...]:
         if str(self._placement) in TEST_TIER:
             return ()
         paired: dict[tuple[str, str], tuple[str, str]] = {}
@@ -9208,20 +9211,12 @@ class Module(ts.Entity):
                     if arg.annotation is None:
                         continue
                     annotation = arg.annotation
-                    if (
-                        isinstance(annotation, ast.Subscript)
-                        and isinstance(annotation.slice, ast.Tuple)
-                        and len(annotation.slice.elts) == 2
-                    ):
+                    if isinstance(annotation, ast.Subscript):
                         opener = scope.resolve(Text(ast.unparse(annotation.value)))
-                        yielded = scope.resolve(Text(ast.unparse(annotation.slice.elts[1])))
-                        if (
-                            opener is not None
-                            and yielded is not None
-                            and str(opener.name()) == WORKFLOW_KIND
-                            and str(opener.module()).split(".")[0] == TESSER
-                        ):
-                            opened[arg.arg] = (str(yielded.module()), str(yielded.name()))
+                        if opener is not None:
+                            yielded = yields.get((str(opener.module()), str(opener.name())))
+                            if yielded is not None:
+                                opened[arg.arg] = yielded
                         continue
                     named = scope.resolve(Text(ast.unparse(annotation)))
                     if named is not None:
@@ -10289,9 +10284,9 @@ class Module(ts.Entity):
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in RUNTIME_ONLY_IMPORTS
                 )
-                component_only = any(
+                runner_only = any(
                     inner == entry or inner.startswith(f"{entry}.")
-                    for entry in COMPONENT_ONLY_IMPORTS
+                    for entry in RUNNER_ONLY_IMPORTS
                 )
                 own_kernel = ".".join((context,) + CONTEXT_KERNEL_HOME)
                 if pieces[0] == context and role != CONTEXT_KERNEL_HOME[0] and (
@@ -10319,15 +10314,15 @@ class Module(ts.Entity):
                             "through the engine",
                         ))
                     )
-                elif pieces[0] == context and component_only and role != "component":
+                elif pieces[0] == context and runner_only and kind_package != RUNNERS_PACKAGE:
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a component imports the "
+                            f"{module_name} imports {target}; only a runner imports the "
                             "orchestrators, because an orchestrator is built per invocation by "
-                            "the workflow the component hands the runtime",
+                            "the workflow that runs beside that invocation's runners",
                         ))
                     )
                 elif pieces[0] == context and role == "adapters" and kind_reach is not None:
@@ -10569,10 +10564,40 @@ class Module(ts.Entity):
             return inner
 
         protocols: list[ast.ClassDef] = []
+        workflows: list[ast.ClassDef] = []
         for stmt in self._class_defs:
             where = f"{module_name}.{stmt.name}"
             named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
             block = str(named) if named is not None else None
+            if block == WORKFLOW_BLOCK:
+                workflows.append(stmt)
+                opens = tuple(
+                    item
+                    for item in stmt.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                )
+                yielded = (
+                    opens[0].returns.slice
+                    if len(opens) == 1
+                    and opens[0].name == WORKFLOW_OPERATION
+                    and isinstance(opens[0].returns, ast.Subscript)
+                    else None
+                )
+                if not (
+                    isinstance(yielded, ast.Name)
+                    and any(isinstance(other, ast.ClassDef) and other.name == yielded.id for other in self._class_defs)
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} does not yield the client beside it from one invocation; a "
+                            "workflow in an application client module declares only invocation, "
+                            "and what it yields is the client that module declares",
+                        ))
+                    )
+                continue
             if block == "actions_client":
                 protocols.append(stmt)
             elif block is None:
@@ -10615,6 +10640,16 @@ class Module(ts.Entity):
                     f"{module_name} declares {len(protocols)} client protocols; an "
                     "application client module declares exactly one ts.Client protocol "
                     "and nothing else",
+                ))
+            )
+        if len(workflows) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    workflows[1].lineno,
+                    "TB052",
+                    f"{module_name} declares {len(workflows)} workflows; an application client "
+                    "module declares at most one ts.Workflow, the one that yields its client",
                 ))
             )
         return tuple(found)
@@ -11114,13 +11149,9 @@ class Module(ts.Entity):
                         ))
                     )
                 else:
-                    doubles = not stmt.bases and tuple(
-                        item.name
-                        for item in stmt.body
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
-                    ) == (WORKFLOW_OPERATION,)
+                    doubles = False
                     for base in stmt.bases:
-                        ref = Annotation(base).primary()
+                        ref = Annotation(base.value if isinstance(base, ast.Subscript) else base).primary()
                         symbol = scope.resolve(ref) if ref is not None else None
                         block = kind_table.block_of(symbol) if symbol is not None else None
                         if block is not None and str(block) in (
@@ -11131,6 +11162,7 @@ class Module(ts.Entity):
                             RELAY_BLOCK,
                             "protocol_port",
                             "config_repository",
+                            WORKFLOW_BLOCK,
                         ):
                             doubles = True
                     if not doubles:
@@ -11140,8 +11172,8 @@ class Module(ts.Entity):
                                 stmt.lineno,
                                 "TB072",
                                 f"{where} implements no application port, store, relay, protocol "
-                                "port, client, or config repository, and is not a workflow's one "
-                                "invocation; a fake implements the contract it doubles",
+                                "port, client, workflow, or config repository; a fake implements "
+                                "the contract it doubles",
                             ))
                         )
             else:
@@ -11336,9 +11368,9 @@ class Module(ts.Entity):
                             "its placement allows",
                         ))
                     )
-                elif allowed and tier != "component" and not at_home and any(
+                elif allowed and tier != RUNNERS_PACKAGE and not at_home and any(
                     inner == entry or inner.startswith(f"{entry}.")
-                    for entry in COMPONENT_ONLY_IMPORTS
+                    for entry in RUNNER_ONLY_IMPORTS
                 ):
                     found.append(
                         Violation(ViolationSpec(
@@ -11346,7 +11378,7 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "component reaches the orchestrators; a test reaches only what its "
+                            "runners reaches the orchestrators; a test reaches only what its "
                             "placement allows",
                         ))
                     )
@@ -11539,7 +11571,9 @@ class Module(ts.Entity):
             where = f"{self._name}.{cls.name}"
             relay_name = ""
             relay_module = ""
-            for symbol in operation_rows.owners(Text(RELAY_BLOCK)):
+            for symbol in tuple(operation_rows.owners(Text(RELAY_BLOCK))) + tuple(
+                operation_rows.owners(Text(WORKFLOW_BLOCK))
+            ):
                 named = str(symbol.name())
                 if (
                     str(symbol.module()).split(".")[0] == context
@@ -11554,9 +11588,9 @@ class Module(ts.Entity):
                         self._path,
                         cls.lineno,
                         "TB085",
-                        f"{where} ends in no relay's name; a runner is its engine's word "
-                        "followed by the name of the relay it implements, because its name "
-                        "is how its relay is found",
+                        f"{where} ends in no relay's or workflow's name; a runner is its "
+                        "engine's word followed by the name of the relay or workflow it "
+                        "implements, because its name is how that protocol is found",
                     ))
                 )
                 continue
@@ -13165,7 +13199,7 @@ class Codebase(ts.AggregateRoot):
                     if key in blocks:
                         continue
                     for base in cls.bases:
-                        base_key = module._resolve(base)
+                        base_key = module._resolve(base.value if isinstance(base, ast.Subscript) else base)
                         if base_key is not None and base_key in blocks:
                             derived = blocks[base_key]
                             if module.name() in relayed:
@@ -13181,17 +13215,6 @@ class Codebase(ts.AggregateRoot):
                     if source is not None:
                         blocks[key] = source
                         changed = True
-        for module in self._modules:
-            for cls in module.class_defs():
-                if cls.bases or (module.name(), cls.name) in blocks:
-                    continue
-                public = tuple(
-                    item.name
-                    for item in cls.body
-                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
-                )
-                if public == (WORKFLOW_OPERATION,):
-                    blocks[(module.name(), cls.name)] = WORKFLOW_BLOCK
         self._mapper_target = {}
         for module in self._modules:
             for cls in module.class_defs():
@@ -13282,8 +13305,22 @@ class Codebase(ts.AggregateRoot):
             if blocks.get((module.name(), stmt.name)) in CHAIN_BLOCKS
         ))
         far_side_seen: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        yields: dict[tuple[str, str], tuple[str, str]] = {}
         for module in self._modules:
-            for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks):
+            for cls in module.class_defs():
+                if blocks.get((module.name(), cls.name)) != WORKFLOW_BLOCK:
+                    continue
+                for item in cls.body:
+                    if (
+                        isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and item.name == WORKFLOW_OPERATION
+                        and isinstance(item.returns, ast.Subscript)
+                    ):
+                        yielded = module._resolve(item.returns.slice)
+                        if yielded is not None:
+                            yields[(module.name(), cls.name)] = yielded
+        for module in self._modules:
+            for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks, yields):
                 far_side_seen.setdefault((context_name, operation_name), set()).add((far_module, far_name))
         far_side_rows = tuple(sorted(
             (context_name, operation_name, side[0], side[1])

@@ -189,7 +189,7 @@ class RestateCallRuntime(ts.Runtime):
         call_application_client: client.CallApplicationClient,
         dialing_application_client: client.DialingApplicationClient,
         speech_application_client: client.SpeechApplicationClient,
-        call_workflow: ts.Workflow[restate.WorkflowContext, client.CallOrchestratorApplicationClient],
+        call_workflow: client.CallWorkflow[restate.WorkflowContext],
     ) -> None:
         self.call_actions_service = restate.Service("CallActions", invocation_retry_policy=_RETRY_POLICY)
         self.dialing_actions_service = restate.Service("DialingActions", invocation_retry_policy=_RETRY_POLICY)

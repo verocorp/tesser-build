@@ -1,54 +1,9 @@
 from __future__ import annotations
 
-import typing
-
 import tesser.testing as ts
-import restate
 
-import calls.application.relays as relays
 import calls.component as component
-import calls.domain as domain
 import pgdatabase.database as pgdatabase_database
-
-
-@ts.fake
-class FakeDurablePromise:  # tesser:debt TB072
-    def __init__(self, resolved: bytes) -> None:
-        self._resolved = resolved
-
-    async def value(self) -> bytes:
-        return self._resolved
-
-
-@ts.fake
-class FakeRestateWorkflowContext:  # tesser:debt TB072
-    def __init__(self) -> None:
-        self.called: list[tuple[str, str]] = []
-
-    async def generic_call(self, service: str, handler: str, arg: bytes) -> bytes:
-        self.called.append((service, handler))
-        if handler == "record_call":
-            return relays.RecordCallResponseSnapshot().serialize(
-                relays.RecordCallResponse(
-                    call_id=str(relays.RecordCallRequestSnapshot().deserialize(arg).call.identity)
-                )
-            )
-        if handler == "dial_person":
-            return relays.DialPersonResponseSnapshot().serialize(relays.DialPersonResponse(call_id="c7"))
-        if handler == "hang_up":
-            return relays.HangUpResponseSnapshot().serialize(relays.HangUpResponse(call_id="c7"))
-        return relays.SayUtteranceResponseSnapshot().serialize(relays.SayUtteranceResponse(call_id="c7"))
-
-    def promise(self, name: str, serde: object) -> FakeDurablePromise:
-        if name == "person_turn_completed":
-            return FakeDurablePromise(
-                relays.AwaitPersonTurnCompletedResponseSnapshot().serialize(
-                    relays.AwaitPersonTurnCompletedResponse(call_id="c7", text="Grace")
-                )
-            )
-        return FakeDurablePromise(
-            relays.AwaitPersonJoinedResponseSnapshot().serialize(relays.AwaitPersonJoinedResponse(call_id="c7"))
-        )
 
 
 @ts.helper
@@ -110,24 +65,3 @@ class TestCalls:
             "SpeechActions": ["say_utterance"],
             "CallOrchestrator": ["conduct_call", "person_joined", "person_turn_completed"],
         }
-
-
-class TestWorkflow:
-    async def test_an_invocation_conducts_the_whole_call_through_the_services_named_for_each_relay(self) -> None:
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-
-        async with component.Calls.Workflow().invocation(
-            typing.cast(restate.WorkflowContext, fake_restate_workflow_context)
-        ) as call_orchestrator:
-            conduct_call_response = await call_orchestrator.conduct_call(
-                relays.ConductCallRequest(call=domain.Call(domain.CallSpec(call_id="c7", person_name="")))
-            )
-
-        assert conduct_call_response.call_id == "c7"
-        assert fake_restate_workflow_context.called == [
-            ("DialingActions", "dial_person"),
-            ("SpeechActions", "say_utterance"),
-            ("SpeechActions", "say_utterance"),
-            ("DialingActions", "hang_up"),
-            ("CallActions", "record_call"),
-        ]

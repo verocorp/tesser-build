@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import contextlib
-import typing
-
 import tesser.component as ts
 import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
-import restate
 
 import calls.adapters.gateways as gateways
 import calls.adapters.repositories as repositories
 import calls.adapters.runners as runners
 import calls.adapters.runtimes as runtimes
 import calls.application as application
-import calls.application.orchestrators as orchestrators
 import calls.client as client
 import pgdatabase.database as pgdatabase_database
 
@@ -71,18 +66,6 @@ class Calls(ts.Component):
         ) -> client.PersonTurnCompletedResponse:
             return await self._call_events_service.person_turn_completed(person_turn_completed_request)
 
-    class Workflow:
-        @contextlib.asynccontextmanager
-        async def invocation(
-            self, restate_workflow_context: restate.WorkflowContext
-        ) -> typing.AsyncIterator[orchestrators.CallOrchestrator]:
-            yield orchestrators.CallOrchestrator(
-                runners.RestateInvocationDialingActionsRelay(restate_workflow_context),
-                runners.RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context),
-                runners.RestateInvocationSpeechActionsRelay(restate_workflow_context),
-                runners.RestateInvocationCallActionsRelay(restate_workflow_context),
-            )
-
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_call_store = repositories.PostgresCallStore(database)
         self.restate_call_runtime: runtimes.RestateCallRuntime = runtimes.RestateCallRuntime(
@@ -107,7 +90,7 @@ class Calls(ts.Component):
                     )
                 )
             ),
-            Calls.Workflow(),
+            runners.RestateCallWorkflow(),
         )
         self.client: client.CallsClient = Calls.Client(
             application.CallService(
