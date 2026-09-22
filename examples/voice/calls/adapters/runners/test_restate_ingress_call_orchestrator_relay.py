@@ -6,33 +6,8 @@ import threading
 import tesser.testing as ts
 
 import calls.adapters.runners as runners
-import calls.adapters.runtimes as runtimes
-import calls.application.client as client
 import calls.application.relays as relays
 import calls.domain as domain
-
-
-@ts.fake
-class FakeCallApplicationClient(client.CallApplicationClient):
-    async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
-        return relays.RecordCallResponse(call_id=str(record_call_request.call.identity))
-
-
-@ts.fake
-class FakeDialingApplicationClient(client.DialingApplicationClient):
-    async def dial_person(self, dial_person_request: relays.DialPersonRequest) -> relays.DialPersonResponse:
-        return relays.DialPersonResponse(call_id=str(dial_person_request.call.identity))
-
-    async def hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
-        return relays.HangUpResponse(call_id=str(hang_up_request.call.identity))
-
-
-@ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient):
-    async def say_utterance(
-        self, say_utterance_request: relays.SayUtteranceRequest
-    ) -> relays.SayUtteranceResponse:
-        return relays.SayUtteranceResponse(call_id=say_utterance_request.call_id)
 
 
 @ts.fake
@@ -89,10 +64,7 @@ class TestRestateIngressCallOrchestratorRelay:
         thread.start()
 
         conduct_call_response = await runners.RestateIngressCallOrchestratorRelay(
-            fake_restate_ingress.base_url,
-            runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-            ),
+            fake_restate_ingress.base_url
         ).run_conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(call_id="c7"))))
         thread.join(5)
         fake_restate_ingress.close()
@@ -108,10 +80,7 @@ class TestRestateIngressCallOrchestratorRelay:
         thread.start()
 
         person_joined_response = await runners.RestateIngressCallOrchestratorRelay(
-            fake_restate_ingress.base_url,
-            runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-            ),
+            fake_restate_ingress.base_url
         ).run_person_joined(relays.PersonJoinedRequest(call_id="c7"))
         thread.join(5)
         fake_restate_ingress.close()
@@ -127,10 +96,7 @@ class TestRestateIngressCallOrchestratorRelay:
         thread.start()
 
         person_turn_completed_response = await runners.RestateIngressCallOrchestratorRelay(
-            fake_restate_ingress.base_url,
-            runtimes.RestateCallRuntime(
-                FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-            ),
+            fake_restate_ingress.base_url
         ).run_person_turn_completed(relays.PersonTurnCompletedRequest(call_id="c7", text="Grace"))
         thread.join(5)
         fake_restate_ingress.close()

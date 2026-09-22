@@ -2,32 +2,28 @@ from __future__ import annotations
 
 import tesser.adapters as ts
 import restate
+import restate.serde as restate_serde
 
-import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
 class RestateInvocationCallOrchestratorSignalRelay(ts.Runner):
-    def __init__(
-        self,
-        restate_workflow_context: restate.WorkflowContext,
-        restate_call_runtime: runtimes.RestateCallRuntime,
-    ) -> None:
+
+    def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
         self._restate_workflow_context = restate_workflow_context
-        self._restate_call_runtime = restate_call_runtime
 
     async def await_person_joined(
         self, await_person_joined_request: relays.AwaitPersonJoinedRequest
     ) -> relays.AwaitPersonJoinedResponse:
-        return await self._restate_workflow_context.promise(
-            self._restate_call_runtime.person_joined_promise,
-            serde=runtimes.RestateAwaitPersonJoinedResponseSerde(),
-        ).value()
+        return relays.AwaitPersonJoinedResponseSnapshot().deserialize(
+            await self._restate_workflow_context.promise("person_joined", serde=restate_serde.BytesSerde()).value()
+        )
 
     async def await_person_turn_completed(
         self, await_person_turn_completed_request: relays.AwaitPersonTurnCompletedRequest
     ) -> relays.AwaitPersonTurnCompletedResponse:
-        return await self._restate_workflow_context.promise(
-            self._restate_call_runtime.person_turn_completed_promise,
-            serde=runtimes.RestateAwaitPersonTurnCompletedResponseSerde(),
-        ).value()
+        return relays.AwaitPersonTurnCompletedResponseSnapshot().deserialize(
+            await self._restate_workflow_context.promise(
+                "person_turn_completed", serde=restate_serde.BytesSerde()
+            ).value()
+        )

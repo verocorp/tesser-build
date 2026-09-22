@@ -6,43 +6,19 @@ import tesser.testing as ts
 import restate
 
 import calls.adapters.runners as runners
-import calls.adapters.runtimes as runtimes
-import calls.application.client as client
 import calls.application.relays as relays
 import calls.domain as domain
 
 
 @ts.fake
-class FakeCallApplicationClient(client.CallApplicationClient):
-    async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
-        return relays.RecordCallResponse(call_id=str(record_call_request.call.identity))
-
-
-@ts.fake
-class FakeDialingApplicationClient(client.DialingApplicationClient):
-    async def dial_person(self, dial_person_request: relays.DialPersonRequest) -> relays.DialPersonResponse:
-        return relays.DialPersonResponse(call_id=str(dial_person_request.call.identity))
-
-    async def hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
-        return relays.HangUpResponse(call_id=str(hang_up_request.call.identity))
-
-
-@ts.fake
-class FakeSpeechApplicationClient(client.SpeechApplicationClient):
-    async def say_utterance(
-        self, say_utterance_request: relays.SayUtteranceRequest
-    ) -> relays.SayUtteranceResponse:
-        return relays.SayUtteranceResponse(call_id=say_utterance_request.call_id)
-
-
-@ts.fake
 class FakeRestateWorkflowContext:  # tesser:debt TB072
-    def __init__(self) -> None:
-        self.called: list[tuple[object, object]] = []
+    def __init__(self, answer: bytes) -> None:
+        self._answer = answer
+        self.called: list[tuple[str, str, bytes]] = []
 
-    async def service_call(self, tpe: object, arg: object) -> object:
-        self.called.append((tpe, arg))
-        return relays.RecordCallResponse(call_id="c1")
+    async def generic_call(self, service: str, handler: str, arg: bytes) -> bytes:
+        self.called.append((service, handler, arg))
+        return self._answer
 
 
 @ts.helper
@@ -51,15 +27,27 @@ def call_spec(call_id: str = "c1", person_name: str = "") -> domain.CallSpec:
 
 
 class TestRestateInvocationCallActionsRelay:
-    async def test_running_record_call_journals_a_call_to_the_runtimes_handler(self) -> None:
-        restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
+    async def test_running_record_call_calls_the_call_actions_service_by_name(self) -> None:
+        fake_restate_workflow_context = FakeRestateWorkflowContext(  # tesser:debt TB085
+            relays.RecordCallResponseSnapshot().serialize(relays.RecordCallResponse(call_id="c1"))
         )
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         record_call_request = relays.RecordCallRequest(call=domain.Call(call_spec()))
 
         await runners.RestateInvocationCallActionsRelay(
-            typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
+            typing.cast(restate.WorkflowContext, fake_restate_workflow_context)
         ).run_record_call(record_call_request)
 
-        assert fake_restate_workflow_context.called == [(restate_call_runtime.record_call_handler, record_call_request)]
+        assert fake_restate_workflow_context.called == [
+            ("CallActions", "record_call", relays.RecordCallRequestSnapshot().serialize(record_call_request))
+        ]
+
+    async def test_running_record_call_answers_what_the_service_answered(self) -> None:
+        fake_restate_workflow_context = FakeRestateWorkflowContext(  # tesser:debt TB085
+            relays.RecordCallResponseSnapshot().serialize(relays.RecordCallResponse(call_id="c1"))
+        )
+
+        record_call_response = await runners.RestateInvocationCallActionsRelay(
+            typing.cast(restate.WorkflowContext, fake_restate_workflow_context)
+        ).run_record_call(relays.RecordCallRequest(call=domain.Call(call_spec())))
+
+        assert record_call_response.call_id == "c1"
