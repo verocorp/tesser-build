@@ -61,12 +61,12 @@ def pay_for_order_request(
     )
 
 
-class TestRestateIngressPayForOrderRelay:
+class TestRestateIngressPurchaseOrchestratorRelay:
 
     def test_running_calls_the_workflow_and_answers_with_its_result(self) -> None:
         order_id = str(uuid.uuid4())
         pay_for_order_response = asyncio.run(
-            runners.RestateIngressPayForOrderRelay(
+            runners.RestateIngressPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -94,19 +94,19 @@ class TestRestateIngressPayForOrderRelay:
 
     def test_the_already_invoked_conflict_is_the_outcome_the_engine_crossing_adds(self) -> None:
         order_id = str(uuid.uuid4())
-        restate_ingress_pay_for_order_relay = runners.RestateIngressPayForOrderRelay(
+        restate_ingress_purchase_orchestrator_relay = runners.RestateIngressPurchaseOrchestratorRelay(
             os.environ["RESTATE_INGRESS"],
             runtimes.RestateOrderRuntime(
                 FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
             ),
         )
         first = asyncio.run(
-            restate_ingress_pay_for_order_relay.run_pay_for_order(
+            restate_ingress_purchase_orchestrator_relay.run_pay_for_order(
                 pay_for_order_request(order_id=order_id)
             )
         )
         second = asyncio.run(
-            restate_ingress_pay_for_order_relay.run_pay_for_order(
+            restate_ingress_purchase_orchestrator_relay.run_pay_for_order(
                 pay_for_order_request(order_id=order_id)
             )
         )
@@ -133,7 +133,7 @@ class TestRestateIngressPayForOrderRelay:
             unreachable = f"http://127.0.0.1:{closed.getsockname()[1]}"
         with pytest.raises(httpx.TransportError):
             asyncio.run(
-                runners.RestateIngressPayForOrderRelay(
+                runners.RestateIngressPurchaseOrchestratorRelay(
                     unreachable,
                     runtimes.RestateOrderRuntime(
                         FakeOrderingApplicationClient(), FakePurchaseApplicationClient()

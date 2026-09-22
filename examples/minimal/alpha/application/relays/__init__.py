@@ -1,6 +1,6 @@
-from alpha.application.relays.keep_widget_relay import KeepWidgetRelay as KeepWidgetRelay
-from alpha.application.relays.keep_widget_relay import KeepWidgetRequest as KeepWidgetRequest
-from alpha.application.relays.keep_widget_relay import KeepWidgetResponse as KeepWidgetResponse
-from alpha.application.relays.register_widget_relay import RegisterWidgetRelay as RegisterWidgetRelay
-from alpha.application.relays.register_widget_relay import RegisterWidgetRequest as RegisterWidgetRequest
-from alpha.application.relays.register_widget_relay import RegisterWidgetResponse as RegisterWidgetResponse
+from alpha.application.relays.widget_actions_relay import WidgetActionsRelay as WidgetActionsRelay
+from alpha.application.relays.widget_actions_relay import KeepWidgetRequest as KeepWidgetRequest
+from alpha.application.relays.widget_actions_relay import KeepWidgetResponse as KeepWidgetResponse
+from alpha.application.relays.widget_orchestrator_relay import WidgetOrchestratorRelay as WidgetOrchestratorRelay
+from alpha.application.relays.widget_orchestrator_relay import RegisterWidgetRequest as RegisterWidgetRequest
+from alpha.application.relays.widget_orchestrator_relay import RegisterWidgetResponse as RegisterWidgetResponse

@@ -17,6 +17,6 @@ class KeepWidgetResponse(ts.Response):
         self.name = name
 
 
-class KeepWidgetRelay(ts.Relay, typing.Protocol):
+class WidgetActionsRelay(ts.Relay, typing.Protocol):
 
     def run_keep_widget(self, keep_widget_request: KeepWidgetRequest) -> KeepWidgetResponse: ...

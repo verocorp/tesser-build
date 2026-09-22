@@ -7,7 +7,7 @@ import alpha.application.relays as relays
 
 
 @ts.fake
-class FakeKeepWidgetRelay(relays.KeepWidgetRelay):
+class FakeWidgetActionsRelay(relays.WidgetActionsRelay):
 
     def __init__(self) -> None:
         self.kept: list[str] = []
@@ -20,12 +20,12 @@ class FakeKeepWidgetRelay(relays.KeepWidgetRelay):
 class TestWidgetOrchestrator:
 
     def test_registering_answers_the_widget_the_action_kept(self) -> None:
-        register_widget_response = orchestrators.WidgetOrchestrator(FakeKeepWidgetRelay()).register_widget(
+        register_widget_response = orchestrators.WidgetOrchestrator(FakeWidgetActionsRelay()).register_widget(
             relays.RegisterWidgetRequest(name="a")
         )
         assert register_widget_response.name == "a"
 
     def test_registering_runs_its_relay_once(self) -> None:
-        fake_keep_widget_relay = FakeKeepWidgetRelay()
-        orchestrators.WidgetOrchestrator(fake_keep_widget_relay).register_widget(relays.RegisterWidgetRequest(name="a"))
-        assert fake_keep_widget_relay.kept == ["a"]
+        fake_widget_actions_relay = FakeWidgetActionsRelay()
+        orchestrators.WidgetOrchestrator(fake_widget_actions_relay).register_widget(relays.RegisterWidgetRequest(name="a"))
+        assert fake_widget_actions_relay.kept == ["a"]

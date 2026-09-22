@@ -6,12 +6,12 @@ The chain, top to bottom, with where each link lives:
 |---|---|---|
 | an HTTP host takes `POST /submissions` | `srv/http/main.py` | `HttpHost`'s `APIRouter` → `ordering/adapters/handlers/http.py` `Handler.submit_order` |
 | the initial application service | `ordering/application/order_service.py` | `OrderService.submit_order` builds the `Order` aggregate |
-| it starts the orchestrator through a relay | `ordering/application/relays/confirm_order_relay.py` | `ConfirmOrderRelay.start_confirm_order(ConfirmOrderRequest) -> StartConfirmOrderResponse`; the request carries the `Order` aggregate itself |
-| the Restate runner sends the workflow | `ordering/adapters/runners/restate_ingress_confirm_order_relay.py` | `RestateIngressConfirmOrderRelay.start_confirm_order` → `workflow_send(runtime.confirm_order_handler, key=order_id, arg=request)` |
+| it starts the orchestrator through a relay | `ordering/application/relays/order_orchestrator_relay.py` | `OrderOrchestratorRelay.start_confirm_order(ConfirmOrderRequest) -> StartConfirmOrderResponse`; the request carries the `Order` aggregate itself |
+| the Restate runner sends the workflow | `ordering/adapters/runners/restate_ingress_order_orchestrator_relay.py` | `RestateIngressOrderOrchestratorRelay.start_confirm_order` → `workflow_send(runtime.confirm_order_handler, key=order_id, arg=request)` |
 | Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_orchestrator_workflow.main()` handler `confirm_order`, exposed as `confirm_order_handler`, registered as `OrderOrchestrator/confirm_order`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/runtimes/restate_order_runtime.py` | `confirm_order` builds `RestateInvocationPriceProductRelay(restate_workflow_context, self)` over *this* invocation's context and constructs `OrderOrchestrator` over it |
-| the orchestrator runs the action through its relay | `ordering/application/relays/price_product_relay.py` | `OrderOrchestrator.confirm_order` reads the `Order` off the message, then `PriceProductRelay.run_price_product(PriceProductRequest) -> PriceProductResponse` |
-| the Restate runner calls the action durably | `ordering/adapters/runners/restate_invocation_price_product_relay.py` | `RestateInvocationPriceProductRelay.run_price_product` → `restate_workflow_context.service_call(runtime.price_product_handler, request)` |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/runtimes/restate_order_runtime.py` | `confirm_order` builds `RestateInvocationOrderActionsRelay(restate_workflow_context, self)` over *this* invocation's context and constructs `OrderOrchestrator` over it |
+| the orchestrator runs the action through its relay | `ordering/application/relays/order_actions_relay.py` | `OrderOrchestrator.confirm_order` reads the `Order` off the message, then `OrderActionsRelay.run_price_product(PriceProductRequest) -> PriceProductResponse` |
+| the Restate runner calls the action durably | `ordering/adapters/runners/restate_invocation_order_actions_relay.py` | `RestateInvocationOrderActionsRelay.run_price_product` → `restate_workflow_context.service_call(runtime.price_product_handler, request)` |
 | Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_actions_service.handler()` handler `price_product`, registered as `OrderActions/price_product`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.price_product` → `ProductCatalogRepository.get_product_price` → `adapters/repositories/memory_product_catalog_repository.py` |
 | the price comes back up the same chain | | `PriceProductResponse.prices[0].cents` → `Order.total(PriceSpec)` → `ConfirmOrderResponse.confirmed_orders[0].total_cents` ends the workflow |
@@ -25,7 +25,7 @@ called; that one, `start_`, belongs to the runner.
 
 `POST /orders` is the other use case over the same orchestrator: placing an
 order. `OrderService.place_order` builds the same `Order`, hands it to
-`ConfirmOrderRelay.run_confirm_order`, and waits; the Restate
+`OrderOrchestratorRelay.run_confirm_order`, and waits; the Restate
 runner's `workflow_call` answers with the `ConfirmOrderResponse` the
 workflow ended with, and the door answers `200 {"order_id", "total_cents"}`.
 "Placed" is the state the caller gets back: priced, now. Both use cases run
@@ -44,7 +44,7 @@ with either thing.
 
 `POST /purchases` is the third use case and the first scenario on top of the
 grid: a **purchase** is an order paid for. `PurchaseService.make_order_payment` builds the
-same `Order` and hands it to `PayForOrderRelay.run_pay_for_order`;
+same `Order` and hands it to `PurchaseOrchestratorRelay.run_pay_for_order`;
 the `PurchaseOrchestrator` workflow runs `OrderOrchestrator/confirm_order` as a **child
 workflow** under the order's own key, waits for its total, and then runs the
 `PurchaseActions/take_payment` action for that total. The door answers
@@ -52,8 +52,8 @@ workflow** under the order's own key, waits for its total, and then runs the
 [A workflow runs another](#a-workflow-runs-another-the-purchase).
 
 The application never touches Restate. `OrderOrchestrator` depends on
-`PriceProductRelay` and nothing else; `PurchaseOrchestrator` depends on
-`TakePaymentRelay` and `ConfirmOrderRelay` and nothing else;
+`OrderActionsRelay` and nothing else; `PurchaseOrchestrator` depends on
+`PurchaseActionsRelay` and `OrderOrchestratorRelay` and nothing else;
 `OrderActions` (the class of actions) depends on the `ProductCatalogRepository`
 port and nothing else, `PurchaseActions` on the `PaymentProcessor` port. All
 are plain application code. What makes an orchestrator's calls durable is
@@ -70,12 +70,12 @@ other side through the aggregate's own constructor.
 `application/relays/` holds both protocols, and each declares only what it is
 for. The verb says how the caller calls: `start_` is an asynchronous send that
 answers as soon as the engine accepts; `run_` is a synchronous call that
-answers with the result. `ConfirmOrderRelay` declares both verbs over one
+answers with the result. `OrderOrchestratorRelay` declares both verbs over one
 message, because the two use cases differ only in whether the caller waits.
 
 ```python
-# ordering/application/relays/confirm_order_relay.py
-class ConfirmOrderRelay(ts.Relay, typing.Protocol):
+# ordering/application/relays/order_orchestrator_relay.py
+class OrderOrchestratorRelay(ts.Relay, typing.Protocol):
 
     async def start_confirm_order(
         self, confirm_order_request: ConfirmOrderRequest
@@ -86,28 +86,28 @@ class ConfirmOrderRelay(ts.Relay, typing.Protocol):
     ) -> ConfirmOrderResponse: ...
 
 
-# ordering/application/relays/price_product_relay.py
-class PriceProductRelay(ts.Relay, typing.Protocol):
+# ordering/application/relays/order_actions_relay.py
+class OrderActionsRelay(ts.Relay, typing.Protocol):
 
     async def run_price_product(
         self, price_product_request: PriceProductRequest
     ) -> PriceProductResponse: ...
 ```
 
-`ConfirmOrderRelay` is held by `OrderService`, lives as long as the
+`OrderOrchestratorRelay` is held by `OrderService`, lives as long as the
 component, and its Restate implementation
-`RestateIngressConfirmOrderRelay(ingress, restate_order_runtime)` is built once
+`RestateIngressOrderOrchestratorRelay(ingress, restate_order_runtime)` is built once
 at wiring.
 
-`PriceProductRelay` is held by `OrderOrchestrator`, lives exactly as long as
+`OrderActionsRelay` is held by `OrderOrchestrator`, lives exactly as long as
 one invocation, and its Restate implementation
-`RestateInvocationPriceProductRelay(restate_workflow_context, restate_order_runtime)`
+`RestateInvocationOrderActionsRelay(restate_workflow_context, restate_order_runtime)`
 is built inside the workflow handler over that handler's own
 `restate.WorkflowContext`. The context is required and is never `None` —
 there is no runner for an action outside an invocation.
 
-`ConfirmOrderRelay` has a second implementation with the second
-lifetime: `RestateInvocationConfirmOrderRelay(restate_workflow_context,
+`OrderOrchestratorRelay` has a second implementation with the second
+lifetime: `RestateInvocationOrderOrchestratorRelay(restate_workflow_context,
 restate_order_runtime)`, built inside the *purchase* workflow's handler,
 answers the same protocol with `ctx.workflow_call` and `ctx.workflow_send`
 instead of the ingress client. One relay, two runners: the door holds the one
@@ -124,13 +124,13 @@ class PurchaseOrchestrator(ts.Orchestrator):
 
     def __init__(
         self,
-        take_payment_relay: relays.TakePaymentRelay,
-        confirm_order_relay: relays.ConfirmOrderRelay,
+        purchase_actions_relay: relays.PurchaseActionsRelay,
+        order_orchestrator_relay: relays.OrderOrchestratorRelay,
     ) -> None: ...
 
     async def pay_for_order(self, pay_for_order_request):
         order = pay_for_order_request.order
-        confirm_order_response = await self._confirm_order_relay.run_confirm_order(
+        confirm_order_response = await self._order_orchestrator_relay.run_confirm_order(
             relays.ConfirmOrderRequest(order=order)
         )
         match confirm_order_response.outcome:
@@ -145,7 +145,7 @@ class PurchaseOrchestrator(ts.Orchestrator):
                 )
             case _ as never:
                 typing.assert_never(never)
-        take_payment_response = await self._take_payment_relay.run_take_payment(
+        take_payment_response = await self._purchase_actions_relay.run_take_payment(
             MapToTakePaymentRequest(purchase, pay_for_order_request.payment_method)
         )
         match take_payment_response.outcome:
@@ -281,7 +281,7 @@ its own key, its own journal, and its own stored result. Measured on
   waiting creator receives `409 {"code":409,"message":"killed"}`, which the
   runner re-raises. A repeat `workflow_send` is `202 PreviouslyAccepted`.
 
-`RestateInvocationConfirmOrderRelay` reads one thing off the message,
+`RestateInvocationOrderOrchestratorRelay` reads one thing off the message,
 `str(confirm_order_request.order.identity)`, for the child's key, and
 passes it as it is: inside the engine the key is an argument to the SDK, not a
 path segment, so there is nothing to percent-encode. A child's terminal error
@@ -296,7 +296,7 @@ that ends terminally ends its workflow, and there is no member for it.
 one relay kind and it says nothing about lifetime: a relay protocol names what
 *this* context's actions or workflows are, by name, and an implementation may
 live as long as the component or as long as one invocation.
-`ConfirmOrderRelay` has one of each, and the orchestrator holding it
+`OrderOrchestratorRelay` has one of each, and the orchestrator holding it
 cannot tell which it has.
 
 `ProductCatalogRepository` (Postgres, or the in-memory stand-in) stays a
@@ -315,11 +315,11 @@ line applied to a boundary that faces inward.
 | class | kind declared | direction | lifetime |
 |---|---|---|---|
 | `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Runtime` | Restate → us: registers `OrderActions/price_product`, `OrderOrchestrator/confirm_order`, `PurchaseActions/take_payment`, and `PurchaseOrchestrator/pay_for_order` | process |
-| `RestateIngressConfirmOrderRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_send` to start, `workflow_call` to run) | process |
-| `RestateIngressPayForOrderRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_call`) | process |
-| `RestateInvocationPriceProductRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
-| `RestateInvocationTakePaymentRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
-| `RestateInvocationConfirmOrderRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation, to a child workflow (`workflow_call` to run, `workflow_send` to start) | one invocation |
+| `RestateIngressOrderOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_send` to start, `workflow_call` to run) | process |
+| `RestateIngressPurchaseOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_call`) | process |
+| `RestateInvocationOrderActionsRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
+| `RestateInvocationPurchaseActionsRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
+| `RestateInvocationOrderOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation, to a child workflow (`workflow_call` to run, `workflow_send` to start) | one invocation |
 
 The runtime is the inbound side, the same role the HTTP handler plays for
 `POST /submissions`: the engine's server receives a request, routes it to a
@@ -400,10 +400,10 @@ This tree is the worked example for `docs/design-app-service-types.md`:
 - `OrderService(ts.ApplicationService)` and `PurchaseService` — the public
   use cases, built once by the component. Every method does the once-only
   work (validate at the door, build the `Order`); `submit_order` starts the
-  order orchestrator through `ConfirmOrderRelay.start_confirm_order`,
+  order orchestrator through `OrderOrchestratorRelay.start_confirm_order`,
   `place_order` runs it through `run_confirm_order`, and `make_order_payment`
   runs the purchase orchestrator through
-  `PayForOrderRelay.run_pay_for_order`. Two services because
+  `PurchaseOrchestratorRelay.run_pay_for_order`. Two services because
   two relays: a service holds the methods that share its dependencies, so the
   purchase, which holds a different relay, is a second service. What the
   context offers the world is still one `client.OrderingClient` protocol, and
@@ -413,7 +413,7 @@ This tree is the worked example for `docs/design-app-service-types.md`:
   runtime with that invocation's runners; store nothing but them; take the
   relay's own request — reading the `Order` straight off it — and return the
   relay's response. The purchase orchestrator holds two relays:
-  `TakePaymentRelay` for the payment action, and `ConfirmOrderRelay` for
+  `PurchaseActionsRelay` for the payment action, and `OrderOrchestratorRelay` for
   the child workflow.
 - `OrderActions(ts.Actions)` and `PurchaseActions` beside the services —
   classes of actions over exactly one port each (`ProductCatalogRepository`,
@@ -453,10 +453,10 @@ class Ordering(ts.Component):
         )
         self.client: client.OrderingClient = Ordering.Client(
             application.OrderService(
-                runners.RestateIngressConfirmOrderRelay(config.ingress, self.restate_order_runtime)
+                runners.RestateIngressOrderOrchestratorRelay(config.ingress, self.restate_order_runtime)
             ),
             application.PurchaseService(
-                runners.RestateIngressPayForOrderRelay(config.ingress, self.restate_order_runtime)
+                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress, self.restate_order_runtime)
             ),
         )
 ```
@@ -569,20 +569,20 @@ relay.
 There are no wire types. Both ends are us, so the send side and the receive
 side of one message are not independent boundaries.
 
-- `confirm_order_relay.py` holds `ConfirmOrderRequest`,
+- `order_orchestrator_relay.py` holds `ConfirmOrderRequest`,
   `StartConfirmOrderResponse`, and `ConfirmOrderResponse` — the
   orchestrator's input, the start ack, and the orchestrator's result.
   `run_confirm_order` answers with the result; after a start, the engine
   stores it and the ingress hands it back on request.
-- `price_product_relay.py` holds `PriceProductRequest` and
+- `order_actions_relay.py` holds `PriceProductRequest` and
   `PriceProductResponse` — the action's two shapes.
   `application/client/order_actions.py` and `OrderActions` speak the same two.
-- `pay_for_order_relay.py` holds `PayForOrderRequest` (the `Order`
+- `purchase_orchestrator_relay.py` holds `PayForOrderRequest` (the `Order`
   again, now with the `PaymentMethod` the caller named — a purchase is asked
   for with an order and something to charge) and `PayForOrderResponse`, whose
   snapshot checks the outcome, the order id, the purchases and the reasons on
   the way in as the order's does.
-- `take_payment_relay.py` holds `TakePaymentRequest` and
+- `purchase_actions_relay.py` holds `TakePaymentRequest` and
   `TakePaymentResponse`; `application/client/purchase_actions.py` and
   `PurchaseActions` speak the same two.
 - `application/snapshots/order_snapshot.py` holds `OrderSnapshot`, the

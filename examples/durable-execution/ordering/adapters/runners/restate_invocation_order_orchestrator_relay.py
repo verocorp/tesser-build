@@ -11,7 +11,7 @@ import ordering.application.relays as relays
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class RestateInvocationConfirmOrderRelay(ts.Runner):
+class RestateInvocationOrderOrchestratorRelay(ts.Runner):
 
     def __init__(
         self,

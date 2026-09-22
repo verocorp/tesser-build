@@ -7,7 +7,7 @@ import ordering.adapters.runtimes as runtimes
 import ordering.application.relays as relays
 
 
-class RestateInvocationPriceProductRelay(ts.Runner):
+class RestateInvocationPurchaseActionsRelay(ts.Runner):
 
     def __init__(
         self,
@@ -17,9 +17,9 @@ class RestateInvocationPriceProductRelay(ts.Runner):
         self._restate_workflow_context = restate_workflow_context
         self._restate_order_runtime = restate_order_runtime
 
-    async def run_price_product(
-        self, price_product_request: relays.PriceProductRequest
-    ) -> relays.PriceProductResponse:
+    async def run_take_payment(
+        self, take_payment_request: relays.TakePaymentRequest
+    ) -> relays.TakePaymentResponse:
         return await self._restate_workflow_context.service_call(
-            self._restate_order_runtime.price_product_handler, price_product_request
+            self._restate_order_runtime.take_payment_handler, take_payment_request
         )

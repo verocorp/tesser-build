@@ -12,7 +12,7 @@ import {{context}}.client as client
 
 
 @ts.fake
-class Fake{{Conduct}}Relay(relays.{{Conduct}}Relay):
+class Fake{{Aggregate}}OrchestratorRelay(relays.{{Aggregate}}OrchestratorRelay):
 
     def __init__(self) -> None:
         self.conducted: list[relays.{{Conduct}}Request] = []
@@ -61,9 +61,9 @@ class Fake{{Aggregate}}Store(ports.{{Aggregate}}Store):
 class Test{{Aggregate}}Service:
 
     async def test_{{write}}_conducts_the_{{aggregate}}_under_the_{{identity}}_its_identity_repository_issued(self) -> None:
-        fake_{{conduct}}_relay = Fake{{Conduct}}Relay()
+        fake_{{aggregate}}_orchestrator_relay = Fake{{Aggregate}}OrchestratorRelay()
         {{aggregate}}_service = application.{{Aggregate}}Service(
-            fake_{{conduct}}_relay, Fake{{Aggregate}}IdentityRepository(), Fake{{Aggregate}}Store()
+            fake_{{aggregate}}_orchestrator_relay, Fake{{Aggregate}}IdentityRepository(), Fake{{Aggregate}}Store()
         )
 
         {{write}}_response = await {{aggregate}}_service.{{write}}(
@@ -72,7 +72,7 @@ class Test{{Aggregate}}Service:
 
         assert [
             ({{#record_fields}}conducted.{{field}}{{comma}}{{/record_fields}})
-            for conducted in fake_{{conduct}}_relay.conducted
+            for conducted in fake_{{aggregate}}_orchestrator_relay.conducted
         ] == [({{#record_fields}}{{#is_identity}}{{identity_sample2}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})]
         assert {{write}}_response.{{identity}} == {{identity_sample2}}
 
@@ -82,7 +82,7 @@ class Test{{Aggregate}}Service:
             {{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}}
         )
         {{aggregate}}_service = application.{{Aggregate}}Service(
-            Fake{{Conduct}}Relay(), Fake{{Aggregate}}IdentityRepository(), fake_{{aggregate}}_store
+            Fake{{Aggregate}}OrchestratorRelay(), Fake{{Aggregate}}IdentityRepository(), fake_{{aggregate}}_store
         )
 
         {{read}}_response = await {{aggregate}}_service.{{read}}(client.{{Read}}Request({{identity}}={{identity_sample}}))

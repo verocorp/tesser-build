@@ -95,7 +95,7 @@ class PriceProductResponseSnapshot(ts.Serde):
         )
 
 
-class PriceProductRelay(ts.Relay, typing.Protocol):
+class OrderActionsRelay(ts.Relay, typing.Protocol):
 
     async def run_price_product(
         self, price_product_request: PriceProductRequest

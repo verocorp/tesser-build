@@ -19,6 +19,6 @@ class InlineWidgetRuntime(ts.Runtime):
     def register_widget_handler(
         self, register_widget_request: relays.RegisterWidgetRequest
     ) -> relays.RegisterWidgetResponse:
-        return orchestrators.WidgetOrchestrator(runners.InlineKeepWidgetRelay(self)).register_widget(
+        return orchestrators.WidgetOrchestrator(runners.InlineWidgetActionsRelay(self)).register_widget(
             register_widget_request
         )

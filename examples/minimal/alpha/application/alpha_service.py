@@ -65,11 +65,11 @@ class AlphaService(ts.ApplicationService):
         self,
         widget_repository: ports.WidgetRepository,
         beta_check: ports.BetaCheck,
-        register_widget_relay: relays.RegisterWidgetRelay,
+        widget_orchestrator_relay: relays.WidgetOrchestratorRelay,
     ) -> None:
         self._widget_repository = widget_repository
         self._beta_check = beta_check
-        self._register_widget_relay = register_widget_relay
+        self._widget_orchestrator_relay = widget_orchestrator_relay
 
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         try:
@@ -89,7 +89,7 @@ class AlphaService(ts.ApplicationService):
         return MapToAddPartResponse(widget)
 
     def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
-        register_widget_response = self._register_widget_relay.run_register_widget(
+        register_widget_response = self._widget_orchestrator_relay.run_register_widget(
             MapToRegisterWidgetRequest(create_widget_request)
         )
         return MapToCreateWidgetResponse(register_widget_response)

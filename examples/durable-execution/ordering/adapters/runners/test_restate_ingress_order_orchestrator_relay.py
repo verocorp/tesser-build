@@ -57,12 +57,12 @@ def confirm_order_request(
     )
 
 
-class TestRestateIngressConfirmOrderRelayStarting:
+class TestRestateIngressOrderOrchestratorRelayStarting:
 
     def test_starting_sends_the_workflow_keyed_by_the_orders_id(self) -> None:
         order_id = str(uuid.uuid4())
         start_confirm_order_response = asyncio.run(
-            runners.RestateIngressConfirmOrderRelay(
+            runners.RestateIngressOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -89,7 +89,7 @@ class TestRestateIngressConfirmOrderRelayStarting:
     def test_the_key_is_encoded_so_an_order_id_cannot_reshape_the_path(self) -> None:
         order_id = "../admin?x=1#f-" + str(uuid.uuid4())
         start_confirm_order_response = asyncio.run(
-            runners.RestateIngressConfirmOrderRelay(
+            runners.RestateIngressOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -111,19 +111,19 @@ class TestRestateIngressConfirmOrderRelayStarting:
 
     def test_a_repeat_send_is_accepted_and_the_engine_runs_the_workflow_once(self) -> None:
         order_id = str(uuid.uuid4())
-        restate_ingress_confirm_order_relay = runners.RestateIngressConfirmOrderRelay(
+        restate_ingress_order_orchestrator_relay = runners.RestateIngressOrderOrchestratorRelay(
             os.environ["RESTATE_INGRESS"],
             runtimes.RestateOrderRuntime(
                 FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
             ),
         )
         first = asyncio.run(
-            restate_ingress_confirm_order_relay.start_confirm_order(
+            restate_ingress_order_orchestrator_relay.start_confirm_order(
                 confirm_order_request(order_id=order_id)
             )
         )
         second = asyncio.run(
-            restate_ingress_confirm_order_relay.start_confirm_order(
+            restate_ingress_order_orchestrator_relay.start_confirm_order(
                 confirm_order_request(order_id=order_id)
             )
         )
@@ -147,7 +147,7 @@ class TestRestateIngressConfirmOrderRelayStarting:
             unreachable = f"http://127.0.0.1:{closed.getsockname()[1]}"
         with pytest.raises(httpx.TransportError):
             asyncio.run(
-                runners.RestateIngressConfirmOrderRelay(
+                runners.RestateIngressOrderOrchestratorRelay(
                     unreachable,
                     runtimes.RestateOrderRuntime(
                         FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -156,12 +156,12 @@ class TestRestateIngressConfirmOrderRelayStarting:
             )
 
 
-class TestRestateIngressConfirmOrderRelayRunning:
+class TestRestateIngressOrderOrchestratorRelayRunning:
 
     def test_running_calls_the_workflow_and_answers_with_its_result(self) -> None:
         order_id = str(uuid.uuid4())
         confirm_order_response = asyncio.run(
-            runners.RestateIngressConfirmOrderRelay(
+            runners.RestateIngressOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -186,19 +186,19 @@ class TestRestateIngressConfirmOrderRelayRunning:
 
     def test_the_already_invoked_conflict_is_the_outcome_the_engine_crossing_adds(self) -> None:
         order_id = str(uuid.uuid4())
-        restate_ingress_confirm_order_relay = runners.RestateIngressConfirmOrderRelay(
+        restate_ingress_order_orchestrator_relay = runners.RestateIngressOrderOrchestratorRelay(
             os.environ["RESTATE_INGRESS"],
             runtimes.RestateOrderRuntime(
                 FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
             ),
         )
         first = asyncio.run(
-            restate_ingress_confirm_order_relay.run_confirm_order(
+            restate_ingress_order_orchestrator_relay.run_confirm_order(
                 confirm_order_request(order_id=order_id)
             )
         )
         second = asyncio.run(
-            restate_ingress_confirm_order_relay.run_confirm_order(
+            restate_ingress_order_orchestrator_relay.run_confirm_order(
                 confirm_order_request(order_id=order_id)
             )
         )
@@ -225,7 +225,7 @@ class TestRestateIngressConfirmOrderRelayRunning:
             unreachable = f"http://127.0.0.1:{closed.getsockname()[1]}"
         with pytest.raises(httpx.TransportError):
             asyncio.run(
-                runners.RestateIngressConfirmOrderRelay(
+                runners.RestateIngressOrderOrchestratorRelay(
                     unreachable,
                     runtimes.RestateOrderRuntime(
                         FakeOrderingApplicationClient(), FakePurchaseApplicationClient()

@@ -17,6 +17,6 @@ class RegisterWidgetResponse(ts.Response):
         self.name = name
 
 
-class RegisterWidgetRelay(ts.Relay, typing.Protocol):
+class WidgetOrchestratorRelay(ts.Relay, typing.Protocol):
 
     def run_register_widget(self, register_widget_request: RegisterWidgetRequest) -> RegisterWidgetResponse: ...

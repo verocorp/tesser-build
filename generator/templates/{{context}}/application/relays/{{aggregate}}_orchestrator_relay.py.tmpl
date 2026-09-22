@@ -63,6 +63,6 @@ class {{Conduct}}ResponseSnapshot(ts.Serde):
         return {{Conduct}}Response({{identity}}=snapshot["{{identity}}"])
 
 
-class {{Conduct}}Relay(ts.Relay, typing.Protocol):
+class {{Aggregate}}OrchestratorRelay(ts.Relay, typing.Protocol):
 
     async def run_{{conduct}}(self, {{conduct}}_request: {{Conduct}}Request) -> {{Conduct}}Response: ...

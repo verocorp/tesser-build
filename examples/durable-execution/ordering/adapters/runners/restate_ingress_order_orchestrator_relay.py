@@ -17,7 +17,7 @@ _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOU
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class RestateIngressConfirmOrderRelay(ts.Runner):
+class RestateIngressOrderOrchestratorRelay(ts.Runner):
 
     def __init__(self, ingress: str, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
         self._ingress = ingress

@@ -19,14 +19,14 @@ class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
         return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
 
 
-class TestRestateIngress{{Conduct}}Relay:
+class TestRestateIngress{{Aggregate}}OrchestratorRelay:
 
     async def test_{{conduct}}_runs_the_workflow_the_engine_keys_by_the_{{identity}}(self) -> None:
         restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
         {{identity}} = str(uuid.uuid4())
         admin = os.environ.get("RESTATE_ADMIN", "http://localhost:9070")
 
-        {{conduct}}_response = await runners.RestateIngress{{Conduct}}Relay(
+        {{conduct}}_response = await runners.RestateIngress{{Aggregate}}OrchestratorRelay(
             os.environ["{{ingress_env}}"], restate_{{aggregate}}_runtime
         ).run_{{conduct}}(
             relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})

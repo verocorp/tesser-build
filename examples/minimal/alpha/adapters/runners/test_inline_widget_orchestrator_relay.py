@@ -15,11 +15,11 @@ class FakeAlphaApplicationClient(client.AlphaApplicationClient):
         return relays.KeepWidgetResponse(name=keep_widget_request.name)
 
 
-class TestInlineKeepWidgetRelay:
+class TestInlineWidgetOrchestratorRelay:
 
-    def test_running_keep_widget_reaches_the_runtimes_handler(self) -> None:
+    def test_running_register_widget_reaches_the_runtimes_handler(self) -> None:
         inline_widget_runtime = runtimes.InlineWidgetRuntime(FakeAlphaApplicationClient())
-        keep_widget_response = runners.InlineKeepWidgetRelay(inline_widget_runtime).run_keep_widget(
-            relays.KeepWidgetRequest(name="a")
+        register_widget_response = runners.InlineWidgetOrchestratorRelay(inline_widget_runtime).run_register_widget(
+            relays.RegisterWidgetRequest(name="a")
         )
-        assert keep_widget_response.name == "a"
+        assert register_widget_response.name == "a"

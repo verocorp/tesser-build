@@ -59,12 +59,12 @@ def pay_for_order_request(
     )
 
 
-class TestRestateInvocationTakePaymentRelay:
+class TestRestateInvocationPurchaseActionsRelay:
 
     def test_running_take_payment_journals_a_call_to_the_runtimes_handler(self) -> None:
         order_id = str(uuid.uuid4())
         pay_for_order_response = asyncio.run(
-            runners.RestateIngressPayForOrderRelay(
+            runners.RestateIngressPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -95,7 +95,7 @@ class TestRestateInvocationTakePaymentRelay:
     def test_no_payment_is_taken_for_an_order_that_was_not_confirmed(self) -> None:
         order_id = str(uuid.uuid4())
         pay_for_order_response = asyncio.run(
-            runners.RestateIngressPayForOrderRelay(
+            runners.RestateIngressPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -119,7 +119,7 @@ class TestRestateInvocationTakePaymentRelay:
     def test_a_declined_charge_ends_the_call_as_an_outcome_not_a_failure(self) -> None:
         order_id = str(uuid.uuid4())
         pay_for_order_response = asyncio.run(
-            runners.RestateIngressPayForOrderRelay(
+            runners.RestateIngressPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()

@@ -68,12 +68,12 @@ def pay_for_order_request(
     )
 
 
-class TestRestateInvocationConfirmOrderRelay:
+class TestRestateInvocationOrderOrchestratorRelay:
 
     def test_running_journals_a_call_to_the_order_workflow_keyed_by_the_orders_id(self) -> None:
         order_id = str(uuid.uuid4())
         pay_for_order_response = asyncio.run(
-            runners.RestateIngressPayForOrderRelay(
+            runners.RestateIngressPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -110,7 +110,7 @@ class TestRestateInvocationConfirmOrderRelay:
     def test_the_key_is_the_id_as_it_is_because_no_path_is_formed_inside_the_engine(self) -> None:
         order_id = "../admin?x=1#f-" + str(uuid.uuid4())
         pay_for_order_response = asyncio.run(
-            runners.RestateIngressPayForOrderRelay(
+            runners.RestateIngressPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -137,12 +137,12 @@ class TestRestateInvocationConfirmOrderRelay:
             FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
         )
         confirm_order_response = asyncio.run(
-            runners.RestateIngressConfirmOrderRelay(
+            runners.RestateIngressOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"], restate_order_runtime
             ).run_confirm_order(confirm_order_request(order_id=order_id))
         )
         pay_for_order_response = asyncio.run(
-            runners.RestateIngressPayForOrderRelay(
+            runners.RestateIngressPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"], restate_order_runtime
             ).run_pay_for_order(pay_for_order_request(order_id=order_id))
         )

@@ -6,10 +6,10 @@ import alpha.adapters.runtimes as runtimes
 import alpha.application.relays as relays
 
 
-class InlineKeepWidgetRelay(ts.Runner):
+class InlineWidgetOrchestratorRelay(ts.Runner):
 
     def __init__(self, inline_widget_runtime: runtimes.InlineWidgetRuntime) -> None:
         self._inline_widget_runtime = inline_widget_runtime
 
-    def run_keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
-        return self._inline_widget_runtime.keep_widget_handler(keep_widget_request)
+    def run_register_widget(self, register_widget_request: relays.RegisterWidgetRequest) -> relays.RegisterWidgetResponse:
+        return self._inline_widget_runtime.register_widget_handler(register_widget_request)

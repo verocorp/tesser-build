@@ -63,6 +63,6 @@ class {{Record}}ResponseSnapshot(ts.Serde):
         return {{Record}}Response({{identity}}=snapshot["{{identity}}"])
 
 
-class {{Record}}Relay(ts.Relay, typing.Protocol):
+class {{Aggregate}}ActionsRelay(ts.Relay, typing.Protocol):
 
     async def run_{{record}}(self, {{record}}_request: {{Record}}Request) -> {{Record}}Response: ...

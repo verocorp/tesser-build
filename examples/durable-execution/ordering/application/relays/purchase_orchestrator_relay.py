@@ -132,7 +132,7 @@ class PayForOrderResponseSnapshot(ts.Serde):
         )
 
 
-class PayForOrderRelay(ts.Relay, typing.Protocol):
+class PurchaseOrchestratorRelay(ts.Relay, typing.Protocol):
 
     async def run_pay_for_order(
         self, pay_for_order_request: PayForOrderRequest

@@ -14,7 +14,7 @@ _READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
 _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOUT_SECONDS)
 
 
-class RestateIngress{{Conduct}}Relay(ts.Runner):
+class RestateIngress{{Aggregate}}OrchestratorRelay(ts.Runner):
 
     def __init__(self, ingress: str, restate_{{aggregate}}_runtime: runtimes.Restate{{Aggregate}}Runtime) -> None:
         self._ingress = ingress

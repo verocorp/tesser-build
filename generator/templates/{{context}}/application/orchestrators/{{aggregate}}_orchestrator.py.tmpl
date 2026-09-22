@@ -23,11 +23,11 @@ class MapTo{{Conduct}}Response(ts.Mapper, relays.{{Conduct}}Response):
 
 class {{Aggregate}}Orchestrator(ts.Orchestrator):
 
-    def __init__(self, {{record}}_relay: relays.{{Record}}Relay) -> None:
-        self._{{record}}_relay = {{record}}_relay
+    def __init__(self, {{aggregate}}_actions_relay: relays.{{Aggregate}}ActionsRelay) -> None:
+        self._{{aggregate}}_actions_relay = {{aggregate}}_actions_relay
 
     async def {{conduct}}(self, {{conduct}}_request: relays.{{Conduct}}Request) -> relays.{{Conduct}}Response:
-        {{record}}_response = await self._{{record}}_relay.run_{{record}}(
+        {{record}}_response = await self._{{aggregate}}_actions_relay.run_{{record}}(
             MapTo{{Record}}Request({{conduct}}_request)
         )
         return MapTo{{Conduct}}Response({{record}}_response)

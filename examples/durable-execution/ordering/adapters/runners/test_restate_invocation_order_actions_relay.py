@@ -55,12 +55,12 @@ def confirm_order_request(
     )
 
 
-class TestRestateInvocationPriceProductRelay:
+class TestRestateInvocationOrderActionsRelay:
 
     def test_running_price_product_journals_a_call_to_the_runtimes_handler(self) -> None:
         order_id = str(uuid.uuid4())
         confirm_order_response = asyncio.run(
-            runners.RestateIngressConfirmOrderRelay(
+            runners.RestateIngressOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
@@ -88,7 +88,7 @@ class TestRestateInvocationPriceProductRelay:
     ) -> None:
         order_id = str(uuid.uuid4())
         confirm_order_response = asyncio.run(
-            runners.RestateIngressConfirmOrderRelay(
+            runners.RestateIngressOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"],
                 runtimes.RestateOrderRuntime(
                     FakeOrderingApplicationClient(), FakePurchaseApplicationClient()
