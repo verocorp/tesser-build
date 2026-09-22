@@ -104,9 +104,9 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         return await self._fake_speech_application_client.say_utterance(arg)
 
     def promise(self, name: str, serde: object) -> FakeDurablePromise:
-        if name == "person_turn":
+        if name == "person_turn_completed":
             return FakeDurablePromise(
-                self.resolved, name, relays.AwaitPersonTurnResponse(call_id="c7", text="Grace")
+                self.resolved, name, relays.AwaitPersonTurnCompletedResponse(call_id="c7", text="Grace")
             )
         return FakeDurablePromise(self.resolved, name, relays.AwaitPersonJoinedResponse(call_id="c7"))
 
@@ -267,8 +267,8 @@ class TestRestateCallRuntime:
 
         assert fake_restate_workflow_shared_context.resolved == [
             (
-                restate_call_runtime.person_turn_promise,
-                relays.AwaitPersonTurnResponse(call_id="c7", text="my name is Grace"),
+                restate_call_runtime.person_turn_completed_promise,
+                relays.AwaitPersonTurnCompletedResponse(call_id="c7", text="my name is Grace"),
             )
         ]
 
@@ -289,7 +289,7 @@ class TestRestateCallRuntime:
 
         assert fake_restate_workflow_shared_context.resolved == [
             (
-                restate_call_runtime.person_turn_promise,
-                relays.AwaitPersonTurnResponse(call_id="c7", text="my name is Grace"),
+                restate_call_runtime.person_turn_completed_promise,
+                relays.AwaitPersonTurnCompletedResponse(call_id="c7", text="my name is Grace"),
             )
         ]

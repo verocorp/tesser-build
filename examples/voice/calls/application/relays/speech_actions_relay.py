@@ -45,5 +45,5 @@ class SayUtteranceResponseSnapshot(ts.Serde):
         return SayUtteranceResponse(call_id=snapshot["call_id"])
 
 
-class SayUtteranceRelay(ts.Relay, typing.Protocol):
+class SpeechActionsRelay(ts.Relay, typing.Protocol):
     async def run_say_utterance(self, say_utterance_request: SayUtteranceRequest) -> SayUtteranceResponse: ...

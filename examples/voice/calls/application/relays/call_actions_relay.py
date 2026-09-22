@@ -43,6 +43,6 @@ class RecordCallResponseSnapshot(ts.Serde):
         return RecordCallResponse(call_id=snapshot["call_id"])
 
 
-class RecordCallRelay(ts.Relay, typing.Protocol):
+class CallActionsRelay(ts.Relay, typing.Protocol):
 
     async def run_record_call(self, record_call_request: RecordCallRequest) -> RecordCallResponse: ...

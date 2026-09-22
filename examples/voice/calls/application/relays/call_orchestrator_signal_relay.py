@@ -29,24 +29,24 @@ class AwaitPersonJoinedResponseSnapshot(ts.Serde):
         return AwaitPersonJoinedResponse(call_id=snapshot["call_id"])
 
 
-class AwaitPersonTurnRequest(ts.Request):
+class AwaitPersonTurnCompletedRequest(ts.Request):
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
 
 
-class AwaitPersonTurnResponse(ts.Response):
+class AwaitPersonTurnCompletedResponse(ts.Response):
     def __init__(self, call_id: str, text: str) -> None:
         self.call_id = call_id
         self.text = text
 
 
-class AwaitPersonTurnResponseSnapshot(ts.Serde):
-    def serialize(self, await_person_turn_response: AwaitPersonTurnResponse) -> bytes:
+class AwaitPersonTurnCompletedResponseSnapshot(ts.Serde):
+    def serialize(self, await_person_turn_completed_response: AwaitPersonTurnCompletedResponse) -> bytes:
         return json.dumps(
-            {"call_id": await_person_turn_response.call_id, "text": await_person_turn_response.text}
+            {"call_id": await_person_turn_completed_response.call_id, "text": await_person_turn_completed_response.text}
         ).encode()
 
-    def deserialize(self, buf: bytes) -> AwaitPersonTurnResponse:
+    def deserialize(self, buf: bytes) -> AwaitPersonTurnCompletedResponse:
         snapshot = json.loads(buf)
         if not (
             isinstance(snapshot, dict)
@@ -54,14 +54,14 @@ class AwaitPersonTurnResponseSnapshot(ts.Serde):
             and isinstance(snapshot.get("text"), str)
         ):
             raise errors.invalid("invalid_snapshot", "an await person turn response is a call_id and a text")
-        return AwaitPersonTurnResponse(call_id=snapshot["call_id"], text=snapshot["text"])
+        return AwaitPersonTurnCompletedResponse(call_id=snapshot["call_id"], text=snapshot["text"])
 
 
-class PersonRelay(ts.Relay, typing.Protocol):
-    async def await_person_joined(  # tesser:debt TB085
+class CallOrchestratorSignalRelay(ts.Relay, typing.Protocol):
+    async def await_person_joined(
         self, await_person_joined_request: AwaitPersonJoinedRequest
     ) -> AwaitPersonJoinedResponse: ...
 
-    async def await_person_turn(  # tesser:debt TB085
-        self, await_person_turn_request: AwaitPersonTurnRequest
-    ) -> AwaitPersonTurnResponse: ...
+    async def await_person_turn_completed(
+        self, await_person_turn_completed_request: AwaitPersonTurnCompletedRequest
+    ) -> AwaitPersonTurnCompletedResponse: ...

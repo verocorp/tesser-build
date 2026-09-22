@@ -17,20 +17,20 @@ class MapToPersonTurnCompletedRequest(ts.Mapper, relays.PersonTurnCompletedReque
 
 
 class CallEventsActions(ts.Actions):
-    def __init__(self, call_events_relay: relays.CallEventsRelay) -> None:  # tesser:debt TB081
-        self._call_events_relay = call_events_relay
+    def __init__(self, call_orchestrator_relay: relays.CallOrchestratorRelay) -> None:  # tesser:debt TB081
+        self._call_orchestrator_relay = call_orchestrator_relay
 
     async def person_joined(  # tesser:debt TB082
         self, person_joined_request: relays.PersonJoinedRequest
     ) -> relays.PersonJoinedResponse:
         call_id = domain.CallId(person_joined_request.call_id)
-        return await self._call_events_relay.run_person_joined(MapToPersonJoinedRequest(call_id))
+        return await self._call_orchestrator_relay.run_person_joined(MapToPersonJoinedRequest(call_id))
 
     async def person_turn_completed(  # tesser:debt TB082
         self, person_turn_completed_request: relays.PersonTurnCompletedRequest
     ) -> relays.PersonTurnCompletedResponse:
         call_id = domain.CallId(person_turn_completed_request.call_id)
         utterance = domain.Utterance(person_turn_completed_request.text)
-        return await self._call_events_relay.run_person_turn_completed(
+        return await self._call_orchestrator_relay.run_person_turn_completed(
             MapToPersonTurnCompletedRequest(call_id, utterance)
         )

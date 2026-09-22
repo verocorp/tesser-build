@@ -9,10 +9,15 @@ import calls.application.relays as relays
 
 
 @ts.fake
-class FakeCallEventsRelay(relays.CallEventsRelay):
+class FakeCallOrchestratorRelay(relays.CallOrchestratorRelay):
     def __init__(self) -> None:
+        self.conducted: list[relays.ConductCallRequest] = []
         self.joined: list[relays.PersonJoinedRequest] = []
         self.completed: list[relays.PersonTurnCompletedRequest] = []
+
+    async def run_conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
+        self.conducted.append(conduct_call_request)
+        return relays.ConductCallResponse(call_id=str(conduct_call_request.call.identity))
 
     async def run_person_joined(
         self, person_joined_request: relays.PersonJoinedRequest
@@ -29,29 +34,29 @@ class FakeCallEventsRelay(relays.CallEventsRelay):
 
 class TestCallEventsActions:
     async def test_a_person_joining_reaches_the_relay_under_the_call_id(self) -> None:
-        fake_call_events_relay = FakeCallEventsRelay()
-        call_events_actions = application.CallEventsActions(fake_call_events_relay)
+        fake_call_orchestrator_relay = FakeCallOrchestratorRelay()
+        call_events_actions = application.CallEventsActions(fake_call_orchestrator_relay)
 
         person_joined_response = await call_events_actions.person_joined(relays.PersonJoinedRequest(call_id="c7"))
 
-        assert [joined.call_id for joined in fake_call_events_relay.joined] == ["c7"]
+        assert [joined.call_id for joined in fake_call_orchestrator_relay.joined] == ["c7"]
         assert person_joined_response.call_id == "c7"
 
     async def test_a_completed_turn_reaches_the_relay_as_the_trimmed_utterance(self) -> None:
-        fake_call_events_relay = FakeCallEventsRelay()
-        call_events_actions = application.CallEventsActions(fake_call_events_relay)
+        fake_call_orchestrator_relay = FakeCallOrchestratorRelay()
+        call_events_actions = application.CallEventsActions(fake_call_orchestrator_relay)
 
         person_turn_completed_response = await call_events_actions.person_turn_completed(
             relays.PersonTurnCompletedRequest(call_id="c7", text="  my name is Grace \n")
         )
 
-        assert [(completed.call_id, completed.text) for completed in fake_call_events_relay.completed] == [
+        assert [(completed.call_id, completed.text) for completed in fake_call_orchestrator_relay.completed] == [
             ("c7", "my name is Grace")
         ]
         assert person_turn_completed_response.call_id == "c7"
 
     async def test_a_turn_that_says_nothing_is_refused(self) -> None:
-        call_events_actions = application.CallEventsActions(FakeCallEventsRelay())
+        call_events_actions = application.CallEventsActions(FakeCallOrchestratorRelay())
 
         with pytest.raises(ValueError):
             await call_events_actions.person_turn_completed(
@@ -59,12 +64,12 @@ class TestCallEventsActions:
             )
 
     async def test_a_turn_that_says_nothing_never_reaches_the_relay(self) -> None:
-        fake_call_events_relay = FakeCallEventsRelay()
-        call_events_actions = application.CallEventsActions(fake_call_events_relay)
+        fake_call_orchestrator_relay = FakeCallOrchestratorRelay()
+        call_events_actions = application.CallEventsActions(fake_call_orchestrator_relay)
 
         with pytest.raises(ValueError):
             await call_events_actions.person_turn_completed(
                 relays.PersonTurnCompletedRequest(call_id="c7", text=" \t\n")
             )
 
-        assert fake_call_events_relay.completed == []
+        assert fake_call_orchestrator_relay.completed == []

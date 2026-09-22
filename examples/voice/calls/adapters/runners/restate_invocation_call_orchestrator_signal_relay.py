@@ -7,7 +7,7 @@ import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
-class RestateInvocationPersonRelay(ts.Runner):
+class RestateInvocationCallOrchestratorSignalRelay(ts.Runner):
     def __init__(
         self,
         restate_workflow_context: restate.WorkflowContext,
@@ -24,10 +24,10 @@ class RestateInvocationPersonRelay(ts.Runner):
             serde=runtimes.RestateAwaitPersonJoinedResponseSerde(),
         ).value()
 
-    async def await_person_turn(
-        self, await_person_turn_request: relays.AwaitPersonTurnRequest
-    ) -> relays.AwaitPersonTurnResponse:
+    async def await_person_turn_completed(
+        self, await_person_turn_completed_request: relays.AwaitPersonTurnCompletedRequest
+    ) -> relays.AwaitPersonTurnCompletedResponse:
         return await self._restate_workflow_context.promise(
-            self._restate_call_runtime.person_turn_promise,
-            serde=runtimes.RestateAwaitPersonTurnResponseSerde(),
+            self._restate_call_runtime.person_turn_completed_promise,
+            serde=runtimes.RestateAwaitPersonTurnCompletedResponseSerde(),
         ).value()

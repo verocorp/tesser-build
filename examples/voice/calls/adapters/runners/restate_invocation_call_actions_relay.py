@@ -7,7 +7,7 @@ import calls.adapters.runtimes as runtimes
 import calls.application.relays as relays
 
 
-class RestateInvocationDialingRelay(ts.Runner):
+class RestateInvocationCallActionsRelay(ts.Runner):
 
     def __init__(
         self,
@@ -17,12 +17,7 @@ class RestateInvocationDialingRelay(ts.Runner):
         self._restate_workflow_context = restate_workflow_context
         self._restate_call_runtime = restate_call_runtime
 
-    async def run_dial_person(self, dial_person_request: relays.DialPersonRequest) -> relays.DialPersonResponse:
+    async def run_record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
         return await self._restate_workflow_context.service_call(
-            self._restate_call_runtime.dial_person_handler, dial_person_request
-        )
-
-    async def run_hang_up(self, hang_up_request: relays.HangUpRequest) -> relays.HangUpResponse:
-        return await self._restate_workflow_context.service_call(
-            self._restate_call_runtime.hang_up_handler, hang_up_request
+            self._restate_call_runtime.record_call_handler, record_call_request
         )

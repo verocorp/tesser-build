@@ -86,13 +86,13 @@ class Calls(ts.Component):
         )
         self.client: client.CallsClient = Calls.Client(
             application.CallService(
-                runners.RestateIngressConductCallRelay(config.ingress, self.restate_call_runtime),
+                runners.RestateIngressCallOrchestratorRelay(config.ingress, self.restate_call_runtime),
                 self._postgres_call_store,
             ),
         )
         self.livekit_call_runtime: runtimes.LivekitCallRuntime = runtimes.LivekitCallRuntime(
             application.CallEventsActions(
-                runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime)
+                runners.RestateIngressCallOrchestratorRelay(config.ingress, self.restate_call_runtime)
             ),
             config.livekit_agent_name,
             config.livekit_stt_model,

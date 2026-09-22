@@ -54,7 +54,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         return FakeDurablePromise(self._resolved)
 
 
-class TestRestateInvocationPersonRelay:
+class TestRestateInvocationCallOrchestratorSignalRelay:
     async def test_awaiting_person_joined_waits_on_the_runtimes_promise(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
             FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
@@ -63,7 +63,7 @@ class TestRestateInvocationPersonRelay:
             relays.AwaitPersonJoinedResponse(call_id="c1")
         )
 
-        await runners.RestateInvocationPersonRelay(
+        await runners.RestateInvocationCallOrchestratorSignalRelay(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
         ).await_person_joined(relays.AwaitPersonJoinedRequest(call_id="c1"))
 
@@ -74,7 +74,7 @@ class TestRestateInvocationPersonRelay:
             relays.AwaitPersonJoinedResponse(call_id="c1")
         )
 
-        await_person_joined_response = await runners.RestateInvocationPersonRelay(
+        await_person_joined_response = await runners.RestateInvocationCallOrchestratorSignalRelay(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
             runtimes.RestateCallRuntime(
                 FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
@@ -88,25 +88,25 @@ class TestRestateInvocationPersonRelay:
             FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext(  # tesser:debt TB085
-            relays.AwaitPersonTurnResponse(call_id="c1", text="Grace")
+            relays.AwaitPersonTurnCompletedResponse(call_id="c1", text="Grace")
         )
 
-        await runners.RestateInvocationPersonRelay(
+        await runners.RestateInvocationCallOrchestratorSignalRelay(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
-        ).await_person_turn(relays.AwaitPersonTurnRequest(call_id="c1"))
+        ).await_person_turn_completed(relays.AwaitPersonTurnCompletedRequest(call_id="c1"))
 
-        assert fake_restate_workflow_context.promised == [restate_call_runtime.person_turn_promise]
+        assert fake_restate_workflow_context.promised == [restate_call_runtime.person_turn_completed_promise]
 
     async def test_awaiting_a_person_turn_answers_what_the_person_said(self) -> None:
         fake_restate_workflow_context = FakeRestateWorkflowContext(  # tesser:debt TB085
-            relays.AwaitPersonTurnResponse(call_id="c1", text="my name is Grace")
+            relays.AwaitPersonTurnCompletedResponse(call_id="c1", text="my name is Grace")
         )
 
-        await_person_turn_response = await runners.RestateInvocationPersonRelay(
+        await_person_turn_completed_response = await runners.RestateInvocationCallOrchestratorSignalRelay(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context),
             runtimes.RestateCallRuntime(
                 FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
             ),
-        ).await_person_turn(relays.AwaitPersonTurnRequest(call_id="c1"))
+        ).await_person_turn_completed(relays.AwaitPersonTurnCompletedRequest(call_id="c1"))
 
-        assert await_person_turn_response.text == "my name is Grace"
+        assert await_person_turn_completed_response.text == "my name is Grace"

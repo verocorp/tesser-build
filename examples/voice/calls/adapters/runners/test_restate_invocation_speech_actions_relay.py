@@ -44,7 +44,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
         return relays.SayUtteranceResponse(call_id="c1")
 
 
-class TestRestateInvocationSayUtteranceRelay:
+class TestRestateInvocationSpeechActionsRelay:
     async def test_running_say_utterance_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
             FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
@@ -52,7 +52,7 @@ class TestRestateInvocationSayUtteranceRelay:
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
         say_utterance_request = relays.SayUtteranceRequest(call_id="c1", text="Hello. Please tell me your first name.")
 
-        await runners.RestateInvocationSayUtteranceRelay(
+        await runners.RestateInvocationSpeechActionsRelay(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
         ).run_say_utterance(say_utterance_request)
 

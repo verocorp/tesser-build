@@ -16,7 +16,7 @@ _RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationR
     max_attempts=5, on_max_attempts="pause"
 )
 _PERSON_JOINED_PROMISE: typing.Final[str] = "person_joined"
-_PERSON_TURN_PROMISE: typing.Final[str] = "person_turn"
+_PERSON_TURN_COMPLETED_PROMISE: typing.Final[str] = "person_turn_completed"
 
 
 class RestateConductCallRequestSerde(ts.Serde, restate_serde.Serde[relays.ConductCallRequest]):
@@ -199,16 +199,16 @@ class RestateAwaitPersonJoinedResponseSerde(ts.Serde, restate_serde.Serde[relays
         return relays.AwaitPersonJoinedResponseSnapshot().deserialize(buf)
 
 
-class RestateAwaitPersonTurnResponseSerde(ts.Serde, restate_serde.Serde[relays.AwaitPersonTurnResponse]):
-    def serialize(self, await_person_turn_response: relays.AwaitPersonTurnResponse | None) -> bytes:
-        if await_person_turn_response is None:
+class RestateAwaitPersonTurnCompletedResponseSerde(ts.Serde, restate_serde.Serde[relays.AwaitPersonTurnCompletedResponse]):
+    def serialize(self, await_person_turn_completed_response: relays.AwaitPersonTurnCompletedResponse | None) -> bytes:
+        if await_person_turn_completed_response is None:
             return b""
-        return relays.AwaitPersonTurnResponseSnapshot().serialize(await_person_turn_response)
+        return relays.AwaitPersonTurnCompletedResponseSnapshot().serialize(await_person_turn_completed_response)
 
-    def deserialize(self, buf: bytes) -> relays.AwaitPersonTurnResponse | None:
+    def deserialize(self, buf: bytes) -> relays.AwaitPersonTurnCompletedResponse | None:
         if not buf:
             raise restate.TerminalError(_EMPTY_BODY, status_code=400)
-        return relays.AwaitPersonTurnResponseSnapshot().deserialize(buf)
+        return relays.AwaitPersonTurnCompletedResponseSnapshot().deserialize(buf)
 
 
 class RestateCallRuntime(ts.Runtime):
@@ -223,7 +223,7 @@ class RestateCallRuntime(ts.Runtime):
         self.speech_actions_service = restate.Service("SpeechActions", invocation_retry_policy=_RETRY_POLICY)
         self.call_orchestrator_workflow = restate.Workflow("CallOrchestrator", invocation_retry_policy=_RETRY_POLICY)
         self.person_joined_promise = _PERSON_JOINED_PROMISE
-        self.person_turn_promise = _PERSON_TURN_PROMISE
+        self.person_turn_completed_promise = _PERSON_TURN_COMPLETED_PROMISE
 
         @self.call_actions_service.handler(
             input_serde=RestateRecordCallRequestSerde(),
@@ -269,10 +269,10 @@ class RestateCallRuntime(ts.Runtime):
             restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
         ) -> relays.ConductCallResponse:
             return await orchestrators.CallOrchestrator(
-                runners.RestateInvocationDialingRelay(restate_workflow_context, self),
-                runners.RestateInvocationPersonRelay(restate_workflow_context, self),
-                runners.RestateInvocationSayUtteranceRelay(restate_workflow_context, self),
-                runners.RestateInvocationRecordCallRelay(restate_workflow_context, self),
+                runners.RestateInvocationDialingActionsRelay(restate_workflow_context, self),
+                runners.RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context, self),
+                runners.RestateInvocationSpeechActionsRelay(restate_workflow_context, self),
+                runners.RestateInvocationCallActionsRelay(restate_workflow_context, self),
             ).conduct_call(conduct_call_request)
 
         @self.call_orchestrator_workflow.handler(
@@ -300,12 +300,12 @@ class RestateCallRuntime(ts.Runtime):
             restate_workflow_shared_context: restate.WorkflowSharedContext,
             person_turn_completed_request: relays.PersonTurnCompletedRequest,
         ) -> relays.PersonTurnCompletedResponse:
-            person_turn_promise = restate_workflow_shared_context.promise(
-                _PERSON_TURN_PROMISE, serde=RestateAwaitPersonTurnResponseSerde()
+            person_turn_completed_promise = restate_workflow_shared_context.promise(
+                _PERSON_TURN_COMPLETED_PROMISE, serde=RestateAwaitPersonTurnCompletedResponseSerde()
             )
-            if await person_turn_promise.peek() is None:
-                await person_turn_promise.resolve(
-                    relays.AwaitPersonTurnResponse(
+            if await person_turn_completed_promise.peek() is None:
+                await person_turn_completed_promise.resolve(
+                    relays.AwaitPersonTurnCompletedResponse(
                         call_id=person_turn_completed_request.call_id, text=person_turn_completed_request.text
                     )
                 )

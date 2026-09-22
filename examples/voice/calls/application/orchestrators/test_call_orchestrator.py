@@ -8,7 +8,7 @@ import calls.domain as domain
 
 
 @ts.fake
-class FakeDialingRelay(relays.DialingRelay):
+class FakeDialingActionsRelay(relays.DialingActionsRelay):
     def __init__(self, journal: list[str]) -> None:
         self._journal = journal
 
@@ -22,7 +22,7 @@ class FakeDialingRelay(relays.DialingRelay):
 
 
 @ts.fake
-class FakePersonRelay(relays.PersonRelay):
+class FakeCallOrchestratorSignalRelay(relays.CallOrchestratorSignalRelay):
     def __init__(self, journal: list[str], text: str) -> None:
         self._journal = journal
         self._text = text
@@ -33,15 +33,15 @@ class FakePersonRelay(relays.PersonRelay):
         self._journal.append("await_person_joined")
         return relays.AwaitPersonJoinedResponse(call_id=await_person_joined_request.call_id)
 
-    async def await_person_turn(
-        self, await_person_turn_request: relays.AwaitPersonTurnRequest
-    ) -> relays.AwaitPersonTurnResponse:
-        self._journal.append("await_person_turn")
-        return relays.AwaitPersonTurnResponse(call_id=await_person_turn_request.call_id, text=self._text)
+    async def await_person_turn_completed(
+        self, await_person_turn_completed_request: relays.AwaitPersonTurnCompletedRequest
+    ) -> relays.AwaitPersonTurnCompletedResponse:
+        self._journal.append("await_person_turn_completed")
+        return relays.AwaitPersonTurnCompletedResponse(call_id=await_person_turn_completed_request.call_id, text=self._text)
 
 
 @ts.fake
-class FakeSayUtteranceRelay(relays.SayUtteranceRelay):
+class FakeSpeechActionsRelay(relays.SpeechActionsRelay):
     def __init__(self, journal: list[str]) -> None:
         self._journal = journal
 
@@ -53,7 +53,7 @@ class FakeSayUtteranceRelay(relays.SayUtteranceRelay):
 
 
 @ts.fake
-class FakeRecordCallRelay(relays.RecordCallRelay):
+class FakeCallActionsRelay(relays.CallActionsRelay):
     def __init__(self, journal: list[str]) -> None:
         self._journal = journal
         self.recorded: list[relays.RecordCallRequest] = []
@@ -73,10 +73,10 @@ class TestCallOrchestrator:
     async def test_a_call_dials_asks_for_the_name_greets_the_person_and_hangs_up(self) -> None:
         journal: list[str] = []
         call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakePersonRelay(journal, "Grace"),
-            FakeSayUtteranceRelay(journal),
-            FakeRecordCallRelay(journal),
+            FakeDialingActionsRelay(journal),
+            FakeCallOrchestratorSignalRelay(journal, "Grace"),
+            FakeSpeechActionsRelay(journal),
+            FakeCallActionsRelay(journal),
         )
 
         await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
@@ -85,7 +85,7 @@ class TestCallOrchestrator:
             "dial_person",
             "await_person_joined",
             "say_utterance Hello. Please tell me your first name.",
-            "await_person_turn",
+            "await_person_turn_completed",
             "say_utterance Nice to meet you, Grace. Goodbye.",
             "hang_up",
             "record_call",
@@ -93,39 +93,39 @@ class TestCallOrchestrator:
 
     async def test_the_recorded_call_carries_the_name_the_person_said(self) -> None:
         journal: list[str] = []
-        fake_record_call_relay = FakeRecordCallRelay(journal)
+        fake_call_actions_relay = FakeCallActionsRelay(journal)
         call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakePersonRelay(journal, "Grace"),
-            FakeSayUtteranceRelay(journal),
-            fake_record_call_relay,
+            FakeDialingActionsRelay(journal),
+            FakeCallOrchestratorSignalRelay(journal, "Grace"),
+            FakeSpeechActionsRelay(journal),
+            fake_call_actions_relay,
         )
 
         await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
 
-        assert [str(recorded.call.person_name) for recorded in fake_record_call_relay.recorded] == ["Grace"]
+        assert [str(recorded.call.person_name) for recorded in fake_call_actions_relay.recorded] == ["Grace"]
 
     async def test_a_name_said_with_punctuation_is_recorded_without_it(self) -> None:
         journal: list[str] = []
-        fake_record_call_relay = FakeRecordCallRelay(journal)
+        fake_call_actions_relay = FakeCallActionsRelay(journal)
         call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakePersonRelay(journal, "Sarah."),
-            FakeSayUtteranceRelay(journal),
-            fake_record_call_relay,
+            FakeDialingActionsRelay(journal),
+            FakeCallOrchestratorSignalRelay(journal, "Sarah."),
+            FakeSpeechActionsRelay(journal),
+            fake_call_actions_relay,
         )
 
         await call_orchestrator.conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec())))
 
-        assert [str(recorded.call.person_name) for recorded in fake_record_call_relay.recorded] == ["Sarah"]
+        assert [str(recorded.call.person_name) for recorded in fake_call_actions_relay.recorded] == ["Sarah"]
 
     async def test_conducting_a_call_answers_the_call_id_it_recorded(self) -> None:
         journal: list[str] = []
         call_orchestrator = orchestrators.CallOrchestrator(
-            FakeDialingRelay(journal),
-            FakePersonRelay(journal, "Grace"),
-            FakeSayUtteranceRelay(journal),
-            FakeRecordCallRelay(journal),
+            FakeDialingActionsRelay(journal),
+            FakeCallOrchestratorSignalRelay(journal, "Grace"),
+            FakeSpeechActionsRelay(journal),
+            FakeCallActionsRelay(journal),
         )
 
         conduct_call_response = await call_orchestrator.conduct_call(

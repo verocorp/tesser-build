@@ -76,7 +76,7 @@ class HangUpResponseSnapshot(ts.Serde):
         return HangUpResponse(call_id=snapshot["call_id"])
 
 
-class DialingRelay(ts.Relay, typing.Protocol):  # tesser:debt TB085
+class DialingActionsRelay(ts.Relay, typing.Protocol):
 
     async def run_dial_person(self, dial_person_request: DialPersonRequest) -> DialPersonResponse: ...
 

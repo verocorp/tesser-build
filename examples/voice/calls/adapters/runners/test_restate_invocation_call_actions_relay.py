@@ -42,7 +42,7 @@ class FakeRestateWorkflowContext:  # tesser:debt TB072
 
     async def service_call(self, tpe: object, arg: object) -> object:
         self.called.append((tpe, arg))
-        return relays.DialPersonResponse(call_id="c1")
+        return relays.RecordCallResponse(call_id="c1")
 
 
 @ts.helper
@@ -50,29 +50,16 @@ def call_spec(call_id: str = "c1", person_name: str = "") -> domain.CallSpec:
     return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
-class TestRestateInvocationDialingRelay:
-    async def test_running_dial_person_journals_a_call_to_the_runtimes_handler(self) -> None:
+class TestRestateInvocationCallActionsRelay:
+    async def test_running_record_call_journals_a_call_to_the_runtimes_handler(self) -> None:
         restate_call_runtime = runtimes.RestateCallRuntime(
             FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
         )
         fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        dial_person_request = relays.DialPersonRequest(call=domain.Call(call_spec()))
+        record_call_request = relays.RecordCallRequest(call=domain.Call(call_spec()))
 
-        await runners.RestateInvocationDialingRelay(
+        await runners.RestateInvocationCallActionsRelay(
             typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
-        ).run_dial_person(dial_person_request)
+        ).run_record_call(record_call_request)
 
-        assert fake_restate_workflow_context.called == [(restate_call_runtime.dial_person_handler, dial_person_request)]
-
-    async def test_running_hang_up_journals_a_call_to_the_runtimes_handler(self) -> None:
-        restate_call_runtime = runtimes.RestateCallRuntime(
-            FakeCallApplicationClient(), FakeDialingApplicationClient(), FakeSpeechApplicationClient()
-        )
-        fake_restate_workflow_context = FakeRestateWorkflowContext()  # tesser:debt TB085
-        hang_up_request = relays.HangUpRequest(call=domain.Call(call_spec()))
-
-        await runners.RestateInvocationDialingRelay(
-            typing.cast(restate.WorkflowContext, fake_restate_workflow_context), restate_call_runtime
-        ).run_hang_up(hang_up_request)
-
-        assert fake_restate_workflow_context.called == [(restate_call_runtime.hang_up_handler, hang_up_request)]
+        assert fake_restate_workflow_context.called == [(restate_call_runtime.record_call_handler, record_call_request)]
