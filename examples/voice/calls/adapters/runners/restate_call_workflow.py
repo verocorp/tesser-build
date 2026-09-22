@@ -7,7 +7,7 @@ import tesser.adapters as ts
 import restate
 import restate.serde as restate_serde
 
-import calls.application.orchestrators as orchestrators
+import calls.application.client as client
 import calls.application.relays as relays
 
 
@@ -85,11 +85,14 @@ class RestateInvocationSpeechActionsRelay(ts.Runner):
 
 class RestateCallWorkflow(ts.Runner):
 
+    def __init__(self, call_orchestrator_factory: client.CallOrchestratorFactory) -> None:
+        self._call_orchestrator_factory = call_orchestrator_factory
+
     @contextlib.asynccontextmanager
     async def invocation(
         self, restate_workflow_context: restate.WorkflowContext
-    ) -> typing.AsyncIterator[orchestrators.CallOrchestrator]:
-        yield orchestrators.CallOrchestrator(
+    ) -> typing.AsyncIterator[client.CallOrchestratorApplicationClient]:
+        yield self._call_orchestrator_factory(
             RestateInvocationDialingActionsRelay(restate_workflow_context),
             RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context),
             RestateInvocationSpeechActionsRelay(restate_workflow_context),

@@ -25,6 +25,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
     ("tesser.application", "Workflow"): "workflow",
+    ("tesser.application", "Factory"): "factory",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -154,6 +155,8 @@ WORKFLOW_OPERATION: typing.Final[str] = "invocation"
 
 WORKFLOW_BLOCK: typing.Final[str] = "workflow"
 
+FACTORY_BLOCK: typing.Final[str] = "factory"
+
 ENGINE_REGISTRATIONS: typing.Final[frozenset[str]] = frozenset({"Service", "Workflow", "VirtualObject"})
 
 AWAIT_MODE: typing.Final[str] = "await_"
@@ -197,7 +200,7 @@ PLACEMENT_KINDS: typing.Final[dict[str, frozenset[str]]] = {
 
 RUNTIME_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (APPLICATION_CLIENT_IMPORT,)
 
-RUNNER_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (ORCHESTRATORS_IMPORT,)
+COMPONENT_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (ORCHESTRATORS_IMPORT,)
 
 RUNNER_BLOCK: typing.Final[str] = "runner"
 
@@ -247,9 +250,9 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     RUNTIMES_PACKAGE: frozenset({RUNTIME_BLOCK, "serde"}),
 }
 
-RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
+APPLICATION_CLIENT_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, RUNNERS_PACKAGE})
 
-ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
+ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNNERS_PACKAGE, RUNTIMES_PACKAGE})
 
 ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, or runtimes"
 
@@ -328,7 +331,7 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
-    RUNNERS_PACKAGE: (RELAYS_IMPORT, ORCHESTRATORS_IMPORT),
+    RUNNERS_PACKAGE: (RELAYS_IMPORT, APPLICATION_CLIENT_IMPORT),
     RUNTIMES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
 }
 
@@ -352,6 +355,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
     "workflow": APPLICATION_CLIENT_HOME,
+    "factory": APPLICATION_CLIENT_HOME,
     RELAY_BLOCK: RELAYS_HOME,
     "relay_request": RELAYS_HOME,
     "relay_response": RELAYS_HOME,
@@ -402,6 +406,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "port": "a port",
     "store": "a store",
     "workflow": "a workflow",
+    "factory": "a factory",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
     "request": "a request DTO",
@@ -10284,9 +10289,9 @@ class Module(ts.Entity):
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in RUNTIME_ONLY_IMPORTS
                 )
-                runner_only = any(
+                component_only = any(
                     inner == entry or inner.startswith(f"{entry}.")
-                    for entry in RUNNER_ONLY_IMPORTS
+                    for entry in COMPONENT_ONLY_IMPORTS
                 )
                 own_kernel = ".".join((context,) + CONTEXT_KERNEL_HOME)
                 if pieces[0] == context and role != CONTEXT_KERNEL_HOME[0] and (
@@ -10303,26 +10308,26 @@ class Module(ts.Entity):
                             "__init__",
                         ))
                     )
-                elif pieces[0] == context and runtime_only and kind_package not in RUNTIME_KIND_PACKAGES:
+                elif pieces[0] == context and runtime_only and kind_package not in APPLICATION_CLIENT_KIND_PACKAGES:
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runtime imports "
-                            "the application client, because an action is reachable only "
-                            "through the engine",
+                            f"{module_name} imports {target}; only a runtime or a runner "
+                            "imports the application client, because an action is reachable "
+                            "only through the engine",
                         ))
                     )
-                elif pieces[0] == context and runner_only and kind_package != RUNNERS_PACKAGE:
+                elif pieces[0] == context and component_only and role != "component":
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runner imports the "
-                            "orchestrators, because an orchestrator is built per invocation by "
-                            "the workflow that runs beside that invocation's runners",
+                            f"{module_name} imports {target}; only a component imports the "
+                            "orchestrators, because the composition root chooses the business "
+                            "logic a workflow's factory builds",
                         ))
                     )
                 elif pieces[0] == context and role == "adapters" and kind_reach is not None:
@@ -10565,6 +10570,7 @@ class Module(ts.Entity):
 
         protocols: list[ast.ClassDef] = []
         workflows: list[ast.ClassDef] = []
+        factories: list[ast.ClassDef] = []
         for stmt in self._class_defs:
             where = f"{module_name}.{stmt.name}"
             named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
@@ -10595,6 +10601,30 @@ class Module(ts.Entity):
                             f"{where} does not yield the client beside it from one invocation; a "
                             "workflow in an application client module declares only invocation, "
                             "and what it yields is the client that module declares",
+                        ))
+                    )
+                continue
+            if block == FACTORY_BLOCK:
+                factories.append(stmt)
+                builds = tuple(
+                    item
+                    for item in stmt.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and (item.name == "__call__" or not item.name.startswith("_"))
+                )
+                built = builds[0].returns if len(builds) == 1 and builds[0].name == "__call__" else None
+                if not (
+                    isinstance(built, ast.Name)
+                    and any(isinstance(other, ast.ClassDef) and other.name == built.id for other in self._class_defs)
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} does not build the client beside it from one __call__; a "
+                            "factory in an application client module declares only __call__, and "
+                            "what it returns is the client that module declares",
                         ))
                     )
                 continue
@@ -10640,6 +10670,16 @@ class Module(ts.Entity):
                     f"{module_name} declares {len(protocols)} client protocols; an "
                     "application client module declares exactly one ts.Client protocol "
                     "and nothing else",
+                ))
+            )
+        if len(factories) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    factories[1].lineno,
+                    "TB052",
+                    f"{module_name} declares {len(factories)} factories; an application client "
+                    "module declares at most one ts.Factory, the one that builds its client",
                 ))
             )
         if len(workflows) > 1:
@@ -11163,6 +11203,7 @@ class Module(ts.Entity):
                             "protocol_port",
                             "config_repository",
                             WORKFLOW_BLOCK,
+                            FACTORY_BLOCK,
                         ):
                             doubles = True
                     if not doubles:
@@ -11172,8 +11213,8 @@ class Module(ts.Entity):
                                 stmt.lineno,
                                 "TB072",
                                 f"{where} implements no application port, store, relay, protocol "
-                                "port, client, workflow, or config repository; a fake implements "
-                                "the contract it doubles",
+                                "port, client, workflow, factory, or config repository; a fake "
+                                "implements the contract it doubles",
                             ))
                         )
             else:
@@ -11364,13 +11405,13 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runtimes reaches the application client; a test reaches only what "
-                            "its placement allows",
+                            "runners or runtimes reaches the application client; a test reaches "
+                            "only what its placement allows",
                         ))
                     )
-                elif allowed and tier != RUNNERS_PACKAGE and not at_home and any(
+                elif allowed and tier != "component" and not at_home and any(
                     inner == entry or inner.startswith(f"{entry}.")
-                    for entry in RUNNER_ONLY_IMPORTS
+                    for entry in COMPONENT_ONLY_IMPORTS
                 ):
                     found.append(
                         Violation(ViolationSpec(
@@ -11378,7 +11419,7 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runners reaches the orchestrators; a test reaches only what its "
+                            "component reaches the orchestrators; a test reaches only what its "
                             "placement allows",
                         ))
                     )

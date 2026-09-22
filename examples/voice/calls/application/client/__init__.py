@@ -2,6 +2,7 @@ from calls.application.client.call_actions import CallApplicationClient as CallA
 from calls.application.client.call_orchestrator import (
     CallOrchestratorApplicationClient as CallOrchestratorApplicationClient,
 )
+from calls.application.client.call_orchestrator import CallOrchestratorFactory as CallOrchestratorFactory
 from calls.application.client.call_orchestrator import CallWorkflow as CallWorkflow
 from calls.application.client.dialing_actions import DialingApplicationClient as DialingApplicationClient
 from calls.application.client.speech_actions import SpeechApplicationClient as SpeechApplicationClient
