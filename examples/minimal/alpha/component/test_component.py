@@ -29,7 +29,7 @@ class TestAlpha:
         add_part_response = alpha.client.add_part(client.AddPartRequest(name="a", part="p"))
         assert add_part_response.name == "a"
 
-    def test_the_wired_client_creates_a_widget_through_its_orchestrator(self) -> None:
+    def test_the_wired_client_creates_a_widget(self) -> None:
         alpha = component.Alpha(component.Config(component.Spec(storage="memory")), FakeBetaCheck())
         create_widget_response = alpha.client.create_widget(client.CreateWidgetRequest(name="a"))
         assert create_widget_response.name == "a"

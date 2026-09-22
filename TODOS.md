@@ -66,11 +66,19 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   cut (one messages module beside each relay, or a `messages/` package),
   what the runner and the runtime then import, and whether ports get the
   same split, since `ports/` has the identical shape.
-- **minimal is non-conformant to the ruled dependency shape (Chris,
-  2026-09-22).** Its inline engine has no invocation context, so the
-  `ts.Workflow[C, O]` binding has nothing to bind `C` to. It keeps its current shape rather than getting
-  a pretend context; decide whether an in-process engine gets a context type
-  of its own or the tree stops claiming the durable shape.
+- **minimal exercises every `ts.*` again — an in-process engine by name
+  (Chris, 2026-09-22; the third PR after the adapter-shape PR).** minimal's
+  requirement is that every `ts.*` kind is shown and exercised. The
+  adapter-shape PR dropped its durable half (relays, runners, runtime,
+  orchestrator, actions, application client) because its inline engine had
+  no invocation context and its runners called the runtime directly, which
+  the closed adapter-import rule forbids. Put it back with a small
+  in-process engine that has a context type and dispatches by service and
+  handler name, so minimal shows `ts.Relay`, `ts.Runner`, `ts.Runtime`,
+  `ts.Orchestrator`, `ts.Actions`, `ts.Workflow` and the application client
+  without Restate. The runtime obligation reads only decorator
+  registrations today, so a method-style runtime is unchecked; the engine
+  should register by name the way Restate does.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the
