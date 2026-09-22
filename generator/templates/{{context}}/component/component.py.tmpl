@@ -32,10 +32,11 @@ class {{Context}}(ts.Component):
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_{{aggregate}}_store = repositories.Postgres{{Aggregate}}Store(database)
         self.restate_{{aggregate}}_runtime: runtimes.Restate{{Aggregate}}Runtime = runtimes.Restate{{Aggregate}}Runtime(
-            application.{{Aggregate}}Actions(self._postgres_{{aggregate}}_store)
+            application.{{Aggregate}}Actions(self._postgres_{{aggregate}}_store),
+            runners.Restate{{Aggregate}}Workflow(),
         )
         self.client: client.{{Context}}Client = application.{{Aggregate}}Service(
-            runners.RestateIngress{{Aggregate}}OrchestratorRelay(config.ingress, self.restate_{{aggregate}}_runtime),
+            runners.RestateIngress{{Aggregate}}OrchestratorRelay(config.ingress),
             repositories.Uuid{{Aggregate}}IdentityRepository(config.identity_seed),
             self._postgres_{{aggregate}}_store,
         )

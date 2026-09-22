@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.application as ts
+
+import {{context}}.application.relays as relays
+
+
+class {{Aggregate}}OrchestratorApplicationClient(ts.Client, typing.Protocol):
+
+    async def {{conduct}}(self, {{conduct}}_request: relays.{{Conduct}}Request) -> relays.{{Conduct}}Response: ...
+
+
+class {{Aggregate}}Workflow[C](ts.Workflow, typing.Protocol):
+
+    def invocation(self, context: C, /) -> typing.AsyncContextManager[{{Aggregate}}OrchestratorApplicationClient]: ...

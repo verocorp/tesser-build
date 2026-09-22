@@ -1,35 +1,31 @@
 from __future__ import annotations
 
 import os
+import typing
 import uuid
 
-import tesser.testing as ts
 import httpx
+import restate
 
 import {{context}}.adapters.runners as runners
-import {{context}}.adapters.runtimes as runtimes
-import {{context}}.application.client as client
+import {{context}}.application.orchestrators as orchestrators
 import {{context}}.application.relays as relays
 
 
-@ts.fake
-class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
+class TestRestate{{Aggregate}}Workflow:
 
-    async def {{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
-        return relays.{{Record}}Response({{identity}}={{record}}_request.{{identity}})
+    async def test_an_invocation_yields_the_{{aggregate}}_orchestrator(self) -> None:
+        async with runners.Restate{{Aggregate}}Workflow().invocation(
+            typing.cast(restate.WorkflowContext, object())
+        ) as {{aggregate}}_orchestrator:
+            assert isinstance({{aggregate}}_orchestrator, orchestrators.{{Aggregate}}Orchestrator)
 
-
-class TestRestateInvocation{{Aggregate}}ActionsRelay:
-
-    async def test_{{record}}_reaches_the_actions_service_as_a_call_the_engine_journals(self) -> None:
-        restate_{{aggregate}}_runtime = runtimes.Restate{{Aggregate}}Runtime(Fake{{Aggregate}}ApplicationClient())
+    async def test_an_invocation_calls_{{record}}_on_the_actions_service_as_a_call_the_engine_journals(self) -> None:
         {{identity}} = str(uuid.uuid4())
         admin = os.environ.get("RESTATE_ADMIN", "http://localhost:9070")
         parent_target = "{{Aggregate}}Orchestrator/" + {{identity}} + "/{{conduct}}"
 
-        await runners.RestateIngress{{Aggregate}}OrchestratorRelay(
-            os.environ["{{ingress_env}}"], restate_{{aggregate}}_runtime
-        ).run_{{conduct}}(
+        await runners.RestateIngress{{Aggregate}}OrchestratorRelay(os.environ["{{ingress_env}}"]).run_{{conduct}}(
             relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
         )
 
