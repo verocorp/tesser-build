@@ -27,21 +27,21 @@ class FakeCallEventsRelay(relays.CallEventsRelay):
         return relays.PersonTurnCompletedResponse(call_id=person_turn_completed_request.call_id)
 
 
-class TestCallEventsService:
+class TestCallEventsActions:
     async def test_a_person_joining_reaches_the_relay_under_the_call_id(self) -> None:
         fake_call_events_relay = FakeCallEventsRelay()
-        call_events_service = application.CallEventsService(fake_call_events_relay)
+        call_events_actions = application.CallEventsActions(fake_call_events_relay)
 
-        person_joined_response = await call_events_service.person_joined(relays.PersonJoinedRequest(call_id="c7"))
+        person_joined_response = await call_events_actions.person_joined(relays.PersonJoinedRequest(call_id="c7"))
 
         assert [joined.call_id for joined in fake_call_events_relay.joined] == ["c7"]
         assert person_joined_response.call_id == "c7"
 
     async def test_a_completed_turn_reaches_the_relay_as_the_trimmed_utterance(self) -> None:
         fake_call_events_relay = FakeCallEventsRelay()
-        call_events_service = application.CallEventsService(fake_call_events_relay)
+        call_events_actions = application.CallEventsActions(fake_call_events_relay)
 
-        person_turn_completed_response = await call_events_service.person_turn_completed(
+        person_turn_completed_response = await call_events_actions.person_turn_completed(
             relays.PersonTurnCompletedRequest(call_id="c7", text="  my name is Grace \n")
         )
 
@@ -51,19 +51,19 @@ class TestCallEventsService:
         assert person_turn_completed_response.call_id == "c7"
 
     async def test_a_turn_that_says_nothing_is_refused(self) -> None:
-        call_events_service = application.CallEventsService(FakeCallEventsRelay())
+        call_events_actions = application.CallEventsActions(FakeCallEventsRelay())
 
         with pytest.raises(ValueError):
-            await call_events_service.person_turn_completed(
+            await call_events_actions.person_turn_completed(
                 relays.PersonTurnCompletedRequest(call_id="c7", text=" \t\n")
             )
 
     async def test_a_turn_that_says_nothing_never_reaches_the_relay(self) -> None:
         fake_call_events_relay = FakeCallEventsRelay()
-        call_events_service = application.CallEventsService(fake_call_events_relay)
+        call_events_actions = application.CallEventsActions(fake_call_events_relay)
 
         with pytest.raises(ValueError):
-            await call_events_service.person_turn_completed(
+            await call_events_actions.person_turn_completed(
                 relays.PersonTurnCompletedRequest(call_id="c7", text=" \t\n")
             )
 

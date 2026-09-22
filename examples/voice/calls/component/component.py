@@ -91,7 +91,7 @@ class Calls(ts.Component):
             ),
         )
         self.livekit_call_runtime: runtimes.LivekitCallRuntime = runtimes.LivekitCallRuntime(
-            application.CallEventsService(
+            application.CallEventsActions(
                 runners.RestateIngressCallEventsRelay(config.ingress, self.restate_call_runtime)
             ),
             config.livekit_agent_name,

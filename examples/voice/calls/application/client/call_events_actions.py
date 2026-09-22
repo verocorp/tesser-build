@@ -7,7 +7,7 @@ import tesser.application as ts
 import calls.application.relays as relays
 
 
-class CallEventsApplicationClient(ts.Client, typing.Protocol):  # tesser:debt TB081
+class CallEventsApplicationClient(ts.Client, typing.Protocol):
     async def person_joined(
         self, person_joined_request: relays.PersonJoinedRequest
     ) -> relays.PersonJoinedResponse: ...
