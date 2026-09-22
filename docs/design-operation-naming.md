@@ -44,17 +44,31 @@ no verb, a response is named for what it is) is assumed throughout.
    caller's word, and it never borrows the workflow's: no two services,
    actions classes, orchestrators, or relays in a context share a method
    name, so the customer's `make_order_payment` and the workflow's
-   `pay_for_order` are two acts with two names. The
-   relay itself is named for the one operation it carries, `ConfirmOrderRelay`,
-   so a relay carries exactly one operation, and a runner is its engine's
-   word, the side its call starts from, and the relay's class name:
-   `RestateIngressConfirmOrderRelay` from outside any invocation,
-   `RestateInvocationConfirmOrderRelay` from inside one. A relay's methods
+   `pay_for_order` are two acts with two names. The relay itself is named
+   for its **far side** and carries any number of operations
+   (Chris, 2026-09-22, reversing the 2026-09-14 rule below): the far side of
+   a `run_`/`start_` operation is the orchestrator its runtime handler builds
+   and calls, or the class of actions behind the application client that
+   handler calls, so `OrderOrchestratorRelay` and `OrderActionsRelay`. Every
+   operation on one relay must derive the same far side. A runner is its
+   engine's word, the side its call starts from, and the relay's class name:
+   `RestateIngressOrderOrchestratorRelay` from outside any invocation,
+   `RestateInvocationOrderOrchestratorRelay` from inside one. A relay's methods
    carry their calling mode, so `run_confirm_order` never collides with the
    `confirm_order` it carries, and two relays carrying one operation do.
 
+   The rule extends to `await_`: `await_X` reads the durable promise named
+   `X`, which the shared handler named `X` resolves, which `run_X` invokes —
+   one name across the crossing. A relay that awaits is named
+   `<FarSide>SignalRelay` and carries only `await_` operations; no other relay
+   carries one. Nothing outside an invocation can read a durable promise, so a
+   signal relay has an invocation runner only while a plain relay has an
+   ingress runner, and a Protocol cannot be partially implemented.
+
 4. **The calling-mode verb lives on the relay protocol and its runners.**
-   `start_<operation>` accepts and returns; `run_<operation>` waits. The
+   `start_<operation>` accepts and returns; `run_<operation>` waits;
+   `await_<operation>` sends nothing and waits for the far side's report,
+   the durable promise its shared handler resolves (Chris, 2026-09-22). The
    operation after the prefix exists on the far side under that name. A
    runner carries the verb because it implements the relay and has the same
    signatures. The runtime never does: its handlers are the receiving end.
@@ -344,9 +358,12 @@ two segments, `start_` and `run_` appear only on a relay (where they are
 required), and the request, response, and the response's `outcome` field
 derive from the operation; on every public orchestrator method, the name is
 not `run`, carries no calling-mode prefix, and has two segments. Since the chain
-wave (2026-09-14) it also carries 3, 4, and 5: a relay is `<Operation>Relay`
-and carries one operation; a runner ends in its relay's class name, offers
-exactly its relay's methods, and each reaches `<operation>_handler`; a
+wave (2026-09-14) it also carries 3, 4, and 5, as amended 2026-09-22: a relay
+is `<FarSide>Relay` (or `<FarSide>SignalRelay` when it awaits) and carries any
+number of operations that derive one far side; a runner ends in its relay's
+class name, offers exactly its relay's methods, and each `run_`/`start_` method
+reaches `<operation>_handler` while each `await_` method reads
+`<operation>_promise`; a
 runtime exposes every handler as `<operation>_handler`, registers it under
 the operation, and the handler invokes that operation; and no two services,
 actions classes, orchestrators, or relays in a context share a method name. `TB081` carries the two
@@ -480,6 +497,13 @@ comes back.
   `OrderOrchestratorRunner` named the class behind the relay and the kind that
   implements it, never what the relay carries, which is a pattern name in the
   same family as `WidgetFlow`, `FlowResponse`, and `*View`.
+  **Reversed 2026-09-22** (see rule 3): a relay is named for its far side and
+  carries any number of operations, and these four are now
+  `OrderOrchestratorRelay`, `PurchaseOrchestratorRelay`, `OrderActionsRelay`,
+  and `PurchaseActionsRelay`. The 2026-09-14 reason does not survive the move
+  of the act onto the method: with `run_`/`start_`/`await_` saying what the
+  caller does, the class name is the only place the far side can live, and
+  naming it is no longer naming a pattern.
 - **A runner pairs with its relay by class name.** Its name is the relay's
   class name after a prefix of the engine and the side its call starts from:
   `RestateIngress…` from outside any invocation, `RestateInvocation…` from

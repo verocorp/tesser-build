@@ -8,26 +8,26 @@ Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).
 Chris ruled no rule or analyzer changes until the example is built and
 right; collisions carry `# tesser:debt` markers meanwhile.
 
-- **A relay carries the operations of the thing it acts on, not one
-  operation (Chris, 2026-09-17).** Ruled while walking the voice example:
-  "classes should never be designed to hold one operation, though they may
-  only hold one." The voice tree's ten single-operation relays became six,
-  cut the way ports and actions classes already are: `DialingRelay`,
-  `SpeechRelay`, `RecordCallRelay`, `PersonRelay` (the two waits),
-  `ConductCallRelay`, and `CallEventsRelay` (the two inbound reports). The
-  orchestrator takes four relays instead of seven, and the service split by
-  responsibility into `CallService` (place, get; holds the store and the
-  conduct relay) and `CallEventsService` (report person answered, report
-  person utterance; holds one relay), composed behind `CallsClient` by a
-  nested `Calls.Client` as durable-execution does. The runners split the
-  other way, one per relay, so #194's runner rule holds with no markers.
-  This reverses half of #194's 2026-09-14 ruling: TB085's "a relay carries
-  one operation, because its name is the operation it carries" fires on the
-  three two-operation relays and they carry markers. To do: re-cut that row
-  as "a relay is named for the thing its operations act on", the rule ports
-  and actions already follow, and move durable-execution and minimal to the
-  same cut. The recorded reason for #194 (a relay must not be named for a
-  pattern) still holds under the new cut.
+- **ENACTED 2026-09-22 — a relay is named for its far side and carries any
+  number of operations (Chris).** Ruled 2026-09-17 while walking the voice
+  example ("classes should never be designed to hold one operation, though
+  they may only hold one") and settled 2026-09-22 into the rule that shipped.
+  TB085 now derives a relay's far side from the runtime handler of each
+  operation it carries — the orchestrator that handler builds and calls, or
+  the class of actions behind the application client it calls — and requires
+  `<FarSide>Relay`; every operation on one relay must derive the same far
+  side. `await_` joined `start_` and `run_` as a calling mode: it sends
+  nothing and waits for the far side's durable promise, `await_X` reads the
+  promise named `X` that the shared handler `X` resolves, and a relay that
+  awaits is `<FarSide>SignalRelay` carrying only `await_` operations, because
+  nothing outside an invocation reads a durable promise and a Protocol cannot
+  be partially implemented. This reverses both of #194's naming rows; their
+  recorded reason (a name for what sits behind a relay is a pattern word) was
+  written when the class name was the only place the act could live and no
+  longer applies now that the mode is on the method. All four trees moved:
+  voice (`CallOrchestratorRelay`, `CallOrchestratorSignalRelay`,
+  `CallActionsRelay`, `SpeechActionsRelay`, `DialingActionsRelay`),
+  durable-execution, minimal, and the generator's templates.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the

@@ -19,18 +19,47 @@ kinds replace all of it.
 
 | kind | base | lives in | built | depends on | reached through |
 |---|---|---|---|---|---|
-| relay | `ts.Relay` (`tesser.application.Relay`) | `application/relays/`, one per module, with the messages it speaks and a snapshot for each | declared, not built — it is a protocol | nothing | a service, through an ingress runner; an orchestrator, through an in-invocation runner |
+| relay | `ts.Relay` (`tesser.application.Relay`) | `application/relays/`, one per module, named for its far side, with the messages it speaks and a snapshot for each | declared, not built — it is a protocol | nothing | a service, through an ingress runner; an orchestrator, through an in-invocation runner |
 | runner | `ts.Runner` (`tesser.adapters.Runner`) | `adapters/runners/` | at wiring, or per invocation by a runtime | its relays' messages and the runtimes package | whoever holds the relay it implements |
 | runtime | `ts.Runtime` (`tesser.adapters.Runtime`) | `adapters/runtimes/` | once, by the component | the application client, the orchestrators, the relays, the runners | the engine, and the host that mounts what it registers |
 
 **One relay kind; lifetime is not a property of the protocol.** The two
-action relays, `PriceProductRelay` and `TakePaymentRelay`, once written as
+action relays, `OrderActionsRelay` and `PurchaseActionsRelay`, once written as
 `ts.JobContext`, are `ts.Relay` now, like the orchestrator relays beside them. The proof that lifetime does
-not belong on the protocol is in the tree: `ConfirmOrderRelay` has two
-implementations — `RestateIngressConfirmOrderRelay`, built once at wiring and
-entering through the engine's ingress, and `RestateInvocationConfirmOrderRelay`,
+not belong on the protocol is in the tree: `OrderOrchestratorRelay` has two
+implementations — `RestateIngressOrderOrchestratorRelay`, built once at wiring and
+entering through the engine's ingress, and `RestateInvocationOrderOrchestratorRelay`,
 built per invocation and running the workflow as a child — and the orchestrator
 holding one cannot tell which it has.
+
+**A relay is named for its far side and carries any number of operations**
+(Chris, 2026-09-22, reversing the 2026-09-14 rule that a relay carried one
+operation and took that operation's name). A relay method is
+`<mode>_<operation>` and the mode is the act, so the class name is free to say
+what sits on the other side of the engine: the orchestrator a `run_`/`start_`
+handler builds and calls, or the class of actions behind the application
+client it calls. `CallOrchestratorRelay` carries `run_conduct_call`,
+`run_person_joined`, and `run_person_turn_completed` because all three are
+handlers on the same workflow; `OrderActionsRelay` carries `run_price_product`
+because that handler reaches `OrderActions`. Every operation on one relay must
+derive the same far side. The 2026-09-14 reason — that a name for what sits
+behind a relay is a pattern word — was written when the class name was the only
+place the act could live; with the act on the method it no longer holds.
+
+**There are three calling modes, and a signal relay is the one that awaits.**
+`start_` sends and does not wait, `run_` sends and waits for the answer, and
+`await_` sends nothing and waits for the far side's report — a durable promise
+the far side's shared handler resolves. `await_X` reads the promise named `X`,
+which the handler named `X` resolves, which `run_X` invokes: one name across
+the crossing. A relay that awaits is named `<FarSide>SignalRelay` and carries
+only `await_` operations; no other relay carries one. Nothing outside an
+invocation can read a durable promise, so a signal relay has an invocation
+runner only, while a plain relay has an ingress runner and may have an
+invocation runner — and a Protocol cannot be partially implemented, so the two
+must not mix. `examples/voice/` is the worked case:
+`CallOrchestratorSignalRelay` carries `await_person_joined` and
+`await_person_turn_completed`, and `RestateInvocationCallOrchestratorSignalRelay`
+is its only runner.
 
 **Lifetime is carried by placement instead.** A runner may hold an
 invocation's engine context; a gateway and a repository never do. The old rule
@@ -50,7 +79,7 @@ no-outward-representation line.** A relay is *inward*: it crosses the engine
 inside one context and is never operated through the client. A `ts.Client`
 faces outsiders and a `ts.Port` faces a foreign system, so those stay
 primitives-only; a relay has us on both ends, so
-`OrderOrchestratorRequest(order: domain.Order)` is legal and the order comes
+`ConfirmOrderRequest(order: domain.Order)` is legal and the order comes
 back whole. A bare bool and a union are findings on a relay message too.
 
 **Who may invoke a relay.** A service, through an ingress runner, and an

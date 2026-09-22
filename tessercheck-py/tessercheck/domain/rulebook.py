@@ -104,6 +104,11 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "paired": "⟨module⟩",
     "owner": "⟨module.Class⟩",
     "handler.name": "⟨function⟩",
+    "awaited": "⟨operation⟩",
+    "called": "⟨operation⟩",
+    "sides": "⟨classes⟩",
+    "side": "⟨class⟩",
+    "promise": "⟨attribute⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {

@@ -212,7 +212,7 @@ reads without a suffix. Three shapes:
 
 - A parameter annotated with a class takes that class's name in snake_case:
   `add_request: client.AddRequest`, `widget_repository: ports.WidgetRepository`,
-  `order_actions_runner: relays.OrderActionsRunner`.
+  `order_actions_relay: relays.OrderActionsRelay`.
 - A local assigned from a **call** takes the name of the class the call
   declares it returns — a constructor (`widget = domain.Widget(spec)`), a
   method (`add_response = self._alpha_client.add(...)`,
@@ -1117,10 +1117,25 @@ is scope, reach, and what each may depend on.
   protocol whose far side is this same context's own application code, reached
   across the engine. It is declared together with the `ts.Request`/`ts.Response`
   messages it speaks and a **snapshot** for each. There is one relay kind:
-  lifetime is not a property of the protocol. `OrderOrchestratorRunner` has two
+  lifetime is not a property of the protocol. `OrderOrchestratorRelay` has two
   implementations — one built once at wiring that enters through the engine's
   ingress, one built per invocation that runs the workflow as a child — and the
   orchestrator holding it cannot tell which it has.
+  **It is named for its far side and carries any number of operations**
+  (TB085): the far side is the orchestrator the runtime handler of an operation
+  builds and calls, or the class of actions behind the application client that
+  handler calls, so `OrderOrchestratorRelay` and `OrderActionsRelay`. Every
+  operation on one relay must derive the same far side. A method is
+  `<mode>_<operation>` and there are three modes — `start_` sends and does not
+  wait, `run_` sends and waits for the answer, `await_` sends nothing and waits
+  for the far side's report, a durable promise. `await_X` reads the promise
+  named `X`, which the shared handler named `X` resolves, which `run_X`
+  invokes: one name across the crossing. A relay that awaits is named
+  `<FarSide>SignalRelay` and carries **only** `await_` operations, and no other
+  relay carries one — nothing outside an invocation can read a durable promise,
+  so a signal relay has an invocation runner only, and a Protocol cannot be
+  partially implemented. `examples/voice/` has the worked case
+  (`CallOrchestratorRelay`, `CallOrchestratorSignalRelay`).
 - **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`, one
   per module) is built **per invocation by a runtime**, with that invocation's
   runners. It depends on relays and **action ports** — a port some application
@@ -1158,7 +1173,7 @@ orchestrator, through an in-invocation runner. Never an action, never a
 handler, never a runtime, never a component (TB081).
 
 ```python
-# ordering/application/relays/order_actions_runner.py (verified impl: examples/durable-execution/)
+# ordering/application/relays/order_actions_relay.py (verified impl: examples/durable-execution/)
 class PriceProductRequest(ts.Request):
 
     def __init__(self, sku: str) -> None:
@@ -1177,7 +1192,7 @@ class PriceProductRequestSnapshot(ts.Serde):
         return PriceProductRequest(sku=snapshot["sku"])
 
 
-class OrderActionsRunner(ts.Relay, typing.Protocol):
+class OrderActionsRelay(ts.Relay, typing.Protocol):          # named for OrderActions, the far side
 
     async def run_price_product(self, price_product_request: PriceProductRequest) -> PriceProductResponse: ...
 
@@ -1203,30 +1218,33 @@ class OrderActions(ts.Actions):
 # ordering/application/orchestrators/order_orchestrator.py (verified impl: examples/durable-execution/)
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, order_actions_runner: relays.OrderActionsRunner) -> None:
-        self._order_actions_runner = order_actions_runner
+    def __init__(self, order_actions_relay: relays.OrderActionsRelay) -> None:
+        self._order_actions_relay = order_actions_relay
 
-    async def run(self, order_orchestrator_request: relays.OrderOrchestratorRequest) -> relays.OrderOrchestratorResponse:
-        order = order_orchestrator_request.order
-        price_product_response = await self._order_actions_runner.run_price_product(MapToPriceProductRequest(order))
-        price = order.total(MapToPriceSpec(price_product_response))
-        return MapToOrderOrchestratorResponse(order, price)
+    async def confirm_order(self, confirm_order_request: relays.ConfirmOrderRequest) -> relays.ConfirmOrderResponse:
+        order = confirm_order_request.order
+        price_product_response = await self._order_actions_relay.run_price_product(MapToPriceProductRequest(order))
+        match price_product_response.outcome:
+            case relays.PriceProductOutcome.PRICED:
+                price = order.total(MapToPriceSpec(price_product_response))
+                return MapToConfirmOrderResponseFromPrice(order, price)
+            case relays.PriceProductOutcome.PRICE_NOT_FOUND:
+                return MapToConfirmOrderResponseFromPriceProductResponse(order, price_product_response)
+            case _ as never:
+                typing.assert_never(never)
 
 
-# ordering/adapters/runners/restate_order_actions_runner.py (verified impl: examples/durable-execution/)
-class RestateOrderActionsRunner(ts.Runner):             # holds this invocation's engine context
+# ordering/adapters/runners/restate_invocation_order_actions_relay.py (verified impl: examples/durable-execution/)
+class RestateInvocationOrderActionsRelay(ts.Runner):    # holds this invocation's engine context
 
     def __init__(self, restate_workflow_context: restate.WorkflowContext, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
         self._restate_workflow_context = restate_workflow_context
         self._restate_order_runtime = restate_order_runtime
 
     async def run_price_product(self, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
-        try:
-            return await self._restate_workflow_context.service_call(
-                self._restate_order_runtime.price_product_handler, price_product_request
-            )
-        except restate.TerminalError as terminal_error:
-            ...
+        return await self._restate_workflow_context.service_call(
+            self._restate_order_runtime.price_product_handler, price_product_request
+        )
 
 
 # ordering/adapters/runtimes/restate_order_runtime.py (verified impl: examples/durable-execution/)
@@ -1239,7 +1257,7 @@ class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.Price
 
     def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
         if not buf:
-            raise errors.invalid("empty_message", "a message crosses the engine with a body")
+            raise restate.TerminalError("a message crosses the engine with a body", status_code=400)
         return relays.PriceProductRequestSnapshot().deserialize(buf)
 
 
@@ -1251,19 +1269,16 @@ class RestateOrderRuntime(ts.Runtime):
 
         @self.order_actions_service.handler(input_serde=..., output_serde=...)
         async def price_product(restate_context: restate.Context, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
-            try:
-                return ordering_application_client.price_product(price_product_request)
-            except errors.DomainError as domain_error:
-                raise restate.TerminalError(domain_error.message, status_code=errors.status_for(domain_error.kind)) from domain_error
+            return ordering_application_client.price_product(price_product_request)
 
         @self.order_orchestrator_workflow.main(input_serde=..., output_serde=...)
-        async def run(restate_workflow_context: restate.WorkflowContext, order_orchestrator_request: relays.OrderOrchestratorRequest) -> relays.OrderOrchestratorResponse:
+        async def confirm_order(restate_workflow_context: restate.WorkflowContext, confirm_order_request: relays.ConfirmOrderRequest) -> relays.ConfirmOrderResponse:
             return await orchestrators.OrderOrchestrator(
-                runners.RestateOrderActionsRunner(restate_workflow_context, self)
-            ).run(order_orchestrator_request)
+                runners.RestateInvocationOrderActionsRelay(restate_workflow_context, self)
+            ).confirm_order(confirm_order_request)
 
         self.price_product_handler = price_product
-        self.order_orchestrator_handler = run
+        self.confirm_order_handler = confirm_order
 
 
 # ordering/component/component.py (verified impl: examples/durable-execution/)
@@ -1273,14 +1288,14 @@ class Ordering(ts.Component):
         self._order_actions = application.OrderActions(self._memory_product_catalog_repository)
         self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(self._order_actions, ...)
         self.client: client.OrderingClient = Ordering.Client(
-            application.OrderService(runners.RestateOrderOrchestratorRunner(config.ingress, self.restate_order_runtime))
+            application.OrderService(runners.RestateIngressOrderOrchestratorRelay(config.ingress, self.restate_order_runtime))
         )
 ```
 
 - **A relay message may carry a domain object** (TB080), and that is not a
   widening of the no-outward-representation line: a relay is **inward**. It
   crosses the engine inside one context and is never operated through the
-  client, so `OrderOrchestratorRequest(order: domain.Order)` is legal and the
+  client, so `ConfirmOrderRequest(order: domain.Order)` is legal and the
   order comes back whole. A `ts.Client` faces outsiders and a `ts.Port` faces a
   foreign system; those stay primitives-only. A bare bool and a union are
   findings on a relay message too.

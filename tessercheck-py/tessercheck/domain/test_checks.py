@@ -7176,9 +7176,9 @@ def test_an_operation_is_named_for_a_verb_and_the_thing_it_acts_on() -> None:
         for f in findings
     ), findings
     assert any(
-        "shop.application.ports.sink.Sink.start_saving_item begins with start_; start_ and "
-        "run_ belong to a relay and its runners, because only a relay's caller chooses how "
-        "it waits" in f
+        "shop.application.ports.sink.Sink.start_saving_item begins with start_; start_, run_ "
+        "and await_ belong to a relay and its runners, because only a relay's caller chooses "
+        "how it waits" in f
         for f in findings
     ), findings
     assert any(
@@ -7240,8 +7240,8 @@ def test_a_relay_method_is_a_calling_mode_and_the_operation_it_carries() -> None
     )
     assert any(
         "shop.application.relays.orders.ConfirmOrderRelay.confirm_order names no calling mode; a "
-        "relay method is start_ or run_ followed by the operation it carries, because the "
-        "verb says how its caller waits" in f
+        "relay method is start_, run_ or await_ followed by the operation it carries, because "
+        "the verb says how its caller waits" in f
         for f in findings
     ), findings
     assert any(
@@ -7275,16 +7275,16 @@ def test_an_orchestrator_method_is_named_for_its_operation_and_never_run() -> No
                 "import tesser.application as ts\n"
                 "import shop.application.relays as relays\n"
                 "class Named(ts.Orchestrator):\n"
-                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
-                "        self._quote_price_relay = quote_price_relay\n"
+                "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+                "        self._quote_actions_relay = quote_actions_relay\n"
                 "    async def run(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n"
                 "    async def run_check_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n"
                 "    async def price(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n"
                 "    async def price_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n",
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n",
                 False,
             ),
         ))).violations()
@@ -7297,7 +7297,7 @@ def test_an_orchestrator_method_is_named_for_its_operation_and_never_run() -> No
     ), findings
     assert any(
         "shop.application.orchestrators.named.Named.run_check_quote begins with run_; "
-        "start_ and run_ belong to a relay and its runners" in f
+        "start_, run_ and await_ belong to a relay and its runners" in f
         for f in findings
     ), findings
     assert any(
@@ -12395,14 +12395,14 @@ def _kinds_spec(
         (
             "shop/application/relays/__init__.py",
             "shop.application.relays",
-            "from shop.application.relays.quote_price_relay import QuotePriceRelay as QuotePriceRelay\n"
-            "from shop.application.relays.quote_price_relay import QuotePriceRequest as QuotePriceRequest\n"
-            "from shop.application.relays.quote_price_relay import QuotePriceResponse as QuotePriceResponse\n",
+            "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
+            "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
+            "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n",
             True,
         ),
         (
-            "shop/application/relays/quote_price_relay.py",
-            "shop.application.relays.quote_price_relay",
+            "shop/application/relays/quote_actions_relay.py",
+            "shop.application.relays.quote_actions_relay",
             "import typing\n"
             "import tesser.application as ts\n"
             "class QuotePriceRequest(ts.Request):\n"
@@ -12411,7 +12411,7 @@ def _kinds_spec(
             "class QuotePriceResponse(ts.Response):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
-            "class QuotePriceRelay(ts.Relay, typing.Protocol):\n"
+            "class QuoteActionsRelay(ts.Relay, typing.Protocol):\n"
             "    async def run_quote_price(self, quote_price_request: QuotePriceRequest)"
             " -> QuotePriceResponse: ...\n",
             False,
@@ -12446,7 +12446,7 @@ def _kinds_spec(
             "class MapToQuotePriceResponse(ts.Mapper, relays.QuotePriceResponse):\n"
             "    def __init__(self, name: thing.Name) -> None:\n"
             "        super().__init__(text=str(name))\n"
-            "class Quotes(ts.Actions):\n"
+            "class QuoteActions(ts.Actions):\n"
             "    def __init__(self, catalog: ports.Catalog) -> None:\n"
             "        self._catalog = catalog\n"
             "    def quote_price(self, quote_price_request: relays.QuotePriceRequest)"
@@ -12503,11 +12503,11 @@ def _kinds_spec(
             "    def __init__(self, quote_price_response: relays.QuotePriceResponse) -> None:\n"
             "        super().__init__(text=quote_price_response.text)\n"
             "class Flow(ts.Orchestrator):\n"
-            "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
-            "        self._quote_price_relay = quote_price_relay\n"
+            "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+            "        self._quote_actions_relay = quote_actions_relay\n"
             "    async def issue_quote(self, quote_price_request: relays.QuotePriceRequest) -> IssueQuoteResponse:\n"
             "        name = thing.Name(quote_price_request.text)\n"
-            "        quote_price_response = await self._quote_price_relay.run_quote_price(MapToQuotePriceRequest(name))\n"
+            "        quote_price_response = await self._quote_actions_relay.run_quote_price(MapToQuotePriceRequest(name))\n"
             "        return MapToIssueQuoteResponse(quote_price_response)\n",
             False,
         ),
@@ -12518,7 +12518,7 @@ def _kinds_spec(
             "import shop.application.orchestrators as orchestrators\n"
             "import shop.application.relays as relays\n"
             "@ts.fake\n"
-            "class FakeQuotePriceRelay(relays.QuotePriceRelay):\n"
+            "class FakeQuoteActionsRelay(relays.QuoteActionsRelay):\n"
             "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
             " -> relays.QuotePriceResponse:\n"
             "        return relays.QuotePriceResponse(text=quote_price_request.text)\n"
@@ -12584,16 +12584,16 @@ def _kinds_spec(
         (
             "shop/adapters/runners/__init__.py",
             "shop.adapters.runners",
-            "from shop.adapters.runners.inline_quote_price_relay import InlineQuotePriceRelay as InlineQuotePriceRelay\n",
+            "from shop.adapters.runners.inline_quote_actions_relay import InlineQuoteActionsRelay as InlineQuoteActionsRelay\n",
             True,
         ),
         (
-            "shop/adapters/runners/inline_quote_price_relay.py",
-            "shop.adapters.runners.inline_quote_price_relay",
+            "shop/adapters/runners/inline_quote_actions_relay.py",
+            "shop.adapters.runners.inline_quote_actions_relay",
             "import tesser.adapters as ts\n"
             "import shop.adapters.runtimes as runtimes\n"
             "import shop.application.relays as relays\n"
-            "class InlineQuotePriceRelay(ts.Runner):\n"
+            "class InlineQuoteActionsRelay(ts.Runner):\n"
             "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
             "        self._engine_runtime = engine_runtime\n"
             "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
@@ -12602,9 +12602,9 @@ def _kinds_spec(
             False,
         ),
         (
-            "shop/adapters/runners/test_inline_quote_price_relay.py",
-            "shop.adapters.runners.test_inline_quote_price_relay",
-            "def test_inline_quote_price_relay_exists() -> None:\n"
+            "shop/adapters/runners/test_inline_quote_actions_relay.py",
+            "shop.adapters.runners.test_inline_quote_actions_relay",
+            "def test_inline_quote_actions_relay_exists() -> None:\n"
             "    assert True\n",
             False,
         ),
@@ -12630,7 +12630,7 @@ def _kinds_spec(
             "        return self._shop_application_client.quote_price(quote_price_request)\n"
             "    async def issue_quote_handler(self, quote_price_request: relays.QuotePriceRequest)"
             " -> orchestrators.IssueQuoteResponse:\n"
-            "        return await orchestrators.Flow(runners.InlineQuotePriceRelay(self))"
+            "        return await orchestrators.Flow(runners.InlineQuoteActionsRelay(self))"
             ".issue_quote(quote_price_request)\n",
             False,
         ),
@@ -12654,7 +12654,7 @@ def _kinds_spec(
             "    def __init__(self) -> None:\n"
             "        self._quotes = gateways.QuoteGateway()\n"
             "        self._listing = gateways.CatalogGateway()\n"
-            "        self._actions = quotes.Quotes(self._listing)\n"
+            "        self._actions = quotes.QuoteActions(self._listing)\n"
             "        self.client: client.Client = service.AskService()\n"
             "        self.engine_runtimes: tuple[runtimes.EngineRuntime, ...] = (\n"
             "            runtimes.EngineRuntime(self._actions),\n"
@@ -13984,8 +13984,8 @@ def test_a_relay_is_held_only_by_a_service_or_an_orchestrator() -> None:
                 "import tesser.adapters as ts\n"
                 "import shop.application.relays as relays\n"
                 "class HoldingGateway(ts.Gateway):\n"
-                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
-                "        self._quote_price_relay = quote_price_relay\n",
+                "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+                "        self._quote_actions_relay = quote_actions_relay\n",
                 False,
             ),
             (
@@ -14001,8 +14001,8 @@ def test_a_relay_is_held_only_by_a_service_or_an_orchestrator() -> None:
                 "import tesser.application as ts\n"
                 "import shop.application.relays as relays\n"
                 "class Relaying(ts.Actions):\n"
-                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
-                "        self._quote_price_relay = quote_price_relay\n",
+                "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+                "        self._quote_actions_relay = quote_actions_relay\n",
                 False,
             ),
             (
@@ -14026,13 +14026,13 @@ def test_a_relay_is_held_only_by_a_service_or_an_orchestrator() -> None:
     )
     assert any(
         "shop.adapters.gateways.holding.HoldingGateway.__init__ parameter "
-        "'quote_price_relay' is a ts.Relay; a relay is invoked only by a service, "
+        "'quote_actions_relay' is a ts.Relay; a relay is invoked only by a service, "
         "through an ingress runner, or by an orchestrator, through an "
         "in-invocation runner" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.relaying.Relaying.__init__ parameter 'quote_price_relay' is "
+        "shop.application.relaying.Relaying.__init__ parameter 'quote_actions_relay' is "
         "not a ts.Port or a ts.Store; a class of actions depends only on ports and "
         "the stores that yield them" in f
         for f in findings
@@ -14054,8 +14054,8 @@ def test_a_service_and_an_orchestrator_may_hold_a_relay() -> None:
                 "import shop.application.relays as relays\n"
                 "import shop.client.holding as holding\n"
                 "class RunService(ts.ApplicationService):\n"
-                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
-                "        self._quote_price_relay = quote_price_relay\n"
+                "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+                "        self._quote_actions_relay = quote_actions_relay\n"
                 "    def hold_quote(self, hold_quote_request: holding.HoldQuoteRequest) -> holding.HoldQuoteResponse:\n"
                 "        return holding.HoldQuoteResponse(text=hold_quote_request.text)\n",
                 False,
@@ -18246,7 +18246,7 @@ def test_a_gateway_a_repository_and_a_runner_inline_their_logic() -> None:
                 "shop.adapters.runners.split",
                 "import tesser.adapters as ts\n"
                 "import shop.application.relays as relays\n"
-                "class SplitQuotePriceRelay(ts.Runner):\n"
+                "class SplitQuoteActionsRelay(ts.Runner):\n"
                 "    def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
                 " -> relays.QuotePriceResponse:\n"
                 "        return relays.QuotePriceResponse(text=self._answer(quote_price_request))\n"
@@ -18271,7 +18271,7 @@ def test_a_gateway_a_repository_and_a_runner_inline_their_logic() -> None:
         for f in findings
     ), findings
     assert any(
-        "shop.adapters.runners.split.SplitQuotePriceRelay.run_quote_price delegates to self._answer; "
+        "shop.adapters.runners.split.SplitQuoteActionsRelay.run_quote_price delegates to self._answer; "
         "a gateway, a repository, and a runner inline their logic" in f
         for f in findings
     ), findings
@@ -18899,7 +18899,7 @@ def test_an_enum_on_an_operations_response_is_its_one_outcome_named_outcome() ->
     assert not any("Sink.grade_item " in f for f in findings), findings
 
 
-def test_a_relay_is_named_for_the_one_operation_it_carries() -> None:
+def test_a_relay_is_named_for_the_far_side_its_operations_reach() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -18908,53 +18908,166 @@ def test_a_relay_is_named_for_the_one_operation_it_carries() -> None:
                 "shop.application.relays.orders",
                 "import typing\n"
                 "import tesser.application as ts\n"
-                "class PlaceOrderRequest(ts.Request):\n"
+                "class QuotePriceRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class PlaceOrderResponse(ts.Response):\n"
+                "class QuotePriceResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class PlaceOrderRelay(ts.Relay, typing.Protocol):\n"
-                "    async def run_place_order(self, place_order_request: PlaceOrderRequest) -> PlaceOrderResponse: ...\n"
-                "class CancelOrderRequest(ts.Request):\n"
+                "class IssueQuoteRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class CancelOrderResponse(ts.Response):\n"
+                "class IssueQuoteResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class HoldOrderRequest(ts.Request):\n"
+                "class PackOrderRequest(ts.Request):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
-                "class HoldOrderResponse(ts.Response):\n"
-                "    def __init__(self, text: str) -> None:\n"
-                "        self.text = text\n"
-                "class ShipOrderRequest(ts.Request):\n"
-                "    def __init__(self, text: str) -> None:\n"
-                "        self.text = text\n"
-                "class ShipOrderResponse(ts.Response):\n"
+                "class PackOrderResponse(ts.Response):\n"
                 "    def __init__(self, text: str) -> None:\n"
                 "        self.text = text\n"
                 "class OrdersRelay(ts.Relay, typing.Protocol):\n"
-                "    async def run_cancel_order(self, cancel_order_request: CancelOrderRequest) -> CancelOrderResponse: ...\n"
-                "class HoldAndShipOrderRelay(ts.Relay, typing.Protocol):\n"
-                "    async def run_hold_order(self, hold_order_request: HoldOrderRequest) -> HoldOrderResponse: ...\n"
-                "    async def run_ship_order(self, ship_order_request: ShipOrderRequest) -> ShipOrderResponse: ...\n",
+                "    async def run_quote_price(self, quote_price_request: QuotePriceRequest)"
+                " -> QuotePriceResponse: ...\n"
+                "class BothRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_quote_price(self, quote_price_request: QuotePriceRequest)"
+                " -> QuotePriceResponse: ...\n"
+                "    async def run_issue_quote(self, issue_quote_request: IssueQuoteRequest)"
+                " -> IssueQuoteResponse: ...\n"
+                "class PackOrderRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_pack_order(self, pack_order_request: PackOrderRequest)"
+                " -> PackOrderResponse: ...\n",
                 False,
             ),
         ))).violations()
     )
     assert any(
-        "shop.application.relays.orders.OrdersRelay carries cancel_order and is not CancelOrderRelay; "
-        "a relay is named for the operation it carries, because a name for what sits behind it is "
-        "a pattern word" in f
+        "shop.application.relays.orders.OrdersRelay reaches QuoteActions and is not "
+        "QuoteActionsRelay; a relay is named for the far side its operations reach, because "
+        "the act lives on the method and the far side lives on the class" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.relays.orders.HoldAndShipOrderRelay carries 2 operations; a relay "
-        "carries one operation, because its name is the operation it carries" in f
+        "shop.application.relays.orders.BothRelay reaches Flow, QuoteActions; a relay is named "
+        "for the far side its operations reach, because the act lives on the method and the far "
+        "side lives on the class" in f
         for f in findings
     ), findings
-    assert not any("orders.PlaceOrderRelay carries" in f for f in findings), findings
+    assert not any("orders.PackOrderRelay reaches" in f for f in findings), findings
+    assert not any("QuoteActionsRelay reaches" in f for f in findings), findings
+
+
+def test_a_signal_relay_carries_only_await_operations() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/waits.py",
+                "shop.application.relays.waits",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class AwaitPackOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AwaitPackOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class PackOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class PackOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class WatchRelay(ts.Relay, typing.Protocol):\n"
+                "    async def await_pack_order(self, await_pack_order_request: AwaitPackOrderRequest)"
+                " -> AwaitPackOrderResponse: ...\n"
+                "class PackingSignalRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_pack_order(self, pack_order_request: PackOrderRequest)"
+                " -> PackOrderResponse: ...\n"
+                "class MixedSignalRelay(ts.Relay, typing.Protocol):\n"
+                "    async def await_pack_order(self, await_pack_order_request: AwaitPackOrderRequest)"
+                " -> AwaitPackOrderResponse: ...\n"
+                "    async def run_pack_order(self, pack_order_request: PackOrderRequest)"
+                " -> PackOrderResponse: ...\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.relays.waits.WatchRelay awaits pack_order and is not a SignalRelay; "
+        "a signal relay carries only await_ operations and no other relay carries one, because "
+        "nothing outside an invocation reads a durable promise" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.waits.PackingSignalRelay is a SignalRelay and carries "
+        "pack_order; a signal relay carries only await_ operations and no other relay carries "
+        "one, because nothing outside an invocation reads a durable promise" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.application.relays.waits.MixedSignalRelay awaits pack_order and carries "
+        "pack_order; a signal relay carries only await_ operations and no other relay carries "
+        "one, because nothing outside an invocation reads a durable promise" in f
+        for f in findings
+    ), findings
+    assert not any("await_pack_order names no calling mode" in f for f in findings), findings
+
+
+def test_an_await_method_reads_the_promise_its_runtime_names() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/waits.py",
+                "shop.application.relays.waits",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class AwaitPackOrderRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class AwaitPackOrderResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class WatchSignalRelay(ts.Relay, typing.Protocol):\n"
+                "    async def await_pack_order(self, await_pack_order_request: AwaitPackOrderRequest)"
+                " -> AwaitPackOrderResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/waiting.py",
+                "shop.adapters.runners.waiting",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.runtimes as runtimes\n"
+                "import shop.application.relays.waits as waits\n"
+                "class EngineWatchSignalRelay(ts.Runner):\n"
+                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
+                "        self._engine_runtime = engine_runtime\n"
+                "    async def await_pack_order(self, await_pack_order_request: waits.AwaitPackOrderRequest)"
+                " -> waits.AwaitPackOrderResponse:\n"
+                "        return self._engine_runtime.quote_price_promise\n"
+                "class StubWatchSignalRelay(ts.Runner):\n"
+                "    def __init__(self, engine_runtime: runtimes.EngineRuntime) -> None:\n"
+                "        self._engine_runtime = engine_runtime\n"
+                "    async def await_pack_order(self, await_pack_order_request: waits.AwaitPackOrderRequest)"
+                " -> waits.AwaitPackOrderResponse:\n"
+                "        return waits.AwaitPackOrderResponse(text=await_pack_order_request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.adapters.runners.waiting.EngineWatchSignalRelay.await_pack_order reads "
+        "quote_price_promise; an await_ method reads the durable promise its runtime names for "
+        "the operation it waits on, because one operation keeps one name across a relay" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.adapters.runners.waiting.StubWatchSignalRelay.await_pack_order reads no promise; "
+        "an await_ method reads the durable promise its runtime names for the operation it "
+        "waits on, because one operation keeps one name across a relay" in f
+        for f in findings
+    ), findings
 
 
 def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
@@ -19066,16 +19179,16 @@ def test_a_runtime_handler_is_its_operation_exposed_with_handler_and_invokes_it(
                 "import tesser.application as ts\n"
                 "import shop.application.relays as relays\n"
                 "class QuoteHolds(ts.Orchestrator):\n"
-                "    def __init__(self, quote_price_relay: relays.QuotePriceRelay) -> None:\n"
-                "        self._quote_price_relay = quote_price_relay\n"
+                "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+                "        self._quote_actions_relay = quote_actions_relay\n"
                 "    async def hold_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n"
                 "    async def cancel_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n"
                 "    async def check_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n"
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n"
                 "    async def review_quote(self, quote_price_request: relays.QuotePriceRequest) -> relays.QuotePriceResponse:\n"
-                "        return await self._quote_price_relay.run_quote_price(quote_price_request)\n",
+                "        return await self._quote_actions_relay.run_quote_price(quote_price_request)\n",
                 False,
             ),
             (
@@ -19272,7 +19385,7 @@ def test_an_actions_class_and_its_application_client_offer_the_same_calls() -> N
         for f in findings
     ), findings
     assert not any("Billing.charge_card is not on" in f for f in findings), findings
-    assert not any("shop.application.quotes.Quotes has no application client" in f for f in findings), findings
+    assert not any("shop.application.quotes.QuoteActions has no application client" in f for f in findings), findings
     assert not any("ShopApplicationClient has no actions class" in f for f in findings), findings
 
 
@@ -19475,7 +19588,7 @@ def test_no_two_services_actions_orchestrators_or_relays_share_a_method_name() -
         for f in findings
     ), findings
     assert not any("Pricing.settle_price shares its name with shop.application.relays" in f for f in findings), findings
-    assert not any("QuotePriceRelay.run_quote_price shares" in f for f in findings), findings
+    assert not any("QuoteActionsRelay.run_quote_price shares" in f for f in findings), findings
 
 
 def test_a_context_error_is_named_for_its_situation_and_never_for_a_status_category() -> None:

@@ -99,7 +99,11 @@ the application-service types (a relay, `ts.Relay` in `application/relays/`,
 is the protocol whose far side is this same context across a
 durable-execution engine, declared with the messages it speaks and a
 snapshot — `ts.Serde` — for each; one relay kind, because lifetime is not a
-property of the protocol. An orchestrator, `ts.Orchestrator` in
+property of the protocol. It is named for its far side — the orchestrator or
+class of actions the runtime handler of each operation it carries reaches —
+and carries any number of operations, each written `start_`, `run_`, or
+`await_` plus the operation; a relay that awaits a durable promise is named
+`<FarSide>SignalRelay` and carries only `await_` operations. An orchestrator, `ts.Orchestrator` in
 `application/orchestrators/`, is built per invocation by a runtime with that
 invocation's runners and depends on relays and action ports; a class of
 actions, `ts.Actions`, has exactly one port and one call on it per method, is

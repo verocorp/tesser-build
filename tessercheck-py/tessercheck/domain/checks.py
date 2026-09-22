@@ -139,9 +139,11 @@ RELAY_MESSAGE_BLOCKS: typing.Final[dict[str, str]] = {
 
 RELAY_DTO_BLOCKS: typing.Final[frozenset[str]] = frozenset(RELAY_MESSAGE_BLOCKS.values())
 
-CALLING_MODES: typing.Final[tuple[str, ...]] = ("start_", "run_")
+CALLING_MODES: typing.Final[tuple[str, ...]] = ("start_", "run_", "await_")
 
 RUN_MODE: typing.Final[str] = "run_"
+
+AWAIT_MODE: typing.Final[str] = "await_"
 
 RUN_METHOD: typing.Final[str] = "run"
 
@@ -191,6 +193,12 @@ RUNTIME_BLOCK: typing.Final[str] = "runtime"
 
 RELAY_SUFFIX: typing.Final[str] = "Relay"
 
+SIGNAL_INFIX: typing.Final[str] = "Signal"
+
+SIGNAL_RELAY_SUFFIX: typing.Final[str] = f"{SIGNAL_INFIX}{RELAY_SUFFIX}"
+
+PROMISE_SUFFIX: typing.Final[str] = "_promise"
+
 HANDLER_SUFFIX: typing.Final[str] = "_handler"
 
 APPLICATION_ROLE: typing.Final[str] = "application"
@@ -199,7 +207,13 @@ CONTEXT_CLIENT_ROLE: typing.Final[str] = "client"
 
 UNIQUE_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = ("service", "actions", "orchestrator", "relay")
 
-INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = ("orchestrator", "actions", "actions_client")
+ORCHESTRATOR_BLOCK: typing.Final[str] = "orchestrator"
+
+ACTIONS_BLOCK: typing.Final[str] = "actions"
+
+ACTIONS_CLIENT_BLOCK: typing.Final[str] = "actions_client"
+
+INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = (ORCHESTRATOR_BLOCK, ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK)
 
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
     {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime"}
@@ -2013,6 +2027,21 @@ class AttrRows(ts.ValueObject):
         ))
 
 
+class FarSideRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def far_side(self, text: Text) -> Symbol | None:
+        wanted = str(text)
+        for context, operation, far_module, far_name in self._items:
+            if f"{context}|{operation}" == wanted:
+                return Symbol(SymbolSpec(far_module, far_name))
+        return None
+
+
 class ReturnRows(ts.ValueObject):
 
     _items: tuple[tuple[str, str, str, str, str], ...]
@@ -2097,7 +2126,9 @@ class RegistrySpec(ts.Spec):
         package_attrs: tuple[tuple[str, str], ...] = (),
         enums: tuple[tuple[str, str], ...] = (),
         operations: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (),
+        far_sides: tuple[tuple[str, str, str, str], ...] = (),
     ) -> None:
+        self.far_sides = far_sides
         self.operations = operations
         self.enums = enums
         self.export_packages = export_packages
@@ -2148,8 +2179,10 @@ class Registry(ts.ValueObject):
     _package_attrs: SymbolRows
     _enums: SymbolRows
     _operations: OperationRows
+    _far_sides: FarSideRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_far_sides", FarSideRows(spec.far_sides))
         object.__setattr__(self, "_operations", OperationRows(spec.operations))
         object.__setattr__(self, "_enums", SymbolRows(spec.enums))
         object.__setattr__(self, "_export_packages", NameRows(spec.export_packages))
@@ -2239,6 +2272,9 @@ class Registry(ts.ValueObject):
 
     def operations(self) -> OperationRows:
         return self._operations
+
+    def far_sides(self) -> FarSideRows:
+        return self._far_sides
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
@@ -5987,9 +6023,9 @@ class ClassDecl(ts.Entity):
                         path,
                         line,
                         "TB085",
-                        f"{where} names no calling mode; a relay method is start_ or run_ "
-                        "followed by the operation it carries, because the verb says how "
-                        "its caller waits",
+                        f"{where} names no calling mode; a relay method is start_, run_ or "
+                        "await_ followed by the operation it carries, because the verb says "
+                        "how its caller waits",
                     ))
                 )
                 continue
@@ -5999,8 +6035,9 @@ class ClassDecl(ts.Entity):
                         path,
                         line,
                         "TB085",
-                        f"{where} begins with {mode}; start_ and run_ belong to a relay and "
-                        "its runners, because only a relay's caller chooses how it waits",
+                        f"{where} begins with {mode}; start_, run_ and await_ belong to a "
+                        "relay and its runners, because only a relay's caller chooses how it "
+                        "waits",
                     ))
                 )
                 continue
@@ -6017,7 +6054,8 @@ class ClassDecl(ts.Entity):
                     ))
                 )
                 continue
-            asked = str(MessageName(operation))
+            waited = mode == AWAIT_MODE
+            asked = str(MessageName(str(signature.name()) if waited else operation))
             answered = str(MessageName(operation if mode in (None, RUN_MODE) else str(signature.name())))
             params = signature.params()
             taken = (
@@ -6150,8 +6188,9 @@ class ClassDecl(ts.Entity):
                         path,
                         line,
                         "TB085",
-                        f"{where} begins with {mode}; start_ and run_ belong to a relay and "
-                        "its runners, because only a relay's caller chooses how it waits",
+                        f"{where} begins with {mode}; start_, run_ and await_ belong to a "
+                        "relay and its runners, because only a relay's caller chooses how it "
+                        "waits",
                     ))
                 )
             elif len(operation.split("_")) < OPERATION_SEGMENTS:
@@ -9118,6 +9157,97 @@ class Module(ts.Entity):
             )
         return tuple(rows)
 
+    def _far_side_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, str, str], ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        paired: dict[tuple[str, str], tuple[str, str]] = {}
+        for client_key, client_block in blocks.items():
+            if client_block != ACTIONS_CLIENT_BLOCK:
+                continue
+            parts = client_key[0].split(".")
+            if len(parts) != 4 or parts[1] != APPLICATION_ROLE or parts[2] != APPLICATION_CLIENT_PACKAGE:
+                continue
+            home = ".".join((parts[0], APPLICATION_ROLE, parts[3]))
+            for actions_key, actions_block in blocks.items():
+                if actions_block == ACTIONS_BLOCK and actions_key[0] == home:
+                    paired[client_key] = actions_key
+        scope = self._scope
+        context = self._name.split(".")[0]
+        rows: list[tuple[str, str, str, str]] = []
+        for cls in self._class_defs:
+            if blocks.get((self._name, cls.name)) != RUNTIME_BLOCK:
+                continue
+            taken: dict[str, tuple[str, str]] = {}
+            held: dict[str, tuple[str, str]] = {}
+            declared: list[tuple[str, str, ast.FunctionDef | ast.AsyncFunctionDef]] = []
+            for item in cls.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if item.name.endswith(HANDLER_SUFFIX) and not item.name.startswith("_"):
+                    declared.append((item.name[: -len(HANDLER_SUFFIX)], item.name, item))
+                if item.name != "__init__":
+                    continue
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
+                    if arg.annotation is None:
+                        continue
+                    named = scope.resolve(Text(ast.unparse(arg.annotation)))
+                    if named is not None:
+                        taken[arg.arg] = (str(named.module()), str(named.name()))
+                for stmt in ast.walk(item):
+                    if (
+                        isinstance(stmt, ast.Assign)
+                        and len(stmt.targets) == 1
+                        and isinstance(stmt.targets[0], ast.Attribute)
+                        and isinstance(stmt.targets[0].value, ast.Name)
+                        and stmt.targets[0].value.id == "self"
+                        and isinstance(stmt.value, ast.Name)
+                        and stmt.value.id in taken
+                    ):
+                        held[stmt.targets[0].attr] = taken[stmt.value.id]
+                for stmt in item.body:
+                    if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    group = stmt.name
+                    for decorator in stmt.decorator_list:
+                        root = decorator.func if isinstance(decorator, ast.Call) else decorator
+                        while isinstance(root, ast.Attribute):
+                            if isinstance(root.value, ast.Name) and root.value.id == "self":
+                                group = root.attr
+                                break
+                            root = root.value
+                    declared.append((stmt.name, group, stmt))
+            sides: dict[str, set[tuple[str, str]]] = {}
+            for _, group, node in declared:
+                carried = sides.setdefault(group, set())
+                for call in ast.walk(node):
+                    if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+                        continue
+                    receiver = call.func.value
+                    target: tuple[str, str] | None = None
+                    if isinstance(receiver, ast.Call):
+                        made = scope.resolve(Text(ast.unparse(receiver.func)))
+                        target = (str(made.module()), str(made.name())) if made is not None else None
+                    elif isinstance(receiver, ast.Name):
+                        target = taken.get(receiver.id)
+                    elif (
+                        isinstance(receiver, ast.Attribute)
+                        and isinstance(receiver.value, ast.Name)
+                        and receiver.value.id == "self"
+                    ):
+                        target = held.get(receiver.attr)
+                    if target is None:
+                        continue
+                    target = paired.get(target, target)
+                    if blocks.get(target) in (ORCHESTRATOR_BLOCK, ACTIONS_BLOCK):
+                        carried.add(target)
+            for operation, group, _ in declared:
+                carried = sides.get(group, set())
+                if len(carried) != 1:
+                    continue
+                for side in carried:
+                    rows.append((context, operation, side[0], side[1]))
+        return tuple(sorted(rows))
+
     def _declared_returns(self) -> tuple[tuple[str, str, str, str], ...]:
         scope = self._scope
         declared: list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]] = [
@@ -11197,7 +11327,10 @@ class Module(ts.Entity):
     def relay_name_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         if str(self._placement) not in ("relays", "relays-file"):
             return ()
-        kind_table = Registry(registry_spec).kinds()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        far_side_rows = registry.far_sides()
+        context = self._name.split(".")[0]
         found: list[Violation] = []
         for cls in self._class_defs:
             block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
@@ -11205,37 +11338,88 @@ class Module(ts.Entity):
                 continue
             where = f"{self._name}.{cls.name}"
             carried = tuple(sorted({
-                item.name[len(prefix):]
+                (prefix, item.name[len(prefix):])
                 for item in cls.body
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
                 for prefix in CALLING_MODES
                 if item.name.startswith(prefix)
             }))
-            count = len(carried)
-            if count > 1:
+            if not carried:
+                continue
+            awaiting = tuple(operation for mode, operation in carried if mode == AWAIT_MODE)
+            calling = tuple(operation for mode, operation in carried if mode != AWAIT_MODE)
+            signalling = cls.name.endswith(SIGNAL_RELAY_SUFFIX)
+            if awaiting and calling:
+                awaited = awaiting[0]
+                called = calling[0]
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         cls.lineno,
                         "TB085",
-                        f"{where} carries {count} operations; a relay carries one operation, "
-                        "because its name is the operation it carries",
+                        f"{where} awaits {awaited} and carries {called}; a signal relay carries "
+                        "only await_ operations and no other relay carries one, because nothing "
+                        "outside an invocation reads a durable promise",
                     ))
                 )
                 continue
-            if count == 0:
+            if awaiting and not signalling:
+                awaited = awaiting[0]
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} awaits {awaited} and is not a SignalRelay; a signal relay "
+                        "carries only await_ operations and no other relay carries one, because "
+                        "nothing outside an invocation reads a durable promise",
+                    ))
+                )
                 continue
-            operation = carried[0]
-            expected = f"{MessageName(operation)}{RELAY_SUFFIX}"
+            if calling and signalling:
+                called = calling[0]
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} is a SignalRelay and carries {called}; a signal relay carries "
+                        "only await_ operations and no other relay carries one, because nothing "
+                        "outside an invocation reads a durable promise",
+                    ))
+                )
+                continue
+            spread: set[tuple[str, str]] = set()
+            for _, operation in carried:
+                reached = far_side_rows.far_side(Text(f"{context}|{operation}"))
+                if reached is not None:
+                    spread.add((str(reached.module()), str(reached.name())))
+            if len(spread) > 1:
+                sides = ", ".join(sorted(name for _, name in spread))
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} reaches {sides}; a relay is named for the far side its "
+                        "operations reach, because the act lives on the method and the far side "
+                        "lives on the class",
+                    ))
+                )
+                continue
+            if not spread:
+                continue
+            side = sorted(spread)[0][1]
+            expected = f"{side}{SIGNAL_INFIX if awaiting else ''}{RELAY_SUFFIX}"
             if cls.name != expected:
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         cls.lineno,
                         "TB085",
-                        f"{where} carries {operation} and is not {expected}; a relay is named "
-                        "for the operation it carries, because a name for what sits behind it "
-                        "is a pattern word",
+                        f"{where} reaches {side} and is not {expected}; a relay is named for the "
+                        "far side its operations reach, because the act lives on the method and "
+                        "the far side lives on the class",
                     ))
                 )
         return tuple(found)
@@ -11309,6 +11493,37 @@ class Module(ts.Entity):
             for member in members:
                 mode = next((prefix for prefix in CALLING_MODES if member.name.startswith(prefix)), None)
                 if mode is None:
+                    continue
+                if mode == AWAIT_MODE:
+                    promise = f"{member.name[len(mode):]}{PROMISE_SUFFIX}"
+                    reached_promises = tuple(
+                        node.attr
+                        for node in ast.walk(member)
+                        if isinstance(node, ast.Attribute) and node.attr.endswith(PROMISE_SUFFIX)
+                    )
+                    if not reached_promises:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                member.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reads no promise; an await_ method "
+                                "reads the durable promise its runtime names for the operation "
+                                "it waits on, because one operation keeps one name across a relay",
+                            ))
+                        )
+                    for read in reached_promises:
+                        if read != promise:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    member.lineno,
+                                    "TB085",
+                                    f"{where}.{member.name} reads {read}; an await_ method reads "
+                                    "the durable promise its runtime names for the operation it "
+                                    "waits on, because one operation keeps one name across a relay",
+                                ))
+                            )
                     continue
                 handler = f"{member.name[len(mode):]}{HANDLER_SUFFIX}"
                 reached_handlers = tuple(
@@ -12770,6 +12985,16 @@ class Codebase(ts.AggregateRoot):
             for stmt in module.class_defs()
             if blocks.get((module.name(), stmt.name)) in CHAIN_BLOCKS
         ))
+        far_side_seen: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        for module in self._modules:
+            for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks):
+                far_side_seen.setdefault((context_name, operation_name), set()).add((far_module, far_name))
+        far_side_rows = tuple(sorted(
+            (context_name, operation_name, side[0], side[1])
+            for (context_name, operation_name), sides in far_side_seen.items()
+            if len(sides) == 1
+            for side in sides
+        ))
         outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
         action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
         context_rows = self._contexts
@@ -12825,6 +13050,7 @@ class Codebase(ts.AggregateRoot):
             package_attrs=package_attr_rows,
             enums=enum_rows,
             operations=operation_rows,
+            far_sides=far_side_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
@@ -12904,6 +13130,7 @@ class Codebase(ts.AggregateRoot):
             package_attrs=package_attr_rows,
             enums=enum_rows,
             operations=operation_rows,
+            far_sides=far_side_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())
