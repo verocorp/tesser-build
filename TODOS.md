@@ -68,8 +68,7 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   same split, since `ports/` has the identical shape.
 - **minimal is non-conformant to the ruled dependency shape (Chris,
   2026-09-22).** Its inline engine has no invocation context, so the
-  `ts.Workflow[C, O]` binding in `docs/design-adapter-dependency-shape.md`
-  has nothing to bind `C` to. It keeps its current shape rather than getting
+  `ts.Workflow[C, O]` binding has nothing to bind `C` to. It keeps its current shape rather than getting
   a pretend context; decide whether an in-process engine gets a context type
   of its own or the tree stops claiming the durable shape.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
