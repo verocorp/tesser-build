@@ -66,6 +66,12 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   cut (one messages module beside each relay, or a `messages/` package),
   what the runner and the runtime then import, and whether ports get the
   same split, since `ports/` has the identical shape.
+- **minimal is non-conformant to the ruled dependency shape (Chris,
+  2026-09-22).** Its inline engine has no invocation context, so the
+  `ts.Workflow[C, O]` binding in `docs/design-adapter-dependency-shape.md`
+  has nothing to bind `C` to. It keeps its current shape rather than getting
+  a pretend context; decide whether an in-process engine gets a context type
+  of its own or the tree stops claiming the durable shape.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the
