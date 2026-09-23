@@ -1108,7 +1108,9 @@ A workflow on a durable-execution engine (Restate, Temporal) adds three
 application kinds that are **not** application services, and two adapter kinds
 that carry the engine. The rules and the why are
 `docs/design-app-service-types.md`; the verified impl is
-`examples/durable-execution/` and the small exemplar is `examples/minimal/`.
+`examples/durable-execution/`, with `examples/voice/` for the signal relay
+(`examples/minimal/` shows none of these kinds until an in-process engine
+restores them; `TODOS.md`).
 All of them keep the service body rules above (one `ts.Request` in, one
 `ts.Response` out, `match` only, mappers for every translation) — what differs
 is scope, reach, and what each may depend on.
@@ -1119,8 +1121,9 @@ is scope, reach, and what each may depend on.
   messages it speaks and a **snapshot** for each. There is one relay kind:
   lifetime is not a property of the protocol. `OrderOrchestratorRelay` has two
   implementations — one built once at wiring that enters through the engine's
-  ingress, one built per invocation that runs the workflow as a child — and the
-  orchestrator holding it cannot tell which it has.
+  ingress, one built per invocation by `RestatePurchaseWorkflow` that runs the
+  workflow as a child — and the orchestrator holding it cannot tell which it
+  has.
   **It is named for its far side and carries any number of operations**
   (TB085): the far side is the orchestrator the runtime handler of an operation
   builds and calls, or the class of actions behind the application client that
@@ -1137,11 +1140,13 @@ is scope, reach, and what each may depend on.
   partially implemented. `examples/voice/` has the worked case
   (`CallOrchestratorRelay`, `CallOrchestratorSignalRelay`).
 - **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`, one
-  per module) is built **per invocation by a runtime**, with that invocation's
-  runners. It depends on relays and **action ports** — a port some application
-  client speaks (below) — never a repository; it stores nothing but those,
-  because everything it does between journaled calls re-runs on replay. It
-  takes a relay request and returns a relay response.
+  per module) is built **per invocation by a workflow runner**, over that
+  invocation's runners, and reached only through its application client. It
+  depends on relays and **action ports** — a port some application client
+  speaks (below) — never a repository; it stores nothing but those, because
+  everything it does between journaled calls re-runs on replay. Its public
+  methods are exactly its application client's, so it takes a relay request
+  and returns a relay response.
 - **A class of actions** (`ts.Actions`, beside the services) takes **exactly
   one port** in `__init__` and each public method calls it **exactly once**: an
   action is the engine's retry unit, and one side effect per unit is what keeps
@@ -1152,21 +1157,55 @@ is scope, reach, and what each may depend on.
   `transaction()` call opens the unit and is not a second call. It is **not on
   the public `Client`**.
 - **An application client** (`tesser.application.Client`, in
-  `application/client/`, one protocol per module named for the actions it
-  fronts) is how a runtime reaches a class of actions — the inbound twin of a
-  port. Same word as the context client, different package, exactly as
-  `Request`/`Response` already are. It speaks the DTOs of exactly one message
-  package, a `ports` module or a `relays` module; only a runtime may import it.
-- **A runner** (`ts.Runner`, in `adapters/runners/`) is an implementation of a
-  relay. Lifetime is carried by placement, not by the base: a runner may hold
-  an invocation's engine context, a gateway or a repository never does. It
-  reaches `application.relays` and `adapters/runtimes/` and nothing else.
+  `application/client/`, one protocol per module) is how a runtime reaches a
+  class of actions or an orchestrator — the inbound twin of a port. The module
+  is named for what it fronts: `client/order_actions.py` fronts
+  `application/order_actions.py`, `client/order_orchestrator.py` fronts
+  `application/orchestrators/order_orchestrator.py` (TB081). Same word as the
+  context client, different package, exactly as `Request`/`Response` already
+  are. It speaks the DTOs of exactly one message package, a `ports` module or
+  a `relays` module; only a runtime may import it.
+- **A workflow** (`ts.Workflow`, from `tesser.application`, a plain marker
+  like `ts.Store`) is declared beside an orchestrator's application client,
+  generic in the engine's context: `class OrderWorkflow[C](ts.Workflow,
+  typing.Protocol)` with one `invocation(context: C, /)` that yields that
+  client. The application never names the engine; the runtime binds it by
+  holding `client.OrderWorkflow[restate.WorkflowContext]`. A client module
+  declares one `ts.Client` and at most one `ts.Workflow`, the one that yields
+  it (TB052) — the same pairing as a store and the repository its
+  `transaction()` yields.
+- **A runner** (`ts.Runner`, in `adapters/runners/`) implements a relay or a
+  workflow. Lifetime is carried by placement, not by the base: a runner may
+  hold an invocation's engine context, a gateway or a repository never does.
+  A relay runner reaches its far side **by literal name**: `run_X` is
+  `generic_call("<FarSide>", "X", <request snapshot bytes>)`, `start_X` is
+  `generic_send` with the same arguments, and `await_X` reads
+  `promise("X", serde=BytesSerde())` — the service is the relay's name without
+  `Relay`, and the handler and the promise are the operation (TB085). The
+  names are literals because the analyzer reads them and checks them against
+  the relay; a constant, a variable, or an f-string is a finding. An ingress
+  runner calls through the Restate client and states
+  `headers={"content-type": "application/json"}`, because Restate's ingress
+  answers 400 to a call by name without it. A workflow runner
+  (`RestateOrderWorkflow`) builds the orchestrator over that invocation's
+  runners, which sit in its module unexported — as `PostgresCallRepository`
+  sits beside the `PostgresCallStore` that yields it — and are tested through
+  it. A runner reaches `application.relays` and `application.orchestrators`,
+  and **only a runner imports the orchestrators**.
 - **A runtime** (`ts.Runtime`, in `adapters/runtimes/`) is the engine's
-  callback surface. It registers the engine's handlers, builds an orchestrator
-  per invocation with that invocation's runners, binds the serdes over the
-  relay messages, and translates a `DomainError` into the engine's terminal
-  error. **It invokes no relay itself.** It reaches `application.client`,
-  `application.orchestrators`, `application.relays`, and `adapters/runners/`.
+  callback surface. It holds the application clients and workflows the
+  component hands it and constructs only its engine registrations and serdes;
+  a main handler opens `async with workflow.invocation(ctx) as client` and
+  returns `await client.<operation>(request)`. It binds the serdes over the
+  relay messages, exposes each handler as `<operation>_handler`, and
+  translates a `DomainError` into the engine's terminal error. **It invokes no
+  relay itself**, and every service, handler, and promise it registers must be
+  one a runner of its context reaches (TB085) — a callback only the outside
+  world invokes is a handler. It reaches `application.client` and
+  `application.relays`.
+- **Not yet settled** (2026-09-22): the workflow runner naming the
+  orchestrator implementation directly is accepted for now, not ruled right;
+  an `await_` operation's request is read by nothing in its runner.
 
 **Who may invoke a relay:** a service, through an ingress runner, and an
 orchestrator, through an in-invocation runner. Never an action, never a
@@ -1234,16 +1273,60 @@ class OrderOrchestrator(ts.Orchestrator):
                 typing.assert_never(never)
 
 
-# ordering/adapters/runners/restate_invocation_order_actions_relay.py (verified impl: examples/durable-execution/)
-class RestateInvocationOrderActionsRelay(ts.Runner):    # holds this invocation's engine context
+# ordering/application/client/order_orchestrator.py (verified impl: examples/durable-execution/)
+class OrderOrchestratorApplicationClient(ts.Client, typing.Protocol):
 
-    def __init__(self, restate_workflow_context: restate.WorkflowContext, restate_order_runtime: runtimes.RestateOrderRuntime) -> None:
+    async def confirm_order(
+        self, confirm_order_request: relays.ConfirmOrderRequest
+    ) -> relays.ConfirmOrderResponse: ...
+
+
+class OrderWorkflow[C](ts.Workflow, typing.Protocol):
+    def invocation(
+        self, context: C, /
+    ) -> typing.AsyncContextManager[OrderOrchestratorApplicationClient]: ...
+
+
+# ordering/adapters/runners/restate_order_workflow.py (verified impl: examples/durable-execution/)
+class RestateInvocationOrderActionsRelay(ts.Runner):
+
+    def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
         self._restate_workflow_context = restate_workflow_context
-        self._restate_order_runtime = restate_order_runtime
 
-    async def run_price_product(self, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
-        return await self._restate_workflow_context.service_call(
-            self._restate_order_runtime.price_product_handler, price_product_request
+    async def run_price_product(
+        self, price_product_request: relays.PriceProductRequest
+    ) -> relays.PriceProductResponse:
+        return relays.PriceProductResponseSnapshot().deserialize(
+            await self._restate_workflow_context.generic_call(
+                "OrderActions",
+                "price_product",
+                relays.PriceProductRequestSnapshot().serialize(price_product_request),
+            )
+        )
+
+
+class RestateOrderWorkflow(ts.Runner):
+
+    @contextlib.asynccontextmanager
+    async def invocation(
+        self, restate_workflow_context: restate.WorkflowContext
+    ) -> typing.AsyncIterator[orchestrators.OrderOrchestrator]:
+        yield orchestrators.OrderOrchestrator(
+            RestateInvocationOrderActionsRelay(restate_workflow_context)
+        )
+
+
+# calls/adapters/runners/restate_call_workflow.py (verified impl: examples/voice/) — an await_ reads the promise named for its operation
+class RestateInvocationCallOrchestratorSignalRelay(ts.Runner):
+
+    def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
+        self._restate_workflow_context = restate_workflow_context
+
+    async def await_person_joined(
+        self, await_person_joined_request: relays.AwaitPersonJoinedRequest
+    ) -> relays.AwaitPersonJoinedResponse:
+        return relays.AwaitPersonJoinedResponseSnapshot().deserialize(
+            await self._restate_workflow_context.promise("person_joined", serde=restate_serde.BytesSerde()).value()
         )
 
 
@@ -1263,32 +1346,99 @@ class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.Price
 
 class RestateOrderRuntime(ts.Runtime):
 
-    def __init__(self, ordering_application_client: client.OrderingApplicationClient, ...) -> None:
-        self.order_actions_service = restate.Service("OrderActions")
-        self.order_orchestrator_workflow = restate.Workflow("OrderOrchestrator")
+    def __init__(
+        self,
+        ordering_application_client: client.OrderingApplicationClient,
+        purchase_application_client: client.PurchaseApplicationClient,
+        order_workflow: client.OrderWorkflow[restate.WorkflowContext],
+        purchase_workflow: client.PurchaseWorkflow[restate.WorkflowContext],
+    ) -> None:
+        self.order_actions_service = restate.Service(
+            "OrderActions", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.order_orchestrator_workflow = restate.Workflow(
+            "OrderOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.purchase_actions_service = restate.Service(
+            "PurchaseActions", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.purchase_orchestrator_workflow = restate.Workflow(
+            "PurchaseOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
 
-        @self.order_actions_service.handler(input_serde=..., output_serde=...)
-        async def price_product(restate_context: restate.Context, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
+        @self.order_actions_service.handler(
+            input_serde=RestatePriceProductRequestSerde(),
+            output_serde=RestatePriceProductResponseSerde(),
+        )
+        async def price_product(
+            restate_context: restate.Context, price_product_request: relays.PriceProductRequest
+        ) -> relays.PriceProductResponse:
             return ordering_application_client.price_product(price_product_request)
 
-        @self.order_orchestrator_workflow.main(input_serde=..., output_serde=...)
-        async def confirm_order(restate_workflow_context: restate.WorkflowContext, confirm_order_request: relays.ConfirmOrderRequest) -> relays.ConfirmOrderResponse:
-            return await orchestrators.OrderOrchestrator(
-                runners.RestateInvocationOrderActionsRelay(restate_workflow_context, self)
-            ).confirm_order(confirm_order_request)
+        @self.order_orchestrator_workflow.main(
+            input_serde=RestateConfirmOrderRequestSerde(),
+            output_serde=RestateConfirmOrderResponseSerde(),
+        )
+        async def confirm_order(
+            restate_workflow_context: restate.WorkflowContext,
+            confirm_order_request: relays.ConfirmOrderRequest,
+        ) -> relays.ConfirmOrderResponse:
+            async with order_workflow.invocation(
+                restate_workflow_context
+            ) as order_orchestrator_application_client:
+                return await order_orchestrator_application_client.confirm_order(
+                    confirm_order_request
+                )
+
+        @self.purchase_actions_service.handler(
+            input_serde=RestateTakePaymentRequestSerde(),
+            output_serde=RestateTakePaymentResponseSerde(),
+        )
+        async def take_payment(
+            restate_context: restate.Context, take_payment_request: relays.TakePaymentRequest
+        ) -> relays.TakePaymentResponse:
+            return purchase_application_client.take_payment(take_payment_request)
+
+        @self.purchase_orchestrator_workflow.main(
+            input_serde=RestatePayForOrderRequestSerde(),
+            output_serde=RestatePayForOrderResponseSerde(),
+        )
+        async def pay_for_order(
+            restate_workflow_context: restate.WorkflowContext,
+            pay_for_order_request: relays.PayForOrderRequest,
+        ) -> relays.PayForOrderResponse:
+            async with purchase_workflow.invocation(
+                restate_workflow_context
+            ) as purchase_orchestrator_application_client:
+                return await purchase_orchestrator_application_client.pay_for_order(
+                    pay_for_order_request
+                )
 
         self.price_product_handler = price_product
         self.confirm_order_handler = confirm_order
+        self.take_payment_handler = take_payment
+        self.pay_for_order_handler = pay_for_order
 
 
 # ordering/component/component.py (verified impl: examples/durable-execution/)
 class Ordering(ts.Component):
 
     def __init__(self, config: Config) -> None:
+        self._memory_product_catalog_repository = repositories.MemoryProductCatalogRepository()
         self._order_actions = application.OrderActions(self._memory_product_catalog_repository)
-        self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(self._order_actions, ...)
+        self._memory_payment_processor = gateways.MemoryPaymentProcessor()
+        self._purchase_actions = application.PurchaseActions(self._memory_payment_processor)
+        self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(
+            self._order_actions,
+            self._purchase_actions,
+            runners.RestateOrderWorkflow(),
+            runners.RestatePurchaseWorkflow(),
+        )
         self.client: client.OrderingClient = Ordering.Client(
-            application.OrderService(runners.RestateIngressOrderOrchestratorRelay(config.ingress, self.restate_order_runtime))
+            application.OrderService(runners.RestateIngressOrderOrchestratorRelay(config.ingress)),
+            application.PurchaseService(
+                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress)
+            ),
         )
 ```
 
@@ -1342,16 +1492,23 @@ class Ordering(ts.Component):
   `runners/`, or `runtimes/`, and holds the kind its package names — only a
   runtimes module holds a runtime beside the serdes it binds. `handlers/` →
   the context client; `runners/` → `application.relays` and
-  `adapters/runtimes/`; `runtimes/` → `application.client`,
-  `application.orchestrators`, `application.relays`, `adapters/runners/`;
-  `gateways/` and `repositories/` → `application.ports`. A kind imports only
-  its own kind. **Only a runtime imports the application client and the
-  orchestrators**, because an action is reachable only through the engine. A
-  host reaches a context only through its handlers and its runtimes (TB063).
+  `application.orchestrators`; `runtimes/` → `application.client` and
+  `application.relays`; `gateways/` and `repositories/` →
+  `application.ports`. **No adapters kind package imports another**: a runner
+  finds its far side by name, and the component hands the runtime its
+  workflows. **Only a runtime imports the application client**, because an
+  action is reachable only through the engine, and **only a runner imports
+  the orchestrators**, because the workflow runner that builds one sits
+  beside that invocation's runners. A host reaches a context only through its
+  handlers and its runtimes (TB063).
 - **Test placement follows** (TB070): `runners/` and `runtimes/` are test
-  tiers; a test placed in either also reaches `application.client` (it
-  constructs the runtime it addresses) and `domain` (it builds the objects a
-  relay message carries).
+  tiers, and a test placed in either reaches what its package reaches plus
+  `domain` (it builds the objects a relay message carries). A runtime test
+  fakes the workflow and the application clients, both tesser contracts; a
+  workflow module's sibling test opens an invocation and runs the flow
+  through it (`examples/durable-execution/` drives it through the ingress
+  runner against real Restate and asserts the child call in
+  `sys_invocation`).
 
 - **Not yet ruled:** payload versioning on a durable leg (a field added to a
   relay message changes the bytes an in-flight journal holds — relay messages

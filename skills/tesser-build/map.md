@@ -76,14 +76,19 @@ its own package, because the package is what carries the module's reach.
 - **Handlers (inbound)** — translate one delivery mechanism's wire format to and
   from the context's `Client`: HTTP, CLI, event-consumer. → `handlers.md`
 - **Runtimes (inbound, engine)** — where a durable-execution engine hands work
-  back: a runtime registers the engine's handlers, calls an application client
-  (a class of actions), and builds an orchestrator per invocation with that
-  invocation's runners. A handler calls the context client; a runtime never
-  does. → `python.md#orchestrators-actions-relays`
+  back: a runtime registers the engine's handlers and calls an application
+  client — a class of actions directly, an orchestrator through the
+  `ts.Workflow` whose invocation yields its client. It constructs nothing but
+  its registrations and serdes, and registers only what a runner of its
+  context reaches. A handler calls the context client; a runtime never does.
+  → `python.md#orchestrators-actions-relays`
 - **Runners (outbound, engine)** — the implementations of the context's
   **relays** (`application/relays/`), the protocols whose far side is this same
-  context reached across the engine. A runner may hold an invocation's engine
-  context; a gateway or a repository never does. →
+  context reached across the engine, and of its workflows. A relay runner
+  reaches its far side by literal service and handler name; a workflow runner
+  builds the orchestrator over that invocation's runners. A runner may hold
+  an invocation's engine context; a gateway or a repository never does. No
+  adapters kind package imports another. →
   `python.md#orchestrators-actions-relays`
 - **Gateways (outbound)** — satisfy a port the context owns, by reaching
   something outside it that is **not** its own storage. The port and its DTOs

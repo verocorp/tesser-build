@@ -10338,8 +10338,9 @@ class Module(ts.Entity):
                                 f"{module_name} imports {target}; an adapters kind "
                                 "package reaches only what its kind reaches — a handler "
                                 "the context client, a gateway or a repository the ports, "
-                                "a runner its relays, a runtime the application client, "
-                                "the orchestrators, and the relays it registers",
+                                "a runner its relays and the orchestrators its workflow "
+                                "builds, a runtime the application client and the relays "
+                                "it registers, and none of them another adapters package",
                             ))
                         )
                 elif pieces[0] == context:
