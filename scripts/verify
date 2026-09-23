@@ -289,7 +289,9 @@ run_specs_app() {
 # CALLS_STORAGE and a Restate server at RESTATE_INGRESS / RESTATE_ADMIN, and
 # has no skip. It serves the tree's Restate endpoint itself, registers it
 # with the server at VOICE_DEPLOYMENT (the address the server dials back),
-# and stops it after pytest. Locally:
+# and stops it after pytest. The adapter tests serve endpoints of their own
+# under fresh service names and register them at VOICE_CALLBACK_HOST through
+# RESTATE_ADMIN, so a test deployment never replaces the tree's. Locally:
 #
 #   docker run -d --name tesser-asyncpg-pg -e POSTGRES_USER=tesser \
 #     -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=tesser -p 5434:5432 postgres:16
@@ -305,7 +307,8 @@ run_voice() {
   local ingress="${RESTATE_INGRESS:-http://localhost:28080}"
   local admin="${RESTATE_ADMIN:-http://localhost:29070}"
   local port="${VOICE_DEPLOYMENT_PORT:-9080}"
-  local deployment="${VOICE_DEPLOYMENT:-http://host.docker.internal:$port}"
+  local callback_host="${VOICE_CALLBACK_HOST:-host.docker.internal}"
+  local deployment="${VOICE_DEPLOYMENT:-http://$callback_host:$port}"
   export LIVEKIT_URL="${LIVEKIT_URL:-ws://livekit.invalid}"
   export LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-unused}"
   export LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-unused}"
@@ -338,7 +341,8 @@ run_voice() {
     worker=$!
   fi
   step "pytest (against Postgres at CALLS_STORAGE and Restate at RESTATE_INGRESS)"
-  CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" pytest -q
+  CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" RESTATE_ADMIN="$admin" \
+    VOICE_CALLBACK_HOST="$callback_host" pytest -q
   local status=$?
   kill -INT "$host" 2>/dev/null
   wait "$host" 2>/dev/null

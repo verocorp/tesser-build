@@ -23,10 +23,10 @@ class RestateHost(ts.Host):
             hypercorn_typing.ASGIFramework,
             restate.app(
                 [
-                    voice_app.calls.restate_call_runtime.call_actions_service,
-                    voice_app.calls.restate_call_runtime.dialing_actions_service,
-                    voice_app.calls.restate_call_runtime.speech_actions_service,
-                    voice_app.calls.restate_call_runtime.call_orchestrator_workflow,
+                    voice_app.calls.call_actions_service,
+                    voice_app.calls.dialing_actions_service,
+                    voice_app.calls.speech_actions_service,
+                    voice_app.calls.call_orchestrator_workflow,
                 ]
             ),
         )

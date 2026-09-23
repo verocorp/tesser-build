@@ -44,17 +44,17 @@ class TestConfig:
 
 
 class TestCalls:
-    async def test_the_component_publishes_the_restate_runtime_it_wired(self) -> None:
+    async def test_the_component_publishes_the_restate_services_and_workflow_it_registered_into(self) -> None:
         config = component.Config(_spec(storage="postgres://nobody@nowhere/none"))
 
         calls = component.Calls(config, pgdatabase_database.Database(config.database))
         registered = {
             registration.name: sorted(registration.handlers)
             for registration in (
-                calls.restate_call_runtime.call_actions_service,
-                calls.restate_call_runtime.dialing_actions_service,
-                calls.restate_call_runtime.speech_actions_service,
-                calls.restate_call_runtime.call_orchestrator_workflow,
+                calls.call_actions_service,
+                calls.dialing_actions_service,
+                calls.speech_actions_service,
+                calls.call_orchestrator_workflow,
             )
         }
         await calls.close()
@@ -65,3 +65,22 @@ class TestCalls:
             "SpeechActions": ["say_utterance"],
             "CallOrchestrator": ["conduct_call", "person_joined", "person_turn_completed"],
         }
+
+    async def test_every_registration_declares_a_bounded_retry_policy(self) -> None:
+        config = component.Config(_spec(storage="postgres://nobody@nowhere/none"))
+
+        calls = component.Calls(config, pgdatabase_database.Database(config.database))
+        policies = [
+            registration.invocation_retry_policy
+            for registration in (
+                calls.call_actions_service,
+                calls.dialing_actions_service,
+                calls.speech_actions_service,
+                calls.call_orchestrator_workflow,
+            )
+        ]
+        await calls.close()
+
+        assert [(policy.max_attempts, policy.on_max_attempts) for policy in policies if policy is not None] == [
+            (5, "pause")
+        ] * 4
