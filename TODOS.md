@@ -100,6 +100,14 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   question (the orchestrator waits on a promise created after the question
   is said, or the turn carries the question it answers) and add an eval in
   which the person speaks first.
+- [ ] **voice `attend_call` decides nothing yet.** `LivekitHandler.accept_job`
+  asks `CallsClient.attend_call` before accepting a dispatch (v0.2.1.0), but
+  the call is saved only when the orchestrator finishes, so `AgentService`
+  can only build the `CallId` and always attends; a room named for any
+  string is accepted. Decide what the application knows at dispatch time
+  (for example, ask the orchestrator whether this call is waiting for an
+  agent) and give `attend_call` a refusal the handler turns into
+  `job_request.reject()`.
 - [ ] **voice hardening and test debt.** (e) `dial_person` and `say` are
   at-least-once under the Restate retry policy but LiveKit's
   `create_dispatch` and the `say` RPC are not idempotent: a retried dispatch
