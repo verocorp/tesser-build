@@ -10619,6 +10619,17 @@ class Module(ts.Entity):
                             "and what it yields is the client that module declares",
                         ))
                     )
+                for inner in nested_class_defs(stmt.body):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            inner.lineno,
+                            "TB052",
+                            f"{where}.{inner.name} is a nested class; an application client "
+                            "module declares its protocol at module level",
+                        ))
+                    )
+                found.extend(ClientClass(ClientClassSpec(stmt, where, self._path)).violations())
                 continue
             if block == "actions_client":
                 protocols.append(stmt)

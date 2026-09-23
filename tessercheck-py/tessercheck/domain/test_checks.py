@@ -19786,7 +19786,10 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
                 "class SiblingWorkflow[C](ts.Workflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[SecondWorkflow]: ...\n"
                 "class RenamedWorkflow[C](ts.Workflow, typing.Protocol):\n"
-                "    def open(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n",
+                "    def open(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n"
+                "class LoadedWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    token: str = input('runs at import')\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n",
                 False,
             ),
         ))).violations()
@@ -19801,8 +19804,9 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
     assert not any(f"{where}.SecondWorkflow does not yield" in f for f in findings), findings
     assert any(f"{where}.SiblingWorkflow does not yield the client beside it" in f for f in findings), findings
     assert any(f"{where}.RenamedWorkflow does not yield the client beside it" in f for f in findings), findings
+    assert any(f"{where}.LoadedWorkflow" in f and "TB051" in f for f in findings), findings
     assert any(
-        f"{where} declares 4 workflows; an application client module declares at most one "
+        f"{where} declares 5 workflows; an application client module declares at most one "
         "ts.Workflow, the one that yields its client" in f
         for f in findings
     ), findings

@@ -47,6 +47,41 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   exception in a TerminalError (terminal, no retry, measured), but the serde
   wrappers map only an empty body to 400, and TB082 counts a `try` in a
   snapshot as a decision it may not make.
+- [ ] **voice: a call never gives up (lifecycle design, Chris: one design
+  item).** HIGH PRIORITY. Nothing times out: not the wait for the person to
+  join (`wait_for_participant` in the LiveKit handler), not the
+  `person_joined` / `person_turn_completed` promises the workflow awaits, not
+  the ingress read (`_MAIN_TIMEOUT` has `read=None`). An unanswered or silent
+  call holds the LiveKit room, the agent job, the Restate workflow, and the
+  caller's HTTP connection forever. With it: a failed step pauses the
+  workflow with the call still up and never hangs up (rule compensation vs
+  a paused workflow for an operator), and because `place_call` holds one
+  HTTP request for the whole call, any connection drop makes a retry dial
+  the person again under a fresh id (start the workflow and return the id,
+  or carry an idempotency key). Durable timers raced against each promise,
+  hanging up when the timer wins, is the likely shape; it is one change to
+  the dead simple call. Also: the whole transcript of the answer becomes the
+  name ("My name is Alice, thanks"), with no length bound.
+- [ ] **Debt markers added as lines by #208 and adapter-shape (Chris: ship,
+  list them).** Net, the two PRs remove 61 markers (454 on main, 393 after),
+  but these lines carry a marker in the added code; each names the design
+  question that retires it:
+  - `examples/voice/calls/adapters/runtimes/restate_call_runtime.py` — the
+    two shared handlers `person_joined`, `person_turn_completed` (TB085: they
+    build messages and branch instead of invoking one operation). Retired by
+    moving the resolve into something a handler can invoke, or by ruling
+    what a shared handler that resolves a promise is.
+  - `examples/voice/calls/adapters/handlers/livekit.py` `CallAgent` (TB052:
+    the LiveKit SDK subclass has no ts.* kind of its own). Retired by ruling
+    on SDK subclasses in handlers.
+  - `examples/voice/srv/livekit/agent_server.py` (TB060). Retired with the
+    host's import row for the LiveKit worker.
+  - `examples/voice/calls/adapters/runners/test_restate_call_workflow.py`,
+    `test_restate_ingress_call_orchestrator_relay.py`,
+    `runtimes/test_restate_call_runtime.py` (TB072 fakes of the Restate
+    context and ingress, TB085 on their locals; mostly carried when test
+    files merged or moved). Retired by the voice Restate test migration
+    (hardening item (f) above).
 - [ ] **durable-execution: an invocation runner's `start_` path is never
   run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`
   exists because the runner implements the whole relay, but
