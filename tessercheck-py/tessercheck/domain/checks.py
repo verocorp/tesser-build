@@ -5009,6 +5009,23 @@ class ClassDecl(ts.Entity):
             ):
                 self_annotations.append(Field(FieldSpec(inner.target.attr, inner.annotation, inner.lineno)))
         object.__setattr__(self, "_self_annotations", tuple(self_annotations))
+        engine_containers: set[str] = set()
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Assign) and len(inner.targets) == 1:
+                container_target: ast.expr = inner.targets[0]
+            elif isinstance(inner, ast.AnnAssign):
+                container_target = inner.target
+            else:
+                continue
+            maker = inner.value.func if isinstance(inner.value, ast.Call) else None
+            made = maker.attr if isinstance(maker, ast.Attribute) else maker.id if isinstance(maker, ast.Name) else ""
+            if (
+                made in ENGINE_REGISTRATIONS
+                and isinstance(container_target, ast.Attribute)
+                and isinstance(container_target.value, ast.Name)
+                and container_target.value.id == "self"
+            ):
+                engine_containers.add(container_target.attr)
         registered_containers: set[str] = set()
         for inner in ast.walk(node):
             if not isinstance(inner, ast.Call):
@@ -5022,6 +5039,8 @@ class ClassDecl(ts.Entity):
                     isinstance(argument, ast.Attribute)
                     and isinstance(argument.value, ast.Name)
                     and argument.value.id == "self"
+                    and argument.attr in engine_containers
+                    and argument.attr != "client"
                 ):
                     registered_containers.add(argument.attr)
         object.__setattr__(self, "_registered_containers", Names(tuple(sorted(registered_containers))))

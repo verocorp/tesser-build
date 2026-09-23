@@ -20548,3 +20548,40 @@ def test_a_component_publishes_the_engine_containers_it_hands_an_a_b_or_c() -> N
         "a b, or a c to register into" in f
         for f in findings
     ), findings
+
+
+def test_only_an_engine_container_handed_to_an_a_b_or_c_is_published_without_its_kind() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/a/record.py",
+                "shop.adapters.a.record",
+                "import tesser.adapters as ts\n"
+                "class Record(ts.A):\n"
+                "    def __init__(self, service: object, actions: object) -> None:\n"
+                "        self.handler = service\n",
+                False,
+            ),
+            (
+                "shop/component/registered.py",
+                "shop.component.registered",
+                "import tesser.component as ts\n"
+                "import restate\n"
+                "import shop.adapters.a.record as record\n"
+                "class Registered(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.actions_service: restate.Service = restate.Service('Actions')\n"
+                "        self.dialing_actions = object()\n"
+                "        self.client = 2\n"
+                "        record.Record(self.actions_service, self.dialing_actions)\n"
+                "        record.Record(self.client, self.dialing_actions)\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("shop.component.registered.Registered publishes actions_service" in f for f in findings), findings
+    assert any("shop.component.registered.Registered publishes dialing_actions; " in f for f in findings), findings
+    assert any("shop.component.registered.Registered publishes client; " in f for f in findings), findings
