@@ -26,9 +26,11 @@ class CallAgent(livekit_agents.Agent, ts.Handler):  # tesser:debt TB052
     async def on_user_turn_completed(
         self, turn_ctx: livekit_llm.ChatContext, new_message: livekit_llm.ChatMessage
     ) -> None:
-        await self._calls_client.person_turn_completed(
-            client.PersonTurnCompletedRequest(call_id=self._call_id, text=new_message.text_content or "")
-        )
+        text = new_message.text_content or ""
+        if text.strip():
+            await self._calls_client.person_turn_completed(
+                client.PersonTurnCompletedRequest(call_id=self._call_id, text=text)
+            )
         raise livekit_llm.StopResponse()
 
     async def say(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:

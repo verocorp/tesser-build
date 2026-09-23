@@ -61,7 +61,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   or carry an idempotency key). Durable timers raced against each promise,
   hanging up when the timer wins, is the likely shape; it is one change to
   the dead simple call. Also: the whole transcript of the answer becomes the
-  name ("My name is Alice, thanks"), with no length bound.
+  name ("My name is Alice, thanks"), with no length bound. And an answer that
+  is only punctuation ("?") now makes `Call.person_said` raise, which Restate
+  retries on the same journaled answer and then pauses, with the call still
+  up; decide whether the workflow asks again or ends the call.
 - [ ] **Debt markers added as lines by #208 and adapter-shape (Chris: ship,
   list them).** Net, the two PRs remove 61 markers (454 on main, 393 after),
   but these lines carry a marker in the added code; each names the design

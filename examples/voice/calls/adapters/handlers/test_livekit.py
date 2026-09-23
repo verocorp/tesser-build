@@ -75,7 +75,7 @@ class TestCallAgent:
                 livekit_llm.ChatContext.empty(), livekit_llm.ChatMessage(role="user", content=["Grace"])
             )
 
-    async def test_a_turn_that_carries_no_text_is_reported_as_nothing_said(self) -> None:
+    async def test_a_turn_that_carries_no_text_is_not_reported(self) -> None:
         fake_calls_client = FakeCallsClient()
         call_agent = handlers.CallAgent(fake_calls_client, "c7")
 
@@ -84,10 +84,18 @@ class TestCallAgent:
                 livekit_llm.ChatContext.empty(), livekit_llm.ChatMessage(role="user", content=[])
             )
 
-        assert [
-            person_turn_completed_request.text
-            for person_turn_completed_request in fake_calls_client.completed
-        ] == [""]
+        assert fake_calls_client.completed == []
+
+    async def test_a_turn_that_carries_only_whitespace_is_not_reported(self) -> None:
+        fake_calls_client = FakeCallsClient()
+        call_agent = handlers.CallAgent(fake_calls_client, "c7")
+
+        with pytest.raises(livekit_llm.StopResponse):
+            await call_agent.on_user_turn_completed(
+                livekit_llm.ChatContext.empty(), livekit_llm.ChatMessage(role="user", content=[" \n"])
+            )
+
+        assert fake_calls_client.completed == []
 
     async def test_a_say_from_a_participant_that_is_not_speech_is_refused(self) -> None:
         call_agent = handlers.CallAgent(FakeCallsClient(), "c7")
