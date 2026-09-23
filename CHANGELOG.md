@@ -5,6 +5,36 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.1.10.0] - 2026-09-23
+
+The voice example places a real phone call through a durable workflow, and a
+relay is named for what it reaches.
+
+### Changed
+- **The voice call is dead simple.** The app holds no language model: the
+  orchestrator dials the person, waits on one named durable promise per
+  expected input (the person joining, the person's completed turn), says the
+  question, records the answer as the person's name, greets them, and hangs
+  up. The LiveKit worker is a handler, not a runtime: it takes jobs, reports
+  the person's join and completed turns through the context client, and
+  speaks when asked. Adapters carry only mechanism.
+- **Three acceptance scenarios** run the whole call against real LiveKit,
+  Restate and Postgres, with a simulated person prompted as a model: the
+  name round trip, the goodbye heard in full before the line drops, and an
+  answer spoken over the question. They run under `VOICE_EVALS=1`.
+- **A relay is named for its far side** (the orchestrator or class of
+  actions its operations reach), carries any number of operations, and
+  `await_` joins `start_` and `run_` as a calling mode; a relay that waits on
+  durable promises is `<FarSide>SignalRelay` and carries only `await_`
+  operations. The analyzer derives the far side from the runtime handler and
+  checks the name. durable-execution, minimal and the generator's templates
+  follow.
+
+### Removed
+- The voice example's LLM turn loop, its interpretation of transcription
+  events in the domain, and the design document for the adapter dependency
+  shape (the change that follows carries that design as code).
+
 ## [0.1.8.0] - 2026-09-16
 
 An adapter's dependency is exercised, not doubled.
