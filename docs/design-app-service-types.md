@@ -24,6 +24,57 @@ kinds replace all of it.
 | runner | `ts.Runner` (`tesser.adapters.Runner`) | `adapters/runners/` | an ingress runner and a workflow runner once, by the component; an invocation runner per invocation, by the workflow runner in its module | the relays; a workflow runner also the orchestrators | whoever holds the relay or workflow it implements |
 | runtime | `ts.Runtime` (`tesser.adapters.Runtime`) | `adapters/runtimes/` | once, by the component, handed the application clients and workflows | the application client (its clients and workflows) and the relays | the engine, and the host that mounts what it registers |
 
+**The call path, reduced to its essentials** (Chris, 2026-09-23). Every
+durable path in the tree is some walk through these lines; relays, runners,
+workflows, application clients, and serdes are how each line is carried, not
+extra steps.
+
+```
+tesser.Service.operation            -> restate.Client.operation
+restate.Client.operation            ⇒  restate.Workflow.main | restate.Workflow.handler
+restate.Workflow.main(wf_ctx)       -> tesser.Orchestrator(wf_ctx) -> tesser.Orchestrator.operation
+tesser.Orchestrator.operation       -> wf_ctx.promise(name).value
+restate.Workflow.handler(shared)    -> shared.promise(name).resolve
+tesser.Orchestrator.operation       -> wf_ctx.operation
+wf_ctx.operation                    ⇒  restate.Service.handler | restate.Workflow.main
+restate.Service.handler(ctx)        -> tesser.Action.operation
+tesser.Action.operation             -> tesser.Port.operation
+```
+
+`->` is a Python call, held by imports, protocols, and constructors, so the
+type checker sees both ends. `⇒` crosses the engine and is addressed by name
+only, and so is the pair `promise(name).value` / `promise(name).resolve`,
+which meet only in the engine's journal. Those are the three links nothing in
+Python holds:
+
+| link | addressed by | carried in the tree by |
+|---|---|---|
+| `restate.Client.operation ⇒ …` | service, key, handler | an ingress runner (`generic_call`/`generic_send` through the Restate client) |
+| `wf_ctx.operation ⇒ …` | service, handler | an invocation runner (`ctx.generic_call`/`ctx.generic_send`) |
+| `.value` ↔ `.resolve` | promise name, within one workflow key | a signal relay's runner (`await_`) and the runtime's shared handler |
+
+Notes on the lines, from the code and the Restate Python SDK (1.0.4):
+
+- `wf_ctx` is `restate.WorkflowContext` and exists only in a workflow's `main`
+  handler. A shared handler gets `restate.WorkflowSharedContext`, and a
+  service handler gets a plain `restate.Context`, which the actions handlers do
+  not use.
+- The orchestrator is not handed `wf_ctx` itself: the workflow runner builds
+  it over invocation runners that each hold `wf_ctx`. The line is written
+  `tesser.Orchestrator(wf_ctx)` because that is the dependency once the
+  runners are taken out.
+- `wf_ctx.operation ⇒ restate.Workflow.main` is one orchestrator starting
+  another (`examples/durable-execution/`: `pay_for_order` reaching
+  `OrderOrchestrator.confirm_order`).
+- An action is reached only through the engine and never uses a relay; it
+  uses one port.
+- A durable promise can be resolved only from inside a handler of its own
+  workflow: the SDK exposes `promise(...)` on `WorkflowContext` and
+  `WorkflowSharedContext` only, and the ingress client offers only calls and
+  sends. That is why an outside event goes `restate.Client.operation ⇒
+  restate.Workflow.handler -> .resolve` instead of resolving the promise
+  directly. A resolved promise cannot be resolved again.
+
 **One relay kind; lifetime is not a property of the protocol.** The two
 action relays, `OrderActionsRelay` and `PurchaseActionsRelay`, once written as
 `ts.JobContext`, are `ts.Relay` now, like the orchestrator relays beside them. The proof that lifetime does
