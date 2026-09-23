@@ -12,7 +12,6 @@ import hypercorn.asyncio as hypercorn_asyncio
 import hypercorn.config as hypercorn_config
 import hypercorn.typing as hypercorn_typing
 import restate
-import restate.client as restate_client
 
 import calls.adapters.a as a
 import calls.adapters.b as b
@@ -102,21 +101,20 @@ class TestRestateIngressCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
-            restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
-                restate_client.Client(async_client),
-                restate_conduct_call,
-                restate_person_joined,
-                restate_person_turn_completed,
-            )
-            conducting = asyncio.create_task(
-                restate_ingress_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
-            )
-            await restate_ingress_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
-            await restate_ingress_call_orchestrator_relay.run_person_turn_completed(
-                relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
-            )
-            conduct_call_response = await conducting
+        restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
+            os.environ["RESTATE_INGRESS"],
+            restate_conduct_call,
+            restate_person_joined,
+            restate_person_turn_completed,
+        )
+        conducting = asyncio.create_task(
+            restate_ingress_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+        )
+        await restate_ingress_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
+        await restate_ingress_call_orchestrator_relay.run_person_turn_completed(
+            relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
+        )
+        conduct_call_response = await conducting
         invoked = await admin.post(
             "/query",
             headers={"accept": "application/json"},
@@ -183,29 +181,28 @@ class TestRestateIngressCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
-            restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
-                restate_client.Client(async_client),
-                restate_conduct_call,
-                restate_person_joined,
-                restate_person_turn_completed,
-            )
-            person_joined_responses = await asyncio.gather(
-                *(
-                    restate_ingress_call_orchestrator_relay.run_person_joined(
-                        relays.PersonJoinedRequest(call_id=call_id)
-                    )
-                    for _ in range(8)
+        restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
+            os.environ["RESTATE_INGRESS"],
+            restate_conduct_call,
+            restate_person_joined,
+            restate_person_turn_completed,
+        )
+        person_joined_responses = await asyncio.gather(
+            *(
+                restate_ingress_call_orchestrator_relay.run_person_joined(
+                    relays.PersonJoinedRequest(call_id=call_id)
                 )
+                for _ in range(8)
             )
-            person_turn_completed_responses = await asyncio.gather(
-                *(
-                    restate_ingress_call_orchestrator_relay.run_person_turn_completed(
-                        relays.PersonTurnCompletedRequest(call_id=call_id, text=f"turn {turn}")
-                    )
-                    for turn in range(8)
+        )
+        person_turn_completed_responses = await asyncio.gather(
+            *(
+                restate_ingress_call_orchestrator_relay.run_person_turn_completed(
+                    relays.PersonTurnCompletedRequest(call_id=call_id, text=f"turn {turn}")
                 )
+                for turn in range(8)
             )
+        )
         await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
         await admin.aclose()
         shutdown.set()
@@ -257,13 +254,12 @@ class TestRestateIngressCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
-            person_joined_response = await c.RestateIngressCallOrchestratorRelay(
-                restate_client.Client(async_client),
-                restate_conduct_call,
-                restate_person_joined,
-                restate_person_turn_completed,
-            ).run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
+        person_joined_response = await c.RestateIngressCallOrchestratorRelay(
+            os.environ["RESTATE_INGRESS"],
+            restate_conduct_call,
+            restate_person_joined,
+            restate_person_turn_completed,
+        ).run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
         promised = await admin.post(
             "/query",
             headers={"accept": "application/json"},

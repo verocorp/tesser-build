@@ -3,11 +3,9 @@ from __future__ import annotations
 import typing
 
 import tesser.component as ts
-import httpx
 import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
 import restate
-import restate.client as restate_client
 
 import calls.adapters.a as a
 import calls.adapters.b as b
@@ -21,7 +19,6 @@ import pgdatabase.database as pgdatabase_database
 _RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
     max_attempts=5, on_max_attempts="pause"
 )
-_INGRESS_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
 
 
 class Spec(ts.Spec):
@@ -79,7 +76,6 @@ class Calls(ts.Component):
 
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_call_store = repositories.PostgresCallStore(database)
-        self._async_client = httpx.AsyncClient(base_url=config.ingress, timeout=_INGRESS_TIMEOUT)
         self.call_actions_service: restate.Service = restate.Service(
             "CallActions", invocation_retry_policy=_RETRY_POLICY
         )
@@ -130,7 +126,7 @@ class Calls(ts.Component):
         restate_person_joined = c.RestatePersonJoined(self.call_orchestrator_workflow)
         restate_person_turn_completed = c.RestatePersonTurnCompleted(self.call_orchestrator_workflow)
         restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
-            restate_client.Client(self._async_client),
+            config.ingress,
             restate_conduct_call,
             restate_person_joined,
             restate_person_turn_completed,
@@ -141,4 +137,4 @@ class Calls(ts.Component):
         )
 
     async def close(self) -> None:
-        await self._async_client.aclose()
+        return None
