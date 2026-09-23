@@ -1,3 +1,4 @@
+from calls.application.agent_service import AgentService as AgentService
 from calls.application.call_actions import CallActions as CallActions
 from calls.application.call_events_service import CallEventsService as CallEventsService
 from calls.application.call_service import CallService as CallService

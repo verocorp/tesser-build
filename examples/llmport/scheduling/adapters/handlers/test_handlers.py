@@ -59,13 +59,6 @@ class FakeSchedulingClientScripted(client.SchedulingClient):
         return client.GetBookingResponse(self.pending.pop(0))
 
 
-def test_the_handler_carries_the_instructions_the_model_opens_with() -> None:
-    llm_tool_handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
-
-    assert "book an appointment" in llm_tool_handler.instructions()
-    assert "never invent slots" in llm_tool_handler.instructions()
-
-
 def test_beginning_asks_the_client_for_its_own_booking() -> None:
     fake_scheduling_client_scripted = FakeSchedulingClientScripted(
         client.Booking(

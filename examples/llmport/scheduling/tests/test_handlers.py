@@ -160,13 +160,6 @@ def test_the_handler_satisfies_the_voicewire_contract() -> None:
     assert tool_turn.reply == "ask the caller for their name"
 
 
-def test_the_handler_owns_the_agent_instructions() -> None:
-    llm_tool_handler = handlers.LlmToolHandler(FakeSchedulingClientScripted(), "b1")
-
-    assert "book an appointment" in llm_tool_handler.instructions()
-    assert "never invent slots" in llm_tool_handler.instructions()
-
-
 def test_a_turn_carries_the_reply_and_the_tools_for_the_step() -> None:
     fake_scheduling_client_scripted = FakeSchedulingClientScripted(
         client.Booking(

@@ -38,9 +38,6 @@ class FakeToolSurface(protocol.ToolSurface):
         self.begins = 0
         self.statuses = 0
 
-    def instructions(self) -> str:
-        return "help the caller book an appointment"
-
     def begin(self) -> protocol.ToolTurn:
         self.begins += 1
         return self._opening
@@ -52,9 +49,6 @@ class FakeToolSurface(protocol.ToolSurface):
 
 @ts.fake
 class FakeUnreachableToolSurface(protocol.ToolSurface):
-
-    def instructions(self) -> str:
-        return "help the caller book an appointment"
 
     def begin(self) -> protocol.ToolTurn:
         raise RuntimeError("the context is unreachable")
@@ -101,13 +95,21 @@ class FakeToolHalt(protocol.ToolHalt):
 
 class TestToolAgent:
 
-    def test_the_agent_speaks_the_instructions_the_surface_owns(self) -> None:
-        fake_tool_halt = FakeToolHalt()
+    def test_the_agent_opens_with_the_instructions_to_book_an_appointment(self) -> None:
+        tool_agent = voice.ToolAgent(FakeToolSurface(tool_turn(), tool_turn()), (), FakeToolHalt())
 
+        assert "book an appointment" in tool_agent.instructions
+
+    def test_the_agent_never_lets_the_model_invent_slots(self) -> None:
+        tool_agent = voice.ToolAgent(FakeToolSurface(tool_turn(), tool_turn()), (), FakeToolHalt())
+
+        assert "never invent slots" in tool_agent.instructions
+
+    def test_building_the_agent_does_not_begin_the_booking(self) -> None:
         fake_tool_surface = FakeToolSurface(tool_turn(), tool_turn())
-        tool_agent = voice.ToolAgent(fake_tool_surface, (), fake_tool_halt)
 
-        assert tool_agent.instructions == "help the caller book an appointment"
+        voice.ToolAgent(fake_tool_surface, (), FakeToolHalt())
+
         assert fake_tool_surface.begins == 0
 
     def test_opening_the_session_mounts_the_tools_the_surface_handed_back(self) -> None:

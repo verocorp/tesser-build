@@ -65,12 +65,6 @@ class LlmToolHandler(ts.Handler):
         self._scheduling_client = scheduling_client
         self._booking_id = booking_id
 
-    def instructions(self) -> str:
-        return (
-            "Help the caller book an appointment."
-            " Use the tools to record what they say; never invent slots."
-        )
-
     def begin(self) -> protocol.ToolTurn:
         begin_booking_response = self._scheduling_client.begin_booking(
             client.BeginBookingRequest(booking_id=self._booking_id)

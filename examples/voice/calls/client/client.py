@@ -61,6 +61,32 @@ class PersonTurnCompletedResponse(ts.Response):
         self.call_id = call_id
 
 
+class AttendCallRequest(ts.Request):
+
+    def __init__(self, call_id: str) -> None:
+        self.call_id = call_id
+
+
+class AttendCallResponse(ts.Response):
+
+    def __init__(self, call_id: str) -> None:
+        self.call_id = call_id
+
+
+class SpeakUtteranceRequest(ts.Request):
+
+    def __init__(self, call_id: str, text: str) -> None:
+        self.call_id = call_id
+        self.text = text
+
+
+class SpeakUtteranceResponse(ts.Response):
+
+    def __init__(self, call_id: str, text: str) -> None:
+        self.call_id = call_id
+        self.text = text
+
+
 class CallNotFound(ts.Error):
 
     def __init__(self, message: str) -> None:
@@ -82,3 +108,7 @@ class CallsClient(ts.Client, typing.Protocol):
     async def person_turn_completed(
         self, person_turn_completed_request: PersonTurnCompletedRequest
     ) -> PersonTurnCompletedResponse: ...
+
+    async def attend_call(self, attend_call_request: AttendCallRequest) -> AttendCallResponse: ...
+
+    async def speak_utterance(self, speak_utterance_request: SpeakUtteranceRequest) -> SpeakUtteranceResponse: ...

@@ -53,10 +53,14 @@ class Config(ts.Config):
 class Calls(ts.Component):
     class Client:
         def __init__(
-            self, call_service: application.CallService, call_events_service: application.CallEventsService
+            self,
+            call_service: application.CallService,
+            call_events_service: application.CallEventsService,
+            agent_service: application.AgentService,
         ) -> None:
             self._call_service = call_service
             self._call_events_service = call_events_service
+            self._agent_service = agent_service
 
         async def place_call(self, place_call_request: client.PlaceCallRequest) -> client.PlaceCallResponse:
             return await self._call_service.place_call(place_call_request)
@@ -73,6 +77,14 @@ class Calls(ts.Component):
             self, person_turn_completed_request: client.PersonTurnCompletedRequest
         ) -> client.PersonTurnCompletedResponse:
             return await self._call_events_service.person_turn_completed(person_turn_completed_request)
+
+        async def attend_call(self, attend_call_request: client.AttendCallRequest) -> client.AttendCallResponse:
+            return await self._agent_service.attend_call(attend_call_request)
+
+        async def speak_utterance(
+            self, speak_utterance_request: client.SpeakUtteranceRequest
+        ) -> client.SpeakUtteranceResponse:
+            return await self._agent_service.speak_utterance(speak_utterance_request)
 
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_call_store = repositories.PostgresCallStore(database)
@@ -134,6 +146,7 @@ class Calls(ts.Component):
         self.client: client.CallsClient = Calls.Client(
             application.CallService(restate_http_call_orchestrator_relay, self._postgres_call_store),
             application.CallEventsService(restate_http_call_orchestrator_relay),
+            application.AgentService(),
         )
 
     async def close(self) -> None:
