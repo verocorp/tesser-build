@@ -24,7 +24,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Actions"): "actions",
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
-    ("tesser.application", "Workflow"): "workflow",
+    ("tesser.application", "DeprecatedWorkflow"): "deprecated_workflow",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -39,9 +39,9 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.adapters", "Runner"): "runner",
     ("tesser.adapters", "Runtime"): "runtime",
-    ("tesser.adapters", "A"): "adapter_a",
-    ("tesser.adapters", "B"): "adapter_b",
-    ("tesser.adapters", "C"): "adapter_c",
+    ("tesser.adapters", "Activity"): "activity",
+    ("tesser.adapters", "Workflow"): "workflow",
+    ("tesser.adapters", "Dispatcher"): "dispatcher",
     ("tesser.adapters", "Mapper"): "mapper",
     ("tesser.adapters", "Serde"): "serde",
     ("tesser.adapters", "Relay"): "relay",
@@ -153,9 +153,9 @@ ENGINE_CALLS: typing.Final[dict[str, str]] = {"generic_call": RUN_MODE, "generic
 
 PROMISE_CALL: typing.Final[str] = "promise"
 
-WORKFLOW_OPERATION: typing.Final[str] = "invocation"
+DEPRECATED_WORKFLOW_OPERATION: typing.Final[str] = "invocation"
 
-WORKFLOW_BLOCK: typing.Final[str] = "workflow"
+DEPRECATED_WORKFLOW_BLOCK: typing.Final[str] = "deprecated_workflow"
 
 PACKAGE_MODULE_SEGMENTS: typing.Final[int] = 4
 
@@ -210,13 +210,13 @@ RUNNER_BLOCK: typing.Final[str] = "runner"
 
 RUNTIME_BLOCK: typing.Final[str] = "runtime"
 
-A_BLOCK: typing.Final[str] = "adapter_a"
+ACTIVITY_BLOCK: typing.Final[str] = "activity"
 
-B_BLOCK: typing.Final[str] = "adapter_b"
+WORKFLOW_BLOCK: typing.Final[str] = "workflow"
 
-C_BLOCK: typing.Final[str] = "adapter_c"
+DISPATCHER_BLOCK: typing.Final[str] = "dispatcher"
 
-REGISTRATION_BLOCKS: typing.Final[frozenset[str]] = frozenset({A_BLOCK, B_BLOCK, C_BLOCK})
+REGISTRATION_BLOCKS: typing.Final[frozenset[str]] = frozenset({ACTIVITY_BLOCK, WORKFLOW_BLOCK, DISPATCHER_BLOCK})
 
 RELAY_SUFFIX: typing.Final[str] = "Relay"
 
@@ -242,7 +242,7 @@ ACTIONS_CLIENT_BLOCK: typing.Final[str] = "actions_client"
 INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = (ORCHESTRATOR_BLOCK, ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK)
 
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"client", "service", ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK, ORCHESTRATOR_BLOCK, RELAY_BLOCK, RUNNER_BLOCK, RUNTIME_BLOCK, WORKFLOW_BLOCK}
+    {"client", "service", ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK, ORCHESTRATOR_BLOCK, RELAY_BLOCK, RUNNER_BLOCK, RUNTIME_BLOCK, DEPRECATED_WORKFLOW_BLOCK}
 )
 
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
@@ -253,13 +253,13 @@ RUNNERS_PACKAGE: typing.Final[str] = "runners"
 
 RUNTIMES_PACKAGE: typing.Final[str] = "runtimes"
 
-A_PACKAGE: typing.Final[str] = "a"
+ACTIVITIES_PACKAGE: typing.Final[str] = "activities"
 
-B_PACKAGE: typing.Final[str] = "b"
+WORKFLOWS_PACKAGE: typing.Final[str] = "workflows"
 
-C_PACKAGE: typing.Final[str] = "c"
+DISPATCHERS_PACKAGE: typing.Final[str] = "dispatchers"
 
-REGISTRATION_PACKAGES: typing.Final[tuple[str, ...]] = (A_PACKAGE, B_PACKAGE, C_PACKAGE)
+REGISTRATION_PACKAGES: typing.Final[tuple[str, ...]] = (ACTIVITIES_PACKAGE, WORKFLOWS_PACKAGE, DISPATCHERS_PACKAGE)
 
 ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
@@ -267,18 +267,18 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "repositories": frozenset({"repository"}),
     RUNNERS_PACKAGE: frozenset({RUNNER_BLOCK}),
     RUNTIMES_PACKAGE: frozenset({RUNTIME_BLOCK, "serde"}),
-    A_PACKAGE: frozenset({A_BLOCK, "serde"}),
-    B_PACKAGE: frozenset({B_BLOCK, "serde"}),
-    C_PACKAGE: frozenset({C_BLOCK, "serde"}),
+    ACTIVITIES_PACKAGE: frozenset({ACTIVITY_BLOCK, "serde"}),
+    WORKFLOWS_PACKAGE: frozenset({WORKFLOW_BLOCK, "serde"}),
+    DISPATCHERS_PACKAGE: frozenset({DISPATCHER_BLOCK, "serde"}),
 }
 
-RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, A_PACKAGE})
+RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, ACTIVITIES_PACKAGE})
 
-RUNNER_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNNERS_PACKAGE, B_PACKAGE})
+RUNNER_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNNERS_PACKAGE, WORKFLOWS_PACKAGE})
 
-ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, A_PACKAGE, B_PACKAGE, C_PACKAGE})
+ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, ACTIVITIES_PACKAGE, WORKFLOWS_PACKAGE, DISPATCHERS_PACKAGE})
 
-ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, runtimes, a, b, or c"
+ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers"
 
 SERDE_BLOCK: typing.Final[str] = "serde"
 
@@ -357,9 +357,9 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "repositories": (PORTS_IMPORT_PATH,),
     RUNNERS_PACKAGE: (RELAYS_IMPORT, ORCHESTRATORS_IMPORT),
     RUNTIMES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
-    A_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
-    B_PACKAGE: (ORCHESTRATORS_IMPORT, RELAYS_IMPORT, f"adapters.{A_PACKAGE}"),
-    C_PACKAGE: (RELAYS_IMPORT, f"adapters.{B_PACKAGE}"),
+    ACTIVITIES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
+    WORKFLOWS_PACKAGE: (ORCHESTRATORS_IMPORT, RELAYS_IMPORT, f"adapters.{ACTIVITIES_PACKAGE}"),
+    DISPATCHERS_PACKAGE: (RELAYS_IMPORT, f"adapters.{WORKFLOWS_PACKAGE}"),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", RUNTIME_BLOCK})
@@ -381,7 +381,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "actions": "application",
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
-    WORKFLOW_BLOCK: APPLICATION_CLIENT_HOME,
+    DEPRECATED_WORKFLOW_BLOCK: APPLICATION_CLIENT_HOME,
     RELAY_BLOCK: RELAYS_HOME,
     "relay_request": RELAYS_HOME,
     "relay_response": RELAYS_HOME,
@@ -399,9 +399,9 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "handler": "adapters",
     RUNNER_BLOCK: "adapters",
     RUNTIME_BLOCK: "adapters",
-    A_BLOCK: "adapters",
-    B_BLOCK: "adapters",
-    C_BLOCK: "adapters",
+    ACTIVITY_BLOCK: "adapters",
+    WORKFLOW_BLOCK: "adapters",
+    DISPATCHER_BLOCK: "adapters",
     "serde": "adapters",
     "component": "component",
     "component_config": "component",
@@ -434,7 +434,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     SNAPSHOT_BLOCK: "a snapshot",
     "port": "a port",
     "store": "a store",
-    WORKFLOW_BLOCK: "a workflow",
+    DEPRECATED_WORKFLOW_BLOCK: "a deprecated workflow",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
     "request": "a request DTO",
@@ -446,9 +446,9 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "handler": "an inbound handler",
     RUNNER_BLOCK: "a runner",
     RUNTIME_BLOCK: "a runtime",
-    A_BLOCK: "an a",
-    B_BLOCK: "a b",
-    C_BLOCK: "a c",
+    ACTIVITY_BLOCK: "an activity",
+    WORKFLOW_BLOCK: "a workflow",
+    DISPATCHER_BLOCK: "a dispatcher",
     "serde": "a serde",
     "component": "a component",
     "component_config": "a component config",
@@ -674,9 +674,9 @@ TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
     "repositories": ("adapters", "repositories"),
     RUNNERS_PACKAGE: ("adapters", RUNNERS_PACKAGE),
     RUNTIMES_PACKAGE: ("adapters", RUNTIMES_PACKAGE),
-    A_PACKAGE: ("adapters", A_PACKAGE),
-    B_PACKAGE: ("adapters", B_PACKAGE),
-    C_PACKAGE: ("adapters", C_PACKAGE),
+    ACTIVITIES_PACKAGE: ("adapters", ACTIVITIES_PACKAGE),
+    WORKFLOWS_PACKAGE: ("adapters", WORKFLOWS_PACKAGE),
+    DISPATCHERS_PACKAGE: ("adapters", DISPATCHERS_PACKAGE),
     ORCHESTRATORS_PACKAGE: ("application", ORCHESTRATORS_PACKAGE),
     RELAYS_PACKAGE: ("application", RELAYS_PACKAGE),
     SNAPSHOTS_PACKAGE: ("application", SNAPSHOTS_PACKAGE),
@@ -692,10 +692,10 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
     RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE] + ("domain",),
     RUNTIMES_PACKAGE: ADAPTER_KIND_REACH[RUNTIMES_PACKAGE] + ("domain",),
-    A_PACKAGE: ADAPTER_KIND_REACH[A_PACKAGE] + ("domain",),
-    B_PACKAGE: ADAPTER_KIND_REACH[B_PACKAGE] + (APPLICATION_CLIENT_IMPORT, "domain"),
-    C_PACKAGE: ADAPTER_KIND_REACH[C_PACKAGE]
-    + (APPLICATION_CLIENT_IMPORT, f"adapters.{A_PACKAGE}", "domain"),
+    ACTIVITIES_PACKAGE: ADAPTER_KIND_REACH[ACTIVITIES_PACKAGE] + ("domain",),
+    WORKFLOWS_PACKAGE: ADAPTER_KIND_REACH[WORKFLOWS_PACKAGE] + (APPLICATION_CLIENT_IMPORT, "domain"),
+    DISPATCHERS_PACKAGE: ADAPTER_KIND_REACH[DISPATCHERS_PACKAGE]
+    + (APPLICATION_CLIENT_IMPORT, f"adapters.{ACTIVITIES_PACKAGE}", "domain"),
     ORCHESTRATORS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
     + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, RELAYS_IMPORT),
     RELAYS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
@@ -744,9 +744,9 @@ TEST_TIER_SHELL: typing.Final[dict[str, frozenset[str]]] = {
     "repositories": frozenset(),
     RUNNERS_PACKAGE: frozenset(),
     RUNTIMES_PACKAGE: frozenset(),
-    A_PACKAGE: frozenset(),
-    B_PACKAGE: frozenset(),
-    C_PACKAGE: frozenset(),
+    ACTIVITIES_PACKAGE: frozenset(),
+    WORKFLOWS_PACKAGE: frozenset(),
+    DISPATCHERS_PACKAGE: frozenset(),
     ORCHESTRATORS_PACKAGE: frozenset(),
     RELAYS_PACKAGE: frozenset(),
     SNAPSHOTS_PACKAGE: frozenset(),
@@ -6478,7 +6478,7 @@ class ClassDecl(ts.Entity):
                         f"{self._module}.{self._name} publishes {published}; "
                         "a component publishes only its client, typed as its ts.Client, "
                         "its runtimes, each typed as a ts.Runtime, and the engine "
-                        "containers it hands an a, a b, or a c to register into",
+                        "containers it hands an activity, a workflow, or a dispatcher to register into",
                     ))
                 )
         return tuple(found)
@@ -9367,7 +9367,7 @@ class Module(ts.Entity):
                             if not (
                                 isinstance(opening, ast.Call)
                                 and isinstance(opening.func, ast.Attribute)
-                                and opening.func.attr == WORKFLOW_OPERATION
+                                and opening.func.attr == DEPRECATED_WORKFLOW_OPERATION
                                 and isinstance(with_item.optional_vars, ast.Name)
                             ):
                                 continue
@@ -10188,7 +10188,7 @@ class Module(ts.Entity):
                     "TB041",
                     f"{module_name} is not in an adapter kind package; an adapters "
                     "module lives in handlers, gateways, repositories, runners, "
-                    "runtimes, a, b, or c, because placement is what carries an adapter's reach",
+                    "runtimes, activities, workflows, or dispatchers, because placement is what carries an adapter's reach",
                 ))
             )
         for stmt in self._body:
@@ -10410,7 +10410,7 @@ class Module(ts.Entity):
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runtime or an a imports "
+                            f"{module_name} imports {target}; only a runtime or an activity imports "
                             "the application client, because an action is reachable only "
                             "through the engine",
                         ))
@@ -10421,7 +10421,7 @@ class Module(ts.Entity):
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runner or a b imports the "
+                            f"{module_name} imports {target}; only a runner or a workflow imports the "
                             "orchestrators, because an orchestrator is built per invocation by "
                             "the workflow that runs beside that invocation's runners",
                         ))
@@ -10441,8 +10441,8 @@ class Module(ts.Entity):
                                 "the context client, a gateway or a repository the ports, "
                                 "a runner its relays and the orchestrators its workflow "
                                 "builds, a runtime the application client and the relays "
-                                "it registers, an a what a runtime reaches, a b the relays, "
-                                "the orchestrators and a, a c the relays and b, and none of "
+                                "it registers, an activity what a runtime reaches, a workflow the relays, "
+                                "the orchestrators and activities, a dispatcher the relays and workflows, and none of "
                                 "them another adapters package",
                             ))
                         )
@@ -10673,7 +10673,7 @@ class Module(ts.Entity):
             where = f"{module_name}.{stmt.name}"
             named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
             block = str(named) if named is not None else None
-            if block == WORKFLOW_BLOCK:
+            if block == DEPRECATED_WORKFLOW_BLOCK:
                 workflows.append(stmt)
                 opens = tuple(
                     item
@@ -10683,7 +10683,7 @@ class Module(ts.Entity):
                 yielded = (
                     opens[0].returns.slice
                     if len(opens) == 1
-                    and opens[0].name == WORKFLOW_OPERATION
+                    and opens[0].name == DEPRECATED_WORKFLOW_OPERATION
                     and isinstance(opens[0].returns, ast.Subscript)
                     else None
                 )
@@ -10698,7 +10698,7 @@ class Module(ts.Entity):
                             stmt.lineno,
                             "TB052",
                             f"{where} does not yield the client beside it from one invocation; a "
-                            "workflow in an application client module declares only invocation, "
+                            "deprecated workflow in an application client module declares only invocation, "
                             "and what it yields is the client that module declares",
                         ))
                     )
@@ -10765,7 +10765,7 @@ class Module(ts.Entity):
                     workflows[1].lineno,
                     "TB052",
                     f"{module_name} declares {len(workflows)} workflows; an application client "
-                    "module declares at most one ts.Workflow, the one that yields its client",
+                    "module declares at most one ts.DeprecatedWorkflow, the one that yields its client",
                 ))
             )
         return tuple(found)
@@ -11278,7 +11278,7 @@ class Module(ts.Entity):
                             RELAY_BLOCK,
                             "protocol_port",
                             "config_repository",
-                            WORKFLOW_BLOCK,
+                            DEPRECATED_WORKFLOW_BLOCK,
                         ):
                             doubles = True
                     if not doubles:
@@ -11288,7 +11288,7 @@ class Module(ts.Entity):
                                 stmt.lineno,
                                 "TB072",
                                 f"{where} implements no application port, store, relay, protocol "
-                                "port, client, workflow, or config repository; a fake implements "
+                                "port, client, deprecated workflow, or config repository; a fake implements "
                                 "the contract it doubles",
                             ))
                         )
@@ -11320,7 +11320,7 @@ class Module(ts.Entity):
                     "TB070",
                     f"{module_name} resolves to no test tier; "
                     "a sibling test lives in a role package, an adapter kind package "
-                    "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
+                    "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
                     "orchestrators package",
                 )),
             )
@@ -11480,7 +11480,7 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runtimes, a, b, or c reaches the application client; a test reaches only what "
+                            "runtimes, activities, workflows, or dispatchers reaches the application client; a test reaches only what "
                             "its placement allows",
                         ))
                     )
@@ -11689,7 +11689,7 @@ class Module(ts.Entity):
             protocol_name = ""
             relay_module = ""
             for symbol in tuple(operation_rows.owners(Text(RELAY_BLOCK))) + tuple(
-                operation_rows.owners(Text(WORKFLOW_BLOCK))
+                operation_rows.owners(Text(DEPRECATED_WORKFLOW_BLOCK))
             ):
                 named = str(symbol.name())
                 if (
@@ -13497,12 +13497,12 @@ class Codebase(ts.AggregateRoot):
         yields: dict[tuple[str, str], tuple[str, str]] = {}
         for module in self._modules:
             for cls in module.class_defs():
-                if blocks.get((module.name(), cls.name)) != WORKFLOW_BLOCK:
+                if blocks.get((module.name(), cls.name)) != DEPRECATED_WORKFLOW_BLOCK:
                     continue
                 for item in cls.body:
                     if (
                         isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                        and item.name == WORKFLOW_OPERATION
+                        and item.name == DEPRECATED_WORKFLOW_OPERATION
                         and isinstance(item.returns, ast.Subscript)
                     ):
                         yielded = module._resolve(item.returns.slice)

@@ -2599,8 +2599,8 @@ def test_only_a_handler_imports_its_own_client() -> None:
         and "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, an a what a runtime reaches, a b the relays, "
-        "the orchestrators and a, a c the relays and b, and none of them another adapters "
+        "client and the relays it registers, an activity what a runtime reaches, a workflow the relays, "
+        "the orchestrators and activities, a dispatcher the relays and workflows, and none of them another adapters "
         "package" in f
         for f in findings
     )
@@ -4982,14 +4982,14 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
     assert any(
         "shop.adapters.test_flat resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
+        "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
         "orchestrators package" in f
         for f in findings
     )
     assert any(
         "shop.adapters.blobs.test_blob resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
+        "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
         "orchestrators package" in f
         for f in findings
     )
@@ -5227,7 +5227,7 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
     assert any(
         "weird.test_nested resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
+        "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
         "orchestrators package" in f
         for f in findings
     )
@@ -7404,8 +7404,8 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, an a what a runtime reaches, a b the relays, "
-        "the orchestrators and a, a c the relays and b, and none of them another adapters "
+        "client and the relays it registers, an activity what a runtime reaches, a workflow the relays, "
+        "the orchestrators and activities, a dispatcher the relays and workflows, and none of them another adapters "
         "package" in f
         for f in findings
     )
@@ -12454,7 +12454,7 @@ def _kinds_spec(
             "class FlowApplicationClient(ts.Client, typing.Protocol):\n"
             "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
             " -> relays.IssueQuoteResponse: ...\n"
-            "class FlowWorkflow[C](ts.Workflow, typing.Protocol):\n"
+            "class FlowWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
             "    def invocation(self, context: C, /) -> typing.AsyncContextManager[FlowApplicationClient]: ...\n",
             False,
         ),
@@ -13292,7 +13292,7 @@ def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
     )
     assert any(
         "shop.adapters.loose is not in an adapter kind package; an adapters "
-        "module lives in handlers, gateways, repositories, runners, runtimes, a, b, or c, "
+        "module lives in handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers, "
         "because placement is what carries an adapter's reach" in f
         for f in findings
     )
@@ -13579,25 +13579,25 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
         ))).violations()
     )
     assert any(
-        "shop.application.peeker imports shop.application.client.quotes; only a runtime or an a imports "
+        "shop.application.peeker imports shop.application.client.quotes; only a runtime or an activity imports "
         "the application client, because an action is reachable only through the engine" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.peeker imports shop.application.orchestrators; only a runner or a b imports "
+        "shop.application.peeker imports shop.application.orchestrators; only a runner or a workflow imports "
         "the orchestrators, because an orchestrator is built per invocation by the workflow that "
         "runs beside that invocation's runners" in f
         for f in findings
     ), findings
     assert any(
-        "shop.component.peek imports shop.application.orchestrators; only a runner or a b imports the "
+        "shop.component.peek imports shop.application.orchestrators; only a runner or a workflow imports the "
         "orchestrators" in f
         for f in findings
     ), findings
     assert not any("shop.adapters.runners.peek imports shop.application.orchestrators" in f for f in findings), findings
     assert any(
         "shop.adapters.handlers.peek imports shop.application.client.quotes; only "
-        "a runtime or an a imports the application client" in f
+        "a runtime or an activity imports the application client" in f
         for f in findings
     ), findings
     for importer, imported in (
@@ -13613,7 +13613,7 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
         ), (importer, findings)
     assert any(
         "shop.adapters.runtimes.peek imports shop.application.orchestrators; only a runner "
-        "or a b imports the orchestrators" in f
+        "or a workflow imports the orchestrators" in f
         for f in findings
     ), findings
     assert any(
@@ -13623,7 +13623,7 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
     ), findings
     assert any(
         "shop.application.test_peek imports shop.application.client.quotes, but only a test "
-        "placed in runtimes, a, b, or c reaches the application client; a test reaches only what its "
+        "placed in runtimes, activities, workflows, or dispatchers reaches the application client; a test reaches only what its "
         "placement allows" in f
         for f in findings
     ), findings
@@ -14036,15 +14036,15 @@ def test_a_component_publishes_only_its_client_and_its_runtimes() -> None:
     assert any(
         "shop.component.bad.Bad publishes extra; "
         "a component publishes only its client, typed as its ts.Client, its "
-        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
-        "a b, or a c to register into" in f
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a dispatcher to register into" in f
         for f in findings
     )
     assert any(
         "shop.component.bad.Bad publishes client; "
         "a component publishes only its client, typed as its ts.Client, its "
-        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
-        "a b, or a c to register into" in f
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a dispatcher to register into" in f
         for f in findings
     )
 
@@ -14488,8 +14488,8 @@ def test_a_component_publishes_its_runtimes_as_one_or_a_tuple_of_them() -> None:
     assert any(
         "shop.component.mixed.Mixed publishes engine_runtimes; "
         "a component publishes only its client, typed as its ts.Client, its "
-        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
-        "a b, or a c to register into" in f
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a dispatcher to register into" in f
         for f in findings
     )
     assert not any("shop.component.component.Shop publishes engine_runtimes" in f for f in findings)
@@ -18642,8 +18642,8 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, an a what a runtime reaches, a b the relays, "
-        "the orchestrators and a, a c the relays and b, and none of them another adapters "
+        "client and the relays it registers, an activity what a runtime reaches, a workflow the relays, "
+        "the orchestrators and activities, a dispatcher the relays and workflows, and none of them another adapters "
         "package" in f
         for f in findings
     ), findings
@@ -19073,7 +19073,7 @@ def test_a_far_side_is_read_through_a_workflow_a_decorated_handler_opens_from_it
                 "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
                 " -> wrong.CountItemsResponse: ...\n"
-                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class TallyWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
                 False,
             ),
@@ -19086,7 +19086,7 @@ def test_a_far_side_is_read_through_a_workflow_a_decorated_handler_opens_from_it
                 "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
                 " -> wrong.ShelveItemsResponse: ...\n"
-                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class ShelfWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
                 False,
             ),
@@ -19195,7 +19195,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_or_a_client() ->
                 "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
                 " -> wrong.CountItemsResponse: ...\n"
-                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class TallyWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
                 False,
             ),
@@ -19208,7 +19208,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_or_a_client() ->
                 "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
                 " -> wrong.ShelveItemsResponse: ...\n"
-                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class ShelfWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
                 False,
             ),
@@ -19319,7 +19319,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_held_on_self() -
                 "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
                 " -> wrong.CountItemsResponse: ...\n"
-                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class TallyWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
                 False,
             ),
@@ -19332,7 +19332,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_held_on_self() -
                 "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
                 " -> wrong.ShelveItemsResponse: ...\n"
-                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class ShelfWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
                 False,
             ),
@@ -19788,15 +19788,15 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
                 "class LoneApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
                 " -> relays.IssueQuoteResponse: ...\n"
-                "class LoneWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class LoneWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[relays.IssueQuoteResponse]: ...\n"
-                "class SecondWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class SecondWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n"
-                "class SiblingWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class SiblingWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[SecondWorkflow]: ...\n"
-                "class RenamedWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class RenamedWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def open(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n"
-                "class LoadedWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class LoadedWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    token: str = input('runs at import')\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n",
                 False,
@@ -19805,7 +19805,7 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
     )
     where = "shop.application.client.lone"
     assert any(
-        f"{where}.LoneWorkflow does not yield the client beside it from one invocation; a workflow in "
+        f"{where}.LoneWorkflow does not yield the client beside it from one invocation; a deprecated workflow in "
         "an application client module declares only invocation, and what it yields is the client that "
         "module declares" in f
         for f in findings
@@ -19816,7 +19816,7 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
     assert any(f"{where}.LoadedWorkflow" in f and "TB051" in f for f in findings), findings
     assert any(
         f"{where} declares 5 workflows; an application client module declares at most one "
-        "ts.Workflow, the one that yields its client" in f
+        "ts.DeprecatedWorkflow, the one that yields its client" in f
         for f in findings
     ), findings
 
@@ -19861,7 +19861,7 @@ def test_a_fake_of_a_subscripted_workflow_implements_that_workflow() -> None:
     assert not any(f"{where}.FakeFlowWorkflow implements no" in f for f in findings), findings
     assert any(
         f"{where}.FakeCounts implements no application port, store, relay, protocol port, client, "
-        "workflow, or config repository; a fake implements the contract it doubles" in f
+        "deprecated workflow, or config repository; a fake implements the contract it doubles" in f
         for f in findings
     ), findings
 
@@ -20411,40 +20411,40 @@ def test_a_context_error_is_named_for_its_situation_and_never_for_a_status_categ
     ), findings
 
 
-def test_a_b_and_c_reach_one_way_from_c_to_b_to_a() -> None:
+def test_activities_workflows_and_dispatchers_reach_one_way_from_dispatchers_to_workflows_to_activities() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/adapters/a/record.py",
-                "shop.adapters.a.record",
+                "shop/adapters/activities/record.py",
+                "shop.adapters.activities.record",
                 "import tesser.adapters as ts\n"
                 "import shop.application.client as client\n"
                 "import shop.application.orchestrators as orchestrators\n"
-                "import shop.adapters.b.conduct as conduct\n"
-                "class Record(ts.A):\n"
+                "import shop.adapters.workflows.conduct as conduct\n"
+                "class Record(ts.Activity):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "shop/adapters/b/conduct.py",
-                "shop.adapters.b.conduct",
+                "shop/adapters/workflows/conduct.py",
+                "shop.adapters.workflows.conduct",
                 "import tesser.adapters as ts\n"
-                "import shop.adapters.a.record as record\n"
+                "import shop.adapters.activities.record as record\n"
                 "import shop.application.orchestrators as orchestrators\n"
                 "import shop.application.client as client\n"
-                "import shop.adapters.c.ingress as ingress\n"
-                "class Conduct(ts.B):\n"
+                "import shop.adapters.dispatchers.ingress as ingress\n"
+                "class Conduct(ts.Workflow):\n"
                 "    pass\n",
                 False,
             ),
             (
-                "shop/adapters/c/ingress.py",
-                "shop.adapters.c.ingress",
+                "shop/adapters/dispatchers/ingress.py",
+                "shop.adapters.dispatchers.ingress",
                 "import tesser.adapters as ts\n"
-                "import shop.adapters.b.conduct as conduct\n"
-                "import shop.adapters.a.record as record\n"
-                "class Ingress(ts.C):\n"
+                "import shop.adapters.workflows.conduct as conduct\n"
+                "import shop.adapters.activities.record as record\n"
+                "class Ingress(ts.Dispatcher):\n"
                 "    pass\n",
                 False,
             ),
@@ -20452,20 +20452,20 @@ def test_a_b_and_c_reach_one_way_from_c_to_b_to_a() -> None:
                 "shop/adapters/runners/leg.py",
                 "shop.adapters.runners.leg",
                 "import tesser.adapters as ts\n"
-                "import shop.adapters.a.record as record\n",
+                "import shop.adapters.activities.record as record\n",
                 False,
             ),
             (
-                "shop/adapters/b/test_conduct.py",
-                "shop.adapters.b.test_conduct",
+                "shop/adapters/workflows/test_conduct.py",
+                "shop.adapters.workflows.test_conduct",
                 "import shop.application.client as client\n"
-                "import shop.adapters.a.record as record\n"
+                "import shop.adapters.activities.record as record\n"
                 "def test_x() -> None:\n    assert True\n",
                 False,
             ),
             (
-                "shop/adapters/a/test_record.py",
-                "shop.adapters.a.test_record",
+                "shop/adapters/activities/test_record.py",
+                "shop.adapters.activities.test_record",
                 "import shop.application.orchestrators as orchestrators\n"
                 "def test_x() -> None:\n    assert True\n",
                 False,
@@ -20473,52 +20473,52 @@ def test_a_b_and_c_reach_one_way_from_c_to_b_to_a() -> None:
         ))).violations()
     )
     for importer, imported in (
-        ("a.record", "application.client"),
-        ("b.conduct", "adapters.a.record"),
-        ("b.conduct", "application.orchestrators"),
-        ("c.ingress", "adapters.b.conduct"),
+        ("activities.record", "application.client"),
+        ("workflows.conduct", "adapters.activities.record"),
+        ("workflows.conduct", "application.orchestrators"),
+        ("dispatchers.ingress", "adapters.workflows.conduct"),
     ):
         assert not any(
             f"shop.adapters.{importer} imports shop.{imported};" in f and "TB060" in f for f in findings
         ), (importer, imported, findings)
     assert any(
-        "shop.adapters.a.record imports shop.application.orchestrators; only a runner or a b imports "
+        "shop.adapters.activities.record imports shop.application.orchestrators; only a runner or a workflow imports "
         "the orchestrators" in f
         for f in findings
     ), findings
     assert any(
-        "shop.adapters.b.conduct imports shop.application.client; only a runtime or an a imports "
+        "shop.adapters.workflows.conduct imports shop.application.client; only a runtime or an activity imports "
         "the application client" in f
         for f in findings
     ), findings
     for importer, imported in (
-        ("a.record", "adapters.b.conduct"),
-        ("b.conduct", "adapters.c.ingress"),
-        ("c.ingress", "adapters.a.record"),
-        ("runners.leg", "adapters.a.record"),
+        ("activities.record", "adapters.workflows.conduct"),
+        ("workflows.conduct", "adapters.dispatchers.ingress"),
+        ("dispatchers.ingress", "adapters.activities.record"),
+        ("runners.leg", "adapters.activities.record"),
     ):
         assert any(
             f"shop.adapters.{importer} imports shop.{imported}; an adapters kind package reaches "
             "only what its kind reaches" in f
             for f in findings
         ), (importer, imported, findings)
-    assert not any("shop.adapters.b.test_conduct" in f and "TB070" in f for f in findings), findings
+    assert not any("shop.adapters.workflows.test_conduct" in f and "TB070" in f for f in findings), findings
     assert any(
-        "shop.adapters.a.test_record imports shop.application.orchestrators, but a test placed in a "
+        "shop.adapters.activities.test_record imports shop.application.orchestrators, but a test placed in activities "
         "reaches only" in f
         for f in findings
     ), findings
 
 
-def test_a_component_publishes_the_engine_containers_it_hands_an_a_b_or_c() -> None:
+def test_a_component_publishes_the_engine_containers_it_hands_an_activity_workflow_or_dispatcher() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/adapters/a/record.py",
-                "shop.adapters.a.record",
+                "shop/adapters/activities/record.py",
+                "shop.adapters.activities.record",
                 "import tesser.adapters as ts\n"
-                "class Record(ts.A):\n"
+                "class Record(ts.Activity):\n"
                 "    def __init__(self, service: object) -> None:\n"
                 "        self.handler = service\n",
                 False,
@@ -20528,7 +20528,7 @@ def test_a_component_publishes_the_engine_containers_it_hands_an_a_b_or_c() -> N
                 "shop.component.registered",
                 "import tesser.component as ts\n"
                 "import restate\n"
-                "import shop.adapters.a.record as record\n"
+                "import shop.adapters.activities.record as record\n"
                 "class Registered(ts.Component):\n"
                 "    def __init__(self) -> None:\n"
                 "        self.actions_service: restate.Service = restate.Service('Actions')\n"
@@ -20544,21 +20544,21 @@ def test_a_component_publishes_the_engine_containers_it_hands_an_a_b_or_c() -> N
     assert any(
         "shop.component.registered.Registered publishes loose_service; "
         "a component publishes only its client, typed as its ts.Client, its "
-        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
-        "a b, or a c to register into" in f
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a dispatcher to register into" in f
         for f in findings
     ), findings
 
 
-def test_only_an_engine_container_handed_to_an_a_b_or_c_is_published_without_its_kind() -> None:
+def test_only_an_engine_container_handed_to_an_activity_workflow_or_dispatcher_is_published_without_its_kind() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
             (
-                "shop/adapters/a/record.py",
-                "shop.adapters.a.record",
+                "shop/adapters/activities/record.py",
+                "shop.adapters.activities.record",
                 "import tesser.adapters as ts\n"
-                "class Record(ts.A):\n"
+                "class Record(ts.Activity):\n"
                 "    def __init__(self, service: object, actions: object) -> None:\n"
                 "        self.handler = service\n",
                 False,
@@ -20568,7 +20568,7 @@ def test_only_an_engine_container_handed_to_an_a_b_or_c_is_published_without_its
                 "shop.component.registered",
                 "import tesser.component as ts\n"
                 "import restate\n"
-                "import shop.adapters.a.record as record\n"
+                "import shop.adapters.activities.record as record\n"
                 "class Registered(ts.Component):\n"
                 "    def __init__(self) -> None:\n"
                 "        self.actions_service: restate.Service = restate.Service('Actions')\n"
