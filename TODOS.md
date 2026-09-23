@@ -71,8 +71,8 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   question that retires it:
   - ~~`examples/voice/calls/adapters/runtimes/restate_call_runtime.py` — the
     two shared handlers `person_joined`, `person_turn_completed` (TB085).~~
-    Retired on branch `name-strings`: the shared handlers are `c` classes
-    now, outside the runtime name rules, and read the promise name from
+    Retired on branch `name-strings`: the shared handlers are dispatchers
+    (`ts.Dispatcher`) now, outside the runtime name rules, and read the promise name from
     `application/relays`.
   - `examples/voice/calls/adapters/handlers/livekit.py` `CallAgent` (TB052:
     the LiveKit SDK subclass has no ts.* kind of its own). Retired by ruling
@@ -83,7 +83,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     `test_restate_ingress_call_orchestrator_relay.py`,
     `runtimes/test_restate_call_runtime.py` (TB072 fakes of the Restate
     context and ingress, TB085 on their locals).~~ Retired on branch
-    `name-strings`: the `b` and `c` tests serve their own endpoint under
+    `name-strings`: the workflows and dispatchers tests serve their own endpoint under
     fresh service names and drive it through the real Restate.
 - [ ] **durable-execution: an invocation runner's `start_` path is never
   run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`

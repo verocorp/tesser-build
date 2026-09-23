@@ -7,11 +7,11 @@ import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
 import restate
 
-import calls.adapters.a as a
-import calls.adapters.b as b
-import calls.adapters.c as c
+import calls.adapters.activities as activities
+import calls.adapters.dispatchers as dispatchers
 import calls.adapters.gateways as gateways
 import calls.adapters.repositories as repositories
+import calls.adapters.workflows as workflows
 import calls.application as application
 import calls.client as client
 import pgdatabase.database as pgdatabase_database
@@ -97,12 +97,12 @@ class Calls(ts.Component):
                 config.livekit_agent_name,
             )
         )
-        restate_record_call = a.RestateRecordCall(
+        restate_record_call = activities.RestateRecordCall(
             self.call_actions_service, application.CallActions(self._postgres_call_store)
         )
-        restate_dial_person = a.RestateDialPerson(self.dialing_actions_service, dialing_actions)
-        restate_hang_up = a.RestateHangUp(self.dialing_actions_service, dialing_actions)
-        restate_say_utterance = a.RestateSayUtterance(
+        restate_dial_person = activities.RestateDialPerson(self.dialing_actions_service, dialing_actions)
+        restate_hang_up = activities.RestateHangUp(self.dialing_actions_service, dialing_actions)
+        restate_say_utterance = activities.RestateSayUtterance(
             self.speech_actions_service,
             application.SpeechActions(
                 gateways.LivekitSpeech(
@@ -116,16 +116,16 @@ class Calls(ts.Component):
                 )
             ),
         )
-        restate_conduct_call = b.RestateConductCall(
+        restate_conduct_call = workflows.RestateConductCall(
             self.call_orchestrator_workflow,
             restate_record_call,
             restate_dial_person,
             restate_hang_up,
             restate_say_utterance,
         )
-        restate_person_joined = c.RestatePersonJoined(self.call_orchestrator_workflow)
-        restate_person_turn_completed = c.RestatePersonTurnCompleted(self.call_orchestrator_workflow)
-        restate_http_call_orchestrator_relay = c.RestateHttpCallOrchestratorRelay(
+        restate_person_joined = dispatchers.RestatePersonJoined(self.call_orchestrator_workflow)
+        restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(self.call_orchestrator_workflow)
+        restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
             config.restate_url,
             restate_conduct_call,
             restate_person_joined,

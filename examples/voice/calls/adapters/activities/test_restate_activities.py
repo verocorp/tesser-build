@@ -14,7 +14,7 @@ import hypercorn.typing as hypercorn_typing
 import restate
 import restate.client as restate_client
 
-import calls.adapters.a as a
+import calls.adapters.activities as activities
 import calls.application.client as client
 import calls.application.relays as relays
 import calls.domain as domain
@@ -66,7 +66,7 @@ class TestRestateRecordCall:
     async def test_restate_serves_record_call_and_a_call_made_with_its_handler_reaches_the_application_client(self) -> None:
         call_actions_service = restate.Service(f"CallActions{uuid.uuid4().hex}")
         fake_call_application_client = FakeCallApplicationClient()
-        restate_record_call = a.RestateRecordCall(call_actions_service, fake_call_application_client)
+        restate_record_call = activities.RestateRecordCall(call_actions_service, fake_call_application_client)
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
             port = probe.getsockname()[1]
@@ -111,7 +111,7 @@ class TestRestateDialPerson:
     async def test_restate_serves_dial_person_and_a_call_made_with_its_handler_reaches_the_application_client(self) -> None:
         dialing_actions_service = restate.Service(f"DialingActions{uuid.uuid4().hex}")
         fake_dialing_application_client = FakeDialingApplicationClient()
-        restate_dial_person = a.RestateDialPerson(dialing_actions_service, fake_dialing_application_client)
+        restate_dial_person = activities.RestateDialPerson(dialing_actions_service, fake_dialing_application_client)
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
             port = probe.getsockname()[1]
@@ -156,7 +156,7 @@ class TestRestateHangUp:
     async def test_restate_serves_hang_up_and_a_call_made_with_its_handler_reaches_the_application_client(self) -> None:
         dialing_actions_service = restate.Service(f"DialingActions{uuid.uuid4().hex}")
         fake_dialing_application_client = FakeDialingApplicationClient()
-        restate_hang_up = a.RestateHangUp(dialing_actions_service, fake_dialing_application_client)
+        restate_hang_up = activities.RestateHangUp(dialing_actions_service, fake_dialing_application_client)
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
             port = probe.getsockname()[1]
@@ -201,7 +201,7 @@ class TestRestateSayUtterance:
     async def test_restate_serves_say_utterance_and_a_call_made_with_its_handler_reaches_the_application_client(self) -> None:
         speech_actions_service = restate.Service(f"SpeechActions{uuid.uuid4().hex}")
         fake_speech_application_client = FakeSpeechApplicationClient()
-        restate_say_utterance = a.RestateSayUtterance(speech_actions_service, fake_speech_application_client)
+        restate_say_utterance = activities.RestateSayUtterance(speech_actions_service, fake_speech_application_client)
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
             port = probe.getsockname()[1]

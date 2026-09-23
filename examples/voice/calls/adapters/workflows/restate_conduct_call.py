@@ -6,7 +6,7 @@ import tesser.adapters as ts
 import restate
 import restate.serde as restate_serde
 
-import calls.adapters.a as a
+import calls.adapters.activities as activities
 import calls.application.orchestrators as orchestrators
 import calls.application.relays as relays
 
@@ -37,9 +37,9 @@ class RestateConductCallResponseSerde(ts.Serde, restate_serde.Serde[relays.Condu
         return relays.ConductCallResponseSnapshot().deserialize(buf)
 
 
-class RestateInvocationCallActionsRelay(ts.B):
+class RestateInvocationCallActionsRelay(ts.Workflow):
     def __init__(
-        self, restate_workflow_context: restate.WorkflowContext, restate_record_call: a.RestateRecordCall
+        self, restate_workflow_context: restate.WorkflowContext, restate_record_call: activities.RestateRecordCall
     ) -> None:
         self._restate_workflow_context = restate_workflow_context
         self._restate_record_call = restate_record_call
@@ -48,12 +48,12 @@ class RestateInvocationCallActionsRelay(ts.B):
         return await self._restate_workflow_context.service_call(self._restate_record_call.handler, record_call_request)
 
 
-class RestateInvocationDialingActionsRelay(ts.B):
+class RestateInvocationDialingActionsRelay(ts.Workflow):
     def __init__(
         self,
         restate_workflow_context: restate.WorkflowContext,
-        restate_dial_person: a.RestateDialPerson,
-        restate_hang_up: a.RestateHangUp,
+        restate_dial_person: activities.RestateDialPerson,
+        restate_hang_up: activities.RestateHangUp,
     ) -> None:
         self._restate_workflow_context = restate_workflow_context
         self._restate_dial_person = restate_dial_person
@@ -66,9 +66,9 @@ class RestateInvocationDialingActionsRelay(ts.B):
         return await self._restate_workflow_context.service_call(self._restate_hang_up.handler, hang_up_request)
 
 
-class RestateInvocationSpeechActionsRelay(ts.B):
+class RestateInvocationSpeechActionsRelay(ts.Workflow):
     def __init__(
-        self, restate_workflow_context: restate.WorkflowContext, restate_say_utterance: a.RestateSayUtterance
+        self, restate_workflow_context: restate.WorkflowContext, restate_say_utterance: activities.RestateSayUtterance
     ) -> None:
         self._restate_workflow_context = restate_workflow_context
         self._restate_say_utterance = restate_say_utterance
@@ -81,7 +81,7 @@ class RestateInvocationSpeechActionsRelay(ts.B):
         )
 
 
-class RestateInvocationCallOrchestratorSignalRelay(ts.B):
+class RestateInvocationCallOrchestratorSignalRelay(ts.Workflow):
     def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
         self._restate_workflow_context = restate_workflow_context
 
@@ -104,14 +104,14 @@ class RestateInvocationCallOrchestratorSignalRelay(ts.B):
         )
 
 
-class RestateConductCall(ts.B):
+class RestateConductCall(ts.Workflow):
     def __init__(
         self,
         call_orchestrator_workflow: restate.Workflow,
-        restate_record_call: a.RestateRecordCall,
-        restate_dial_person: a.RestateDialPerson,
-        restate_hang_up: a.RestateHangUp,
-        restate_say_utterance: a.RestateSayUtterance,
+        restate_record_call: activities.RestateRecordCall,
+        restate_dial_person: activities.RestateDialPerson,
+        restate_hang_up: activities.RestateHangUp,
+        restate_say_utterance: activities.RestateSayUtterance,
     ) -> None:
         @call_orchestrator_workflow.main(
             input_serde=RestateConductCallRequestSerde(),

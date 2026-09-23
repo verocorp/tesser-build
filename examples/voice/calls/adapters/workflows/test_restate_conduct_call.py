@@ -15,8 +15,8 @@ import hypercorn.typing as hypercorn_typing
 import restate
 import restate.client as restate_client
 
-import calls.adapters.a as a
-import calls.adapters.b as b
+import calls.adapters.activities as activities
+import calls.adapters.workflows as workflows
 import calls.application.client as client
 import calls.application.relays as relays
 import calls.domain as domain
@@ -71,12 +71,12 @@ class TestRestateConductCall:
         suffix = uuid.uuid4().hex
         dialing_actions_service = restate.Service(f"DialingActions{suffix}")
         call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{suffix}")
-        restate_conduct_call = b.RestateConductCall(
+        restate_conduct_call = workflows.RestateConductCall(
             call_orchestrator_workflow,
-            a.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
-            a.RestateDialPerson(dialing_actions_service, fake_dialing_application_client),
-            a.RestateHangUp(dialing_actions_service, fake_dialing_application_client),
-            a.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
+            activities.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
+            activities.RestateDialPerson(dialing_actions_service, fake_dialing_application_client),
+            activities.RestateHangUp(dialing_actions_service, fake_dialing_application_client),
+            activities.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
         )
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))

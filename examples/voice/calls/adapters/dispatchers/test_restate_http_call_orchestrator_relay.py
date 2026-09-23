@@ -13,9 +13,9 @@ import hypercorn.config as hypercorn_config
 import hypercorn.typing as hypercorn_typing
 import restate
 
-import calls.adapters.a as a
-import calls.adapters.b as b
-import calls.adapters.c as c
+import calls.adapters.activities as activities
+import calls.adapters.dispatchers as dispatchers
+import calls.adapters.workflows as workflows
 import calls.application.client as client
 import calls.application.relays as relays
 import calls.domain as domain
@@ -68,15 +68,15 @@ class TestRestateHttpCallOrchestratorRelay:
         dialing_actions_service = restate.Service(f"DialingActions{suffix}")
         speech_actions_service = restate.Service(f"SpeechActions{suffix}")
         call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{suffix}")
-        restate_conduct_call = b.RestateConductCall(
+        restate_conduct_call = workflows.RestateConductCall(
             call_orchestrator_workflow,
-            a.RestateRecordCall(call_actions_service, fake_call_application_client),
-            a.RestateDialPerson(dialing_actions_service, fake_dialing_application_client),
-            a.RestateHangUp(dialing_actions_service, fake_dialing_application_client),
-            a.RestateSayUtterance(speech_actions_service, fake_speech_application_client),
+            activities.RestateRecordCall(call_actions_service, fake_call_application_client),
+            activities.RestateDialPerson(dialing_actions_service, fake_dialing_application_client),
+            activities.RestateHangUp(dialing_actions_service, fake_dialing_application_client),
+            activities.RestateSayUtterance(speech_actions_service, fake_speech_application_client),
         )
-        restate_person_joined = c.RestatePersonJoined(call_orchestrator_workflow)
-        restate_person_turn_completed = c.RestatePersonTurnCompleted(call_orchestrator_workflow)
+        restate_person_joined = dispatchers.RestatePersonJoined(call_orchestrator_workflow)
+        restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(call_orchestrator_workflow)
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
             port = probe.getsockname()[1]
@@ -101,7 +101,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        restate_http_call_orchestrator_relay = c.RestateHttpCallOrchestratorRelay(
+        restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
             os.environ["RESTATE_URL"],
             restate_conduct_call,
             restate_person_joined,
@@ -148,15 +148,15 @@ class TestRestateHttpCallOrchestratorRelay:
     async def test_concurrent_joins_and_completed_turns_for_one_call_are_all_acknowledged(self) -> None:
         call_id = str(uuid.uuid4())
         call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
-        restate_conduct_call = b.RestateConductCall(
+        restate_conduct_call = workflows.RestateConductCall(
             call_orchestrator_workflow,
-            a.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
-            a.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            a.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            a.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
+            activities.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
+            activities.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
         )
-        restate_person_joined = c.RestatePersonJoined(call_orchestrator_workflow)
-        restate_person_turn_completed = c.RestatePersonTurnCompleted(call_orchestrator_workflow)
+        restate_person_joined = dispatchers.RestatePersonJoined(call_orchestrator_workflow)
+        restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(call_orchestrator_workflow)
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
             port = probe.getsockname()[1]
@@ -181,7 +181,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        restate_http_call_orchestrator_relay = c.RestateHttpCallOrchestratorRelay(
+        restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
             os.environ["RESTATE_URL"],
             restate_conduct_call,
             restate_person_joined,
@@ -221,15 +221,15 @@ class TestRestateHttpCallOrchestratorRelay:
     async def test_the_key_is_encoded_so_a_call_id_cannot_reshape_the_path(self) -> None:
         call_id = "../admin?x=1#f-" + str(uuid.uuid4())
         call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
-        restate_conduct_call = b.RestateConductCall(
+        restate_conduct_call = workflows.RestateConductCall(
             call_orchestrator_workflow,
-            a.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
-            a.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            a.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            a.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
+            activities.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
+            activities.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
         )
-        restate_person_joined = c.RestatePersonJoined(call_orchestrator_workflow)
-        restate_person_turn_completed = c.RestatePersonTurnCompleted(call_orchestrator_workflow)
+        restate_person_joined = dispatchers.RestatePersonJoined(call_orchestrator_workflow)
+        restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(call_orchestrator_workflow)
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
             port = probe.getsockname()[1]
@@ -254,7 +254,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        person_joined_response = await c.RestateHttpCallOrchestratorRelay(
+        person_joined_response = await dispatchers.RestateHttpCallOrchestratorRelay(
             os.environ["RESTATE_URL"],
             restate_conduct_call,
             restate_person_joined,

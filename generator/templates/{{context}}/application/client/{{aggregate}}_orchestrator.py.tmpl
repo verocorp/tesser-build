@@ -12,6 +12,6 @@ class {{Aggregate}}OrchestratorApplicationClient(ts.Client, typing.Protocol):
     async def {{conduct}}(self, {{conduct}}_request: relays.{{Conduct}}Request) -> relays.{{Conduct}}Response: ...
 
 
-class {{Aggregate}}Workflow[C](ts.Workflow, typing.Protocol):
+class {{Aggregate}}Workflow[C](ts.DeprecatedWorkflow, typing.Protocol):
 
     def invocation(self, context: C, /) -> typing.AsyncContextManager[{{Aggregate}}OrchestratorApplicationClient]: ...

@@ -9,7 +9,7 @@ import restate
 import restate.client as restate_client
 import restate.serde as restate_serde
 
-import calls.adapters.b as b
+import calls.adapters.workflows as workflows
 import calls.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
@@ -44,7 +44,7 @@ class RestatePersonJoinedResponseSerde(ts.Serde, restate_serde.Serde[relays.Pers
         return relays.PersonJoinedResponseSnapshot().deserialize(buf)
 
 
-class RestatePersonJoined(ts.C):
+class RestatePersonJoined(ts.Dispatcher):
     def __init__(self, call_orchestrator_workflow: restate.Workflow) -> None:
         @call_orchestrator_workflow.handler(
             input_serde=RestatePersonJoinedRequestSerde(),
@@ -95,7 +95,7 @@ class RestatePersonTurnCompletedResponseSerde(ts.Serde, restate_serde.Serde[rela
         return relays.PersonTurnCompletedResponseSnapshot().deserialize(buf)
 
 
-class RestatePersonTurnCompleted(ts.C):
+class RestatePersonTurnCompleted(ts.Dispatcher):
     def __init__(self, call_orchestrator_workflow: restate.Workflow) -> None:
         @call_orchestrator_workflow.handler(
             input_serde=RestatePersonTurnCompletedRequestSerde(),
@@ -124,11 +124,11 @@ class RestatePersonTurnCompleted(ts.C):
         self.handler = person_turn_completed
 
 
-class RestateHttpCallOrchestratorRelay(ts.C):
+class RestateHttpCallOrchestratorRelay(ts.Dispatcher):
     def __init__(
         self,
         restate_url: str,
-        restate_conduct_call: b.RestateConductCall,
+        restate_conduct_call: workflows.RestateConductCall,
         restate_person_joined: RestatePersonJoined,
         restate_person_turn_completed: RestatePersonTurnCompleted,
     ) -> None:

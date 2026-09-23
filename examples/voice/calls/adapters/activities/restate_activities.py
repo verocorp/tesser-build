@@ -36,7 +36,7 @@ class RestateRecordCallResponseSerde(ts.Serde, restate_serde.Serde[relays.Record
         return relays.RecordCallResponseSnapshot().deserialize(buf)
 
 
-class RestateRecordCall(ts.A):
+class RestateRecordCall(ts.Activity):
     def __init__(
         self, call_actions_service: restate.Service, call_application_client: client.CallApplicationClient
     ) -> None:
@@ -76,7 +76,7 @@ class RestateDialPersonResponseSerde(ts.Serde, restate_serde.Serde[relays.DialPe
         return relays.DialPersonResponseSnapshot().deserialize(buf)
 
 
-class RestateDialPerson(ts.A):
+class RestateDialPerson(ts.Activity):
     def __init__(
         self, dialing_actions_service: restate.Service, dialing_application_client: client.DialingApplicationClient
     ) -> None:
@@ -116,7 +116,7 @@ class RestateHangUpResponseSerde(ts.Serde, restate_serde.Serde[relays.HangUpResp
         return relays.HangUpResponseSnapshot().deserialize(buf)
 
 
-class RestateHangUp(ts.A):
+class RestateHangUp(ts.Activity):
     def __init__(
         self, dialing_actions_service: restate.Service, dialing_application_client: client.DialingApplicationClient
     ) -> None:
@@ -156,7 +156,7 @@ class RestateSayUtteranceResponseSerde(ts.Serde, restate_serde.Serde[relays.SayU
         return relays.SayUtteranceResponseSnapshot().deserialize(buf)
 
 
-class RestateSayUtterance(ts.A):
+class RestateSayUtterance(ts.Activity):
     def __init__(
         self, speech_actions_service: restate.Service, speech_application_client: client.SpeechApplicationClient
     ) -> None:
