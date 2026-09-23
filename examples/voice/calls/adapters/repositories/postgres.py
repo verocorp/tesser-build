@@ -10,15 +10,10 @@ import tesser.adapters as ts
 import calls.application.ports as ports
 import pgdatabase.database as pgdatabase_database
 
-_SCHEMA: typing.Final[str] = (
-    "CREATE TABLE IF NOT EXISTS calls "
-    "(call_id text PRIMARY KEY, person_name text NOT NULL, phone_number text NOT NULL)"
-)
+_SCHEMA: typing.Final[str] = "CREATE TABLE IF NOT EXISTS calls (call_id text PRIMARY KEY, person_name text NOT NULL)"
 _ISSUE: typing.Final[str] = "SELECT gen_random_uuid()::text AS call_id"
-_SAVE: typing.Final[str] = (
-    "INSERT INTO calls (call_id, person_name, phone_number) VALUES ($1, $2, $3) ON CONFLICT (call_id) DO NOTHING"
-)
-_LOAD: typing.Final[str] = "SELECT call_id, person_name, phone_number FROM calls WHERE call_id = $1"
+_SAVE: typing.Final[str] = "INSERT INTO calls (call_id, person_name) VALUES ($1, $2) ON CONFLICT (call_id) DO NOTHING"
+_LOAD: typing.Final[str] = "SELECT call_id, person_name FROM calls WHERE call_id = $1"
 
 
 class PostgresCallRepository(ts.Repository):
@@ -31,12 +26,7 @@ class PostgresCallRepository(ts.Repository):
         return ports.IssueCallIdResponse(call_id=call_id)
 
     async def save_call(self, save_call_request: ports.SaveCallRequest) -> ports.SaveCallResponse:
-        await self._connection.execute(
-            _SAVE,
-            save_call_request.call_id,
-            save_call_request.person_name,
-            save_call_request.phone_number,
-        )
+        await self._connection.execute(_SAVE, save_call_request.call_id, save_call_request.person_name)
         return ports.SaveCallResponse(call_id=save_call_request.call_id)
 
     async def load_call(self, load_call_request: ports.LoadCallRequest) -> ports.LoadCallResponse:
@@ -44,10 +34,7 @@ class PostgresCallRepository(ts.Repository):
         outcome = ports.LoadCallOutcome.NOT_FOUND if rows == [] else ports.LoadCallOutcome.FOUND
         return ports.LoadCallResponse(
             outcome=outcome,
-            calls=tuple(
-                ports.Call(call_id=row["call_id"], person_name=row["person_name"], phone_number=row["phone_number"])
-                for row in rows
-            ),
+            calls=tuple(ports.Call(call_id=row["call_id"], person_name=row["person_name"]) for row in rows),
         )
 
 

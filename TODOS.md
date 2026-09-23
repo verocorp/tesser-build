@@ -8,26 +8,69 @@ Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).
 Chris ruled no rule or analyzer changes until the example is built and
 right; collisions carry `# tesser:debt` markers meanwhile.
 
-- **A relay carries the operations of the thing it acts on, not one
-  operation (Chris, 2026-09-17).** Ruled while walking the voice example:
-  "classes should never be designed to hold one operation, though they may
-  only hold one." The voice tree's ten single-operation relays became six,
-  cut the way ports and actions classes already are: `DialingRelay`,
-  `SpeechRelay`, `RecordCallRelay`, `PersonRelay` (the two waits),
-  `ConductCallRelay`, and `CallEventsRelay` (the two inbound reports). The
-  orchestrator takes four relays instead of seven, and the service split by
-  responsibility into `CallService` (place, get; holds the store and the
-  conduct relay) and `CallEventsService` (report person answered, report
-  person utterance; holds one relay), composed behind `CallsClient` by a
-  nested `Calls.Client` as durable-execution does. The runners split the
-  other way, one per relay, so #194's runner rule holds with no markers.
-  This reverses half of #194's 2026-09-14 ruling: TB085's "a relay carries
-  one operation, because its name is the operation it carries" fires on the
-  three two-operation relays and they carry markers. To do: re-cut that row
-  as "a relay is named for the thing its operations act on", the rule ports
-  and actions already follow, and move durable-execution and minimal to the
-  same cut. The recorded reason for #194 (a relay must not be named for a
-  pattern) still holds under the new cut.
+- **ENACTED 2026-09-22 — a relay is named for its far side and carries any
+  number of operations (Chris).** Ruled 2026-09-17 while walking the voice
+  example ("classes should never be designed to hold one operation, though
+  they may only hold one") and settled 2026-09-22 into the rule that shipped.
+  TB085 now derives a relay's far side from the runtime handler of each
+  operation it carries — the orchestrator that handler builds and calls, or
+  the class of actions behind the application client it calls — and requires
+  `<FarSide>Relay`; every operation on one relay must derive the same far
+  side. `await_` joined `start_` and `run_` as a calling mode: it sends
+  nothing and waits for the far side's durable promise, `await_X` reads the
+  promise named `X` that the shared handler `X` resolves, and a relay that
+  awaits is `<FarSide>SignalRelay` carrying only `await_` operations, because
+  nothing outside an invocation reads a durable promise and a Protocol cannot
+  be partially implemented. This reverses both of #194's naming rows; their
+  recorded reason (a name for what sits behind a relay is a pattern word) was
+  written when the class name was the only place the act could live and no
+  longer applies now that the mode is on the method. All four trees moved:
+  voice (`CallOrchestratorRelay`, `CallOrchestratorSignalRelay`,
+  `CallActionsRelay`, `SpeechActionsRelay`, `DialingActionsRelay`),
+  durable-execution, minimal, and the generator's templates.
+- **A foreign SDK's callback surface is a handler, not a runtime (Chris,
+  2026-09-22; enacted in the voice tree, analyzer check still to build).**
+  `LivekitCallRuntime` became `calls/adapters/handlers/livekit.py`: the
+  person on the phone is an outsider, so the surface that observes them
+  joining and speaking holds the context client, and `CallsClient` publishes
+  `person_joined` and `person_turn_completed` the way it would publish a
+  webhook. `CallEventsActions` went back to `CallEventsService`, which may
+  hold a relay, so the relay-in-actions widening is not needed and the three
+  TB081/TB082 markers on it and the four TB085 runtime-hook markers are gone.
+  The STT and TTS model names moved off the component's config onto the
+  worker host that owns them. To build: the mechanical cut that tells the
+  two kinds apart — every handler a runtime registers, and every promise it
+  names, is the far end of a relay operation in its context (`run_`,
+  `start_`, or `await_` + operation), because a runtime has us on both ends;
+  a callback no runner reaches is a handler and belongs in
+  `adapters/handlers/`; and the mirror, a handler's public methods are never
+  named for a relay operation. Both read the relay registry the far-side
+  derivation already builds. Declare-then-verify limit: writing runners for
+  an SDK is the declaration that we are on both ends.
+- **Consider splitting a relay module into its protocol and its messages
+  (Chris, 2026-09-22; not enacted, leaning yes).** Today one module in
+  `application/relays/` holds the relay protocol, every request and response
+  it speaks, and their snapshots — `call_orchestrator_relay.py` declares
+  thirteen classes. A runner implements the relay structurally and never
+  names the protocol, but it imports the `relays` package for the message
+  types on its signatures, so the import that says *implements* is
+  indistinguishable from one that says *uses*, and the protocol is bound in
+  every module that only wanted a message. The same is true of the service
+  and the orchestrator that *use* the relay: they name the protocol and the
+  messages from one package. Splitting would put the messages (and their
+  snapshots) where an implementer and a user both reach them and the
+  protocol where only a user does, so the import graph shows which
+  relationship a module has to the relay — the vocabulary in the
+  uses/implements/directly-uses taxonomy the analyzer would need before it
+  could enforce "an implementer does not import its interface". Decide the
+  cut (one messages module beside each relay, or a `messages/` package),
+  what the runner and the runtime then import, and whether ports get the
+  same split, since `ports/` has the identical shape.
+- **minimal is non-conformant to the ruled dependency shape (Chris,
+  2026-09-22).** Its inline engine has no invocation context, so the
+  `ts.Workflow[C, O]` binding has nothing to bind `C` to. It keeps its current shape rather than getting
+  a pretend context; decide whether an in-process engine gets a context type
+  of its own or the tree stops claiming the durable shape.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the
@@ -53,15 +96,11 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   row for `<context>/tests/evals/`; whatever it imports will carry TB070
   debt until the rule gains the row. Also decide how evals are excluded
   from the default `pytest -q` and gated separately (env flag, marker, or
-  path). The first one exists:
-  `calls/tests/evals/eval_livekit_take_person_name.py` (2026-09-16) runs
-  the worker host in-process and replaces the engine with in-process
-  relays, so it carries TB070 on the module, TB081 on the inline runtime
-  that hands relays to the orchestrator, and it imports `srv.livekit`.
-  Its person is a model with an instruction whose lines are generated from
-  what the agent said, so the name only arrives if the agent asked. It is
-  excluded by filename (`eval_*.py` is not a pytest default) and gated by
-  `VOICE_EVALS=1`.
+  path). The original name-taking eval was promoted to the app acceptance
+  test `examples/voice/tests/test_livekit_take_person_name.py` (2026-09-20).
+  It now uses `app.load()`, the real Restate workflow and actions, Postgres,
+  and LiveKit. Only the person is simulated, as a room participant. Pytest
+  collects it normally and `VOICE_EVALS=1` enables its external model calls.
 - **A doubled agent line is an LLM retry inside `generate_reply`.** Seen
   twice in the eval (2026-09-16 and 2026-09-17, sim5.log for Michael): the
   worker logs "failed to generate LLM completion: Request timed out,

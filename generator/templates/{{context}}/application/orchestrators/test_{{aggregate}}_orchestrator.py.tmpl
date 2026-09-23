@@ -7,7 +7,7 @@ import {{context}}.application.relays as relays
 
 
 @ts.fake
-class Fake{{Record}}Relay(relays.{{Record}}Relay):
+class Fake{{Aggregate}}ActionsRelay(relays.{{Aggregate}}ActionsRelay):
 
     def __init__(self) -> None:
         self.recorded: list[relays.{{Record}}Request] = []
@@ -20,8 +20,8 @@ class Fake{{Record}}Relay(relays.{{Record}}Relay):
 class Test{{Aggregate}}Orchestrator:
 
     async def test_{{conduct}}_runs_{{record}}_with_the_{{aggregate}}(self) -> None:
-        fake_{{record}}_relay = Fake{{Record}}Relay()
-        {{aggregate}}_orchestrator = orchestrators.{{Aggregate}}Orchestrator(fake_{{record}}_relay)
+        fake_{{aggregate}}_actions_relay = Fake{{Aggregate}}ActionsRelay()
+        {{aggregate}}_orchestrator = orchestrators.{{Aggregate}}Orchestrator(fake_{{aggregate}}_actions_relay)
 
         await {{aggregate}}_orchestrator.{{conduct}}(
             relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})
@@ -29,11 +29,11 @@ class Test{{Aggregate}}Orchestrator:
 
         assert [
             ({{#record_fields}}recorded.{{field}}{{comma}}{{/record_fields}})
-            for recorded in fake_{{record}}_relay.recorded
+            for recorded in fake_{{aggregate}}_actions_relay.recorded
         ] == [({{#record_fields}}{{sample}}{{comma}}{{/record_fields}})]
 
     async def test_{{conduct}}_answers_the_{{identity}}_that_{{record}}_answered(self) -> None:
-        {{aggregate}}_orchestrator = orchestrators.{{Aggregate}}Orchestrator(Fake{{Record}}Relay())
+        {{aggregate}}_orchestrator = orchestrators.{{Aggregate}}Orchestrator(Fake{{Aggregate}}ActionsRelay())
 
         {{conduct}}_response = await {{aggregate}}_orchestrator.{{conduct}}(
             relays.{{Conduct}}Request({{#record_fields}}{{field}}={{sample}}{{comma}}{{/record_fields}})

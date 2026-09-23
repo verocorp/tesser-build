@@ -22,9 +22,7 @@ class FakeCallRepository(ports.CallRepository):
 
     async def save_call(self, save_call_request: ports.SaveCallRequest) -> ports.SaveCallResponse:
         self._calls[save_call_request.call_id] = ports.Call(
-            call_id=save_call_request.call_id,
-            person_name=save_call_request.person_name,
-            phone_number=save_call_request.phone_number,
+            call_id=save_call_request.call_id, person_name=save_call_request.person_name
         )
         return ports.SaveCallResponse(call_id=save_call_request.call_id)
 
@@ -48,10 +46,8 @@ class FakeCallStore(ports.CallStore):
 
 
 @ts.helper
-def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
-    return domain.CallSpec(
-        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="done"
-    )
+def call_spec(call_id: str = "c1", person_name: str = "Ada") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestCallActions:
@@ -60,7 +56,9 @@ class TestCallActions:
         fake_call_store = FakeCallStore()
         call_actions = application.CallActions(fake_call_store)
 
-        await call_actions.record_call(relays.RecordCallRequest(call=domain.Call(call_spec(call_id="c7", name="Grace"))))
+        await call_actions.record_call(
+            relays.RecordCallRequest(call=domain.Call(call_spec(call_id="c7", person_name="Grace")))
+        )
 
         assert fake_call_store.calls["c7"].person_name == "Grace"
 

@@ -9,8 +9,7 @@ import calls.application.relays as relays
 class MapToDialPersonRequest(ts.Mapper, ports.DialPersonRequest):
 
     def __init__(self, dial_person_request: relays.DialPersonRequest) -> None:
-        call = dial_person_request.call
-        super().__init__(call_id=str(call.identity), phone_number=str(call.person.phone_number))
+        super().__init__(call_id=str(dial_person_request.call.identity))
 
 
 class MapToDialPersonResponse(ts.Mapper, relays.DialPersonResponse):

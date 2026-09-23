@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+import tesser.adapters as ts
+import restate
+
+import {{context}}.adapters.runtimes as runtimes
+import {{context}}.application.relays as relays
+
+
+class RestateInvocation{{Aggregate}}ActionsRelay(ts.Runner):
+
+    def __init__(
+        self,
+        restate_workflow_context: restate.WorkflowContext,
+        restate_{{aggregate}}_runtime: runtimes.Restate{{Aggregate}}Runtime,
+    ) -> None:
+        self._restate_workflow_context = restate_workflow_context
+        self._restate_{{aggregate}}_runtime = restate_{{aggregate}}_runtime
+
+    async def run_{{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        return await self._restate_workflow_context.service_call(
+            self._restate_{{aggregate}}_runtime.{{record}}_handler, {{record}}_request
+        )

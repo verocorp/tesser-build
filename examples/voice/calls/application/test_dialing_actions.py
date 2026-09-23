@@ -25,23 +25,19 @@ class FakeDialing(ports.Dialing):
 
 
 @ts.helper
-def call_spec(call_id: str = "c1", name: str = "Ada", phone_number: str = "+15555550100") -> domain.CallSpec:
-    return domain.CallSpec(
-        call_id=call_id, person=domain.PersonSpec(name=name, phone_number=phone_number), turns=(), step="ask_name"
-    )
+def call_spec(call_id: str = "c1", person_name: str = "Ada") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestDialingActions:
 
-    async def test_dialing_hands_the_port_the_persons_number_under_the_call_id(self) -> None:
+    async def test_dialing_hands_the_port_the_call_id_it_dials_for(self) -> None:
         fake_dialing = FakeDialing()
         dialing_actions = application.DialingActions(fake_dialing)
 
-        await dialing_actions.dial_person(
-            relays.DialPersonRequest(call=domain.Call(call_spec(call_id="c7", phone_number="+15555550199")))
-        )
+        await dialing_actions.dial_person(relays.DialPersonRequest(call=domain.Call(call_spec(call_id="c7"))))
 
-        assert [(d.call_id, d.phone_number) for d in fake_dialing.dialed] == [("c7", "+15555550199")]
+        assert [dialed.call_id for dialed in fake_dialing.dialed] == ["c7"]
 
     async def test_dialing_answers_the_call_id_it_dialed_for(self) -> None:
         dialing_actions = application.DialingActions(FakeDialing())
@@ -58,7 +54,7 @@ class TestDialingActions:
 
         await dialing_actions.hang_up(relays.HangUpRequest(call=domain.Call(call_spec(call_id="c7"))))
 
-        assert [h.call_id for h in fake_dialing.hung_up] == ["c7"]
+        assert [hung_up.call_id for hung_up in fake_dialing.hung_up] == ["c7"]
 
     async def test_hanging_up_answers_the_call_id_it_hung_up(self) -> None:
         dialing_actions = application.DialingActions(FakeDialing())

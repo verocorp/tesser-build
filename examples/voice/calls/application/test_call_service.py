@@ -14,14 +14,28 @@ import calls.client as client
 
 
 @ts.fake
-class FakeConductCallRelay(relays.ConductCallRelay):
+class FakeCallOrchestratorRelay(relays.CallOrchestratorRelay):
 
     def __init__(self) -> None:
         self.conducted: list[relays.ConductCallRequest] = []
+        self.joined: list[relays.PersonJoinedRequest] = []
+        self.completed: list[relays.PersonTurnCompletedRequest] = []
 
     async def run_conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
         self.conducted.append(conduct_call_request)
         return relays.ConductCallResponse(call_id=str(conduct_call_request.call.identity))
+
+    async def run_person_joined(
+        self, person_joined_request: relays.PersonJoinedRequest
+    ) -> relays.PersonJoinedResponse:
+        self.joined.append(person_joined_request)
+        return relays.PersonJoinedResponse(call_id=person_joined_request.call_id)
+
+    async def run_person_turn_completed(
+        self, person_turn_completed_request: relays.PersonTurnCompletedRequest
+    ) -> relays.PersonTurnCompletedResponse:
+        self.completed.append(person_turn_completed_request)
+        return relays.PersonTurnCompletedResponse(call_id=person_turn_completed_request.call_id)
 
 
 @ts.fake
@@ -35,9 +49,7 @@ class FakeCallRepository(ports.CallRepository):
 
     async def save_call(self, save_call_request: ports.SaveCallRequest) -> ports.SaveCallResponse:
         self._calls[save_call_request.call_id] = ports.Call(
-            call_id=save_call_request.call_id,
-            person_name=save_call_request.person_name,
-            phone_number=save_call_request.phone_number,
+            call_id=save_call_request.call_id, person_name=save_call_request.person_name
         )
         return ports.SaveCallResponse(call_id=save_call_request.call_id)
 
@@ -60,50 +72,44 @@ class FakeCallStore(ports.CallStore):
         yield FakeCallRepository(self.calls)
 
 
-@ts.helper
-def place_call_request(phone_number: str = "+15555550100") -> client.PlaceCallRequest:
-    return client.PlaceCallRequest(phone_number=phone_number)
-
-
 class TestCallService:
 
-    async def test_placing_a_call_conducts_it_to_the_number_it_was_placed_to(self) -> None:
-        fake_conduct_call_relay = FakeConductCallRelay()
-        call_service = application.CallService(fake_conduct_call_relay, FakeCallStore())
+    async def test_placing_a_call_conducts_the_call_it_answers_with(self) -> None:
+        fake_call_orchestrator_relay = FakeCallOrchestratorRelay()
+        call_service = application.CallService(fake_call_orchestrator_relay, FakeCallStore())
 
-        place_call_response = await call_service.place_call(place_call_request(phone_number="+15555550199"))
+        place_call_response = await call_service.place_call(client.PlaceCallRequest())
 
-        assert [
-            (str(conducted.call.identity), str(conducted.call.person.phone_number))
-            for conducted in fake_conduct_call_relay.conducted
-        ] == [(place_call_response.call_id, "+15555550199")]
+        assert [str(conducted.call.identity) for conducted in fake_call_orchestrator_relay.conducted] == [
+            place_call_response.call_id
+        ]
 
-    async def test_a_placed_call_starts_by_asking_for_the_name(self) -> None:
-        fake_conduct_call_relay = FakeConductCallRelay()
-        call_service = application.CallService(fake_conduct_call_relay, FakeCallStore())
+    async def test_a_placed_call_carries_no_name_until_the_person_says_one(self) -> None:
+        fake_call_orchestrator_relay = FakeCallOrchestratorRelay()
+        call_service = application.CallService(fake_call_orchestrator_relay, FakeCallStore())
 
-        await call_service.place_call(place_call_request())
+        await call_service.place_call(client.PlaceCallRequest())
 
-        assert [str(conducted.call.step) for conducted in fake_conduct_call_relay.conducted] == ["ask_name"]
+        assert [str(conducted.call.person_name) for conducted in fake_call_orchestrator_relay.conducted] == [""]
 
     async def test_a_placed_call_takes_the_call_id_the_store_issued(self) -> None:
-        call_service = application.CallService(FakeConductCallRelay(), FakeCallStore())
+        call_service = application.CallService(FakeCallOrchestratorRelay(), FakeCallStore())
 
-        place_call_response = await call_service.place_call(place_call_request())
+        place_call_response = await call_service.place_call(client.PlaceCallRequest())
 
         assert place_call_response.call_id == "issued-1"
 
     async def test_a_saved_call_is_read_back_by_its_call_id(self) -> None:
         fake_call_store = FakeCallStore()
-        fake_call_store.calls["c1"] = ports.Call(call_id="c1", person_name="Grace", phone_number="+15555550100")
-        call_service = application.CallService(FakeConductCallRelay(), fake_call_store)
+        fake_call_store.calls["c1"] = ports.Call(call_id="c1", person_name="Grace")
+        call_service = application.CallService(FakeCallOrchestratorRelay(), fake_call_store)
 
         get_call_response = await call_service.get_call(client.GetCallRequest(call_id="c1"))
 
         assert get_call_response.call.person_name == "Grace"
 
     async def test_a_call_that_was_never_placed_is_not_found(self) -> None:
-        call_service = application.CallService(FakeConductCallRelay(), FakeCallStore())
+        call_service = application.CallService(FakeCallOrchestratorRelay(), FakeCallStore())
 
         with pytest.raises(client.CallNotFound) as raised:
             await call_service.get_call(client.GetCallRequest(call_id="never-placed"))

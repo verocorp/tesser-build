@@ -61,18 +61,18 @@ class {{Aggregate}}Service(ts.ApplicationService):
 
     def __init__(
         self,
-        {{conduct}}_relay: relays.{{Conduct}}Relay,
+        {{aggregate}}_orchestrator_relay: relays.{{Aggregate}}OrchestratorRelay,
         {{aggregate}}_identity_repository: ports.{{Aggregate}}IdentityRepository,
         {{aggregate}}_store: ports.{{Aggregate}}Store,
     ) -> None:
-        self._{{conduct}}_relay = {{conduct}}_relay
+        self._{{aggregate}}_orchestrator_relay = {{aggregate}}_orchestrator_relay
         self._{{aggregate}}_identity_repository = {{aggregate}}_identity_repository
         self._{{aggregate}}_store = {{aggregate}}_store
 
     async def {{write}}(self, {{write}}_request: client.{{Write}}Request) -> client.{{Write}}Response:
         {{issue}}_response = await self._{{aggregate}}_identity_repository.{{issue}}(ports.{{Issue}}Request())
         {{aggregate}} = domain.{{Aggregate}}(MapTo{{Aggregate}}Spec({{write}}_request, {{issue}}_response))
-        {{conduct}}_response = await self._{{conduct}}_relay.run_{{conduct}}(MapTo{{Conduct}}Request({{aggregate}}))
+        {{conduct}}_response = await self._{{aggregate}}_orchestrator_relay.run_{{conduct}}(MapTo{{Conduct}}Request({{aggregate}}))
         return MapTo{{Write}}Response({{conduct}}_response)
 
     async def {{read}}(self, {{read}}_request: client.{{Read}}Request) -> client.{{Read}}Response:

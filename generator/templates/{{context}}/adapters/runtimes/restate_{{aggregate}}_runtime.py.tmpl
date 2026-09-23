@@ -96,7 +96,7 @@ class Restate{{Aggregate}}Runtime(ts.Runtime):
             restate_workflow_context: restate.WorkflowContext, {{conduct}}_request: relays.{{Conduct}}Request
         ) -> relays.{{Conduct}}Response:
             return await orchestrators.{{Aggregate}}Orchestrator(
-                runners.RestateInvocation{{Record}}Relay(restate_workflow_context, self)
+                runners.RestateInvocation{{Aggregate}}ActionsRelay(restate_workflow_context, self)
             ).{{conduct}}({{conduct}}_request)
 
         self.{{record}}_handler = {{record}}

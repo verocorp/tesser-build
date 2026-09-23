@@ -16,7 +16,6 @@ _REQUIRED: typing.Final[tuple[str, ...]] = (
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
     "LIVEKIT_AGENT_NAME",
-    "LIVEKIT_SIP_TRUNK_ID",
 )
 
 
@@ -70,7 +69,6 @@ class EnvConfigRepository(AppConfigRepository):
                         livekit_api_key=settings["LIVEKIT_API_KEY"],
                         livekit_api_secret=settings["LIVEKIT_API_SECRET"],
                         livekit_agent_name=settings["LIVEKIT_AGENT_NAME"],
-                        livekit_sip_trunk_id=settings["LIVEKIT_SIP_TRUNK_ID"],
                     )
                 )
             )

@@ -7,8 +7,8 @@ import tesser.context as ts
 
 class PlaceCallRequest(ts.Request):
 
-    def __init__(self, phone_number: str) -> None:
-        self.phone_number = phone_number
+    def __init__(self) -> None:
+        return None
 
 
 class PlaceCallResponse(ts.Response):
@@ -36,26 +36,26 @@ class GetCallResponse(ts.Response):
         self.call = call
 
 
-class ReportPersonAnsweredRequest(ts.Request):
+class PersonJoinedRequest(ts.Request):
 
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
 
 
-class ReportPersonAnsweredResponse(ts.Response):
+class PersonJoinedResponse(ts.Response):
 
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
 
 
-class ReportPersonUtteranceRequest(ts.Request):
+class PersonTurnCompletedRequest(ts.Request):
 
     def __init__(self, call_id: str, text: str) -> None:
         self.call_id = call_id
         self.text = text
 
 
-class ReportPersonUtteranceResponse(ts.Response):
+class PersonTurnCompletedResponse(ts.Response):
 
     def __init__(self, call_id: str) -> None:
         self.call_id = call_id
@@ -77,10 +77,8 @@ class CallsClient(ts.Client, typing.Protocol):
 
     async def get_call(self, get_call_request: GetCallRequest) -> GetCallResponse: ...
 
-    async def report_person_answered(
-        self, report_person_answered_request: ReportPersonAnsweredRequest
-    ) -> ReportPersonAnsweredResponse: ...
+    async def person_joined(self, person_joined_request: PersonJoinedRequest) -> PersonJoinedResponse: ...
 
-    async def report_person_utterance(
-        self, report_person_utterance_request: ReportPersonUtteranceRequest
-    ) -> ReportPersonUtteranceResponse: ...
+    async def person_turn_completed(
+        self, person_turn_completed_request: PersonTurnCompletedRequest
+    ) -> PersonTurnCompletedResponse: ...

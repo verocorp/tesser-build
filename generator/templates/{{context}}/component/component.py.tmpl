@@ -35,7 +35,7 @@ class {{Context}}(ts.Component):
             application.{{Aggregate}}Actions(self._postgres_{{aggregate}}_store)
         )
         self.client: client.{{Context}}Client = application.{{Aggregate}}Service(
-            runners.RestateIngress{{Conduct}}Relay(config.ingress, self.restate_{{aggregate}}_runtime),
+            runners.RestateIngress{{Aggregate}}OrchestratorRelay(config.ingress, self.restate_{{aggregate}}_runtime),
             repositories.Uuid{{Aggregate}}IdentityRepository(config.identity_seed),
             self._postgres_{{aggregate}}_store,
         )

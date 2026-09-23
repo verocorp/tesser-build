@@ -300,7 +300,7 @@ run_voice() {
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict app calls pgdatabase srv tests conftest.py || return 1
+  MYPYPATH=.:../../tesser-py mypy --strict app calls pgdatabase simulated srv tests conftest.py || return 1
   local storage="${CALLS_STORAGE:-postgres://tesser@localhost:5434/tesser}"
   local ingress="${RESTATE_INGRESS:-http://localhost:28080}"
   local admin="${RESTATE_ADMIN:-http://localhost:29070}"
@@ -330,11 +330,22 @@ run_voice() {
     wait "$host" 2>/dev/null
     return 1
   fi
+  local worker=""
+  if [ "${VOICE_EVALS:-0}" = "1" ]; then
+    step "serve the LiveKit agent server as $LIVEKIT_AGENT_NAME"
+    CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" PYTHONPATH=.:../../tesser-py \
+      python3 -m srv.livekit.agent_server &
+    worker=$!
+  fi
   step "pytest (against Postgres at CALLS_STORAGE and Restate at RESTATE_INGRESS)"
   CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" pytest -q
   local status=$?
   kill -INT "$host" 2>/dev/null
   wait "$host" 2>/dev/null
+  if [ -n "$worker" ]; then
+    kill -TERM "$worker" 2>/dev/null
+    wait "$worker" 2>/dev/null
+  fi
   return "$status"
 }
 

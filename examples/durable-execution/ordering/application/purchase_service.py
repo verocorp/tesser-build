@@ -35,9 +35,9 @@ class MapToMakeOrderPaymentResponse(ts.Mapper, client.MakeOrderPaymentResponse):
 class PurchaseService(ts.ApplicationService):
 
     def __init__(
-        self, pay_for_order_relay: relays.PayForOrderRelay
+        self, purchase_orchestrator_relay: relays.PurchaseOrchestratorRelay
     ) -> None:
-        self._pay_for_order_relay = pay_for_order_relay
+        self._purchase_orchestrator_relay = purchase_orchestrator_relay
 
     async def make_order_payment(
         self, make_order_payment_request: client.MakeOrderPaymentRequest
@@ -49,7 +49,7 @@ class PurchaseService(ts.ApplicationService):
             raise client.OrderRejected(
                 code=domain_error.code, message=domain_error.message
             ) from domain_error
-        pay_for_order_response = await self._pay_for_order_relay.run_pay_for_order(
+        pay_for_order_response = await self._purchase_orchestrator_relay.run_pay_for_order(
             relays.PayForOrderRequest(order=order, payment_method=payment_method)
         )
         match pay_for_order_response.outcome:  # tesser:debt TB082

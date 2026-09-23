@@ -32,7 +32,7 @@ class Alpha(ts.Component):
         self._actions = application.WidgetActions(self._widgets)
         self.inline_widget_runtime: runtimes.InlineWidgetRuntime = runtimes.InlineWidgetRuntime(self._actions)
         self.client: client.AlphaClient = application.AlphaService(
-            self._widgets, beta_check, runners.InlineRegisterWidgetRelay(self.inline_widget_runtime)
+            self._widgets, beta_check, runners.InlineWidgetOrchestratorRelay(self.inline_widget_runtime)
         )
 
     def close(self) -> None:

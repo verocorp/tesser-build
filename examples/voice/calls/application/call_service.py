@@ -12,17 +12,8 @@ import calls.domain as domain
 
 class MapToCallSpec(ts.Mapper, domain.CallSpec):
 
-    def __init__(
-        self,
-        place_call_request: client.PlaceCallRequest,
-        issue_call_id_response: ports.IssueCallIdResponse,
-    ) -> None:
-        super().__init__(
-            call_id=issue_call_id_response.call_id,
-            person=domain.PersonSpec(name="", phone_number=place_call_request.phone_number),
-            turns=(),
-            step=domain.ASK_NAME,
-        )
+    def __init__(self, issue_call_id_response: ports.IssueCallIdResponse) -> None:
+        super().__init__(call_id=issue_call_id_response.call_id, person_name="")
 
 
 class MapToConductCallRequest(ts.Mapper, relays.ConductCallRequest):
@@ -63,15 +54,15 @@ class MapToGetCallResponse(ts.Mapper, client.GetCallResponse):
 
 class CallService(ts.ApplicationService):
 
-    def __init__(self, conduct_call_relay: relays.ConductCallRelay, call_store: ports.CallStore) -> None:
-        self._conduct_call_relay = conduct_call_relay
+    def __init__(self, call_orchestrator_relay: relays.CallOrchestratorRelay, call_store: ports.CallStore) -> None:
+        self._call_orchestrator_relay = call_orchestrator_relay
         self._call_store = call_store
 
     async def place_call(self, place_call_request: client.PlaceCallRequest) -> client.PlaceCallResponse:
         async with self._call_store.transaction() as call_repository:
             issue_call_id_response = await call_repository.issue_call_id(ports.IssueCallIdRequest())
-        call = domain.Call(MapToCallSpec(place_call_request, issue_call_id_response))
-        conduct_call_response = await self._conduct_call_relay.run_conduct_call(MapToConductCallRequest(call))
+        call = domain.Call(MapToCallSpec(issue_call_id_response))
+        conduct_call_response = await self._call_orchestrator_relay.run_conduct_call(MapToConductCallRequest(call))
         return MapToPlaceCallResponse(conduct_call_response)
 
     async def get_call(self, get_call_request: client.GetCallRequest) -> client.GetCallResponse:

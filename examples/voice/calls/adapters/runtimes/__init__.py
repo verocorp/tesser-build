@@ -1,3 +1,7 @@
-from calls.adapters.runtimes.restate_call_runtime import RestateAwaitPersonAnsweredResponseSerde as RestateAwaitPersonAnsweredResponseSerde
-from calls.adapters.runtimes.restate_call_runtime import RestateAwaitPersonUtteranceResponseSerde as RestateAwaitPersonUtteranceResponseSerde
+from calls.adapters.runtimes.restate_call_runtime import (
+    RestateAwaitPersonJoinedResponseSerde as RestateAwaitPersonJoinedResponseSerde,
+)
+from calls.adapters.runtimes.restate_call_runtime import (
+    RestateAwaitPersonTurnCompletedResponseSerde as RestateAwaitPersonTurnCompletedResponseSerde,
+)
 from calls.adapters.runtimes.restate_call_runtime import RestateCallRuntime as RestateCallRuntime

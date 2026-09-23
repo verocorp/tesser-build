@@ -101,17 +101,17 @@ class PurchaseOrchestrator(ts.Orchestrator):
 
     def __init__(
         self,
-        take_payment_relay: relays.TakePaymentRelay,
-        confirm_order_relay: relays.ConfirmOrderRelay,
+        purchase_actions_relay: relays.PurchaseActionsRelay,
+        order_orchestrator_relay: relays.OrderOrchestratorRelay,
     ) -> None:
-        self._take_payment_relay = take_payment_relay
-        self._confirm_order_relay = confirm_order_relay
+        self._purchase_actions_relay = purchase_actions_relay
+        self._order_orchestrator_relay = order_orchestrator_relay
 
     async def pay_for_order(
         self, pay_for_order_request: relays.PayForOrderRequest
     ) -> relays.PayForOrderResponse:
         order = pay_for_order_request.order
-        confirm_order_response = await self._confirm_order_relay.run_confirm_order(
+        confirm_order_response = await self._order_orchestrator_relay.run_confirm_order(
             relays.ConfirmOrderRequest(order=order)
         )
         match confirm_order_response.outcome:  # tesser:debt TB082
@@ -126,7 +126,7 @@ class PurchaseOrchestrator(ts.Orchestrator):
             case _ as never:
                 typing.assert_never(never)
         payment_method = pay_for_order_request.payment_method
-        take_payment_response = await self._take_payment_relay.run_take_payment(
+        take_payment_response = await self._purchase_actions_relay.run_take_payment(
             MapToTakePaymentRequest(purchase, payment_method)
         )
         match take_payment_response.outcome:  # tesser:debt TB082

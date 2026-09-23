@@ -4,51 +4,46 @@ import tesser.application as ts
 
 import calls.application.relays as relays
 import calls.client as client
+import calls.domain as domain
 
 
-class MapToPersonAnsweredRequest(ts.Mapper, relays.PersonAnsweredRequest):
-
-    def __init__(self, report_person_answered_request: client.ReportPersonAnsweredRequest) -> None:
-        super().__init__(call_id=report_person_answered_request.call_id)
-
-
-class MapToReportPersonAnsweredResponse(ts.Mapper, client.ReportPersonAnsweredResponse):
-
-    def __init__(self, person_answered_response: relays.PersonAnsweredResponse) -> None:
-        super().__init__(call_id=person_answered_response.call_id)
+class MapToPersonJoinedRequest(ts.Mapper, relays.PersonJoinedRequest):
+    def __init__(self, call_id: domain.CallId) -> None:
+        super().__init__(call_id=str(call_id))
 
 
-class MapToPersonUtteranceRequest(ts.Mapper, relays.PersonUtteranceRequest):
-
-    def __init__(self, report_person_utterance_request: client.ReportPersonUtteranceRequest) -> None:
-        super().__init__(
-            call_id=report_person_utterance_request.call_id, text=report_person_utterance_request.text
-        )
+class MapToPersonJoinedResponse(ts.Mapper, client.PersonJoinedResponse):
+    def __init__(self, person_joined_response: relays.PersonJoinedResponse) -> None:
+        super().__init__(call_id=person_joined_response.call_id)
 
 
-class MapToReportPersonUtteranceResponse(ts.Mapper, client.ReportPersonUtteranceResponse):
+class MapToPersonTurnCompletedRequest(ts.Mapper, relays.PersonTurnCompletedRequest):
+    def __init__(self, call_id: domain.CallId, utterance: domain.Utterance) -> None:
+        super().__init__(call_id=str(call_id), text=str(utterance))
 
-    def __init__(self, person_utterance_response: relays.PersonUtteranceResponse) -> None:
-        super().__init__(call_id=person_utterance_response.call_id)
+
+class MapToPersonTurnCompletedResponse(ts.Mapper, client.PersonTurnCompletedResponse):
+    def __init__(self, person_turn_completed_response: relays.PersonTurnCompletedResponse) -> None:
+        super().__init__(call_id=person_turn_completed_response.call_id)
 
 
 class CallEventsService(ts.ApplicationService):
+    def __init__(self, call_orchestrator_relay: relays.CallOrchestratorRelay) -> None:
+        self._call_orchestrator_relay = call_orchestrator_relay
 
-    def __init__(self, call_events_relay: relays.CallEventsRelay) -> None:
-        self._call_events_relay = call_events_relay
-
-    async def report_person_answered(
-        self, report_person_answered_request: client.ReportPersonAnsweredRequest
-    ) -> client.ReportPersonAnsweredResponse:
-        person_answered_response = await self._call_events_relay.run_person_answered(
-            MapToPersonAnsweredRequest(report_person_answered_request)
+    async def person_joined(self, person_joined_request: client.PersonJoinedRequest) -> client.PersonJoinedResponse:
+        call_id = domain.CallId(person_joined_request.call_id)
+        person_joined_response = await self._call_orchestrator_relay.run_person_joined(
+            MapToPersonJoinedRequest(call_id)
         )
-        return MapToReportPersonAnsweredResponse(person_answered_response)
+        return MapToPersonJoinedResponse(person_joined_response)
 
-    async def report_person_utterance(
-        self, report_person_utterance_request: client.ReportPersonUtteranceRequest
-    ) -> client.ReportPersonUtteranceResponse:
-        person_utterance_response = await self._call_events_relay.run_person_utterance(
-            MapToPersonUtteranceRequest(report_person_utterance_request)
+    async def person_turn_completed(
+        self, person_turn_completed_request: client.PersonTurnCompletedRequest
+    ) -> client.PersonTurnCompletedResponse:
+        call_id = domain.CallId(person_turn_completed_request.call_id)
+        utterance = domain.Utterance(person_turn_completed_request.text)
+        person_turn_completed_response = await self._call_orchestrator_relay.run_person_turn_completed(
+            MapToPersonTurnCompletedRequest(call_id, utterance)
         )
-        return MapToReportPersonUtteranceResponse(person_utterance_response)
+        return MapToPersonTurnCompletedResponse(person_turn_completed_response)

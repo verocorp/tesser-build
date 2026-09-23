@@ -18,7 +18,6 @@ def calls_spec(storage: str = "postgres://a@b/calls", ingress: str = "http://loc
         livekit_api_key="key",
         livekit_api_secret="secret",
         livekit_agent_name="caller",
-        livekit_sip_trunk_id="ST_1",
     )
 
 

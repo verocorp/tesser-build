@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import json
+import typing
+
+import tesser.application as ts
+
+import tesser.errors as errors
+
+
+class {{Record}}Request(ts.Request):
+
+    def __init__(self, {{#record_fields}}{{field}}: {{py_type}}{{comma}}{{/record_fields}}) -> None:
+{{#record_fields}}
+        self.{{field}} = {{field}}
+{{/record_fields}}
+
+
+class {{Record}}RequestSnapshot(ts.Serde):
+
+    def serialize(self, {{record}}_request: {{Record}}Request) -> bytes:
+        return json.dumps(
+            {
+{{#record_fields}}
+                "{{field}}": {{record}}_request.{{field}},
+{{/record_fields}}
+            }
+        ).encode()
+
+    def deserialize(self, buf: bytes) -> {{Record}}Request:
+        snapshot = json.loads(buf)
+        if not (
+            isinstance(snapshot, dict)
+{{#record_fields}}
+            and isinstance(snapshot.get("{{field}}"), {{py_type}})
+{{/record_fields}}
+        ):
+            raise errors.invalid(
+                "invalid_snapshot", "a {{record_words}} request is {{#record_fields}}{{prose}}a {{field}}{{/record_fields}}"
+            )
+        return {{Record}}Request(
+{{#record_fields}}
+            {{field}}=snapshot["{{field}}"],
+{{/record_fields}}
+        )
+
+
+class {{Record}}Response(ts.Response):
+
+    def __init__(self, {{identity}}: str) -> None:
+        self.{{identity}} = {{identity}}
+
+
+class {{Record}}ResponseSnapshot(ts.Serde):
+
+    def serialize(self, {{record}}_response: {{Record}}Response) -> bytes:
+        return json.dumps({"{{identity}}": {{record}}_response.{{identity}}}).encode()
+
+    def deserialize(self, buf: bytes) -> {{Record}}Response:
+        snapshot = json.loads(buf)
+        if not (isinstance(snapshot, dict) and isinstance(snapshot.get("{{identity}}"), str)):
+            raise errors.invalid("invalid_snapshot", "a {{record_words}} response is a {{identity}}")
+        return {{Record}}Response({{identity}}=snapshot["{{identity}}"])
+
+
+class {{Aggregate}}ActionsRelay(ts.Relay, typing.Protocol):
+
+    async def run_{{record}}(self, {{record}}_request: {{Record}}Request) -> {{Record}}Response: ...

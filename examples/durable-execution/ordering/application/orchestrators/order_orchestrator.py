@@ -46,14 +46,14 @@ class MapToConfirmOrderResponseFromPriceProductResponse(ts.Mapper, relays.Confir
 
 class OrderOrchestrator(ts.Orchestrator):
 
-    def __init__(self, price_product_relay: relays.PriceProductRelay) -> None:
-        self._price_product_relay = price_product_relay
+    def __init__(self, order_actions_relay: relays.OrderActionsRelay) -> None:
+        self._order_actions_relay = order_actions_relay
 
     async def confirm_order(
         self, confirm_order_request: relays.ConfirmOrderRequest
     ) -> relays.ConfirmOrderResponse:
         order = confirm_order_request.order
-        price_product_response = await self._price_product_relay.run_price_product(
+        price_product_response = await self._order_actions_relay.run_price_product(
             MapToPriceProductRequest(order)
         )
         match price_product_response.outcome:  # tesser:debt TB082

@@ -59,10 +59,10 @@ class Ordering(ts.Component):
         )
         self.client: client.OrderingClient = Ordering.Client(
             application.OrderService(
-                runners.RestateIngressConfirmOrderRelay(config.ingress, self.restate_order_runtime)
+                runners.RestateIngressOrderOrchestratorRelay(config.ingress, self.restate_order_runtime)
             ),
             application.PurchaseService(
-                runners.RestateIngressPayForOrderRelay(config.ingress, self.restate_order_runtime)
+                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress, self.restate_order_runtime)
             ),
         )
 

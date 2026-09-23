@@ -11,7 +11,7 @@ import ordering.component as component
 
 
 @ts.fake
-class FakeConfirmOrderRelay(relays.ConfirmOrderRelay):
+class FakeOrderOrchestratorRelay(relays.OrderOrchestratorRelay):
 
     def __init__(self) -> None:
         self.started: list[str] = []
@@ -39,7 +39,7 @@ class FakeConfirmOrderRelay(relays.ConfirmOrderRelay):
 
 
 @ts.fake
-class FakePayForOrderRelay(relays.PayForOrderRelay):
+class FakePurchaseOrchestratorRelay(relays.PurchaseOrchestratorRelay):
 
     def __init__(self) -> None:
         self.ran: list[str] = []
@@ -59,11 +59,11 @@ class FakePayForOrderRelay(relays.PayForOrderRelay):
 class TestClient:
 
     def test_each_use_case_reaches_the_service_that_owns_it(self) -> None:
-        fake_confirm_order_relay = FakeConfirmOrderRelay()
-        fake_pay_for_order_relay = FakePayForOrderRelay()
+        fake_order_orchestrator_relay = FakeOrderOrchestratorRelay()
+        fake_purchase_orchestrator_relay = FakePurchaseOrchestratorRelay()
         ordering_client: client.OrderingClient = component.Ordering.Client(
-            application.OrderService(fake_confirm_order_relay),
-            application.PurchaseService(fake_pay_for_order_relay),
+            application.OrderService(fake_order_orchestrator_relay),
+            application.PurchaseService(fake_purchase_orchestrator_relay),
         )
         submit_order_response = asyncio.run(
             ordering_client.submit_order(
@@ -85,9 +85,9 @@ class TestClient:
         assert submit_order_response.order_id == "s1"
         assert place_order_response.total_cents == 500
         assert make_order_payment_response.payment_reference == "pay-o1"
-        assert fake_confirm_order_relay.started == ["s1"]
-        assert fake_confirm_order_relay.ran == ["p1"]
-        assert fake_pay_for_order_relay.ran == ["u1"]
+        assert fake_order_orchestrator_relay.started == ["s1"]
+        assert fake_order_orchestrator_relay.ran == ["p1"]
+        assert fake_purchase_orchestrator_relay.ran == ["u1"]
 
 
 class TestOrdering:
