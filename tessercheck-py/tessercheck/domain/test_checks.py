@@ -2598,8 +2598,8 @@ def test_only_a_handler_imports_its_own_client() -> None:
         "two.adapters.gateways.sneaky" in f and "imports two.client.client" in f
         and "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
-        "relays, a runtime the application client, the orchestrators, and the "
-        "relays it registers" in f
+        "relays and the orchestrators its workflow builds, a runtime the application "
+        "client and the relays it registers, and none of them another adapters package" in f
         for f in findings
     )
 
@@ -7401,8 +7401,8 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
         "shop.adapters.gateways.memory imports shop.application.service; "
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
-        "relays, a runtime the application client, the orchestrators, and the "
-        "relays it registers" in f
+        "relays and the orchestrators its workflow builds, a runtime the application "
+        "client and the relays it registers, and none of them another adapters package" in f
         for f in findings
     )
     assert not any("imports shop.application.ports.sink;" in f for f in findings)
@@ -18630,8 +18630,8 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
         "shop.adapters.runners.engine imports shop.application.service; "
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
-        "relays, a runtime the application client, the orchestrators, and the "
-        "relays it registers" in f
+        "relays and the orchestrators its workflow builds, a runtime the application "
+        "client and the relays it registers, and none of them another adapters package" in f
         for f in findings
     ), findings
     assert not any("imports shop.application.relays;" in f for f in findings), findings
