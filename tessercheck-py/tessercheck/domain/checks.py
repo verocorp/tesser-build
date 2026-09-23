@@ -9262,6 +9262,13 @@ class Module(ts.Entity):
                         source = alias.value
                         if isinstance(source, ast.Name) and source.id in opened_here:
                             opened_here[alias.targets[0].id] = opened_here[source.id]
+                        if (
+                            isinstance(source, ast.Attribute)
+                            and isinstance(source.value, ast.Name)
+                            and source.value.id == "self"
+                            and source.attr in held_opened
+                        ):
+                            opened_here[alias.targets[0].id] = held_opened[source.attr]
                         if isinstance(source, ast.Name) and source.id in bound:
                             bound[alias.targets[0].id] = bound[source.id]
                         elif (

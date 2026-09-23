@@ -101,6 +101,16 @@ class TestCallAgent:
 
         assert raised.value.code == livekit_rtc.RpcError.ErrorCode.APPLICATION_ERROR
 
+    async def test_a_say_from_its_own_calls_speech_participant_passes_the_check_to_the_agent_session(self) -> None:
+        call_agent = handlers.CallAgent(FakeCallsClient(), "c7")
+
+        with pytest.raises(RuntimeError, match="the agent is not running"):
+            await call_agent.say(
+                livekit_rtc.RpcInvocationData(
+                    request_id="r1", caller_identity="speech-c7", payload="Hello.", response_timeout=5.0, method="say"
+                )
+            )
+
     async def test_a_say_from_another_calls_speech_participant_is_refused(self) -> None:
         call_agent = handlers.CallAgent(FakeCallsClient(), "c7")
 
