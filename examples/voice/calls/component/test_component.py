@@ -1,9 +1,75 @@
 from __future__ import annotations
 
+import contextlib
+import typing
+
 import tesser.testing as ts
 
+import calls.application as application
+import calls.application.ports as ports
+import calls.application.relays as relays
+import calls.client as client
 import calls.component as component
 import pgdatabase.database as pgdatabase_database
+
+
+@ts.fake
+class FakeCallOrchestratorRelay(relays.CallOrchestratorRelay):
+
+    def __init__(self) -> None:
+        self.conducted: list[relays.ConductCallRequest] = []
+        self.joined: list[relays.PersonJoinedRequest] = []
+        self.completed: list[relays.PersonTurnCompletedRequest] = []
+
+    async def run_conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
+        self.conducted.append(conduct_call_request)
+        return relays.ConductCallResponse(call_id=str(conduct_call_request.call.identity))
+
+    async def run_person_joined(
+        self, person_joined_request: relays.PersonJoinedRequest
+    ) -> relays.PersonJoinedResponse:
+        self.joined.append(person_joined_request)
+        return relays.PersonJoinedResponse(call_id=person_joined_request.call_id)
+
+    async def run_person_turn_completed(
+        self, person_turn_completed_request: relays.PersonTurnCompletedRequest
+    ) -> relays.PersonTurnCompletedResponse:
+        self.completed.append(person_turn_completed_request)
+        return relays.PersonTurnCompletedResponse(call_id=person_turn_completed_request.call_id)
+
+
+@ts.fake
+class FakeCallRepository(ports.CallRepository):
+
+    def __init__(self, calls: dict[str, ports.Call]) -> None:
+        self._calls = calls
+
+    async def issue_call_id(self, issue_call_id_request: ports.IssueCallIdRequest) -> ports.IssueCallIdResponse:
+        return ports.IssueCallIdResponse(call_id="issued-1")
+
+    async def save_call(self, save_call_request: ports.SaveCallRequest) -> ports.SaveCallResponse:
+        self._calls[save_call_request.call_id] = ports.Call(
+            call_id=save_call_request.call_id, person_name=save_call_request.person_name
+        )
+        return ports.SaveCallResponse(call_id=save_call_request.call_id)
+
+    async def load_call(self, load_call_request: ports.LoadCallRequest) -> ports.LoadCallResponse:
+        if load_call_request.call_id not in self._calls:
+            return ports.LoadCallResponse(outcome=ports.LoadCallOutcome.NOT_FOUND, calls=())
+        return ports.LoadCallResponse(
+            outcome=ports.LoadCallOutcome.FOUND, calls=(self._calls[load_call_request.call_id],)
+        )
+
+
+@ts.fake
+class FakeCallStore(ports.CallStore):
+
+    def __init__(self) -> None:
+        self.calls: dict[str, ports.Call] = {}
+
+    @contextlib.asynccontextmanager
+    async def transaction(self) -> typing.AsyncIterator[ports.CallRepository]:
+        yield FakeCallRepository(self.calls)
 
 
 @ts.helper
@@ -41,6 +107,40 @@ class TestConfig:
             config.livekit_api_secret,
             config.livekit_agent_name,
         ) == ("ws://livekit", "key", "secret", "caller")
+
+
+class TestClient:
+    async def test_each_use_case_reaches_the_service_that_owns_it(self) -> None:
+        fake_call_orchestrator_relay = FakeCallOrchestratorRelay()
+        fake_call_store = FakeCallStore()
+        fake_call_store.calls["c1"] = ports.Call(call_id="c1", person_name="Grace")
+        calls_client: client.CallsClient = component.Calls.Client(
+            application.CallService(fake_call_orchestrator_relay, fake_call_store),
+            application.CallEventsService(fake_call_orchestrator_relay),
+            application.AgentService(),
+        )
+
+        place_call_response = await calls_client.place_call(client.PlaceCallRequest())
+        get_call_response = await calls_client.get_call(client.GetCallRequest(call_id="c1"))
+        person_joined_response = await calls_client.person_joined(client.PersonJoinedRequest(call_id="p1"))
+        person_turn_completed_response = await calls_client.person_turn_completed(
+            client.PersonTurnCompletedRequest(call_id="t1", text="my name is Grace")
+        )
+        attend_call_response = await calls_client.attend_call(client.AttendCallRequest(call_id="a1"))
+        speak_utterance_response = await calls_client.speak_utterance(
+            client.SpeakUtteranceRequest(call_id="s1", text="Hello.")
+        )
+
+        assert [str(conducted.call.identity) for conducted in fake_call_orchestrator_relay.conducted] == [
+            place_call_response.call_id
+        ]
+        assert get_call_response.call.person_name == "Grace"
+        assert [joined.call_id for joined in fake_call_orchestrator_relay.joined] == ["p1"]
+        assert person_joined_response.call_id == "p1"
+        assert [completed.call_id for completed in fake_call_orchestrator_relay.completed] == ["t1"]
+        assert person_turn_completed_response.call_id == "t1"
+        assert attend_call_response.call_id == "a1"
+        assert (speak_utterance_response.call_id, speak_utterance_response.text) == ("s1", "Hello.")
 
 
 class TestCalls:
