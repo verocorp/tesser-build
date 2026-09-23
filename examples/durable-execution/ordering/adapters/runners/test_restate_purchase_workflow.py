@@ -34,7 +34,7 @@ def pay_for_order_request(
     )
 
 
-class TestRestateInvocationOrderOrchestratorRelay:
+class TestRestatePurchaseWorkflow:
 
     def test_running_journals_a_call_to_the_order_workflow_keyed_by_the_orders_id(self) -> None:
         order_id = str(uuid.uuid4())
@@ -122,8 +122,6 @@ class TestRestateInvocationOrderOrchestratorRelay:
             ("PurchaseOrchestrator/" + order_id + "/pay_for_order", "ingress", "success"),
         ]
 
-
-class TestRestateInvocationPurchaseActionsRelay:
 
     def test_running_take_payment_journals_a_call_to_the_runtimes_handler(self) -> None:
         order_id = str(uuid.uuid4())

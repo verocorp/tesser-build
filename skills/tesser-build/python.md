@@ -1194,11 +1194,13 @@ is scope, reach, and what each may depend on.
   and **only a runner imports the orchestrators**.
 - **A runtime** (`ts.Runtime`, in `adapters/runtimes/`) is the engine's
   callback surface. It holds the application clients and workflows the
-  component hands it and constructs only its engine registrations and serdes;
+  component hands it and constructs no orchestrator, runner, or other adapter;
   a main handler opens `async with workflow.invocation(ctx) as client` and
   returns `await client.<operation>(request)`. It binds the serdes over the
-  relay messages, exposes each handler as `<operation>_handler`, and
-  translates a `DomainError` into the engine's terminal error. **It invokes no
+  relay messages and exposes each handler as `<operation>_handler`; a
+  `DomainError` raised behind it reaches the engine as an ordinary failure,
+  retried under the registration's retry policy (no runtime translates it to a
+  terminal error today). **It invokes no
   relay itself**, and every service, handler, and promise it registers must be
   one a runner of its context reaches (TB085) — a callback only the outside
   world invokes is a handler. It reaches `application.client` and

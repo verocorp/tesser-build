@@ -2,6 +2,55 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the adapter-shape ship review (2026-09-22, Chris)
+
+- [ ] **The runner-to-runtime link is held only by a string (Chris: "properly
+  handle this, not just rely on the analyzer").** HIGH PRIORITY. Since the
+  adapter-shape change a runner reaches its far side by literal service and
+  handler name (`generic_call("CallActions", "record_call", ...)`) and the
+  runtime registers under literals too. Nothing in Python connects the two
+  ends; the analyzer is the only thing holding them to one name (the
+  runtime obligation, and the reverse row added in this review). Decide a
+  structural mechanism so the name has one source both ends read, not a
+  check that two copies agree: for example the relay declares its far
+  side's service name and operation names as data that the runner and the
+  runtime's registration both read, or the engine registration is derived
+  from the relay. Until then, three shapes still evade the analyzer (below).
+- [ ] **Three ways around the name checks, found by red team and left open
+  pending the item above.** Each gives zero findings on a copy of voice:
+  (1) a handler registered under another name, positionally
+  (`@svc.handler("renamed")`) or through a constant (`name=_RENAMED`) — the
+  row reads only a literal `name=` keyword and the obligation uses the
+  function name; (2) a `restate.Service` built into a local variable and
+  decorated through it instead of `self.x = ...` in `__init__`; (3) the two
+  shared handlers resolving each other's promise — nothing checks that the
+  promise a shared handler resolves is the one named for it.
+- [ ] **voice: the first completed turn wins, whatever it was.** The agent
+  session starts listening before `person_joined` is sent and before the
+  question is said, and `person_turn_completed` keeps the first value it
+  gets. A callee who says "Hello?" first has "Hello?" recorded as their
+  name, and the real answer is dropped silently. Key the wait to the
+  question (the orchestrator waits on a promise created after the question
+  is said, or the turn carries the question it answers) and add an eval in
+  which the person speaks first.
+- [ ] **voice hardening and test debt.** (e) `dial_person` and `say` are
+  at-least-once under the Restate retry policy but LiveKit's
+  `create_dispatch` and the `say` RPC are not idempotent: a retried dispatch
+  sends a second agent job to the room, a retried say speaks twice. (f) The
+  voice runner and ingress tests still fake Restate (the carried TB072/TB085
+  markers) where durable-execution and the generator run the same shapes
+  against the real engine and assert `sys_invocation`; migrate them. (g)
+  `scripts/verify` starts the LiveKit agent server under `VOICE_EVALS=1` and
+  runs pytest at once, with no readiness wait. (h) `LivekitHandler.start_job`
+  and `CallAgent.say` run only in the gated eval.
+- [ ] **durable-execution: an invocation runner's `start_` path is never
+  run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`
+  exists because the runner implements the whole relay, but
+  `PurchaseOrchestrator` only runs `run_confirm_order`, and the runner is
+  reachable only through `RestatePurchaseWorkflow`. Decide whether a relay
+  operation an invocation never uses belongs on that relay, or test the
+  path directly.
+
 ## Left open by the voice example's LiveKit integration (2026-09-15/16, Chris)
 
 Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).

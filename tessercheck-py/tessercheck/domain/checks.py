@@ -156,6 +156,8 @@ WORKFLOW_BLOCK: typing.Final[str] = "workflow"
 
 PACKAGE_MODULE_SEGMENTS: typing.Final[int] = 4
 
+BINDING_PASSES: typing.Final[int] = 2
+
 ENGINE_REGISTRATIONS: typing.Final[frozenset[str]] = frozenset({"Service", "Workflow", "VirtualObject"})
 
 AWAIT_MODE: typing.Final[str] = "await_"
@@ -2135,7 +2137,9 @@ class RegistrySpec(ts.Spec):
         operations: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (),
         far_sides: tuple[tuple[str, str, str, str], ...] = (),
         engine_targets: tuple[str, ...] = (),
+        engine_registrations: tuple[str, ...] = (),
     ) -> None:
+        self.engine_registrations = engine_registrations
         self.engine_targets = engine_targets
         self.far_sides = far_sides
         self.operations = operations
@@ -2190,8 +2194,10 @@ class Registry(ts.ValueObject):
     _operations: OperationRows
     _far_sides: FarSideRows
     _engine_targets: NameRows
+    _engine_registrations: NameRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_engine_registrations", NameRows(spec.engine_registrations))
         object.__setattr__(self, "_engine_targets", NameRows(spec.engine_targets))
         object.__setattr__(self, "_far_sides", FarSideRows(spec.far_sides))
         object.__setattr__(self, "_operations", OperationRows(spec.operations))
@@ -2289,6 +2295,9 @@ class Registry(ts.ValueObject):
 
     def engine_targets(self) -> Names:
         return self._engine_targets.names()
+
+    def engine_registrations(self) -> Names:
+        return self._engine_registrations.names()
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
@@ -9241,28 +9250,49 @@ class Module(ts.Entity):
             for _, group, node in declared:
                 carried = sides.setdefault(group, set())
                 bound = dict(taken)
-                for block in ast.walk(node):
-                    if not isinstance(block, (ast.With, ast.AsyncWith)):
-                        continue
-                    for with_item in block.items:
-                        opening = with_item.context_expr
+                opened_here = dict(opened)
+                for _ in range(BINDING_PASSES):
+                    for alias in ast.walk(node):
                         if not (
-                            isinstance(opening, ast.Call)
-                            and isinstance(opening.func, ast.Attribute)
-                            and opening.func.attr == WORKFLOW_OPERATION
-                            and isinstance(with_item.optional_vars, ast.Name)
+                            isinstance(alias, ast.Assign)
+                            and len(alias.targets) == 1
+                            and isinstance(alias.targets[0], ast.Name)
                         ):
                             continue
-                        receiver = opening.func.value
-                        if isinstance(receiver, ast.Name) and receiver.id in opened:
-                            bound[with_item.optional_vars.id] = opened[receiver.id]
+                        source = alias.value
+                        if isinstance(source, ast.Name) and source.id in opened_here:
+                            opened_here[alias.targets[0].id] = opened_here[source.id]
+                        if isinstance(source, ast.Name) and source.id in bound:
+                            bound[alias.targets[0].id] = bound[source.id]
                         elif (
-                            isinstance(receiver, ast.Attribute)
-                            and isinstance(receiver.value, ast.Name)
-                            and receiver.value.id == "self"
-                            and receiver.attr in held_opened
+                            isinstance(source, ast.Attribute)
+                            and isinstance(source.value, ast.Name)
+                            and source.value.id == "self"
+                            and source.attr in held
                         ):
-                            bound[with_item.optional_vars.id] = held_opened[receiver.attr]
+                            bound[alias.targets[0].id] = held[source.attr]
+                    for block in ast.walk(node):
+                        if not isinstance(block, (ast.With, ast.AsyncWith)):
+                            continue
+                        for with_item in block.items:
+                            opening = with_item.context_expr
+                            if not (
+                                isinstance(opening, ast.Call)
+                                and isinstance(opening.func, ast.Attribute)
+                                and opening.func.attr == WORKFLOW_OPERATION
+                                and isinstance(with_item.optional_vars, ast.Name)
+                            ):
+                                continue
+                            receiver = opening.func.value
+                            if isinstance(receiver, ast.Name) and receiver.id in opened_here:
+                                bound[with_item.optional_vars.id] = opened_here[receiver.id]
+                            elif (
+                                isinstance(receiver, ast.Attribute)
+                                and isinstance(receiver.value, ast.Name)
+                                and receiver.value.id == "self"
+                                and receiver.attr in held_opened
+                            ):
+                                bound[with_item.optional_vars.id] = held_opened[receiver.attr]
                 for call in ast.walk(node):
                     if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
                         continue
@@ -11547,6 +11577,7 @@ class Module(ts.Entity):
         registry = Registry(registry_spec)
         kind_table = registry.kinds()
         operation_rows = registry.operations()
+        names = registry.engine_registrations()
         context = self._name.split(".")[0]
         found: list[Violation] = []
         for cls in self._class_defs:
@@ -11663,6 +11694,26 @@ class Module(ts.Entity):
                             ))
                         )
                         continue
+                    reached = (
+                        f"{context}|{PROMISE_CALL}|{literals[0]}"
+                        if mode == AWAIT_MODE
+                        else f"{context}|{literals[0]}|{literals[1]}"
+                    )
+                    reached_name = (
+                        f"the promise {literals[0]}" if mode == AWAIT_MODE else f"{literals[0]}.{literals[1]}"
+                    )
+                    if reached not in names:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches {reached_name}, which no "
+                                f"runtime in {context} registers; a runner reaches only a service, "
+                                "handler, or promise a runtime of its context registers, because the "
+                                "name is all that holds the two ends together",
+                            ))
+                        )
                     if mode == AWAIT_MODE:
                         if literals[0] != operation:
                             found.append(
@@ -11700,6 +11751,58 @@ class Module(ts.Entity):
                             ))
                         )
         return tuple(found)
+
+    def _engine_registration_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[str, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        context = self._name.split(".")[0]
+        rows: list[str] = []
+        for cls in self._class_defs:
+            if blocks.get((self._name, cls.name)) != RUNTIME_BLOCK:
+                continue
+            registered: dict[str, str] = {}
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name != "__init__":
+                    continue
+                for stmt in member.body:
+                    if (
+                        isinstance(stmt, ast.Assign)
+                        and len(stmt.targets) == 1
+                        and isinstance(stmt.targets[0], ast.Attribute)
+                        and isinstance(stmt.targets[0].value, ast.Name)
+                        and stmt.targets[0].value.id == "self"
+                        and isinstance(stmt.value, ast.Call)
+                        and (
+                            stmt.value.func.attr if isinstance(stmt.value.func, ast.Attribute)
+                            else stmt.value.func.id if isinstance(stmt.value.func, ast.Name) else ""
+                        ) in ENGINE_REGISTRATIONS
+                        and stmt.value.args
+                        and isinstance(stmt.value.args[0], ast.Constant)
+                        and isinstance(stmt.value.args[0].value, str)
+                    ):
+                        registered[stmt.targets[0].attr] = stmt.value.args[0].value
+                for fn in member.body:
+                    if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    for decorator in fn.decorator_list:
+                        root = decorator.func if isinstance(decorator, ast.Call) else decorator
+                        while isinstance(root, ast.Attribute):
+                            if isinstance(root.value, ast.Name) and root.value.id == "self":
+                                break
+                            root = root.value
+                        if isinstance(root, ast.Attribute) and root.attr in registered:
+                            rows.append(f"{context}|{registered[root.attr]}|{fn.name}")
+            for node in ast.walk(cls):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == PROMISE_CALL
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)
+                ):
+                    rows.append(f"{context}|{PROMISE_CALL}|{node.args[0].value}")
+        return tuple(sorted(rows))
 
     def _engine_target_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[str, ...]:
         if str(self._placement) in TEST_TIER:
@@ -13335,6 +13438,9 @@ class Codebase(ts.AggregateRoot):
         engine_target_rows = tuple(sorted(
             row for module in self._modules for row in module._engine_target_rows(blocks)
         ))
+        engine_registration_rows = tuple(sorted(
+            row for module in self._modules for row in module._engine_registration_rows(blocks)
+        ))
         outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
         action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
         context_rows = self._contexts
@@ -13392,6 +13498,7 @@ class Codebase(ts.AggregateRoot):
             operations=operation_rows,
             far_sides=far_side_rows,
             engine_targets=engine_target_rows,
+            engine_registrations=engine_registration_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
@@ -13473,6 +13580,7 @@ class Codebase(ts.AggregateRoot):
             operations=operation_rows,
             far_sides=far_side_rows,
             engine_targets=engine_target_rows,
+            engine_registrations=engine_registration_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())

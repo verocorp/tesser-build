@@ -118,7 +118,7 @@ operation; `await_` reads the promise named for the operation); a workflow
 runner builds the orchestrator over that invocation's runners, which live in
 its module. A runtime, `ts.Runtime` in `adapters/runtimes/`, is the engine's
 callback surface — it holds application clients and workflows, constructs
-only its engine registrations and serdes, and every service, handler, and
+no orchestrator, runner, or other adapter, and every service, handler, and
 promise it registers must be one a runner of its context reaches. No adapters
 kind package imports another; only a runner imports the orchestrators, and
 only a runtime the application client. Reach is carried by the

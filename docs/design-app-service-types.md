@@ -116,9 +116,11 @@ orchestrators has two workflow modules (`restate_order_workflow.py`,
 `restate_purchase_workflow.py`), since they share no invocation runner.
 
 **A runtime registers; it does not build.** It holds the application
-clients and the workflows it is handed, constructs only its engine
-registrations and serdes, and translates a `DomainError` into the engine's
-terminal error. A main handler opens the invocation and calls the operation:
+clients and the workflows it is handed and constructs no orchestrator, runner,
+or other adapter (it still builds its engine registrations, its serdes, and the
+messages its shared handlers answer with). No runtime translates a `DomainError`
+into the engine's terminal error today; one is retried under the registration's
+retry policy. A main handler opens the invocation and calls the operation:
 
 ```python
 async with call_workflow.invocation(restate_workflow_context) as call_orchestrator_application_client:

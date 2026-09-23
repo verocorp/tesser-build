@@ -12666,9 +12666,13 @@ def _kinds_spec(
             "    ) -> None:\n"
             "        self._shop_application_client = shop_application_client\n"
             "        self._flow_workflow = flow_workflow\n"
-            "    def quote_price_handler(self, quote_price_request: relays.QuotePriceRequest)"
-            " -> relays.QuotePriceResponse:\n"
-            "        return self._shop_application_client.quote_price(quote_price_request)\n"
+            "        self.quote_actions_service = engine.Service('QuoteActions')\n"
+            "        @self.quote_actions_service.handler()\n"
+            "        async def quote_price(\n"
+            "            engine_context: engine.Context, quote_price_request: relays.QuotePriceRequest\n"
+            "        ) -> relays.QuotePriceResponse:\n"
+            "            return shop_application_client.quote_price(quote_price_request)\n"
+            "        self.quote_price_handler = quote_price\n"
             "    async def issue_quote_handler(\n"
             "        self, engine_context: engine.Context, issue_quote_request: relays.IssueQuoteRequest\n"
             "    ) -> relays.IssueQuoteResponse:\n"
@@ -19143,6 +19147,130 @@ def test_a_far_side_is_read_through_a_workflow_a_decorated_handler_opens_from_it
     assert not any("wrong.StoreRelay reaches" in f for f in findings), findings
 
 
+
+def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_or_a_client() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "till/application/relays/wrong.py",
+                "till.application.relays.wrong",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class CountItemsRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class CountItemsResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ShelveItemsRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ShelveItemsResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class WrongRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_count_items(self, count_items_request: CountItemsRequest)"
+                " -> CountItemsResponse: ...\n"
+                "class StoreRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_shelve_items(self, shelve_items_request: ShelveItemsRequest)"
+                " -> ShelveItemsResponse: ...\n",
+                False,
+            ),
+            (
+                "till/application/client/tally.py",
+                "till.application.client.tally",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
+                "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
+                " -> wrong.CountItemsResponse: ...\n"
+                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
+                False,
+            ),
+            (
+                "till/application/client/shelf.py",
+                "till.application.client.shelf",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
+                "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
+                " -> wrong.ShelveItemsResponse: ...\n"
+                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
+                False,
+            ),
+            (
+                "till/application/orchestrators/tally.py",
+                "till.application.orchestrators.tally",
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class Tally(ts.Orchestrator):\n"
+                "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
+                " -> wrong.CountItemsResponse:\n"
+                "        return wrong.CountItemsResponse(text=count_items_request.text)\n",
+                False,
+            ),
+            (
+                "till/application/orchestrators/shelf.py",
+                "till.application.orchestrators.shelf",
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class Shelf(ts.Orchestrator):\n"
+                "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
+                " -> wrong.ShelveItemsResponse:\n"
+                "        return wrong.ShelveItemsResponse(text=shelve_items_request.text)\n",
+                False,
+            ),
+            (
+                "till/adapters/runtimes/engine.py",
+                "till.adapters.runtimes.engine",
+                "import tesser.adapters as ts\n"
+                "import engine\n"
+                "import till.application.client.shelf as shelf\n"
+                "import till.application.client.tally as tally\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class TillRuntime(ts.Runtime):\n"
+                "    def __init__(\n"
+                "        self,\n"
+                "        tally_workflow: tally.TallyWorkflow[engine.Context],\n"
+                "        shelf_workflow: shelf.ShelfWorkflow[engine.Context],\n"
+                "    ) -> None:\n"
+                "        self.tally_workflow = engine.Workflow('Tally')\n"
+                "        self.mixed_workflow = engine.Workflow('Mixed')\n"
+                "        @self.tally_workflow.main()\n"
+                "        async def count_items(engine_context: engine.Context, count_items_request: wrong.CountItemsRequest)"
+                " -> wrong.CountItemsResponse:\n"
+                "            opener = tally_workflow\n"
+                "            async with opener.invocation(engine_context) as tally_application_client:\n"
+                "                counter = tally_application_client\n"
+                "                return await counter.count_items(count_items_request)\n"
+                "        @self.mixed_workflow.main()\n"
+                "        async def shelve_items(engine_context: engine.Context, shelve_items_request: wrong.ShelveItemsRequest)"
+                " -> wrong.ShelveItemsResponse:\n"
+                "            async with shelf_workflow.invocation(engine_context) as shelf_application_client:\n"
+                "                await shelf_application_client.shelve_items(shelve_items_request)\n"
+                "            async with tally_workflow.invocation(engine_context) as tally_application_client:\n"
+                "                await tally_application_client.count_items(wrong.CountItemsRequest(text='x'))\n"
+                "            return wrong.ShelveItemsResponse(text=shelve_items_request.text)\n"
+                "        self.count_items_handler = count_items\n"
+                "        self.shelve_items_handler = shelve_items\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "till.application.relays.wrong.WrongRelay reaches Tally and is not TallyRelay; a relay is "
+        "named for the far side its operations reach, because the act lives on the method and the "
+        "far side lives on the class" in f
+        for f in findings
+    ), findings
+    assert not any("wrong.StoreRelay reaches" in f for f in findings), findings
+
+
 def test_a_signal_relay_carries_only_await_operations() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -19221,6 +19349,20 @@ def test_an_await_method_reads_the_promise_named_for_its_operation() -> None:
                 False,
             ),
             (
+                "shop/adapters/runtimes/desk.py",
+                "shop.adapters.runtimes.desk",
+                "import tesser.adapters as ts\n"
+                "import engine\n"
+                "class DeskRuntime(ts.Runtime):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.confirm_order_workflow = engine.Workflow('ConfirmOrder')\n"
+                "        @self.confirm_order_workflow.main()\n"
+                "        async def confirm_order(engine_context: engine.Context) -> None:\n"
+                "            await engine_context.promise('pack_order').peek()\n"
+                "        self.confirm_order_handler = confirm_order\n",
+                False,
+            ),
+            (
                 "shop/adapters/runners/waiting.py",
                 "shop.adapters.runners.waiting",
                 "import tesser.adapters as ts\n"
@@ -19274,6 +19416,12 @@ def test_an_await_method_reads_the_promise_named_for_its_operation() -> None:
         for f in findings
     ), findings
     assert not any("ReadWatchSignalRelay" in f for f in findings), findings
+    assert any(
+        f"{where}.EngineWatchSignalRelay.await_pack_order reaches the promise quote_price, which no "
+        "runtime in shop registers; a runner reaches only a service, handler, or promise a runtime "
+        "of its context registers, because the name is all that holds the two ends together" in f
+        for f in findings
+    ), findings
 
 
 def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
@@ -19299,6 +19447,20 @@ def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
                 " -> StartConfirmOrderResponse: ...\n"
                 "    async def run_confirm_order(self, confirm_order_request: ConfirmOrderRequest)"
                 " -> ConfirmOrderResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/adapters/runtimes/desk.py",
+                "shop.adapters.runtimes.desk",
+                "import tesser.adapters as ts\n"
+                "import engine\n"
+                "class DeskRuntime(ts.Runtime):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.confirm_order_workflow = engine.Workflow('ConfirmOrder')\n"
+                "        @self.confirm_order_workflow.main()\n"
+                "        async def confirm_order(engine_context: engine.Context) -> None:\n"
+                "            await engine_context.promise('pack_order').peek()\n"
+                "        self.confirm_order_handler = confirm_order\n",
                 False,
             ),
             (
@@ -19400,6 +19562,16 @@ def test_a_runner_is_its_engine_and_its_relay_and_mirrors_that_relay() -> None:
         for f in findings
     ), findings
     assert not any("StubConfirmOrderRelay.start_confirm_order" in f for f in findings), findings
+    assert any(
+        f"{where}.EngineConfirmOrderRelay.run_confirm_order reaches ConfirmOrder.cancel_order, which "
+        "no runtime in shop registers" in f
+        for f in findings
+    ), findings
+    assert any(
+        f"{where}.ElsewhereConfirmOrderRelay.start_confirm_order reaches Billing.confirm_order, which "
+        "no runtime in shop registers" in f
+        for f in findings
+    ), findings
     assert not any("ElsewhereConfirmOrderRelay.run_confirm_order" in f for f in findings), findings
 
 
