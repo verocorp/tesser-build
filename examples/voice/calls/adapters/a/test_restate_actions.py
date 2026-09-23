@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+import os
+import socket
 import typing
+import uuid
 
 import tesser.testing as ts
+import httpx
+import hypercorn.asyncio as hypercorn_asyncio
+import hypercorn.config as hypercorn_config
+import hypercorn.typing as hypercorn_typing
 import restate
+import restate.client as restate_client
 
 import calls.adapters.a as a
 import calls.application.client as client
@@ -21,27 +30,6 @@ class FakeCallApplicationClient(client.CallApplicationClient):
         return relays.RecordCallResponse(call_id=str(record_call_request.call.identity))
 
 
-class TestRestateRecordCall:
-    def test_it_registers_its_handler_under_the_operation_on_the_service_it_is_handed(self) -> None:
-        call_actions_service = restate.Service("CallActions")
-
-        a.RestateRecordCall(call_actions_service, FakeCallApplicationClient())
-
-        assert sorted(call_actions_service.handlers) == ["record_call"]
-
-    async def test_the_handler_hands_the_request_to_the_application_client(self) -> None:
-        fake_call_application_client = FakeCallApplicationClient()
-        record_call_request = relays.RecordCallRequest(
-            call=domain.Call(domain.CallSpec(call_id="c7", person_name="Grace"))
-        )
-
-        await a.RestateRecordCall(restate.Service("CallActions"), fake_call_application_client).handler(
-            typing.cast(restate.Context, None), record_call_request
-        )
-
-        assert fake_call_application_client.recorded == [record_call_request]
-
-
 @ts.fake
 class FakeDialingApplicationClient(client.DialingApplicationClient):
     def __init__(self) -> None:
@@ -57,48 +45,6 @@ class FakeDialingApplicationClient(client.DialingApplicationClient):
         return relays.HangUpResponse(call_id=str(hang_up_request.call.identity))
 
 
-class TestRestateDialPerson:
-    def test_it_registers_its_handler_under_the_operation_on_the_service_it_is_handed(self) -> None:
-        dialing_actions_service = restate.Service("DialingActions")
-
-        a.RestateDialPerson(dialing_actions_service, FakeDialingApplicationClient())
-
-        assert sorted(dialing_actions_service.handlers) == ["dial_person"]
-
-    async def test_the_handler_hands_the_request_to_the_application_client(self) -> None:
-        fake_dialing_application_client = FakeDialingApplicationClient()
-        dial_person_request = relays.DialPersonRequest(
-            call=domain.Call(domain.CallSpec(call_id="c7", person_name=""))
-        )
-
-        await a.RestateDialPerson(restate.Service("DialingActions"), fake_dialing_application_client).handler(
-            typing.cast(restate.Context, None), dial_person_request
-        )
-
-        assert fake_dialing_application_client.dialed == [dial_person_request]
-
-
-class TestRestateHangUp:
-    def test_it_registers_its_handler_under_the_operation_on_the_service_it_is_handed(self) -> None:
-        dialing_actions_service = restate.Service("DialingActions")
-
-        a.RestateHangUp(dialing_actions_service, FakeDialingApplicationClient())
-
-        assert sorted(dialing_actions_service.handlers) == ["hang_up"]
-
-    async def test_the_handler_hands_the_request_to_the_application_client(self) -> None:
-        fake_dialing_application_client = FakeDialingApplicationClient()
-        hang_up_request = relays.HangUpRequest(
-            call=domain.Call(domain.CallSpec(call_id="c7", person_name=""))
-        )
-
-        await a.RestateHangUp(restate.Service("DialingActions"), fake_dialing_application_client).handler(
-            typing.cast(restate.Context, None), hang_up_request
-        )
-
-        assert fake_dialing_application_client.hung_up == [hang_up_request]
-
-
 @ts.fake
 class FakeSpeechApplicationClient(client.SpeechApplicationClient):
     def __init__(self) -> None:
@@ -111,20 +57,78 @@ class FakeSpeechApplicationClient(client.SpeechApplicationClient):
         return relays.SayUtteranceResponse(call_id=say_utterance_request.call_id)
 
 
-class TestRestateSayUtterance:
-    def test_it_registers_its_handler_under_the_operation_on_the_service_it_is_handed(self) -> None:
-        speech_actions_service = restate.Service("SpeechActions")
+@ts.helper
+def call_spec(call_id: str = "c7", person_name: str = "Grace") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
-        a.RestateSayUtterance(speech_actions_service, FakeSpeechApplicationClient())
 
-        assert sorted(speech_actions_service.handlers) == ["say_utterance"]
-
-    async def test_the_handler_hands_the_request_to_the_application_client(self) -> None:
+class TestRestateActions:
+    async def test_each_action_handler_is_served_by_restate_and_answers_a_call_made_with_its_handler(self) -> None:
+        suffix = uuid.uuid4().hex
+        call_actions_service = restate.Service(f"CallActions{suffix}")
+        dialing_actions_service = restate.Service(f"DialingActions{suffix}")
+        speech_actions_service = restate.Service(f"SpeechActions{suffix}")
+        fake_call_application_client = FakeCallApplicationClient()
+        fake_dialing_application_client = FakeDialingApplicationClient()
         fake_speech_application_client = FakeSpeechApplicationClient()
-        say_utterance_request = relays.SayUtteranceRequest(call_id="c7", text="Hello.")
-
-        await a.RestateSayUtterance(restate.Service("SpeechActions"), fake_speech_application_client).handler(
-            typing.cast(restate.Context, None), say_utterance_request
+        restate_record_call = a.RestateRecordCall(call_actions_service, fake_call_application_client)
+        restate_dial_person = a.RestateDialPerson(dialing_actions_service, fake_dialing_application_client)
+        restate_hang_up = a.RestateHangUp(dialing_actions_service, fake_dialing_application_client)
+        restate_say_utterance = a.RestateSayUtterance(speech_actions_service, fake_speech_application_client)
+        with socket.socket() as probe:
+            probe.bind(("0.0.0.0", 0))
+            port = probe.getsockname()[1]
+        hypercorn_config_config = hypercorn_config.Config()
+        hypercorn_config_config.bind = [f"0.0.0.0:{port}"]
+        shutdown = asyncio.Event()
+        serving = asyncio.create_task(
+            hypercorn_asyncio.serve(
+                typing.cast(
+                    hypercorn_typing.ASGIFramework,
+                    restate.app([call_actions_service, dialing_actions_service, speech_actions_service]),
+                ),
+                hypercorn_config_config,
+                shutdown_trigger=shutdown.wait,
+            )
         )
+        admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
+        registered = httpx.Response(503)
+        for _ in range(50):
+            registered = await admin.post(
+                "/deployments",
+                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+            )
+            if registered.is_success:
+                break
+            await asyncio.sleep(0.1)
 
-        assert fake_speech_application_client.said == [say_utterance_request]
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+            restate_client_client = restate_client.Client(async_client)
+            record_call_response = await restate_client_client.service_call(
+                restate_record_call.handler, relays.RecordCallRequest(call=domain.Call(call_spec()))
+            )
+            dial_person_response = await restate_client_client.service_call(
+                restate_dial_person.handler, relays.DialPersonRequest(call=domain.Call(call_spec()))
+            )
+            hang_up_response = await restate_client_client.service_call(
+                restate_hang_up.handler, relays.HangUpRequest(call=domain.Call(call_spec()))
+            )
+            say_utterance_response = await restate_client_client.service_call(
+                restate_say_utterance.handler, relays.SayUtteranceRequest(call_id="c7", text="Hello.")
+            )
+
+        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+        await admin.aclose()
+        shutdown.set()
+        await asyncio.wait([serving], timeout=1.0)
+        serving.cancel()
+
+        assert registered.is_success
+        assert record_call_response == relays.RecordCallResponse(call_id="c7")
+        assert dial_person_response == relays.DialPersonResponse(call_id="c7")
+        assert hang_up_response == relays.HangUpResponse(call_id="c7")
+        assert say_utterance_response == relays.SayUtteranceResponse(call_id="c7")
+        assert [str(request.call.identity) for request in fake_call_application_client.recorded] == ["c7"]
+        assert [str(request.call.identity) for request in fake_dialing_application_client.dialed] == ["c7"]
+        assert [str(request.call.identity) for request in fake_dialing_application_client.hung_up] == ["c7"]
+        assert fake_speech_application_client.said == [relays.SayUtteranceRequest(call_id="c7", text="Hello.")]
