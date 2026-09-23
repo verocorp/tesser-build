@@ -28,6 +28,26 @@ class TestPostgresCallStore:
 
         assert load_call_response.calls == (ports.Call(call_id="c1", person_name="Grace"),)
 
+    async def test_a_call_is_saved_into_a_table_left_by_an_earlier_schema(self) -> None:
+        dsn = os.environ["CALLS_STORAGE"]
+        connection = await asyncpg.connect(dsn)
+        await connection.execute("DROP TABLE IF EXISTS calls")
+        await connection.execute(
+            "CREATE TABLE calls (call_id text PRIMARY KEY, phone_number text NOT NULL, person_name text NOT NULL)"
+        )
+        await connection.close()
+        database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))
+        await database.open()
+        postgres_call_store = repositories.PostgresCallStore(database)
+
+        async with postgres_call_store.transaction() as call_repository:
+            await call_repository.save_call(ports.SaveCallRequest(call_id="c1", person_name="Grace"))
+        async with postgres_call_store.transaction() as call_repository:
+            load_call_response = await call_repository.load_call(ports.LoadCallRequest(call_id="c1"))
+        await database.close()
+
+        assert load_call_response.calls == (ports.Call(call_id="c1", person_name="Grace"),)
+
     async def test_a_call_that_was_never_saved_is_not_found(self) -> None:
         dsn = os.environ["CALLS_STORAGE"]
         database = pgdatabase_database.Database(pgdatabase_database.DatabaseRequest(dsn))

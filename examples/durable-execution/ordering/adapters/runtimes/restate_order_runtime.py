@@ -6,9 +6,7 @@ import tesser.adapters as ts
 import restate
 import restate.serde as restate_serde
 
-import ordering.adapters.runners as runners
 import ordering.application.client as client
-import ordering.application.orchestrators as orchestrators
 import ordering.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
@@ -151,6 +149,8 @@ class RestateOrderRuntime(ts.Runtime):
         self,
         ordering_application_client: client.OrderingApplicationClient,
         purchase_application_client: client.PurchaseApplicationClient,
+        order_workflow: client.OrderWorkflow[restate.WorkflowContext],
+        purchase_workflow: client.PurchaseWorkflow[restate.WorkflowContext],
     ) -> None:
         self.order_actions_service = restate.Service(
             "OrderActions", invocation_retry_policy=_RETRY_POLICY
@@ -182,9 +182,12 @@ class RestateOrderRuntime(ts.Runtime):
             restate_workflow_context: restate.WorkflowContext,
             confirm_order_request: relays.ConfirmOrderRequest,
         ) -> relays.ConfirmOrderResponse:
-            return await orchestrators.OrderOrchestrator(
-                runners.RestateInvocationOrderActionsRelay(restate_workflow_context, self)
-            ).confirm_order(confirm_order_request)
+            async with order_workflow.invocation(
+                restate_workflow_context
+            ) as order_orchestrator_application_client:
+                return await order_orchestrator_application_client.confirm_order(
+                    confirm_order_request
+                )
 
         @self.purchase_actions_service.handler(
             input_serde=RestateTakePaymentRequestSerde(),
@@ -203,10 +206,12 @@ class RestateOrderRuntime(ts.Runtime):
             restate_workflow_context: restate.WorkflowContext,
             pay_for_order_request: relays.PayForOrderRequest,
         ) -> relays.PayForOrderResponse:
-            return await orchestrators.PurchaseOrchestrator(
-                runners.RestateInvocationPurchaseActionsRelay(restate_workflow_context, self),
-                runners.RestateInvocationOrderOrchestratorRelay(restate_workflow_context, self),
-            ).pay_for_order(pay_for_order_request)
+            async with purchase_workflow.invocation(
+                restate_workflow_context
+            ) as purchase_orchestrator_application_client:
+                return await purchase_orchestrator_application_client.pay_for_order(
+                    pay_for_order_request
+                )
 
         self.price_product_handler = price_product
         self.confirm_order_handler = confirm_order

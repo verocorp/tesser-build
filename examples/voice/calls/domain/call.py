@@ -97,4 +97,7 @@ class Call(ts.AggregateRoot):
         return Utterance(_GREETING.format(name=str(self._person_name)))
 
     def person_said(self, utterance: Utterance) -> None:
-        self._person_name = PersonName(str(utterance))
+        person_name = PersonName(str(utterance))
+        if not str(person_name):
+            raise ValueError("a name says something besides punctuation")
+        self._person_name = person_name

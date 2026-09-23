@@ -7,17 +7,17 @@ The chain, top to bottom, with where each link lives:
 | an HTTP host takes `POST /submissions` | `srv/http/main.py` | `HttpHost`'s `APIRouter` → `ordering/adapters/handlers/http.py` `Handler.submit_order` |
 | the initial application service | `ordering/application/order_service.py` | `OrderService.submit_order` builds the `Order` aggregate |
 | it starts the orchestrator through a relay | `ordering/application/relays/order_orchestrator_relay.py` | `OrderOrchestratorRelay.start_confirm_order(ConfirmOrderRequest) -> StartConfirmOrderResponse`; the request carries the `Order` aggregate itself |
-| the Restate runner sends the workflow | `ordering/adapters/runners/restate_ingress_order_orchestrator_relay.py` | `RestateIngressOrderOrchestratorRelay.start_confirm_order` → `workflow_send(runtime.confirm_order_handler, key=order_id, arg=request)` |
+| the Restate runner sends the workflow | `ordering/adapters/runners/restate_ingress_order_orchestrator_relay.py` | `RestateIngressOrderOrchestratorRelay.start_confirm_order` → `generic_send("OrderOrchestrator", "confirm_order", <snapshot bytes>, key=order_id)` |
 | Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_orchestrator_workflow.main()` handler `confirm_order`, exposed as `confirm_order_handler`, registered as `OrderOrchestrator/confirm_order`, mounted at `/restate` by the host |
-| the orchestrator is built **inside the invocation** | `ordering/adapters/runtimes/restate_order_runtime.py` | `confirm_order` builds `RestateInvocationOrderActionsRelay(restate_workflow_context, self)` over *this* invocation's context and constructs `OrderOrchestrator` over it |
+| the orchestrator is built **inside the invocation** | `ordering/adapters/runners/restate_order_workflow.py` | the runtime's `confirm_order` opens `order_workflow.invocation(restate_workflow_context)`; `RestateOrderWorkflow` builds `RestateInvocationOrderActionsRelay` over *this* invocation's context and yields `OrderOrchestrator` over it, which the runtime sees only as `OrderOrchestratorApplicationClient` |
 | the orchestrator runs the action through its relay | `ordering/application/relays/order_actions_relay.py` | `OrderOrchestrator.confirm_order` reads the `Order` off the message, then `OrderActionsRelay.run_price_product(PriceProductRequest) -> PriceProductResponse` |
-| the Restate runner calls the action durably | `ordering/adapters/runners/restate_invocation_order_actions_relay.py` | `RestateInvocationOrderActionsRelay.run_price_product` → `restate_workflow_context.service_call(runtime.price_product_handler, request)` |
+| the Restate runner calls the action durably | `ordering/adapters/runners/restate_order_workflow.py` | `RestateInvocationOrderActionsRelay.run_price_product` → `restate_workflow_context.generic_call("OrderActions", "price_product", <snapshot bytes>)` |
 | Restate's server calls back into the runtime | `ordering/adapters/runtimes/restate_order_runtime.py` | `RestateOrderRuntime`'s `@order_actions_service.handler()` handler `price_product`, registered as `OrderActions/price_product`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.price_product` → `ProductCatalogRepository.get_product_price` → `adapters/repositories/memory_product_catalog_repository.py` |
 | the price comes back up the same chain | | `PriceProductResponse.prices[0].cents` → `Order.total(PriceSpec)` → `ConfirmOrderResponse.confirmed_orders[0].total_cents` ends the workflow |
 
 `POST /submissions` answers `202` with the order id as soon as the workflow is
-accepted — `workflow_send` is fire-and-forget, so the total is read back from
+accepted — the send is fire-and-forget, so the total is read back from
 Restate, not from the response. Submitting an order is the asynchronous use
 case: the order is accepted now and priced later. The verb is the domain's
 word for what the caller gets back, not the engine's word for how it was
@@ -26,7 +26,7 @@ called; that one, `start_`, belongs to the runner.
 `POST /orders` is the other use case over the same orchestrator: placing an
 order. `OrderService.place_order` builds the same `Order`, hands it to
 `OrderOrchestratorRelay.run_confirm_order`, and waits; the Restate
-runner's `workflow_call` answers with the `ConfirmOrderResponse` the
+runner's `generic_call` answers with the `ConfirmOrderResponse` the
 workflow ended with, and the door answers `200 {"order_id", "total_cents"}`.
 "Placed" is the state the caller gets back: priced, now. Both use cases run
 `OrderOrchestrator/confirm_order` under the same key, so they are one business act done
@@ -39,8 +39,8 @@ with either thing.
 
 | | a workflow (`OrderOrchestrator/confirm_order`) | an action (`OrderActions/price_product`) |
 |---|---|---|
-| `start_` — the engine accepts, the caller carries on | `start_confirm_order`, ingress `workflow_send`, behind `POST /submissions` | not yet |
-| `run_` — the caller waits for the result | `run_confirm_order`, ingress `workflow_call`, behind `POST /orders` | `run_price_product`, `ctx.service_call`, inside the workflow |
+| `start_` — the engine accepts, the caller carries on | `start_confirm_order`, ingress `generic_send`, behind `POST /submissions` | not yet |
+| `run_` — the caller waits for the result | `run_confirm_order`, ingress `generic_call`, behind `POST /orders` | `run_price_product`, `ctx.generic_call`, inside the workflow |
 
 `POST /purchases` is the third use case and the first scenario on top of the
 grid: a **purchase** is an order paid for. `PurchaseService.make_order_payment` builds the
@@ -96,20 +96,20 @@ class OrderActionsRelay(ts.Relay, typing.Protocol):
 
 `OrderOrchestratorRelay` is held by `OrderService`, lives as long as the
 component, and its Restate implementation
-`RestateIngressOrderOrchestratorRelay(ingress, restate_order_runtime)` is built once
+`RestateIngressOrderOrchestratorRelay(ingress)` is built once
 at wiring.
 
 `OrderActionsRelay` is held by `OrderOrchestrator`, lives exactly as long as
 one invocation, and its Restate implementation
-`RestateInvocationOrderActionsRelay(restate_workflow_context, restate_order_runtime)`
-is built inside the workflow handler over that handler's own
-`restate.WorkflowContext`. The context is required and is never `None` —
+`RestateInvocationOrderActionsRelay(restate_workflow_context)`
+is built by `RestateOrderWorkflow.invocation` over the workflow handler's own
+`restate.WorkflowContext`, in the same module as the workflow that builds it. The context is required and is never `None` —
 there is no runner for an action outside an invocation.
 
 `OrderOrchestratorRelay` has a second implementation with the second
-lifetime: `RestateInvocationOrderOrchestratorRelay(restate_workflow_context,
-restate_order_runtime)`, built inside the *purchase* workflow's handler,
-answers the same protocol with `ctx.workflow_call` and `ctx.workflow_send`
+lifetime: `RestateInvocationOrderOrchestratorRelay(restate_workflow_context)`,
+built by `RestatePurchaseWorkflow.invocation` for the *purchase* workflow,
+answers the same protocol with `ctx.generic_call` and `ctx.generic_send`
 instead of the ingress client. One relay, two runners: the door holds the one
 that lives with the component, a parent workflow holds the one that lives with
 its invocation, and `OrderService` and `PurchaseOrchestrator` cannot tell
@@ -260,7 +260,7 @@ its own key, its own journal, and its own stored result. Measured on
   service raises `client.OrderNotConfirmed` and the door answers `422`. No
   `PurchaseActions` row exists for it, because the parent returned before
   reaching the payment step — ordering, not compensation.
-- `ctx.workflow_call` on a child whose key has already run does **not**
+- `ctx.generic_call` on a child whose key has already run does **not**
   attach to the stored result: it fails with a terminal `409 the workflow
   method was already invoked`. The child runner recognises exactly that
   refusal — the 409 whose message is the server's already-invoked wording —
@@ -272,14 +272,14 @@ its own key, its own journal, and its own stored result. Measured on
   payment cannot be repeated, for the same reason a placed order cannot be
   placed again.
 - The same holds at the ingress (measured on `restate-server` 1.7.9): a
-  repeat `workflow_call` on a completed key is `409 {"code":409,"message":"the
+  repeat call on a completed key is `409 {"code":409,"message":"the
   workflow method was already invoked","source":"invocation"}`, and so is one
   on a key whose invocation is still running — the ingress never attaches a
   second caller. A cancel requested through the admin API while the endpoint
   is unreachable is accepted but stays undelivered (`backing-off`) until the
   handler next runs; a kill completes the invocation as `[409] killed` and the
   waiting creator receives `409 {"code":409,"message":"killed"}`, which the
-  runner re-raises. A repeat `workflow_send` is `202 PreviouslyAccepted`.
+  runner re-raises. A repeat send is `202 PreviouslyAccepted`.
 
 `RestateInvocationOrderOrchestratorRelay` reads one thing off the message,
 `str(confirm_order_request.order.identity)`, for the child's key, and
@@ -310,36 +310,38 @@ deployment — so its messages may carry domain objects and they come back
 whole. That is not a widening of the no-outward-representation line; it is the
 line applied to a boundary that faces inward.
 
-## Six adapters, split by direction and by lifetime
+## Adapters, split by direction and by lifetime
 
 | class | kind declared | direction | lifetime |
 |---|---|---|---|
-| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Runtime` | Restate → us: registers `OrderActions/price_product`, `OrderOrchestrator/confirm_order`, `PurchaseActions/take_payment`, and `PurchaseOrchestrator/pay_for_order` | process |
-| `RestateIngressOrderOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_send` to start, `workflow_call` to run) | process |
-| `RestateIngressPurchaseOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `workflow_call`) | process |
-| `RestateInvocationOrderActionsRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
-| `RestateInvocationPurchaseActionsRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation (`service_call`) | one invocation |
-| `RestateInvocationOrderOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from inside an invocation, to a child workflow (`workflow_call` to run, `workflow_send` to start) | one invocation |
+| `RestateOrderRuntime` (`adapters/runtimes/`) | `ts.Runtime` | Restate → us: registers `OrderActions/price_product`, `OrderOrchestrator/confirm_order`, `PurchaseActions/take_payment`, and `PurchaseOrchestrator/pay_for_order`; opens a workflow for each orchestrator handler | process |
+| `RestateOrderWorkflow`, `RestatePurchaseWorkflow` (`adapters/runners/`) | `ts.Runner` | builds one invocation's runners and its orchestrator, yielded to the runtime as the orchestrator's application client | process (each `invocation` lasts one invocation) |
+| `RestateIngressOrderOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `generic_send` to start, `generic_call` to run) | process |
+| `RestateIngressPurchaseOrchestratorRelay` (`adapters/runners/`) | `ts.Runner` | us → Restate, from outside any invocation (ingress HTTP: `generic_call`) | process |
+| `RestateInvocationOrderActionsRelay` (`adapters/runners/restate_order_workflow.py`, not exported) | `ts.Runner` | us → Restate, from inside an invocation (`generic_call`) | one invocation |
+| `RestateInvocationPurchaseActionsRelay` (`adapters/runners/restate_purchase_workflow.py`, not exported) | `ts.Runner` | us → Restate, from inside an invocation (`generic_call`) | one invocation |
+| `RestateInvocationOrderOrchestratorRelay` (`adapters/runners/restate_purchase_workflow.py`, not exported) | `ts.Runner` | us → Restate, from inside an invocation, to a child workflow (`generic_call` to run, `generic_send` to start) | one invocation |
 
 The runtime is the inbound side, the same role the HTTP handler plays for
 `POST /submissions`: the engine's server receives a request, routes it to a
 handler, and the handler invokes application code. The runners are the
 outbound side, the same role an HTTP client gateway plays, except that they
-address the far end by the handler object the runtime registered rather than
-by a URL. That is what the Restate SDK's typed calls take: `service_call`,
-`workflow_send` and `workflow_call` all read the service name, the handler
-name, and both serdes off the decorated function (`handler_from_callable`),
-so a rename is a rename
-and there is no string to keep in step. `"OrderActions"`,
-`"OrderOrchestrator"`, `"PurchaseActions"` and `"PurchaseOrchestrator"` appear
-exactly once each, in the `restate.Service(...)` and `restate.Workflow(...)`
-constructor calls in `RestateOrderRuntime.__init__`; the handler names are the
-Python function names, and each one is the operation it answers —
-`price_product`, `confirm_order`, `take_payment`, `pay_for_order`. There is
-no `name=` override and no alias: the runtime exposes each as
-`<operation>_handler`, a name derived and not chosen, because the attribute
-is the SDK's decorated function and a bare `price_product` on a runtime would
-read as the application method it forwards to.
+address the far end by name rather than by a URL. Each runner method calls the
+service named for its relay's far side (the relay's name without `Relay`) and
+the handler named for the operation it carries (the method's name without
+`run_`/`start_`), as string literals: `generic_call("OrderActions",
+"price_product", ...)`. The runtime registers the same names, as literals, in
+its `restate.Service(...)` and `restate.Workflow(...)` calls and as the Python
+function names of its handlers — `price_product`, `confirm_order`,
+`take_payment`, `pay_for_order`. The two sides are kept in step by the
+analyzer, not by an import: every service, workflow and handler the runtime
+registers must be reached by some runner's literal engine call in this context.
+Calling by name drops the handler's content type, so the ingress runners send
+`content-type: application/json` themselves (Restate's ingress answers `400
+Empty content-type` otherwise). The runtime still exposes each handler as
+`<operation>_handler` for its tests, a name derived and not chosen, because a
+bare `price_product` on a runtime would read as the application method it
+forwards to.
 
 Each `restate.Service(...)` and `restate.Workflow(...)` also declares a
 bounded `InvocationRetryPolicy` — `max_attempts=5`, `on_max_attempts="pause"`.
@@ -352,12 +354,15 @@ discovery floor**: retry-policy fields exist only in discovery protocol v4,
 so this endpoint needs `restate-server >= 1.5`, and `srv/http/test_main.py`
 asks for `application/vnd.restate.endpointmanifest.v4+json`.
 
-The runners hold the runtime to reach those handlers. A runner for an action
-cannot own the handler it invokes: it is built per invocation, and
-registration has to be finished before the first invocation exists — the
-host mounts the runtime's `Service` and `Workflow` at startup, when no
-workflow context exists yet. So the runtime owns every handler, and each
-runner reaches its own through the runtime.
+No adapters package imports another. The runtime imports no runner and no
+orchestrator: it holds `client.OrderWorkflow[restate.WorkflowContext]` and
+`client.PurchaseWorkflow[restate.WorkflowContext]`, protocols declared in
+`application/client/` beside the orchestrator application clients their
+`invocation` yields, and the component passes it `runners.RestateOrderWorkflow()`
+and `runners.RestatePurchaseWorkflow()`. Each workflow module holds the
+invocation runners it builds, because a module may not import a module beside
+it — the two workflows share no invocation runner, so each gets its own module.
+The runners, in turn, never hold the runtime: they reach its handlers by name.
 
 **A runner and the runtime never read or name the payload.** The order's
 fields — `sku`, `cents`, `quantity`, `total_cents` — cross only through the
@@ -449,14 +454,15 @@ class Ordering(ts.Component):
     def __init__(self, config: Config) -> None:
         ...
         self.restate_order_runtime = runtimes.RestateOrderRuntime(
-            self._order_actions, self._purchase_actions
+            self._order_actions,
+            self._purchase_actions,
+            runners.RestateOrderWorkflow(),
+            runners.RestatePurchaseWorkflow(),
         )
         self.client: client.OrderingClient = Ordering.Client(
-            application.OrderService(
-                runners.RestateIngressOrderOrchestratorRelay(config.ingress, self.restate_order_runtime)
-            ),
+            application.OrderService(runners.RestateIngressOrderOrchestratorRelay(config.ingress)),
             application.PurchaseService(
-                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress, self.restate_order_runtime)
+                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress)
             ),
         )
 ```
@@ -729,7 +735,7 @@ not touch `PayForOrderOutcome`.
 `ALREADY_STARTED` is the one kind of member the engine crossing adds. It
 exists only on a relay response, only on the `run_` path, and it is produced
 by the runner translating the engine's refusal — never by an orchestrator. The
-`start_` path has no second member, because a repeat `workflow_send` on an
+`start_` path has no second member, because a repeat send on an
 existing key is accepted again (`202 "PreviouslyAccepted"`) and deduplicated
 by the server, so the refusal is unobservable there (measured on
 `restate-server` 1.7.2).
@@ -741,9 +747,9 @@ exists, the response already has the field to carry it.
 **Everything else is a fault.** A handler has no `except` arm; a runner has no
 status-code `match`. Concretely:
 
-- A `TerminalError` from `service_call` propagates. An action that ends
+- A `TerminalError` from an action's `generic_call` propagates. An action that ends
   terminally ends its workflow, and the runners for actions read nothing off it.
-- On `workflow_call`, the child runner and the two ingress runners recognise
+- On a `run_` call, the child runner and the two ingress runners recognise
   exactly one refusal: a `409` whose body says `the workflow method was
   already invoked`. That, and only that, is `ALREADY_STARTED`. Any other
   `409` — a cancelled invocation, which the SDK surfaces in the same shape
@@ -966,7 +972,7 @@ sends SIGINT.
   never be purchased, and a purchased order can never be placed again, and
   any caller can take a key first. That is what "one business act done to one
   order" costs when ids are chosen by the caller with no authentication.
-- A parent cannot attach to a child that already ran. `ctx.workflow_call` on
+- A parent cannot attach to a child that already ran. `ctx.generic_call` on
   a taken key is a terminal `409`, so a purchase of an order that was placed
   is refused rather than priced from the stored result; a parent that wanted
   the stored result would need the SDK's attach, which this tree does not

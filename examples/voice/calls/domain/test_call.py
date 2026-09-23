@@ -27,6 +27,14 @@ class TestCall:
         assert str(call.person_name) == "Sarah"
         assert str(call.greeting) == "Nice to meet you, Sarah. Goodbye."
 
+    def test_an_answer_that_is_only_punctuation_is_not_a_name(self) -> None:
+        call = domain.Call(call_spec())
+
+        with pytest.raises(ValueError):
+            call.person_said(domain.Utterance("..."))
+
+        assert str(call.person_name) == ""
+
     def test_a_call_is_identified_by_its_id(self) -> None:
         assert domain.Call(call_spec(call_id="c1")) == domain.Call(call_spec(call_id="c1", person_name="Ada"))
         assert domain.Call(call_spec(call_id="c1")) != domain.Call(call_spec(call_id="c2"))

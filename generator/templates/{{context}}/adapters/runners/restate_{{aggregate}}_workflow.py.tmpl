@@ -1,0 +1,32 @@
+from __future__ import annotations
+
+import contextlib
+import typing
+
+import tesser.adapters as ts
+import restate
+
+import {{context}}.application.orchestrators as orchestrators
+import {{context}}.application.relays as relays
+
+
+class RestateInvocation{{Aggregate}}ActionsRelay(ts.Runner):
+
+    def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
+        self._restate_workflow_context = restate_workflow_context
+
+    async def run_{{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        return relays.{{Record}}ResponseSnapshot().deserialize(
+            await self._restate_workflow_context.generic_call(
+                "{{Aggregate}}Actions", "{{record}}", relays.{{Record}}RequestSnapshot().serialize({{record}}_request)
+            )
+        )
+
+
+class Restate{{Aggregate}}Workflow(ts.Runner):
+
+    @contextlib.asynccontextmanager
+    async def invocation(
+        self, restate_workflow_context: restate.WorkflowContext
+    ) -> typing.AsyncIterator[orchestrators.{{Aggregate}}Orchestrator]:
+        yield orchestrators.{{Aggregate}}Orchestrator(RestateInvocation{{Aggregate}}ActionsRelay(restate_workflow_context))

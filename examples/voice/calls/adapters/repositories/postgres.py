@@ -11,6 +11,7 @@ import calls.application.ports as ports
 import pgdatabase.database as pgdatabase_database
 
 _SCHEMA: typing.Final[str] = "CREATE TABLE IF NOT EXISTS calls (call_id text PRIMARY KEY, person_name text NOT NULL)"
+_MIGRATE: typing.Final[str] = "ALTER TABLE calls DROP COLUMN IF EXISTS phone_number"
 _ISSUE: typing.Final[str] = "SELECT gen_random_uuid()::text AS call_id"
 _SAVE: typing.Final[str] = "INSERT INTO calls (call_id, person_name) VALUES ($1, $2) ON CONFLICT (call_id) DO NOTHING"
 _LOAD: typing.Final[str] = "SELECT call_id, person_name FROM calls WHERE call_id = $1"
@@ -49,6 +50,7 @@ class PostgresCallStore(ts.Repository):
         async with self._database.acquire() as connection:
             if not self._schema_ready:
                 await connection.execute(_SCHEMA)
+                await connection.execute(_MIGRATE)
                 self._schema_ready = True
             async with connection.transaction():
                 yield PostgresCallRepository(connection)

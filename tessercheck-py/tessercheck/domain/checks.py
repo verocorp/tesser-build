@@ -24,6 +24,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Actions"): "actions",
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
+    ("tesser.application", "Workflow"): "workflow",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -143,6 +144,22 @@ CALLING_MODES: typing.Final[tuple[str, ...]] = ("start_", "run_", "await_")
 
 RUN_MODE: typing.Final[str] = "run_"
 
+START_MODE: typing.Final[str] = "start_"
+
+ENGINE_CALLS: typing.Final[dict[str, str]] = {"generic_call": RUN_MODE, "generic_send": START_MODE}
+
+PROMISE_CALL: typing.Final[str] = "promise"
+
+WORKFLOW_OPERATION: typing.Final[str] = "invocation"
+
+WORKFLOW_BLOCK: typing.Final[str] = "workflow"
+
+PACKAGE_MODULE_SEGMENTS: typing.Final[int] = 4
+
+BINDING_PASSES: typing.Final[int] = 2
+
+ENGINE_REGISTRATIONS: typing.Final[frozenset[str]] = frozenset({"Service", "Workflow", "VirtualObject"})
+
 AWAIT_MODE: typing.Final[str] = "await_"
 
 RUN_METHOD: typing.Final[str] = "run"
@@ -182,10 +199,9 @@ PLACEMENT_KINDS: typing.Final[dict[str, frozenset[str]]] = {
     "snapshots-file": frozenset({SNAPSHOT_BLOCK}),
 }
 
-RUNTIME_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (
-    APPLICATION_CLIENT_IMPORT,
-    ORCHESTRATORS_IMPORT,
-)
+RUNTIME_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (APPLICATION_CLIENT_IMPORT,)
+
+RUNNER_ONLY_IMPORTS: typing.Final[tuple[str, ...]] = (ORCHESTRATORS_IMPORT,)
 
 RUNNER_BLOCK: typing.Final[str] = "runner"
 
@@ -197,7 +213,6 @@ SIGNAL_INFIX: typing.Final[str] = "Signal"
 
 SIGNAL_RELAY_SUFFIX: typing.Final[str] = f"{SIGNAL_INFIX}{RELAY_SUFFIX}"
 
-PROMISE_SUFFIX: typing.Final[str] = "_promise"
 
 HANDLER_SUFFIX: typing.Final[str] = "_handler"
 
@@ -216,7 +231,7 @@ ACTIONS_CLIENT_BLOCK: typing.Final[str] = "actions_client"
 INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = (ORCHESTRATOR_BLOCK, ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK)
 
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime"}
+    {"client", "service", ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK, ORCHESTRATOR_BLOCK, RELAY_BLOCK, RUNNER_BLOCK, RUNTIME_BLOCK, WORKFLOW_BLOCK}
 )
 
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
@@ -237,9 +252,7 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
 
 RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
 
-ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
-    {RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
-)
+ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
 
 ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, or runtimes"
 
@@ -318,13 +331,8 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": (PORTS_IMPORT_PATH,),
     "repositories": (PORTS_IMPORT_PATH,),
-    RUNNERS_PACKAGE: (RELAYS_IMPORT, f"adapters.{RUNTIMES_PACKAGE}"),
-    RUNTIMES_PACKAGE: (
-        APPLICATION_CLIENT_IMPORT,
-        ORCHESTRATORS_IMPORT,
-        RELAYS_IMPORT,
-        f"adapters.{RUNNERS_PACKAGE}",
-    ),
+    RUNNERS_PACKAGE: (RELAYS_IMPORT, ORCHESTRATORS_IMPORT),
+    RUNTIMES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", RUNTIME_BLOCK})
@@ -346,6 +354,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "actions": "application",
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
+    WORKFLOW_BLOCK: APPLICATION_CLIENT_HOME,
     RELAY_BLOCK: RELAYS_HOME,
     "relay_request": RELAYS_HOME,
     "relay_response": RELAYS_HOME,
@@ -395,6 +404,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     SNAPSHOT_BLOCK: "a snapshot",
     "port": "a port",
     "store": "a store",
+    WORKFLOW_BLOCK: "a workflow",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
     "request": "a request DTO",
@@ -644,8 +654,7 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "handlers": ("client",),
     "gateways": SAME_CONTEXT_IMPORTS["adapters"],
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
-    RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE]
-    + (APPLICATION_CLIENT_IMPORT, "domain"),
+    RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE] + ("domain",),
     RUNTIMES_PACKAGE: ADAPTER_KIND_REACH[RUNTIMES_PACKAGE] + ("domain",),
     ORCHESTRATORS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
     + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, RELAYS_IMPORT),
@@ -2127,7 +2136,11 @@ class RegistrySpec(ts.Spec):
         enums: tuple[tuple[str, str], ...] = (),
         operations: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (),
         far_sides: tuple[tuple[str, str, str, str], ...] = (),
+        engine_targets: tuple[str, ...] = (),
+        engine_registrations: tuple[str, ...] = (),
     ) -> None:
+        self.engine_registrations = engine_registrations
+        self.engine_targets = engine_targets
         self.far_sides = far_sides
         self.operations = operations
         self.enums = enums
@@ -2180,8 +2193,12 @@ class Registry(ts.ValueObject):
     _enums: SymbolRows
     _operations: OperationRows
     _far_sides: FarSideRows
+    _engine_targets: NameRows
+    _engine_registrations: NameRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_engine_registrations", NameRows(spec.engine_registrations))
+        object.__setattr__(self, "_engine_targets", NameRows(spec.engine_targets))
         object.__setattr__(self, "_far_sides", FarSideRows(spec.far_sides))
         object.__setattr__(self, "_operations", OperationRows(spec.operations))
         object.__setattr__(self, "_enums", SymbolRows(spec.enums))
@@ -2275,6 +2292,12 @@ class Registry(ts.ValueObject):
 
     def far_sides(self) -> FarSideRows:
         return self._far_sides
+
+    def engine_targets(self) -> Names:
+        return self._engine_targets.names()
+
+    def engine_registrations(self) -> Names:
+        return self._engine_registrations.names()
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
@@ -9157,20 +9180,14 @@ class Module(ts.Entity):
             )
         return tuple(rows)
 
-    def _far_side_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, str, str], ...]:
+    def _far_side_rows(
+        self,
+        blocks: dict[tuple[str, str], str],
+        yields: dict[tuple[str, str], tuple[str, str]],
+        paired: dict[tuple[str, str], tuple[str, str]],
+    ) -> tuple[tuple[str, str, str, str], ...]:
         if str(self._placement) in TEST_TIER:
             return ()
-        paired: dict[tuple[str, str], tuple[str, str]] = {}
-        for client_key, client_block in blocks.items():
-            if client_block != ACTIONS_CLIENT_BLOCK:
-                continue
-            parts = client_key[0].split(".")
-            if len(parts) != 4 or parts[1] != APPLICATION_ROLE or parts[2] != APPLICATION_CLIENT_PACKAGE:
-                continue
-            home = ".".join((parts[0], APPLICATION_ROLE, parts[3]))
-            for actions_key, actions_block in blocks.items():
-                if actions_block == ACTIONS_BLOCK and actions_key[0] == home:
-                    paired[client_key] = actions_key
         scope = self._scope
         context = self._name.split(".")[0]
         rows: list[tuple[str, str, str, str]] = []
@@ -9179,6 +9196,8 @@ class Module(ts.Entity):
                 continue
             taken: dict[str, tuple[str, str]] = {}
             held: dict[str, tuple[str, str]] = {}
+            opened: dict[str, tuple[str, str]] = {}
+            held_opened: dict[str, tuple[str, str]] = {}
             declared: list[tuple[str, str, ast.FunctionDef | ast.AsyncFunctionDef]] = []
             for item in cls.body:
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -9190,20 +9209,31 @@ class Module(ts.Entity):
                 for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
                     if arg.annotation is None:
                         continue
-                    named = scope.resolve(Text(ast.unparse(arg.annotation)))
+                    annotation = arg.annotation
+                    if isinstance(annotation, ast.Subscript):
+                        opener = scope.resolve(Text(ast.unparse(annotation.value)))
+                        if opener is not None:
+                            yielded = yields.get((str(opener.module()), str(opener.name())))
+                            if yielded is not None:
+                                opened[arg.arg] = yielded
+                        continue
+                    named = scope.resolve(Text(ast.unparse(annotation)))
                     if named is not None:
                         taken[arg.arg] = (str(named.module()), str(named.name()))
                 for stmt in ast.walk(item):
-                    if (
+                    if not (
                         isinstance(stmt, ast.Assign)
                         and len(stmt.targets) == 1
                         and isinstance(stmt.targets[0], ast.Attribute)
                         and isinstance(stmt.targets[0].value, ast.Name)
                         and stmt.targets[0].value.id == "self"
                         and isinstance(stmt.value, ast.Name)
-                        and stmt.value.id in taken
                     ):
+                        continue
+                    if stmt.value.id in taken:
                         held[stmt.targets[0].attr] = taken[stmt.value.id]
+                    if stmt.value.id in opened:
+                        held_opened[stmt.targets[0].attr] = opened[stmt.value.id]
                 for stmt in item.body:
                     if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         continue
@@ -9219,6 +9249,57 @@ class Module(ts.Entity):
             sides: dict[str, set[tuple[str, str]]] = {}
             for _, group, node in declared:
                 carried = sides.setdefault(group, set())
+                bound = dict(taken)
+                opened_here = dict(opened)
+                for _ in range(BINDING_PASSES):
+                    for alias in ast.walk(node):
+                        if not (
+                            isinstance(alias, ast.Assign)
+                            and len(alias.targets) == 1
+                            and isinstance(alias.targets[0], ast.Name)
+                        ):
+                            continue
+                        source = alias.value
+                        if isinstance(source, ast.Name) and source.id in opened_here:
+                            opened_here[alias.targets[0].id] = opened_here[source.id]
+                        if (
+                            isinstance(source, ast.Attribute)
+                            and isinstance(source.value, ast.Name)
+                            and source.value.id == "self"
+                            and source.attr in held_opened
+                        ):
+                            opened_here[alias.targets[0].id] = held_opened[source.attr]
+                        if isinstance(source, ast.Name) and source.id in bound:
+                            bound[alias.targets[0].id] = bound[source.id]
+                        elif (
+                            isinstance(source, ast.Attribute)
+                            and isinstance(source.value, ast.Name)
+                            and source.value.id == "self"
+                            and source.attr in held
+                        ):
+                            bound[alias.targets[0].id] = held[source.attr]
+                    for block in ast.walk(node):
+                        if not isinstance(block, (ast.With, ast.AsyncWith)):
+                            continue
+                        for with_item in block.items:
+                            opening = with_item.context_expr
+                            if not (
+                                isinstance(opening, ast.Call)
+                                and isinstance(opening.func, ast.Attribute)
+                                and opening.func.attr == WORKFLOW_OPERATION
+                                and isinstance(with_item.optional_vars, ast.Name)
+                            ):
+                                continue
+                            receiver = opening.func.value
+                            if isinstance(receiver, ast.Name) and receiver.id in opened_here:
+                                bound[with_item.optional_vars.id] = opened_here[receiver.id]
+                            elif (
+                                isinstance(receiver, ast.Attribute)
+                                and isinstance(receiver.value, ast.Name)
+                                and receiver.value.id == "self"
+                                and receiver.attr in held_opened
+                            ):
+                                bound[with_item.optional_vars.id] = held_opened[receiver.attr]
                 for call in ast.walk(node):
                     if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
                         continue
@@ -9228,7 +9309,7 @@ class Module(ts.Entity):
                         made = scope.resolve(Text(ast.unparse(receiver.func)))
                         target = (str(made.module()), str(made.name())) if made is not None else None
                     elif isinstance(receiver, ast.Name):
-                        target = taken.get(receiver.id)
+                        target = bound.get(receiver.id)
                     elif (
                         isinstance(receiver, ast.Attribute)
                         and isinstance(receiver.value, ast.Name)
@@ -10223,6 +10304,10 @@ class Module(ts.Entity):
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in RUNTIME_ONLY_IMPORTS
                 )
+                runner_only = any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in RUNNER_ONLY_IMPORTS
+                )
                 own_kernel = ".".join((context,) + CONTEXT_KERNEL_HOME)
                 if pieces[0] == context and role != CONTEXT_KERNEL_HOME[0] and (
                     target == own_kernel or target.startswith(own_kernel + ".")
@@ -10245,8 +10330,19 @@ class Module(ts.Entity):
                             lineno,
                             "TB060",
                             f"{module_name} imports {target}; only a runtime imports "
-                            "the application client and the orchestrators, because an "
-                            "action is reachable only through the engine",
+                            "the application client, because an action is reachable only "
+                            "through the engine",
+                        ))
+                    )
+                elif pieces[0] == context and runner_only and kind_package != RUNNERS_PACKAGE:
+                    denied.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB060",
+                            f"{module_name} imports {target}; only a runner imports the "
+                            "orchestrators, because an orchestrator is built per invocation by "
+                            "the workflow that runs beside that invocation's runners",
                         ))
                     )
                 elif pieces[0] == context and role == "adapters" and kind_reach is not None:
@@ -10262,8 +10358,9 @@ class Module(ts.Entity):
                                 f"{module_name} imports {target}; an adapters kind "
                                 "package reaches only what its kind reaches — a handler "
                                 "the context client, a gateway or a repository the ports, "
-                                "a runner its relays, a runtime the application client, "
-                                "the orchestrators, and the relays it registers",
+                                "a runner its relays and the orchestrators its workflow "
+                                "builds, a runtime the application client and the relays "
+                                "it registers, and none of them another adapters package",
                             ))
                         )
                 elif pieces[0] == context:
@@ -10488,10 +10585,52 @@ class Module(ts.Entity):
             return inner
 
         protocols: list[ast.ClassDef] = []
+        workflows: list[ast.ClassDef] = []
         for stmt in self._class_defs:
             where = f"{module_name}.{stmt.name}"
             named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
             block = str(named) if named is not None else None
+            if block == WORKFLOW_BLOCK:
+                workflows.append(stmt)
+                opens = tuple(
+                    item
+                    for item in stmt.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                )
+                yielded = (
+                    opens[0].returns.slice
+                    if len(opens) == 1
+                    and opens[0].name == WORKFLOW_OPERATION
+                    and isinstance(opens[0].returns, ast.Subscript)
+                    else None
+                )
+                if not (
+                    isinstance(yielded, ast.Name)
+                    and str(kind_table.block_of(Symbol(SymbolSpec(module_name, yielded.id))) or "")
+                    == ACTIONS_CLIENT_BLOCK
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            stmt.lineno,
+                            "TB052",
+                            f"{where} does not yield the client beside it from one invocation; a "
+                            "workflow in an application client module declares only invocation, "
+                            "and what it yields is the client that module declares",
+                        ))
+                    )
+                for inner in nested_class_defs(stmt.body):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            inner.lineno,
+                            "TB052",
+                            f"{where}.{inner.name} is a nested class; an application client "
+                            "module declares its protocol at module level",
+                        ))
+                    )
+                found.extend(ClientClass(ClientClassSpec(stmt, where, self._path)).violations())
+                continue
             if block == "actions_client":
                 protocols.append(stmt)
             elif block is None:
@@ -10534,6 +10673,16 @@ class Module(ts.Entity):
                     f"{module_name} declares {len(protocols)} client protocols; an "
                     "application client module declares exactly one ts.Client protocol "
                     "and nothing else",
+                ))
+            )
+        if len(workflows) > 1:
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    workflows[1].lineno,
+                    "TB052",
+                    f"{module_name} declares {len(workflows)} workflows; an application client "
+                    "module declares at most one ts.Workflow, the one that yields its client",
                 ))
             )
         return tuple(found)
@@ -11035,7 +11184,7 @@ class Module(ts.Entity):
                 else:
                     doubles = False
                     for base in stmt.bases:
-                        ref = Annotation(base).primary()
+                        ref = Annotation(base.value if isinstance(base, ast.Subscript) else base).primary()
                         symbol = scope.resolve(ref) if ref is not None else None
                         block = kind_table.block_of(symbol) if symbol is not None else None
                         if block is not None and str(block) in (
@@ -11046,6 +11195,7 @@ class Module(ts.Entity):
                             RELAY_BLOCK,
                             "protocol_port",
                             "config_repository",
+                            WORKFLOW_BLOCK,
                         ):
                             doubles = True
                     if not doubles:
@@ -11055,7 +11205,8 @@ class Module(ts.Entity):
                                 stmt.lineno,
                                 "TB072",
                                 f"{where} implements no application port, store, relay, protocol "
-                                "port, client, or config repository; a fake implements the contract it doubles",
+                                "port, client, workflow, or config repository; a fake implements "
+                                "the contract it doubles",
                             ))
                         )
             else:
@@ -11246,8 +11397,22 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runners or runtimes reaches the application client and the "
-                            "orchestrators; a test reaches only what its placement allows",
+                            "runtimes reaches the application client; a test reaches only what "
+                            "its placement allows",
+                        ))
+                    )
+                elif allowed and tier != RUNNERS_PACKAGE and not at_home and any(
+                    inner == entry or inner.startswith(f"{entry}.")
+                    for entry in RUNNER_ONLY_IMPORTS
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            lineno,
+                            "TB070",
+                            f"{module_name} imports {target}, but only a test placed in "
+                            "runners reaches the orchestrators; a test reaches only what its "
+                            "placement allows",
                         ))
                     )
                 elif not allowed:
@@ -11430,6 +11595,7 @@ class Module(ts.Entity):
         registry = Registry(registry_spec)
         kind_table = registry.kinds()
         operation_rows = registry.operations()
+        names = registry.engine_registrations()
         context = self._name.split(".")[0]
         found: list[Violation] = []
         for cls in self._class_defs:
@@ -11437,30 +11603,32 @@ class Module(ts.Entity):
             if block is None or str(block) != RUNNER_BLOCK:
                 continue
             where = f"{self._name}.{cls.name}"
-            relay_name = ""
+            protocol_name = ""
             relay_module = ""
-            for symbol in operation_rows.owners(Text(RELAY_BLOCK)):
+            for symbol in tuple(operation_rows.owners(Text(RELAY_BLOCK))) + tuple(
+                operation_rows.owners(Text(WORKFLOW_BLOCK))
+            ):
                 named = str(symbol.name())
                 if (
                     str(symbol.module()).split(".")[0] == context
                     and cls.name.endswith(named)
-                    and len(named) > len(relay_name)
+                    and len(named) > len(protocol_name)
                 ):
-                    relay_name = named
+                    protocol_name = named
                     relay_module = str(symbol.module())
-            if not relay_name:
+            if not protocol_name:
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         cls.lineno,
                         "TB085",
-                        f"{where} ends in no relay's name; a runner is its engine's word "
-                        "followed by the name of the relay it implements, because its name "
-                        "is how its relay is found",
+                        f"{where} ends in no relay's or workflow's name; a runner is its "
+                        "engine's word followed by the name of the relay or workflow it "
+                        "implements, because its name is how that protocol is found",
                     ))
                 )
                 continue
-            carried = tuple(operation_rows.methods(Symbol(SymbolSpec(relay_module, relay_name))))
+            carried = tuple(operation_rows.methods(Symbol(SymbolSpec(relay_module, protocol_name))))
             members = tuple(
                 item
                 for item in cls.body
@@ -11474,7 +11642,7 @@ class Module(ts.Entity):
                             self._path,
                             cls.lineno,
                             "TB081",
-                            f"{where}.{sibling} is not on {relay_name}; a runner's public "
+                            f"{where}.{sibling} is not on {protocol_name}; a runner's public "
                             "methods are exactly its relay's, because it implements that relay "
                             "and nothing else",
                         ))
@@ -11490,71 +11658,189 @@ class Module(ts.Entity):
                             "its relay's, because it implements that relay and nothing else",
                         ))
                     )
+            far_side = protocol_name[: -len(RELAY_SUFFIX)] if protocol_name.endswith(RELAY_SUFFIX) else ""
             for member in members:
                 mode = next((prefix for prefix in CALLING_MODES if member.name.startswith(prefix)), None)
                 if mode is None:
                     continue
-                if mode == AWAIT_MODE:
-                    promise = f"{member.name[len(mode):]}{PROMISE_SUFFIX}"
-                    reached_promises = tuple(
-                        node.attr
-                        for node in ast.walk(member)
-                        if isinstance(node, ast.Attribute) and node.attr.endswith(PROMISE_SUFFIX)
-                    )
-                    if not reached_promises:
-                        found.append(
-                            Violation(ViolationSpec(
-                                self._path,
-                                member.lineno,
-                                "TB085",
-                                f"{where}.{member.name} reads no promise; an await_ method "
-                                "reads the durable promise its runtime names for the operation "
-                                "it waits on, because one operation keeps one name across a relay",
-                            ))
-                        )
-                    for read in reached_promises:
-                        if read != promise:
-                            found.append(
-                                Violation(ViolationSpec(
-                                    self._path,
-                                    member.lineno,
-                                    "TB085",
-                                    f"{where}.{member.name} reads {read}; an await_ method reads "
-                                    "the durable promise its runtime names for the operation it "
-                                    "waits on, because one operation keeps one name across a relay",
-                                ))
-                            )
-                    continue
-                handler = f"{member.name[len(mode):]}{HANDLER_SUFFIX}"
-                reached_handlers = tuple(
-                    node.attr
+                operation = member.name[len(mode):]
+                wanted = (PROMISE_CALL,) if mode == AWAIT_MODE else tuple(ENGINE_CALLS)
+                calls = tuple(
+                    (node, node.func.attr)
                     for node in ast.walk(member)
-                    if isinstance(node, ast.Attribute) and node.attr.endswith(HANDLER_SUFFIX)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in wanted
                 )
-                if not reached_handlers:
+                if not calls and mode == AWAIT_MODE:
                     found.append(
                         Violation(ViolationSpec(
                             self._path,
                             member.lineno,
                             "TB085",
-                            f"{where}.{member.name} reaches no handler; a runner method "
-                            "reaches the handler of the operation it carries, because one "
+                            f"{where}.{member.name} reads no promise; an await_ method reads the "
+                            "durable promise named for the operation it waits on, because one "
                             "operation keeps one name across a relay",
                         ))
                     )
-                for reached in reached_handlers:
-                    if reached != handler:
+                elif not calls:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            member.lineno,
+                            "TB085",
+                            f"{where}.{member.name} makes no engine call; a runner method calls the "
+                            "service named for its relay's far side and the handler named for the "
+                            "operation it carries, because one operation keeps one name across a relay",
+                        ))
+                    )
+                for call, engine_call in calls:
+                    literals = tuple(
+                        arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else None
+                        for arg in call.args[: 1 if mode == AWAIT_MODE else 2]
+                    )
+                    if len(literals) < (1 if mode == AWAIT_MODE else 2) or None in literals:
                         found.append(
                             Violation(ViolationSpec(
                                 self._path,
-                                member.lineno,
+                                call.lineno,
                                 "TB085",
-                                f"{where}.{member.name} reaches {reached}; a runner method "
-                                "reaches the handler of the operation it carries, because one "
-                                "operation keeps one name across a relay",
+                                f"{where}.{member.name} names its far side with something other than "
+                                "a string literal; a runner names the service, the handler, and the "
+                                "promise it reaches as literals, because a name the analyzer cannot "
+                                "read is a name it is not checking",
+                            ))
+                        )
+                        continue
+                    reached = (
+                        f"{context}|{PROMISE_CALL}|{literals[0]}"
+                        if mode == AWAIT_MODE
+                        else f"{context}|{literals[0]}|{literals[1]}"
+                    )
+                    reached_name = (
+                        f"the promise {literals[0]}" if mode == AWAIT_MODE else f"{literals[0]}.{literals[1]}"
+                    )
+                    if reached not in names:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches {reached_name}, which no "
+                                f"runtime in {context} registers; a runner reaches only a service, "
+                                "handler, or promise a runtime of its context registers, because the "
+                                "name is all that holds the two ends together",
+                            ))
+                        )
+                    if mode == AWAIT_MODE:
+                        if literals[0] != operation:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    call.lineno,
+                                    "TB085",
+                                    f"{where}.{member.name} reads the promise {literals[0]}; an await_ "
+                                    "method reads the durable promise named for the operation it "
+                                    "waits on, because one operation keeps one name across a relay",
+                                ))
+                            )
+                        continue
+                    if ENGINE_CALLS[engine_call] != mode:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches its far side through {engine_call}; "
+                                "a run_ operation calls and waits and a start_ operation sends and "
+                                "does not, because the mode on the method is the mode on the engine",
+                            ))
+                        )
+                    if (literals[0], literals[1]) != (far_side, operation):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} calls {literals[0]}.{literals[1]}, not "
+                                f"{far_side}.{operation}; a runner method calls the service named for "
+                                "its relay's far side and the handler named for the operation it "
+                                "carries, because one operation keeps one name across a relay",
                             ))
                         )
         return tuple(found)
+
+    def _engine_registration_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[str, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        context = self._name.split(".")[0]
+        rows: list[str] = []
+        for cls in self._class_defs:
+            if blocks.get((self._name, cls.name)) != RUNTIME_BLOCK:
+                continue
+            registered: dict[str, str] = {}
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name != "__init__":
+                    continue
+                for stmt in member.body:
+                    if (
+                        isinstance(stmt, ast.Assign)
+                        and len(stmt.targets) == 1
+                        and isinstance(stmt.targets[0], ast.Attribute)
+                        and isinstance(stmt.targets[0].value, ast.Name)
+                        and stmt.targets[0].value.id == "self"
+                        and isinstance(stmt.value, ast.Call)
+                        and (
+                            stmt.value.func.attr if isinstance(stmt.value.func, ast.Attribute)
+                            else stmt.value.func.id if isinstance(stmt.value.func, ast.Name) else ""
+                        ) in ENGINE_REGISTRATIONS
+                        and stmt.value.args
+                        and isinstance(stmt.value.args[0], ast.Constant)
+                        and isinstance(stmt.value.args[0].value, str)
+                    ):
+                        registered[stmt.targets[0].attr] = stmt.value.args[0].value
+                for fn in member.body:
+                    if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    for decorator in fn.decorator_list:
+                        root = decorator.func if isinstance(decorator, ast.Call) else decorator
+                        while isinstance(root, ast.Attribute):
+                            if isinstance(root.value, ast.Name) and root.value.id == "self":
+                                break
+                            root = root.value
+                        if isinstance(root, ast.Attribute) and root.attr in registered:
+                            rows.append(f"{context}|{registered[root.attr]}|{fn.name}")
+            for node in ast.walk(cls):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == PROMISE_CALL
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)
+                ):
+                    rows.append(f"{context}|{PROMISE_CALL}|{node.args[0].value}")
+        return tuple(sorted(rows))
+
+    def _engine_target_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[str, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        context = self._name.split(".")[0]
+        rows: list[str] = []
+        for cls in self._class_defs:
+            if blocks.get((self._name, cls.name)) != RUNNER_BLOCK:
+                continue
+            for node in ast.walk(cls):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                literals = tuple(
+                    arg.value for arg in node.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                )
+                if node.func.attr in ENGINE_CALLS and len(literals) >= 2:
+                    rows.append(f"{context}|{literals[0]}|{literals[1]}")
+                elif node.func.attr == PROMISE_CALL and literals:
+                    rows.append(f"{context}|{PROMISE_CALL}|{literals[0]}")
+        return tuple(sorted(rows))
 
     def runtime_handler_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         if str(self._placement) in TEST_TIER:
@@ -11713,6 +11999,107 @@ class Module(ts.Entity):
                         )
         return tuple(found)
 
+    def runtime_obligation_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        context = self._name.split(".")[0]
+        names = registry.engine_targets()
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) != RUNTIME_BLOCK:
+                continue
+            where = f"{self._name}.{cls.name}"
+            registered: dict[str, str] = {}
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name != "__init__":
+                    continue
+                for stmt in member.body:
+                    if not (
+                        isinstance(stmt, ast.Assign)
+                        and len(stmt.targets) == 1
+                        and isinstance(stmt.targets[0], ast.Attribute)
+                        and isinstance(stmt.targets[0].value, ast.Name)
+                        and stmt.targets[0].value.id == "self"
+                        and isinstance(stmt.value, ast.Call)
+                    ):
+                        continue
+                    maker = stmt.value.func
+                    made = maker.attr if isinstance(maker, ast.Attribute) else maker.id if isinstance(maker, ast.Name) else ""
+                    if made not in ENGINE_REGISTRATIONS:
+                        continue
+                    first = stmt.value.args[0] if stmt.value.args else None
+                    if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                stmt.lineno,
+                                "TB085",
+                                f"{where} registers {stmt.targets[0].attr} under something other than a "
+                                "string literal; a runtime registers each service under a literal, because "
+                                "a name the analyzer cannot read is a name it is not checking",
+                            ))
+                        )
+                        continue
+                    registered[stmt.targets[0].attr] = first.value
+                for fn in member.body:
+                    if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    for decorator in fn.decorator_list:
+                        root = decorator.func if isinstance(decorator, ast.Call) else decorator
+                        while isinstance(root, ast.Attribute):
+                            if isinstance(root.value, ast.Name) and root.value.id == "self":
+                                break
+                            root = root.value
+                        if not isinstance(root, ast.Attribute) or root.attr not in registered:
+                            continue
+                        service = registered[root.attr]
+                        if f"{context}|{service}|{fn.name}" not in names:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    fn.lineno,
+                                    "TB085",
+                                    f"{where} registers {service}.{fn.name} and no runner in {context} "
+                                    "calls it; a runtime registers only what a runner of its context "
+                                    "reaches, because a runtime has this context on both ends, and a "
+                                    "callback that only the outside world invokes belongs to a handler",
+                                ))
+                            )
+            for node in ast.walk(cls):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == PROMISE_CALL
+                    and node.args
+                ):
+                    first = node.args[0]
+                    if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB085",
+                                f"{where} names a promise with something other than a string literal; "
+                                "a runtime names each promise as a literal, because a name the analyzer "
+                                "cannot read is a name it is not checking",
+                            ))
+                        )
+                    elif f"{context}|{PROMISE_CALL}|{first.value}" not in names:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB085",
+                                f"{where} names the promise {first.value} and no runner in {context} "
+                                "awaits it; a runtime names only the promises a runner of its context "
+                                "awaits, because a runtime has this context on both ends",
+                            ))
+                        )
+        return tuple(found)
+
     def actions_mirror_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         place = str(self._placement)
         if place in TEST_TIER:
@@ -11777,15 +12164,53 @@ class Module(ts.Entity):
                         )
             elif block is not None and str(block) == "actions_client" and place in ("app-client", "app-client-file"):
                 paired = ".".join((parts[0], APPLICATION_ROLE, parts[-1]))
-                if not any(str(symbol.module()) == paired for symbol in operation_rows.owners(Text("actions"))):
+                orchestrated = ".".join((parts[0], APPLICATION_ROLE, ORCHESTRATORS_PACKAGE, parts[-1]))
+                if not any(
+                    str(symbol.module()) == paired for symbol in operation_rows.owners(Text(ACTIONS_BLOCK))
+                ) and not any(
+                    str(symbol.module()) == orchestrated
+                    for symbol in operation_rows.owners(Text(ORCHESTRATOR_BLOCK))
+                ):
                     found.append(
                         Violation(ViolationSpec(
                             self._path,
                             cls.lineno,
                             "TB081",
-                            f"{where} has no actions class in {paired}; an actions class's public "
-                            "methods are exactly the application client's in the module of its "
-                            "name, because that client is the only way a runtime reaches it",
+                            f"{where} has no actions class in {paired} and no orchestrator in "
+                            f"{orchestrated}; an application client fronts the actions class or the "
+                            "orchestrator in the module of its name, because that client is the only "
+                            "way a runtime reaches either",
+                        ))
+                    )
+            elif (
+                block is not None
+                and str(block) == ORCHESTRATOR_BLOCK
+                and len(parts) == PACKAGE_MODULE_SEGMENTS
+                and parts[1] == APPLICATION_ROLE
+                and parts[2] == ORCHESTRATORS_PACKAGE
+            ):
+                paired = ".".join((parts[0], APPLICATION_ROLE, APPLICATION_CLIENT_PACKAGE, parts[3]))
+                protocols = tuple(
+                    symbol
+                    for symbol in operation_rows.owners(Text(ACTIONS_CLIENT_BLOCK))
+                    if str(symbol.module()) == paired
+                )
+                offered = tuple(sibling for symbol in protocols for sibling in operation_rows.methods(symbol))
+                implemented = tuple(
+                    item.name
+                    for item in cls.body
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+                )
+                if not protocols or set(offered) != set(implemented):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cls.lineno,
+                            "TB081",
+                            f"{where} is not mirrored by an application client in {paired}; an "
+                            "orchestrator's public methods are exactly the application client's in "
+                            "the module of its name, because a runtime reaches an orchestrator only "
+                            "through the client its workflow yields",
                         ))
                     )
         return tuple(found)
@@ -12880,7 +13305,7 @@ class Codebase(ts.AggregateRoot):
                     if key in blocks:
                         continue
                     for base in cls.bases:
-                        base_key = module._resolve(base)
+                        base_key = module._resolve(base.value if isinstance(base, ast.Subscript) else base)
                         if base_key is not None and base_key in blocks:
                             derived = blocks[base_key]
                             if module.name() in relayed:
@@ -12986,14 +13411,53 @@ class Codebase(ts.AggregateRoot):
             if blocks.get((module.name(), stmt.name)) in CHAIN_BLOCKS
         ))
         far_side_seen: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        yields: dict[tuple[str, str], tuple[str, str]] = {}
         for module in self._modules:
-            for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks):
+            for cls in module.class_defs():
+                if blocks.get((module.name(), cls.name)) != WORKFLOW_BLOCK:
+                    continue
+                for item in cls.body:
+                    if (
+                        isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and item.name == WORKFLOW_OPERATION
+                        and isinstance(item.returns, ast.Subscript)
+                    ):
+                        yielded = module._resolve(item.returns.slice)
+                        if yielded is not None:
+                            yields[(module.name(), cls.name)] = yielded
+        paired: dict[tuple[str, str], tuple[str, str]] = {}
+        homes: dict[str, tuple[str, str]] = {
+            key[0]: key for key, block in blocks.items() if block in (ACTIONS_BLOCK, ORCHESTRATOR_BLOCK)
+        }
+        for client_key, client_block in blocks.items():
+            parts = client_key[0].split(".")
+            if (
+                client_block != ACTIONS_CLIENT_BLOCK
+                or len(parts) != PACKAGE_MODULE_SEGMENTS
+                or parts[1] != APPLICATION_ROLE
+                or parts[2] != APPLICATION_CLIENT_PACKAGE
+            ):
+                continue
+            for home in (
+                ".".join((parts[0], APPLICATION_ROLE, parts[3])),
+                ".".join((parts[0], APPLICATION_ROLE, ORCHESTRATORS_PACKAGE, parts[3])),
+            ):
+                if home in homes:
+                    paired[client_key] = homes[home]
+        for module in self._modules:
+            for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks, yields, paired):
                 far_side_seen.setdefault((context_name, operation_name), set()).add((far_module, far_name))
         far_side_rows = tuple(sorted(
             (context_name, operation_name, side[0], side[1])
             for (context_name, operation_name), sides in far_side_seen.items()
             if len(sides) == 1
             for side in sides
+        ))
+        engine_target_rows = tuple(sorted(
+            row for module in self._modules for row in module._engine_target_rows(blocks)
+        ))
+        engine_registration_rows = tuple(sorted(
+            row for module in self._modules for row in module._engine_registration_rows(blocks)
         ))
         outcome_method_rows = tuple(f"{module_name}|{class_name}|{method_name}" for module_name, class_name, method_name in sorted(self._outcome_methods))
         action_port_rows = tuple((module_name, class_name) for module_name, class_name in sorted(self._action_ports))
@@ -13051,6 +13515,8 @@ class Codebase(ts.AggregateRoot):
             enums=enum_rows,
             operations=operation_rows,
             far_sides=far_side_rows,
+            engine_targets=engine_target_rows,
+            engine_registrations=engine_registration_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
@@ -13131,6 +13597,8 @@ class Codebase(ts.AggregateRoot):
             enums=enum_rows,
             operations=operation_rows,
             far_sides=far_side_rows,
+            engine_targets=engine_target_rows,
+            engine_registrations=engine_registration_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())
@@ -13493,6 +13961,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.relay_name_violations(registry))
             found.extend(module.runner_violations(registry))
             found.extend(module.runtime_handler_violations(registry))
+            found.extend(module.runtime_obligation_violations(registry))
             found.extend(module.actions_mirror_violations(registry))
             found.extend(module.service_mirror_violations(registry))
             found.extend(module.operation_unique_violations(registry))

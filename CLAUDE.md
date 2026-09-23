@@ -104,17 +104,26 @@ class of actions the runtime handler of each operation it carries reaches —
 and carries any number of operations, each written `start_`, `run_`, or
 `await_` plus the operation; a relay that awaits a durable promise is named
 `<FarSide>SignalRelay` and carries only `await_` operations. An orchestrator, `ts.Orchestrator` in
-`application/orchestrators/`, is built per invocation by a runtime with that
-invocation's runners and depends on relays and action ports; a class of
-actions, `ts.Actions`, has exactly one port and one call on it per method, is
-reachable only through a `tesser.application.Client` in
-`application/client/`, and never holds a relay; a runner, `ts.Runner` in
-`adapters/runners/`, is an implementation of a relay, and placement is what
-says it may hold an invocation's engine context; a runtime, `ts.Runtime` in
-`adapters/runtimes/`, is the engine's callback surface — it registers the
-handlers, builds the orchestrator, and invokes no relay itself. Reach is
-carried by the adapter kind package and a component publishes only its client
-and its runtimes — `TB041`/`TB052`/`TB060`/`TB081`/`TB082`;
+`application/orchestrators/`, depends on relays and action ports and is
+reached, like a class of actions, only through a `tesser.application.Client`
+in `application/client/`; beside that client sits a `ts.Workflow` protocol,
+generic in the engine's context (`class CallWorkflow[C](ts.Workflow,
+typing.Protocol)`), whose one `invocation(context)` yields it. A class of
+actions, `ts.Actions`, has exactly one port and one call on it per method and
+never holds a relay. A runner, `ts.Runner` in `adapters/runners/`, is an
+implementation of a relay or of a workflow: a relay runner reaches its far
+side by literal name (`generic_call("CallActions", "record_call", ...)`, the
+service named for the relay's far side and the handler named for the
+operation; `await_` reads the promise named for the operation); a workflow
+runner builds the orchestrator over that invocation's runners, which live in
+its module. A runtime, `ts.Runtime` in `adapters/runtimes/`, is the engine's
+callback surface — it holds application clients and workflows, constructs
+no orchestrator, runner, or other adapter, and every service, handler, and
+promise it registers must be one a runner of its context reaches. No adapters
+kind package imports another; only a runner imports the orchestrators, and
+only a runtime the application client. Reach is carried by the
+adapter kind package and a component publishes only its client and its
+runtimes — `TB041`/`TB052`/`TB060`/`TB081`/`TB082`/`TB085`;
 `docs/design-app-service-types.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.

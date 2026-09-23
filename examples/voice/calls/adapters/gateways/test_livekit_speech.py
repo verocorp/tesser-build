@@ -4,6 +4,7 @@ import base64
 import json
 import typing
 
+import pytest
 import tesser.testing as ts
 import livekit.rtc as livekit_rtc
 
@@ -28,12 +29,15 @@ class FakeRoom:  # tesser:debt TB072
     connected: typing.ClassVar[list[tuple[str, str]]] = []
     performed: typing.ClassVar[list[dict[str, str]]] = []
     disconnected: typing.ClassVar[list[bool]] = []
+    refused: typing.ClassVar[bool] = False
 
     def __init__(self) -> None:
         self.local_participant = FakeLocalParticipant(FakeRoom.reply, FakeRoom.performed)
 
     async def connect(self, url: str, token: str) -> None:
         FakeRoom.connected.append((url, token))
+        if FakeRoom.refused:
+            raise ConnectionError("the room refused the connection")
 
     async def disconnect(self) -> None:
         FakeRoom.disconnected.append(True)
@@ -75,6 +79,19 @@ class TestLivekitAgentRpc:
         )
 
         await livekit_agent_rpc.ask("c7", "say", "hello")
+
+        assert FakeRoom.disconnected == [True]
+
+    async def test_the_room_is_left_when_joining_it_fails(self) -> None:
+        FakeRoom.refused = True
+        FakeRoom.disconnected = []
+        livekit_agent_rpc = gateways.LivekitAgentRpc(
+            typing.cast(type[livekit_rtc.Room], FakeRoom), "ws://livekit", "key", "secret", "agent"
+        )
+
+        with pytest.raises(ConnectionError):
+            await livekit_agent_rpc.ask("c7", "say", "hello")
+        FakeRoom.refused = False
 
         assert FakeRoom.disconnected == [True]
 

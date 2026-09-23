@@ -13,6 +13,17 @@ import tessercheck.domain.checks as checks  # tesser:debt TB060
 _UNREADABLE: typing.Final[str] = "rulebook_unreadable"
 
 HOLE_NAMES: typing.Final[dict[str, str]] = {
+    "reached_name": "⟨service.handler or promise⟩",
+    "len(workflows)": "⟨count⟩",
+    "engine_call": "⟨engine call⟩",
+    "literals[0]": "⟨name⟩",
+    "literals[1]": "⟨handler⟩",
+    "far_side": "⟨far side⟩",
+    "service": "⟨service⟩",
+    "first.value": "⟨name⟩",
+    "stmt.targets[0].attr": "⟨attribute⟩",
+    "orchestrated": "⟨module⟩",
+    "context": "⟨context⟩",
     "where": "⟨module.Class.method⟩",
     "module.name()": "⟨module⟩",
     "cls.name": "⟨class⟩",
@@ -97,7 +108,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "mode": "⟨prefix⟩",
     "count": "⟨count⟩",
     "expected": "⟨class⟩",
-    "relay_name": "⟨class⟩",
+    "protocol_name": "⟨class⟩",
     "reached": "⟨attribute⟩",
     "invoked": "⟨method⟩",
     "registered": "⟨name⟩",
@@ -108,7 +119,6 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "called": "⟨operation⟩",
     "sides": "⟨classes⟩",
     "side": "⟨class⟩",
-    "promise": "⟨attribute⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -218,6 +228,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.relay_name_violations": "relay protocol",
     "Module.runner_violations": "runner class",
     "Module.runtime_handler_violations": "runtime class",
+    "Module.runtime_obligation_violations": "runtime class",
     "Module.actions_mirror_violations": "actions class or application client",
     "Module.service_mirror_violations": "service or context client method",
     "Module.operation_unique_violations": "public service, actions, orchestrator, or relay method",

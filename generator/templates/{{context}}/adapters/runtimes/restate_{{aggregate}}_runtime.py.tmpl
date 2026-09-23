@@ -6,9 +6,7 @@ import tesser.adapters as ts
 import restate
 import restate.serde as restate_serde
 
-import {{context}}.adapters.runners as runners
 import {{context}}.application.client as client
-import {{context}}.application.orchestrators as orchestrators
 import {{context}}.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
@@ -71,7 +69,11 @@ class Restate{{Record}}ResponseSerde(ts.Serde, restate_serde.Serde[relays.{{Reco
 
 class Restate{{Aggregate}}Runtime(ts.Runtime):
 
-    def __init__(self, {{aggregate}}_application_client: client.{{Aggregate}}ApplicationClient) -> None:
+    def __init__(
+        self,
+        {{aggregate}}_application_client: client.{{Aggregate}}ApplicationClient,
+        {{aggregate}}_workflow: client.{{Aggregate}}Workflow[restate.WorkflowContext],
+    ) -> None:
         self.{{aggregate}}_actions_service = restate.Service(
             "{{Aggregate}}Actions", invocation_retry_policy=_RETRY_POLICY
         )
@@ -95,9 +97,8 @@ class Restate{{Aggregate}}Runtime(ts.Runtime):
         async def {{conduct}}(
             restate_workflow_context: restate.WorkflowContext, {{conduct}}_request: relays.{{Conduct}}Request
         ) -> relays.{{Conduct}}Response:
-            return await orchestrators.{{Aggregate}}Orchestrator(
-                runners.RestateInvocation{{Aggregate}}ActionsRelay(restate_workflow_context, self)
-            ).{{conduct}}({{conduct}}_request)
+            async with {{aggregate}}_workflow.invocation(restate_workflow_context) as {{aggregate}}_orchestrator_application_client:
+                return await {{aggregate}}_orchestrator_application_client.{{conduct}}({{conduct}}_request)
 
         self.{{record}}_handler = {{record}}
         self.{{conduct}}_handler = {{conduct}}

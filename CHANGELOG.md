@@ -5,6 +5,63 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.2.0.0] - 2026-09-23
+
+No adapter imports another. A runner reaches its far side by name, a runtime
+holds a workflow and constructs no orchestrator or runner, and the analyzer
+holds both ends of each name together.
+
+### Added
+- **`ts.Workflow`,** a plain marker in `tesser.application` like `ts.Store`.
+  An application declares its orchestrator's workflow beside that
+  orchestrator's application client, generic in the engine's context
+  (`class CallWorkflow[C](ts.Workflow, typing.Protocol)`), so the application
+  never names the engine and the runtime binds it
+  (`client.CallWorkflow[restate.WorkflowContext]`).
+- **An orchestrator is reached through an application client,** as a class
+  of actions is; an orchestrator's public methods mirror its client's, and
+  its messages are the messages of the relay whose far side it is.
+- **Analyzer rows for the shape:** a runner names its far side's service,
+  handler and promise as string literals in the engine call itself
+  (`generic_call` for `run_`, `generic_send` for `start_`, `promise` for
+  `await_`), matched against its relay's far side and operation; every
+  service, handler and promise a runtime registers must be one a runner of
+  its context reaches, and every one a runner reaches must be one a runtime
+  registers; a client module declares at most one workflow, yielding its own
+  client; a runner is named for its relay or its workflow.
+
+### Changed
+- **Runners reach Restate by literal name** and speak bytes through the
+  relay snapshots; ingress calls state their content type (Restate's ingress
+  rejects a call by name without one). A workflow runner builds the
+  orchestrator over that invocation's runners, which live in its module and
+  are tested through it.
+- **Runtimes hold application clients and workflows** and open an
+  invocation in each main handler. voice, durable-execution (two workflows
+  in one runtime) and the generator's templates follow.
+- **Import reach closes:** no adapters kind package imports another, only a
+  runner imports the orchestrators, and only a runtime the application
+  client.
+- **The relay-naming check reaches the orchestrator** through the workflow's
+  yielded client, and follows local aliases, where before it silently
+  checked nothing.
+- The far-side pairing is built once per codebase instead of once per
+  module.
+- Skill v84, the design doc's ruled section, the coverage matrix and
+  CLAUDE.md describe the new shape.
+
+### Fixed
+- voice: concurrent duplicate person-joined or completed-turn events are
+  acknowledged instead of failing with 409; a body whose call id is not the
+  workflow's key is rejected; the agent speaks only for its own call's speech
+  participant; a database created before the schema change no longer fails
+  every save; an empty or punctuation-only answer is not recorded as a name;
+  a failed room connect no longer leaks the room.
+
+### Removed
+- **minimal's durable half** (relays, runners, runtime, orchestrator, actions
+  and application client), until an in-process engine can show it.
+
 ## [0.1.10.0] - 2026-09-23
 
 The voice example places a real phone call through a durable workflow, and a

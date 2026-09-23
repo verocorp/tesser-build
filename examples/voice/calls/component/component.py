@@ -90,14 +90,15 @@ class Calls(ts.Component):
                     )
                 )
             ),
+            runners.RestateCallWorkflow(),
         )
         self.client: client.CallsClient = Calls.Client(
             application.CallService(
-                runners.RestateIngressCallOrchestratorRelay(config.ingress, self.restate_call_runtime),
+                runners.RestateIngressCallOrchestratorRelay(config.ingress),
                 self._postgres_call_store,
             ),
             application.CallEventsService(
-                runners.RestateIngressCallOrchestratorRelay(config.ingress, self.restate_call_runtime)
+                runners.RestateIngressCallOrchestratorRelay(config.ingress)
             ),
         )
 

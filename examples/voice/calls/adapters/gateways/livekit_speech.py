@@ -44,8 +44,8 @@ class LivekitAgentRpc(ts.Gateway):
             .to_jwt()
         )
         room = self._room_type()  # tesser:debt TB085
-        await room.connect(self._url, token)
         try:
+            await room.connect(self._url, token)
             return await room.local_participant.perform_rpc(
                 destination_identity=self._agent_identity,
                 method=method,

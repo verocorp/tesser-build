@@ -2,6 +2,97 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the adapter-shape ship review (2026-09-22, Chris)
+
+- [ ] **The runner-to-runtime link is held only by a string (Chris: "properly
+  handle this, not just rely on the analyzer").** HIGH PRIORITY. Since the
+  adapter-shape change a runner reaches its far side by literal service and
+  handler name (`generic_call("CallActions", "record_call", ...)`) and the
+  runtime registers under literals too. Nothing in Python connects the two
+  ends; the analyzer is the only thing holding them to one name (the
+  runtime obligation, and the reverse row added in this review). Decide a
+  structural mechanism so the name has one source both ends read, not a
+  check that two copies agree: for example the relay declares its far
+  side's service name and operation names as data that the runner and the
+  runtime's registration both read, or the engine registration is derived
+  from the relay. Until then, three shapes still evade the analyzer (below).
+- [ ] **Three ways around the name checks, found by red team and left open
+  pending the item above.** Each gives zero findings on a copy of voice:
+  (1) a handler registered under another name, positionally
+  (`@svc.handler("renamed")`) or through a constant (`name=_RENAMED`) — the
+  row reads only a literal `name=` keyword and the obligation uses the
+  function name; (2) a `restate.Service` built into a local variable and
+  decorated through it instead of `self.x = ...` in `__init__`; (3) the two
+  shared handlers resolving each other's promise — nothing checks that the
+  promise a shared handler resolves is the one named for it.
+- [ ] **voice: the first completed turn wins, whatever it was.** The agent
+  session starts listening before `person_joined` is sent and before the
+  question is said, and `person_turn_completed` keeps the first value it
+  gets. A callee who says "Hello?" first has "Hello?" recorded as their
+  name, and the real answer is dropped silently. Key the wait to the
+  question (the orchestrator waits on a promise created after the question
+  is said, or the turn carries the question it answers) and add an eval in
+  which the person speaks first.
+- [ ] **voice hardening and test debt.** (e) `dial_person` and `say` are
+  at-least-once under the Restate retry policy but LiveKit's
+  `create_dispatch` and the `say` RPC are not idempotent: a retried dispatch
+  sends a second agent job to the room, a retried say speaks twice. (f) The
+  voice runner and ingress tests still fake Restate (the carried TB072/TB085
+  markers) where durable-execution and the generator run the same shapes
+  against the real engine and assert `sys_invocation`; migrate them. (g)
+  `scripts/verify` starts the LiveKit agent server under `VOICE_EVALS=1` and
+  runs pytest at once, with no readiness wait. (h) `LivekitHandler.start_job`
+  and `CallAgent.say` run only in the gated eval. (i) A body the snapshots
+  cannot parse is answered 500, not 400: the Restate SDK wraps an input-serde
+  exception in a TerminalError (terminal, no retry, measured), but the serde
+  wrappers map only an empty body to 400, and TB082 counts a `try` in a
+  snapshot as a decision it may not make.
+- [ ] **voice: a call never gives up (lifecycle design, Chris: one design
+  item).** HIGH PRIORITY. Nothing times out: not the wait for the person to
+  join (`wait_for_participant` in the LiveKit handler), not the
+  `person_joined` / `person_turn_completed` promises the workflow awaits, not
+  the ingress read (`_MAIN_TIMEOUT` has `read=None`). An unanswered or silent
+  call holds the LiveKit room, the agent job, the Restate workflow, and the
+  caller's HTTP connection forever. With it: a failed step pauses the
+  workflow with the call still up and never hangs up (rule compensation vs
+  a paused workflow for an operator), and because `place_call` holds one
+  HTTP request for the whole call, any connection drop makes a retry dial
+  the person again under a fresh id (start the workflow and return the id,
+  or carry an idempotency key). Durable timers raced against each promise,
+  hanging up when the timer wins, is the likely shape; it is one change to
+  the dead simple call. Also: the whole transcript of the answer becomes the
+  name ("My name is Alice, thanks"), with no length bound. And an answer that
+  is only punctuation ("?") now makes `Call.person_said` raise, which Restate
+  retries on the same journaled answer and then pauses, with the call still
+  up; decide whether the workflow asks again or ends the call.
+- [ ] **Debt markers added as lines by #208 and adapter-shape (Chris: ship,
+  list them).** Net, the two PRs remove 61 markers (454 on main, 393 after),
+  but these lines carry a marker in the added code; each names the design
+  question that retires it:
+  - `examples/voice/calls/adapters/runtimes/restate_call_runtime.py` — the
+    two shared handlers `person_joined`, `person_turn_completed` (TB085: they
+    build messages and branch instead of invoking one operation). Retired by
+    moving the resolve into something a handler can invoke, or by ruling
+    what a shared handler that resolves a promise is.
+  - `examples/voice/calls/adapters/handlers/livekit.py` `CallAgent` (TB052:
+    the LiveKit SDK subclass has no ts.* kind of its own). Retired by ruling
+    on SDK subclasses in handlers.
+  - `examples/voice/srv/livekit/agent_server.py` (TB060). Retired with the
+    host's import row for the LiveKit worker.
+  - `examples/voice/calls/adapters/runners/test_restate_call_workflow.py`,
+    `test_restate_ingress_call_orchestrator_relay.py`,
+    `runtimes/test_restate_call_runtime.py` (TB072 fakes of the Restate
+    context and ingress, TB085 on their locals; mostly carried when test
+    files merged or moved). Retired by the voice Restate test migration
+    (hardening item (f) above).
+- [ ] **durable-execution: an invocation runner's `start_` path is never
+  run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`
+  exists because the runner implements the whole relay, but
+  `PurchaseOrchestrator` only runs `run_confirm_order`, and the runner is
+  reachable only through `RestatePurchaseWorkflow`. Decide whether a relay
+  operation an invocation never uses belongs on that relay, or test the
+  path directly.
+
 ## Left open by the voice example's LiveKit integration (2026-09-15/16, Chris)
 
 Surfaced while building `examples/voice` (branch `worktree-voice`, PR #196).
@@ -66,11 +157,19 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   cut (one messages module beside each relay, or a `messages/` package),
   what the runner and the runtime then import, and whether ports get the
   same split, since `ports/` has the identical shape.
-- **minimal is non-conformant to the ruled dependency shape (Chris,
-  2026-09-22).** Its inline engine has no invocation context, so the
-  `ts.Workflow[C, O]` binding has nothing to bind `C` to. It keeps its current shape rather than getting
-  a pretend context; decide whether an in-process engine gets a context type
-  of its own or the tree stops claiming the durable shape.
+- **minimal exercises every `ts.*` again — an in-process engine by name
+  (Chris, 2026-09-22; the third PR after the adapter-shape PR).** minimal's
+  requirement is that every `ts.*` kind is shown and exercised. The
+  adapter-shape PR dropped its durable half (relays, runners, runtime,
+  orchestrator, actions, application client) because its inline engine had
+  no invocation context and its runners called the runtime directly, which
+  the closed adapter-import rule forbids. Put it back with a small
+  in-process engine that has a context type and dispatches by service and
+  handler name, so minimal shows `ts.Relay`, `ts.Runner`, `ts.Runtime`,
+  `ts.Orchestrator`, `ts.Actions`, `ts.Workflow` and the application client
+  without Restate. The runtime obligation reads only decorator
+  registrations today, so a method-style runtime is unchecked; the engine
+  should register by name the way Restate does.
 - **Which language each `ts.*` kind and each directory speaks.** HIGH
   PRIORITY. The context's ubiquitous language is `domain/`,
   `application/`, `client/`. `srv/` is not part of it: a host speaks the
@@ -311,12 +410,12 @@ yet reach, and the names they found that were deferred rather than renamed:
   `Unreadable`, or a bare `Rejected`; it fired on 23 declarations in five
   trees (not 22), and removing the `port_error` placement row made the 9
   port errors TB052 findings.
-- [ ] **The skill does not yet teach these rules.** A finding's message is
-  the only guidance an agent gets; the naming rows belong in
-  `skills/tesser-build/python.md` with a `skill-version` bump. Its
-  durable-execution walkthrough also still names relays and runners the old
-  way (`OrderActionsRunner`, `relays.OrderOrchestratorRequest`, `run`), so the
-  relay and runner naming rules go in with it.
+- [x] **The skill now teaches these rules (completed by the adapter-shape
+  wave, 2026-09-22).** `skills/tesser-build/python.md`'s
+  orchestrators-actions-relays section carries the relay and runner naming
+  rules, `skill-version` is bumped, and its durable-execution walkthrough
+  names relays and runners the current way (`OrderActionsRelay`,
+  `relays.ConfirmOrderRequest`, `confirm_order`).
 
 ## Left open by the rows 1-7 Codex challenge (2026-09-14, v0.1.6.1)
 
@@ -792,14 +891,13 @@ domain modules out before removing them.
   result address on the ingress; the request body is read with no size cap and
   `json.loads` runs once per field; snapshots carry no version, so a field
   added or a rule tightened fails every in-flight journal terminally;
-  `RestateIngressConfirmOrderRelay` opens a new `httpx.AsyncClient` per send
+  `RestateIngressOrderOrchestratorRelay` opens a new `httpx.AsyncClient` per send
   (stated in the README as the cost of nothing async outliving a request);
   `MemoryProductCatalogRepository.close()` clears a dict a live handler may
-  still hold; `runtimes/restate_order_runtime.py` and
-  `runners/restate_invocation_price_product_relay.py` import each other (the runtime
-  builds the runner per invocation, the runner names the runtime as a
-  parameter type); `.importlinter` now carries three pairwise
-  `ignore_imports` holes in the adapters→application contract.
+  still hold; `.importlinter` now carries three pairwise
+  `ignore_imports` holes in the adapters→application contract. (The runtime
+  and runner no longer import each other: since the adapter-shape change a
+  runner calls its far side by name and the runtime holds a workflow.)
 
 ## Left open by the import and naming rulings (2026-09-05, Chris accepted)
 
