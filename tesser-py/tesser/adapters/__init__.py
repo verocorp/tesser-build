@@ -1,3 +1,6 @@
+from tesser.adapters.a import A as A
+from tesser.adapters.b import B as B
+from tesser.adapters.c import C as C
 from tesser.adapters.gateway import Gateway as Gateway
 from tesser.adapters.handler import Handler as Handler
 from tesser.adapters.mapper import Mapper as Mapper
