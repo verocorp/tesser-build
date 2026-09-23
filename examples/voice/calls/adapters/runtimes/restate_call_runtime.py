@@ -10,6 +10,8 @@ import calls.application.client as client
 import calls.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
+_FOREIGN_CALL_ID: typing.Final[str] = "a message names the call its workflow is keyed by"
+_ALREADY_COMPLETED: typing.Final[int] = 409
 _RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
     max_attempts=5, on_max_attempts="pause"
 )
@@ -250,14 +252,17 @@ class RestateCallRuntime(ts.Runtime):
             restate_workflow_shared_context: restate.WorkflowSharedContext,
             person_joined_request: relays.PersonJoinedRequest,
         ) -> relays.PersonJoinedResponse:
-            person_joined_promise = restate_workflow_shared_context.promise("person_joined", serde=restate_serde.BytesSerde())
-            if await person_joined_promise.peek() is None:
-                await person_joined_promise.resolve(
-                    relays.AwaitPersonJoinedResponseSnapshot().serialize(
-                        relays.AwaitPersonJoinedResponse(call_id=person_joined_request.call_id)
-                    )
+            call_id = restate_workflow_shared_context.key()
+            if person_joined_request.call_id != call_id:
+                raise restate.TerminalError(_FOREIGN_CALL_ID, status_code=400)
+            try:
+                await restate_workflow_shared_context.promise("person_joined", serde=restate_serde.BytesSerde()).resolve(
+                    relays.AwaitPersonJoinedResponseSnapshot().serialize(relays.AwaitPersonJoinedResponse(call_id=call_id))
                 )
-            return relays.PersonJoinedResponse(call_id=person_joined_request.call_id)
+            except restate.TerminalError as terminal_error:
+                if terminal_error.status_code != _ALREADY_COMPLETED:
+                    raise
+            return relays.PersonJoinedResponse(call_id=call_id)
 
         @self.call_orchestrator_workflow.handler(
             input_serde=RestatePersonTurnCompletedRequestSerde(),
@@ -267,16 +272,21 @@ class RestateCallRuntime(ts.Runtime):
             restate_workflow_shared_context: restate.WorkflowSharedContext,
             person_turn_completed_request: relays.PersonTurnCompletedRequest,
         ) -> relays.PersonTurnCompletedResponse:
-            person_turn_completed_promise = restate_workflow_shared_context.promise("person_turn_completed", serde=restate_serde.BytesSerde())
-            if await person_turn_completed_promise.peek() is None:
-                await person_turn_completed_promise.resolve(
+            call_id = restate_workflow_shared_context.key()
+            if person_turn_completed_request.call_id != call_id:
+                raise restate.TerminalError(_FOREIGN_CALL_ID, status_code=400)
+            try:
+                await restate_workflow_shared_context.promise(
+                    "person_turn_completed", serde=restate_serde.BytesSerde()
+                ).resolve(
                     relays.AwaitPersonTurnCompletedResponseSnapshot().serialize(
-                        relays.AwaitPersonTurnCompletedResponse(
-                            call_id=person_turn_completed_request.call_id, text=person_turn_completed_request.text
-                        )
+                        relays.AwaitPersonTurnCompletedResponse(call_id=call_id, text=person_turn_completed_request.text)
                     )
                 )
-            return relays.PersonTurnCompletedResponse(call_id=person_turn_completed_request.call_id)
+            except restate.TerminalError as terminal_error:
+                if terminal_error.status_code != _ALREADY_COMPLETED:
+                    raise
+            return relays.PersonTurnCompletedResponse(call_id=call_id)
 
         self.record_call_handler = record_call
         self.dial_person_handler = dial_person

@@ -42,7 +42,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   against the real engine and assert `sys_invocation`; migrate them. (g)
   `scripts/verify` starts the LiveKit agent server under `VOICE_EVALS=1` and
   runs pytest at once, with no readiness wait. (h) `LivekitHandler.start_job`
-  and `CallAgent.say` run only in the gated eval.
+  and `CallAgent.say` run only in the gated eval. (i) A body the snapshots
+  cannot parse is answered 500, not 400: the Restate SDK wraps an input-serde
+  exception in a TerminalError (terminal, no retry, measured), but the serde
+  wrappers map only an empty body to 400, and TB082 counts a `try` in a
+  snapshot as a decision it may not make.
 - [ ] **durable-execution: an invocation runner's `start_` path is never
   run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`
   exists because the runner implements the whole relay, but

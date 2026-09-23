@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import os
 import socket
 import threading
+import uuid
 
 import tesser.testing as ts
+import httpx
 
 import calls.adapters.runners as runners
 import calls.application.relays as relays
@@ -107,3 +111,50 @@ class TestRestateIngressCallOrchestratorRelay:
             == b"POST /CallOrchestrator/c7/person_turn_completed HTTP/1.1"
         )
         assert fake_restate_ingress.seen[1] == b'{"call_id": "c7", "text": "Grace"}'
+
+
+class TestRestateIngressCallOrchestratorRelayServed:
+    async def test_concurrent_joins_for_one_call_are_all_acknowledged(self) -> None:
+        call_id = str(uuid.uuid4())
+        restate_ingress_call_orchestrator_relay = runners.RestateIngressCallOrchestratorRelay(
+            os.environ["RESTATE_INGRESS"]
+        )
+
+        person_joined_responses = await asyncio.gather(
+            *(
+                restate_ingress_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
+                for _ in range(8)
+            )
+        )
+
+        assert [person_joined_response.call_id for person_joined_response in person_joined_responses] == [call_id] * 8
+
+    async def test_concurrent_completed_turns_for_one_call_are_all_acknowledged(self) -> None:
+        call_id = str(uuid.uuid4())
+        restate_ingress_call_orchestrator_relay = runners.RestateIngressCallOrchestratorRelay(
+            os.environ["RESTATE_INGRESS"]
+        )
+
+        person_turn_completed_responses = await asyncio.gather(
+            *(
+                restate_ingress_call_orchestrator_relay.run_person_turn_completed(
+                    relays.PersonTurnCompletedRequest(call_id=call_id, text=f"turn {turn}")
+                )
+                for turn in range(8)
+            )
+        )
+
+        assert [
+            person_turn_completed_response.call_id for person_turn_completed_response in person_turn_completed_responses
+        ] == [call_id] * 8
+
+    async def test_a_body_that_is_not_json_is_refused_at_once_and_never_retried(self) -> None:
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=10.0) as async_client:
+            response = await async_client.post(
+                f"/CallOrchestrator/{uuid.uuid4()}/person_turn_completed",
+                content=b"[" * 100_000,
+                headers={"content-type": "application/json"},
+            )
+
+        assert response.status_code == 500
+        assert response.json()["message"].startswith("Unable to parse an input argument.")

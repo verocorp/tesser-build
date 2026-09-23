@@ -8,6 +8,7 @@ import livekit.agents as livekit_agents
 import livekit.agents.job as livekit_job
 import livekit.agents.llm as livekit_llm
 import livekit.protocol.agent as livekit_agent
+import livekit.rtc as livekit_rtc
 
 import calls.adapters.handlers as handlers
 import calls.client as client
@@ -87,3 +88,27 @@ class TestCallAgent:
             person_turn_completed_request.text
             for person_turn_completed_request in fake_calls_client.completed
         ] == [""]
+
+    async def test_a_say_from_a_participant_that_is_not_speech_is_refused(self) -> None:
+        call_agent = handlers.CallAgent(FakeCallsClient(), "c7")
+
+        with pytest.raises(livekit_rtc.RpcError) as raised:
+            await call_agent.say(
+                livekit_rtc.RpcInvocationData(
+                    request_id="r1", caller_identity="person", payload="Hello.", response_timeout=5.0, method="say"
+                )
+            )
+
+        assert raised.value.code == livekit_rtc.RpcError.ErrorCode.APPLICATION_ERROR
+
+    async def test_a_say_from_another_calls_speech_participant_is_refused(self) -> None:
+        call_agent = handlers.CallAgent(FakeCallsClient(), "c7")
+
+        with pytest.raises(livekit_rtc.RpcError) as raised:
+            await call_agent.say(
+                livekit_rtc.RpcInvocationData(
+                    request_id="r1", caller_identity="speech-c8", payload="Hello.", response_timeout=5.0, method="say"
+                )
+            )
+
+        assert raised.value.code == livekit_rtc.RpcError.ErrorCode.APPLICATION_ERROR

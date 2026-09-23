@@ -4,6 +4,7 @@ import contextlib
 import typing
 
 import tesser.testing as ts
+import pytest
 import restate
 
 import calls.adapters.runtimes as runtimes
@@ -57,15 +58,8 @@ class FakeDurablePromise:  # tesser:debt TB072
 
     async def resolve(self, value: object) -> None:
         if any(name == self._name for name, _ in self._resolved):
-            raise RuntimeError(f"promise {self._name!r} is already resolved")
+            raise restate.TerminalError("promise was already completed", status_code=409)
         self._resolved.append((self._name, value))
-
-    async def peek(self) -> object:
-        for name, value in self._resolved:
-            if name == self._name:
-                return value
-        return None
-
 
 
 @ts.fake
@@ -94,8 +88,12 @@ class FakeCallWorkflow(client.CallWorkflow[restate.WorkflowContext]):
 
 @ts.fake
 class FakeRestateWorkflowSharedContext:  # tesser:debt TB072
-    def __init__(self) -> None:
-        self.resolved: list[tuple[str, object]] = []
+    def __init__(self, key: str = "c7", resolved: list[tuple[str, object]] | None = None) -> None:
+        self._key = key
+        self.resolved: list[tuple[str, object]] = [] if resolved is None else resolved
+
+    def key(self) -> str:
+        return self._key
 
     def promise(self, name: str, serde: object) -> FakeDurablePromise:
         return FakeDurablePromise(self.resolved, name)
@@ -314,3 +312,40 @@ class TestRestateCallRuntime:
                 ),
             )
         ]
+
+    async def test_a_join_whose_call_id_is_not_the_workflows_key_is_rejected(self) -> None:
+        restate_call_runtime = runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeCallWorkflow(FakeCallOrchestratorApplicationClient()),
+        )
+        resolved: list[tuple[str, object]] = []
+
+        with pytest.raises(restate.TerminalError) as raised:
+            await restate_call_runtime.person_joined_handler(
+                typing.cast(restate.WorkflowSharedContext, FakeRestateWorkflowSharedContext(key="c7", resolved=resolved)),
+                relays.PersonJoinedRequest(call_id="c8"),
+            )
+
+        assert raised.value.status_code == 400
+        assert resolved == []
+
+    async def test_a_completed_turn_whose_call_id_is_not_the_workflows_key_is_rejected(self) -> None:
+        restate_call_runtime = runtimes.RestateCallRuntime(
+            FakeCallApplicationClient(),
+            FakeDialingApplicationClient(),
+            FakeSpeechApplicationClient(),
+            FakeCallWorkflow(FakeCallOrchestratorApplicationClient()),
+        )
+        resolved: list[tuple[str, object]] = []
+
+        with pytest.raises(restate.TerminalError) as raised:
+            await restate_call_runtime.person_turn_completed_handler(
+                typing.cast(restate.WorkflowSharedContext, FakeRestateWorkflowSharedContext(key="c7", resolved=resolved)),
+                relays.PersonTurnCompletedRequest(call_id="c8", text="Grace"),
+            )
+
+        assert raised.value.status_code == 400
+        assert resolved == []
+

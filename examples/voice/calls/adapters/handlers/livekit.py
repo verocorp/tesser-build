@@ -13,6 +13,8 @@ import calls.client as client
 
 SAY_METHOD: typing.Final[str] = "say"
 _PERSON_IDENTITY: typing.Final[str] = "person"
+_SPEECH_IDENTITY: typing.Final[str] = "speech"
+_FOREIGN_CALLER: typing.Final[str] = "only this call's speech participant may ask the agent to say something"
 
 
 class CallAgent(livekit_agents.Agent, ts.Handler):  # tesser:debt TB052
@@ -30,6 +32,8 @@ class CallAgent(livekit_agents.Agent, ts.Handler):  # tesser:debt TB052
         raise livekit_llm.StopResponse()
 
     async def say(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:
+        if rpc_invocation_data.caller_identity != f"{_SPEECH_IDENTITY}-{self._call_id}":
+            raise livekit_rtc.RpcError(livekit_rtc.RpcError.ErrorCode.APPLICATION_ERROR, _FOREIGN_CALLER)
         await self.session.say(rpc_invocation_data.payload)
         return ""
 
