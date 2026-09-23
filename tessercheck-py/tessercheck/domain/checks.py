@@ -39,6 +39,9 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.adapters", "Runner"): "runner",
     ("tesser.adapters", "Runtime"): "runtime",
+    ("tesser.adapters", "A"): "adapter_a",
+    ("tesser.adapters", "B"): "adapter_b",
+    ("tesser.adapters", "C"): "adapter_c",
     ("tesser.adapters", "Mapper"): "mapper",
     ("tesser.adapters", "Serde"): "serde",
     ("tesser.adapters", "Relay"): "relay",
@@ -207,6 +210,14 @@ RUNNER_BLOCK: typing.Final[str] = "runner"
 
 RUNTIME_BLOCK: typing.Final[str] = "runtime"
 
+A_BLOCK: typing.Final[str] = "adapter_a"
+
+B_BLOCK: typing.Final[str] = "adapter_b"
+
+C_BLOCK: typing.Final[str] = "adapter_c"
+
+REGISTRATION_BLOCKS: typing.Final[frozenset[str]] = frozenset({A_BLOCK, B_BLOCK, C_BLOCK})
+
 RELAY_SUFFIX: typing.Final[str] = "Relay"
 
 SIGNAL_INFIX: typing.Final[str] = "Signal"
@@ -235,12 +246,20 @@ CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
 )
 
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"handler", "gateway", "repository", RUNNER_BLOCK, RUNTIME_BLOCK}
+    {"handler", "gateway", "repository", RUNNER_BLOCK, RUNTIME_BLOCK} | REGISTRATION_BLOCKS
 )
 
 RUNNERS_PACKAGE: typing.Final[str] = "runners"
 
 RUNTIMES_PACKAGE: typing.Final[str] = "runtimes"
+
+A_PACKAGE: typing.Final[str] = "a"
+
+B_PACKAGE: typing.Final[str] = "b"
+
+C_PACKAGE: typing.Final[str] = "c"
+
+REGISTRATION_PACKAGES: typing.Final[tuple[str, ...]] = (A_PACKAGE, B_PACKAGE, C_PACKAGE)
 
 ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
@@ -248,13 +267,18 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "repositories": frozenset({"repository"}),
     RUNNERS_PACKAGE: frozenset({RUNNER_BLOCK}),
     RUNTIMES_PACKAGE: frozenset({RUNTIME_BLOCK, "serde"}),
+    A_PACKAGE: frozenset({A_BLOCK, "serde"}),
+    B_PACKAGE: frozenset({B_BLOCK, "serde"}),
+    C_PACKAGE: frozenset({C_BLOCK, "serde"}),
 }
 
-RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
+RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, A_PACKAGE})
 
-ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
+RUNNER_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNNERS_PACKAGE, B_PACKAGE})
 
-ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, or runtimes"
+ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, A_PACKAGE, B_PACKAGE, C_PACKAGE})
+
+ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, runtimes, a, b, or c"
 
 SERDE_BLOCK: typing.Final[str] = "serde"
 
@@ -333,6 +357,9 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "repositories": (PORTS_IMPORT_PATH,),
     RUNNERS_PACKAGE: (RELAYS_IMPORT, ORCHESTRATORS_IMPORT),
     RUNTIMES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
+    A_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
+    B_PACKAGE: (ORCHESTRATORS_IMPORT, RELAYS_IMPORT, f"adapters.{A_PACKAGE}"),
+    C_PACKAGE: (RELAYS_IMPORT, f"adapters.{B_PACKAGE}"),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", RUNTIME_BLOCK})
@@ -372,6 +399,9 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "handler": "adapters",
     RUNNER_BLOCK: "adapters",
     RUNTIME_BLOCK: "adapters",
+    A_BLOCK: "adapters",
+    B_BLOCK: "adapters",
+    C_BLOCK: "adapters",
     "serde": "adapters",
     "component": "component",
     "component_config": "component",
@@ -416,6 +446,9 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "handler": "an inbound handler",
     RUNNER_BLOCK: "a runner",
     RUNTIME_BLOCK: "a runtime",
+    A_BLOCK: "an a",
+    B_BLOCK: "a b",
+    C_BLOCK: "a c",
     "serde": "a serde",
     "component": "a component",
     "component_config": "a component config",
@@ -641,6 +674,9 @@ TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
     "repositories": ("adapters", "repositories"),
     RUNNERS_PACKAGE: ("adapters", RUNNERS_PACKAGE),
     RUNTIMES_PACKAGE: ("adapters", RUNTIMES_PACKAGE),
+    A_PACKAGE: ("adapters", A_PACKAGE),
+    B_PACKAGE: ("adapters", B_PACKAGE),
+    C_PACKAGE: ("adapters", C_PACKAGE),
     ORCHESTRATORS_PACKAGE: ("application", ORCHESTRATORS_PACKAGE),
     RELAYS_PACKAGE: ("application", RELAYS_PACKAGE),
     SNAPSHOTS_PACKAGE: ("application", SNAPSHOTS_PACKAGE),
@@ -656,6 +692,10 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
     RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE] + ("domain",),
     RUNTIMES_PACKAGE: ADAPTER_KIND_REACH[RUNTIMES_PACKAGE] + ("domain",),
+    A_PACKAGE: ADAPTER_KIND_REACH[A_PACKAGE] + ("domain",),
+    B_PACKAGE: ADAPTER_KIND_REACH[B_PACKAGE] + (APPLICATION_CLIENT_IMPORT, "domain"),
+    C_PACKAGE: ADAPTER_KIND_REACH[C_PACKAGE]
+    + (APPLICATION_CLIENT_IMPORT, f"adapters.{A_PACKAGE}", "domain"),
     ORCHESTRATORS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
     + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, RELAYS_IMPORT),
     RELAYS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
@@ -672,6 +712,7 @@ TEST_TIER_FOREIGN: typing.Final[dict[str, tuple[str, ...]]] = {
 
 ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
     {"handlers", "gateways", "repositories", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
+    | frozenset(REGISTRATION_PACKAGES)
 )
 
 SRV_TIER: typing.Final[str] = "srv"
@@ -703,6 +744,9 @@ TEST_TIER_SHELL: typing.Final[dict[str, frozenset[str]]] = {
     "repositories": frozenset(),
     RUNNERS_PACKAGE: frozenset(),
     RUNTIMES_PACKAGE: frozenset(),
+    A_PACKAGE: frozenset(),
+    B_PACKAGE: frozenset(),
+    C_PACKAGE: frozenset(),
     ORCHESTRATORS_PACKAGE: frozenset(),
     RELAYS_PACKAGE: frozenset(),
     SNAPSHOTS_PACKAGE: frozenset(),
@@ -4790,6 +4834,7 @@ class ClassDecl(ts.Entity):
     _held_relays: Names
     _stores: tuple[Fact, ...]
     _self_annotations: tuple[Field, ...]
+    _registered_containers: Names
     _bases: Names
     _decoration: Names
     _extras: tuple[Fact, ...]
@@ -4964,6 +5009,22 @@ class ClassDecl(ts.Entity):
             ):
                 self_annotations.append(Field(FieldSpec(inner.target.attr, inner.annotation, inner.lineno)))
         object.__setattr__(self, "_self_annotations", tuple(self_annotations))
+        registered_containers: set[str] = set()
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Call):
+                continue
+            called = scope.resolve(Text(ast.unparse(inner.func)))
+            called_block = kind_table.block_of(called) if called is not None else None
+            if called_block is None or str(called_block) not in REGISTRATION_BLOCKS:
+                continue
+            for argument in list(inner.args) + [keyword.value for keyword in inner.keywords]:
+                if (
+                    isinstance(argument, ast.Attribute)
+                    and isinstance(argument.value, ast.Name)
+                    and argument.value.id == "self"
+                ):
+                    registered_containers.add(argument.attr)
+        object.__setattr__(self, "_registered_containers", Names(tuple(sorted(registered_containers))))
         bases: list[str] = []
         for base in node.bases:
             base_ref = Annotation(base).primary()
@@ -6369,7 +6430,7 @@ class ClassDecl(ts.Entity):
         fields: dict[str, Annotation] = {str(field.name()): field.annotation() for field in self._fields}
         for fact in self._stores:
             published = str(fact.detail())
-            if published.startswith("_"):
+            if published.startswith("_") or published in self._registered_containers:
                 continue
             annotated = dict(fields)
             for field in self._self_annotations:
@@ -6397,7 +6458,8 @@ class ClassDecl(ts.Entity):
                         "TB081",
                         f"{self._module}.{self._name} publishes {published}; "
                         "a component publishes only its client, typed as its ts.Client, "
-                        "and its runtimes, each typed as a ts.Runtime",
+                        "its runtimes, each typed as a ts.Runtime, and the engine "
+                        "containers it hands an a, a b, or a c to register into",
                     ))
                 )
         return tuple(found)
@@ -10106,8 +10168,8 @@ class Module(ts.Entity):
                     1,
                     "TB041",
                     f"{module_name} is not in an adapter kind package; an adapters "
-                    "module lives in handlers, gateways, repositories, runners, or "
-                    "runtimes, because placement is what carries an adapter's reach",
+                    "module lives in handlers, gateways, repositories, runners, "
+                    "runtimes, a, b, or c, because placement is what carries an adapter's reach",
                 ))
             )
         for stmt in self._body:
@@ -10329,18 +10391,18 @@ class Module(ts.Entity):
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runtime imports "
+                            f"{module_name} imports {target}; only a runtime or an a imports "
                             "the application client, because an action is reachable only "
                             "through the engine",
                         ))
                     )
-                elif pieces[0] == context and runner_only and kind_package != RUNNERS_PACKAGE:
+                elif pieces[0] == context and runner_only and kind_package not in RUNNER_KIND_PACKAGES:
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runner imports the "
+                            f"{module_name} imports {target}; only a runner or a b imports the "
                             "orchestrators, because an orchestrator is built per invocation by "
                             "the workflow that runs beside that invocation's runners",
                         ))
@@ -10360,7 +10422,9 @@ class Module(ts.Entity):
                                 "the context client, a gateway or a repository the ports, "
                                 "a runner its relays and the orchestrators its workflow "
                                 "builds, a runtime the application client and the relays "
-                                "it registers, and none of them another adapters package",
+                                "it registers, an a what a runtime reaches, a b the relays, "
+                                "the orchestrators and a, a c the relays and b, and none of "
+                                "them another adapters package",
                             ))
                         )
                 elif pieces[0] == context:
@@ -11237,7 +11301,7 @@ class Module(ts.Entity):
                     "TB070",
                     f"{module_name} resolves to no test tier; "
                     "a sibling test lives in a role package, an adapter kind package "
-                    "(handlers, gateways, repositories, runners, or runtimes), or the "
+                    "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
                     "orchestrators package",
                 )),
             )
@@ -11397,11 +11461,11 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runtimes reaches the application client; a test reaches only what "
+                            "runtimes, a, b, or c reaches the application client; a test reaches only what "
                             "its placement allows",
                         ))
                     )
-                elif allowed and tier != RUNNERS_PACKAGE and not at_home and any(
+                elif allowed and tier not in RUNNER_KIND_PACKAGES and not at_home and any(
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in RUNNER_ONLY_IMPORTS
                 ):
@@ -11411,7 +11475,7 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runners reaches the orchestrators; a test reaches only what its "
+                            "runners or b reaches the orchestrators; a test reaches only what its "
                             "placement allows",
                         ))
                     )

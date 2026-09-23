@@ -2599,7 +2599,9 @@ def test_only_a_handler_imports_its_own_client() -> None:
         and "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, and none of them another adapters package" in f
+        "client and the relays it registers, an a what a runtime reaches, a b the relays, "
+        "the orchestrators and a, a c the relays and b, and none of them another adapters "
+        "package" in f
         for f in findings
     )
 
@@ -4980,14 +4982,14 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
     assert any(
         "shop.adapters.test_flat resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
         "orchestrators package" in f
         for f in findings
     )
     assert any(
         "shop.adapters.blobs.test_blob resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
         "orchestrators package" in f
         for f in findings
     )
@@ -5225,7 +5227,7 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
     assert any(
         "weird.test_nested resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "(handlers, gateways, repositories, runners, runtimes, a, b, or c), or the "
         "orchestrators package" in f
         for f in findings
     )
@@ -7402,7 +7404,9 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, and none of them another adapters package" in f
+        "client and the relays it registers, an a what a runtime reaches, a b the relays, "
+        "the orchestrators and a, a c the relays and b, and none of them another adapters "
+        "package" in f
         for f in findings
     )
     assert not any("imports shop.application.ports.sink;" in f for f in findings)
@@ -13288,7 +13292,7 @@ def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
     )
     assert any(
         "shop.adapters.loose is not in an adapter kind package; an adapters "
-        "module lives in handlers, gateways, repositories, runners, or runtimes, "
+        "module lives in handlers, gateways, repositories, runners, runtimes, a, b, or c, "
         "because placement is what carries an adapter's reach" in f
         for f in findings
     )
@@ -13575,25 +13579,25 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
         ))).violations()
     )
     assert any(
-        "shop.application.peeker imports shop.application.client.quotes; only a runtime imports "
+        "shop.application.peeker imports shop.application.client.quotes; only a runtime or an a imports "
         "the application client, because an action is reachable only through the engine" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.peeker imports shop.application.orchestrators; only a runner imports "
+        "shop.application.peeker imports shop.application.orchestrators; only a runner or a b imports "
         "the orchestrators, because an orchestrator is built per invocation by the workflow that "
         "runs beside that invocation's runners" in f
         for f in findings
     ), findings
     assert any(
-        "shop.component.peek imports shop.application.orchestrators; only a runner imports the "
+        "shop.component.peek imports shop.application.orchestrators; only a runner or a b imports the "
         "orchestrators" in f
         for f in findings
     ), findings
     assert not any("shop.adapters.runners.peek imports shop.application.orchestrators" in f for f in findings), findings
     assert any(
         "shop.adapters.handlers.peek imports shop.application.client.quotes; only "
-        "a runtime imports the application client" in f
+        "a runtime or an a imports the application client" in f
         for f in findings
     ), findings
     for importer, imported in (
@@ -13609,7 +13613,7 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
         ), (importer, findings)
     assert any(
         "shop.adapters.runtimes.peek imports shop.application.orchestrators; only a runner "
-        "imports the orchestrators" in f
+        "or a b imports the orchestrators" in f
         for f in findings
     ), findings
     assert any(
@@ -13619,13 +13623,13 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
     ), findings
     assert any(
         "shop.application.test_peek imports shop.application.client.quotes, but only a test "
-        "placed in runtimes reaches the application client; a test reaches only what its "
+        "placed in runtimes, a, b, or c reaches the application client; a test reaches only what its "
         "placement allows" in f
         for f in findings
     ), findings
     assert any(
         "shop.tests.test_peek imports shop.application.orchestrators, but only a test placed in "
-        "runners reaches the orchestrators; a test reaches only what its placement allows" in f
+        "runners or b reaches the orchestrators; a test reaches only what its placement allows" in f
         for f in findings
     ), findings
     assert not any(
@@ -14031,14 +14035,16 @@ def test_a_component_publishes_only_its_client_and_its_runtimes() -> None:
     )
     assert any(
         "shop.component.bad.Bad publishes extra; "
-        "a component publishes only its client, typed as its ts.Client, and its "
-        "runtimes, each typed as a ts.Runtime" in f
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
+        "a b, or a c to register into" in f
         for f in findings
     )
     assert any(
         "shop.component.bad.Bad publishes client; "
-        "a component publishes only its client, typed as its ts.Client, and its "
-        "runtimes, each typed as a ts.Runtime" in f
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
+        "a b, or a c to register into" in f
         for f in findings
     )
 
@@ -14481,8 +14487,9 @@ def test_a_component_publishes_its_runtimes_as_one_or_a_tuple_of_them() -> None:
     )
     assert any(
         "shop.component.mixed.Mixed publishes engine_runtimes; "
-        "a component publishes only its client, typed as its ts.Client, and its "
-        "runtimes, each typed as a ts.Runtime" in f
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
+        "a b, or a c to register into" in f
         for f in findings
     )
     assert not any("shop.component.component.Shop publishes engine_runtimes" in f for f in findings)
@@ -18635,7 +18642,9 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, and none of them another adapters package" in f
+        "client and the relays it registers, an a what a runtime reaches, a b the relays, "
+        "the orchestrators and a, a c the relays and b, and none of them another adapters "
+        "package" in f
         for f in findings
     ), findings
     assert not any("imports shop.application.relays;" in f for f in findings), findings
@@ -20398,5 +20407,144 @@ def test_a_context_error_is_named_for_its_situation_and_never_for_a_status_categ
     assert not any("QuoteRejected is named for a status category" in f for f in findings), findings
     assert any(
         "shop.application.ports.quote_store.QuoteStoreUnavailable declares no ts.* base" in f
+        for f in findings
+    ), findings
+
+
+def test_a_b_and_c_reach_one_way_from_c_to_b_to_a() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/a/record.py",
+                "shop.adapters.a.record",
+                "import tesser.adapters as ts\n"
+                "import shop.application.client as client\n"
+                "import shop.application.orchestrators as orchestrators\n"
+                "import shop.adapters.b.conduct as conduct\n"
+                "class Record(ts.A):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/b/conduct.py",
+                "shop.adapters.b.conduct",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.a.record as record\n"
+                "import shop.application.orchestrators as orchestrators\n"
+                "import shop.application.client as client\n"
+                "import shop.adapters.c.ingress as ingress\n"
+                "class Conduct(ts.B):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/c/ingress.py",
+                "shop.adapters.c.ingress",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.b.conduct as conduct\n"
+                "import shop.adapters.a.record as record\n"
+                "class Ingress(ts.C):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/leg.py",
+                "shop.adapters.runners.leg",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.a.record as record\n",
+                False,
+            ),
+            (
+                "shop/adapters/b/test_conduct.py",
+                "shop.adapters.b.test_conduct",
+                "import shop.application.client as client\n"
+                "import shop.adapters.a.record as record\n"
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+            (
+                "shop/adapters/a/test_record.py",
+                "shop.adapters.a.test_record",
+                "import shop.application.orchestrators as orchestrators\n"
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    for importer, imported in (
+        ("a.record", "application.client"),
+        ("b.conduct", "adapters.a.record"),
+        ("b.conduct", "application.orchestrators"),
+        ("c.ingress", "adapters.b.conduct"),
+    ):
+        assert not any(
+            f"shop.adapters.{importer} imports shop.{imported};" in f and "TB060" in f for f in findings
+        ), (importer, imported, findings)
+    assert any(
+        "shop.adapters.a.record imports shop.application.orchestrators; only a runner or a b imports "
+        "the orchestrators" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.adapters.b.conduct imports shop.application.client; only a runtime or an a imports "
+        "the application client" in f
+        for f in findings
+    ), findings
+    for importer, imported in (
+        ("a.record", "adapters.b.conduct"),
+        ("b.conduct", "adapters.c.ingress"),
+        ("c.ingress", "adapters.a.record"),
+        ("runners.leg", "adapters.a.record"),
+    ):
+        assert any(
+            f"shop.adapters.{importer} imports shop.{imported}; an adapters kind package reaches "
+            "only what its kind reaches" in f
+            for f in findings
+        ), (importer, imported, findings)
+    assert not any("shop.adapters.b.test_conduct" in f and "TB070" in f for f in findings), findings
+    assert any(
+        "shop.adapters.a.test_record imports shop.application.orchestrators, but a test placed in a "
+        "reaches only" in f
+        for f in findings
+    ), findings
+
+
+def test_a_component_publishes_the_engine_containers_it_hands_an_a_b_or_c() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/a/record.py",
+                "shop.adapters.a.record",
+                "import tesser.adapters as ts\n"
+                "class Record(ts.A):\n"
+                "    def __init__(self, service: object) -> None:\n"
+                "        self.handler = service\n",
+                False,
+            ),
+            (
+                "shop/component/registered.py",
+                "shop.component.registered",
+                "import tesser.component as ts\n"
+                "import restate\n"
+                "import shop.adapters.a.record as record\n"
+                "class Registered(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.actions_service: restate.Service = restate.Service('Actions')\n"
+                "        self.loose_service: restate.Service = restate.Service('Loose')\n"
+                "        record.Record(self.actions_service)\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("shop.component.registered.Registered publishes actions_service" in f for f in findings), findings
+    assert any(
+        "shop.component.registered.Registered publishes loose_service; "
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an a, "
+        "a b, or a c to register into" in f
         for f in findings
     ), findings
