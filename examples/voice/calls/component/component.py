@@ -25,14 +25,14 @@ class Spec(ts.Spec):
     def __init__(
         self,
         storage: str,
-        ingress: str,
+        restate_url: str,
         livekit_url: str,
         livekit_api_key: str,
         livekit_api_secret: str,
         livekit_agent_name: str,
     ) -> None:
         self.storage = storage
-        self.ingress = ingress
+        self.restate_url = restate_url
         self.livekit_url = livekit_url
         self.livekit_api_key = livekit_api_key
         self.livekit_api_secret = livekit_api_secret
@@ -42,7 +42,7 @@ class Spec(ts.Spec):
 class Config(ts.Config):
     def __init__(self, spec: Spec) -> None:
         self.storage = spec.storage
-        self.ingress = spec.ingress
+        self.restate_url = spec.restate_url
         self.livekit_url = spec.livekit_url
         self.livekit_api_key = spec.livekit_api_key
         self.livekit_api_secret = spec.livekit_api_secret
@@ -125,15 +125,15 @@ class Calls(ts.Component):
         )
         restate_person_joined = c.RestatePersonJoined(self.call_orchestrator_workflow)
         restate_person_turn_completed = c.RestatePersonTurnCompleted(self.call_orchestrator_workflow)
-        restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
-            config.ingress,
+        restate_http_call_orchestrator_relay = c.RestateHttpCallOrchestratorRelay(
+            config.restate_url,
             restate_conduct_call,
             restate_person_joined,
             restate_person_turn_completed,
         )
         self.client: client.CallsClient = Calls.Client(
-            application.CallService(restate_ingress_call_orchestrator_relay, self._postgres_call_store),
-            application.CallEventsService(restate_ingress_call_orchestrator_relay),
+            application.CallService(restate_http_call_orchestrator_relay, self._postgres_call_store),
+            application.CallEventsService(restate_http_call_orchestrator_relay),
         )
 
     async def close(self) -> None:

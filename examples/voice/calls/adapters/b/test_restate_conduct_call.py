@@ -102,7 +102,7 @@ class TestRestateConductCall:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
             sent = await restate_client.Client(async_client).workflow_send(
                 restate_conduct_call.handler, key=call_id, arg=conduct_call_request(call_id=call_id)
             )

@@ -27,7 +27,7 @@ both: each one places a call through the loaded app while a simulated person
 LiveKit for the room the agent was dispatched into, joins it as `person`, and
 answers either when asked or over the question.
 
-Defaults are Postgres at `localhost:5434` and Restate ingress/admin at
+Defaults are Postgres at `localhost:5434` and Restate (calls/admin) at
 `localhost:28080`/`localhost:29070`. Override them with `CALLS_STORAGE`,
-`RESTATE_INGRESS`, and `RESTATE_ADMIN`. This test uses paid LiveKit/model APIs
+`RESTATE_URL`, and `RESTATE_ADMIN`. This test uses paid LiveKit/model APIs
 and is skipped unless `VOICE_EVALS=1`.

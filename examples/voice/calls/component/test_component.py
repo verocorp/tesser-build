@@ -9,11 +9,11 @@ import pgdatabase.database as pgdatabase_database
 @ts.helper
 def _spec(
     storage: str = "postgres://a@b/c",
-    ingress: str = "http://localhost:8080",
+    restate_url: str = "http://localhost:8080",
 ) -> component.Spec:
     return component.Spec(
         storage=storage,
-        ingress=ingress,
+        restate_url=restate_url,
         livekit_url="ws://livekit",
         livekit_api_key="key",
         livekit_api_secret="secret",
@@ -27,10 +27,10 @@ class TestConfig:
 
         assert config.database == pgdatabase_database.DatabaseRequest("postgres://a@b/c")
 
-    def test_a_config_carries_the_engine_ingress(self) -> None:
-        config = component.Config(_spec(ingress="http://localhost:8080"))
+    def test_a_config_carries_the_restate_url(self) -> None:
+        config = component.Config(_spec(restate_url="http://localhost:8080"))
 
-        assert config.ingress == "http://localhost:8080"
+        assert config.restate_url == "http://localhost:8080"
 
     def test_a_config_carries_the_livekit_settings(self) -> None:
         config = component.Config(_spec())

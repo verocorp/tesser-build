@@ -15,7 +15,7 @@ class TestCallsContext:
         config = component.Config(
             component.Spec(
                 storage=os.environ["CALLS_STORAGE"],
-                ingress=os.environ["RESTATE_INGRESS"],
+                restate_url=os.environ["RESTATE_URL"],
                 livekit_url="ws://livekit.invalid",
                 livekit_api_key="unused",
                 livekit_api_secret="unused",

@@ -91,7 +91,7 @@ class TestRestateRecordCall:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
             record_call_response = await restate_client.Client(async_client).service_call(
                 restate_record_call.handler, relays.RecordCallRequest(call=domain.Call(call_spec()))
             )
@@ -136,7 +136,7 @@ class TestRestateDialPerson:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
             dial_person_response = await restate_client.Client(async_client).service_call(
                 restate_dial_person.handler, relays.DialPersonRequest(call=domain.Call(call_spec()))
             )
@@ -181,7 +181,7 @@ class TestRestateHangUp:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
             hang_up_response = await restate_client.Client(async_client).service_call(
                 restate_hang_up.handler, relays.HangUpRequest(call=domain.Call(call_spec()))
             )
@@ -226,7 +226,7 @@ class TestRestateSayUtterance:
                 break
             await asyncio.sleep(0.1)
 
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
             say_utterance_response = await restate_client.Client(async_client).service_call(
                 restate_say_utterance.handler, relays.SayUtteranceRequest(call_id="c7", text="Hello.")
             )

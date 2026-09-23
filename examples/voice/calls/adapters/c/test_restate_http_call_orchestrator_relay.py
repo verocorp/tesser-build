@@ -57,7 +57,7 @@ def conduct_call_request(call_id: str = "c7") -> relays.ConductCallRequest:
     return relays.ConductCallRequest(call=domain.Call(domain.CallSpec(call_id=call_id, person_name="")))
 
 
-class TestRestateIngressCallOrchestratorRelay:
+class TestRestateHttpCallOrchestratorRelay:
     async def test_a_call_conducted_through_the_engine_records_the_name_the_person_said(self) -> None:
         call_id = str(uuid.uuid4())
         fake_call_application_client = FakeCallApplicationClient()
@@ -101,17 +101,17 @@ class TestRestateIngressCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
-            os.environ["RESTATE_INGRESS"],
+        restate_http_call_orchestrator_relay = c.RestateHttpCallOrchestratorRelay(
+            os.environ["RESTATE_URL"],
             restate_conduct_call,
             restate_person_joined,
             restate_person_turn_completed,
         )
         conducting = asyncio.create_task(
-            restate_ingress_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+            restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
         )
-        await restate_ingress_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
-        await restate_ingress_call_orchestrator_relay.run_person_turn_completed(
+        await restate_http_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
+        await restate_http_call_orchestrator_relay.run_person_turn_completed(
             relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
         )
         conduct_call_response = await conducting
@@ -181,15 +181,15 @@ class TestRestateIngressCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        restate_ingress_call_orchestrator_relay = c.RestateIngressCallOrchestratorRelay(
-            os.environ["RESTATE_INGRESS"],
+        restate_http_call_orchestrator_relay = c.RestateHttpCallOrchestratorRelay(
+            os.environ["RESTATE_URL"],
             restate_conduct_call,
             restate_person_joined,
             restate_person_turn_completed,
         )
         person_joined_responses = await asyncio.gather(
             *(
-                restate_ingress_call_orchestrator_relay.run_person_joined(
+                restate_http_call_orchestrator_relay.run_person_joined(
                     relays.PersonJoinedRequest(call_id=call_id)
                 )
                 for _ in range(8)
@@ -197,7 +197,7 @@ class TestRestateIngressCallOrchestratorRelay:
         )
         person_turn_completed_responses = await asyncio.gather(
             *(
-                restate_ingress_call_orchestrator_relay.run_person_turn_completed(
+                restate_http_call_orchestrator_relay.run_person_turn_completed(
                     relays.PersonTurnCompletedRequest(call_id=call_id, text=f"turn {turn}")
                 )
                 for turn in range(8)
@@ -254,8 +254,8 @@ class TestRestateIngressCallOrchestratorRelay:
                 break
             await asyncio.sleep(0.1)
 
-        person_joined_response = await c.RestateIngressCallOrchestratorRelay(
-            os.environ["RESTATE_INGRESS"],
+        person_joined_response = await c.RestateHttpCallOrchestratorRelay(
+            os.environ["RESTATE_URL"],
             restate_conduct_call,
             restate_person_joined,
             restate_person_turn_completed,

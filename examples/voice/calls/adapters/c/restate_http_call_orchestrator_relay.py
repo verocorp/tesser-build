@@ -124,7 +124,7 @@ class RestatePersonTurnCompleted(ts.C):
         self.handler = person_turn_completed
 
 
-class RestateIngressCallOrchestratorRelay(ts.C):
+class RestateHttpCallOrchestratorRelay(ts.C):
     def __init__(
         self,
         restate_url: str,

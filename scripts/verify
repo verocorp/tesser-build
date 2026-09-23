@@ -286,7 +286,7 @@ run_specs_app() {
 # call id. place_call runs the CallOrchestrator workflow on Restate, and its
 # record_call action writes the call through an asyncpg repository; get_call
 # reads it back directly. The gate needs a reachable Postgres at
-# CALLS_STORAGE and a Restate server at RESTATE_INGRESS / RESTATE_ADMIN, and
+# CALLS_STORAGE and a Restate server at RESTATE_URL / RESTATE_ADMIN, and
 # has no skip. It serves the tree's Restate endpoint itself, registers it
 # with the server at VOICE_DEPLOYMENT (the address the server dials back),
 # and stops it after pytest. The adapter tests serve endpoints of their own
@@ -304,7 +304,7 @@ run_voice() {
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict app calls pgdatabase simulated srv tests conftest.py || return 1
   local storage="${CALLS_STORAGE:-postgres://tesser@localhost:5434/tesser}"
-  local ingress="${RESTATE_INGRESS:-http://localhost:28080}"
+  local restate_url="${RESTATE_URL:-http://localhost:28080}"
   local admin="${RESTATE_ADMIN:-http://localhost:29070}"
   local port="${VOICE_DEPLOYMENT_PORT:-9080}"
   local callback_host="${VOICE_CALLBACK_HOST:-host.docker.internal}"
@@ -315,7 +315,7 @@ run_voice() {
   export LIVEKIT_AGENT_NAME="${LIVEKIT_AGENT_NAME:-caller}"
   export LIVEKIT_SIP_TRUNK_ID="${LIVEKIT_SIP_TRUNK_ID:-unused}"
   step "serve the Restate endpoint on :$port and register it at $admin"
-  CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" PYTHONPATH=.:../../tesser-py \
+  CALLS_STORAGE="$storage" RESTATE_URL="$restate_url" PYTHONPATH=.:../../tesser-py \
     python3 -m srv.restate.main "0.0.0.0:$port" &
   local host=$!
   local registered=1
@@ -336,12 +336,12 @@ run_voice() {
   local worker=""
   if [ "${VOICE_EVALS:-0}" = "1" ]; then
     step "serve the LiveKit agent server as $LIVEKIT_AGENT_NAME"
-    CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" PYTHONPATH=.:../../tesser-py \
+    CALLS_STORAGE="$storage" RESTATE_URL="$restate_url" PYTHONPATH=.:../../tesser-py \
       python3 -m srv.livekit.agent_server &
     worker=$!
   fi
-  step "pytest (against Postgres at CALLS_STORAGE and Restate at RESTATE_INGRESS)"
-  CALLS_STORAGE="$storage" RESTATE_INGRESS="$ingress" RESTATE_ADMIN="$admin" \
+  step "pytest (against Postgres at CALLS_STORAGE and Restate at RESTATE_URL)"
+  CALLS_STORAGE="$storage" RESTATE_URL="$restate_url" RESTATE_ADMIN="$admin" \
     VOICE_CALLBACK_HOST="$callback_host" pytest -q
   local status=$?
   kill -INT "$host" 2>/dev/null
