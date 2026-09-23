@@ -410,12 +410,12 @@ yet reach, and the names they found that were deferred rather than renamed:
   `Unreadable`, or a bare `Rejected`; it fired on 23 declarations in five
   trees (not 22), and removing the `port_error` placement row made the 9
   port errors TB052 findings.
-- [ ] **The skill does not yet teach these rules.** A finding's message is
-  the only guidance an agent gets; the naming rows belong in
-  `skills/tesser-build/python.md` with a `skill-version` bump. Its
-  durable-execution walkthrough also still names relays and runners the old
-  way (`OrderActionsRunner`, `relays.OrderOrchestratorRequest`, `run`), so the
-  relay and runner naming rules go in with it.
+- [x] **The skill now teaches these rules (completed by the adapter-shape
+  wave, 2026-09-22).** `skills/tesser-build/python.md`'s
+  orchestrators-actions-relays section carries the relay and runner naming
+  rules, `skill-version` is bumped, and its durable-execution walkthrough
+  names relays and runners the current way (`OrderActionsRelay`,
+  `relays.ConfirmOrderRequest`, `confirm_order`).
 
 ## Left open by the rows 1-7 Codex challenge (2026-09-14, v0.1.6.1)
 
@@ -891,7 +891,7 @@ domain modules out before removing them.
   result address on the ingress; the request body is read with no size cap and
   `json.loads` runs once per field; snapshots carry no version, so a field
   added or a rule tightened fails every in-flight journal terminally;
-  `RestateIngressConfirmOrderRelay` opens a new `httpx.AsyncClient` per send
+  `RestateIngressOrderOrchestratorRelay` opens a new `httpx.AsyncClient` per send
   (stated in the README as the cost of nothing async outliving a request);
   `MemoryProductCatalogRepository.close()` clears a dict a live handler may
   still hold; `.importlinter` now carries three pairwise
