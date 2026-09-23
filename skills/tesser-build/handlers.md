@@ -48,8 +48,9 @@ Yes → handler.
    that makes no call on the client it holds is doing application work, or
    routing that belongs to the host (`srv.md`), inside an adapter. The
    analyzer finds the client by the `__init__` parameter annotated with the
-   context's `Client` and the `self` attribute it is kept on; private
-   (`_`-prefixed) helpers are not read.
+   context's `Client` and the `self` attribute it is kept on; a call inside
+   a nested function or lambda does not count; private (`_`-prefixed)
+   helpers are not read, and `__call__` is.
 2. **A handler is a total transform: request DTO in, response DTO out.** Every
    endpoint method has the same signature — `(HttpRequest) -> Response` — and
    the handler touches nothing else: no socket, no framework request object, no

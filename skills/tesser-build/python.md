@@ -1812,10 +1812,13 @@ class Handler(ts.Handler):
   analyzer reads the `__init__` parameter annotated with the context's
   `client.<X>Client`, the `self` attribute it is kept on, and requires each
   public method to make at least one call on that attribute
-  (`self._client.op(...)`, or `self._client(...)`). A public method that
-  never calls it is application work, or routing the host owns, sitting in
-  an adapter: move the logic behind the client, or the constant into `srv/`.
-  Private (`_`-prefixed) and dunder methods are not read.
+  (`self._client.op(...)`, `self._client(...)`, or either through a local
+  name bound to it). A call inside a nested function or lambda does not
+  count, and neither does a `_`-prefixed method called on the client. A
+  public method that never calls it is application work, or routing the
+  host owns, sitting in an adapter: move the logic behind the client, or
+  the constant into `srv/`. Private (`_`-prefixed) methods are not read;
+  `__call__` is.
 - **The handler matches the context's `ERRORS`; the host catches only its
   own.** A context declares what crosses its `Client` in `client/`
   (`class Rejected(ts.Error)`, and `ERRORS = (Rejected, ...)`); the handler

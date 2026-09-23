@@ -5080,24 +5080,55 @@ class ClassDecl(ts.Entity):
         held_relays = held(RELAY_BLOCK)
         object.__setattr__(self, "_held_ports", Names(held_ports))
         object.__setattr__(self, "_held_relays", Names(held_relays))
-        held_clients = frozenset(held("client"))
         idle_handlers: list[tuple[int, str, str | None, tuple[str, ...]]] = []
         if own_block is not None and str(own_block) == "handler":
+            held_clients = frozenset(held("client"))
             for item in node.body:
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
+                if item.name.startswith("_") and item.name != "__call__":
+                    continue
+                client_aliases: set[str] = set()
                 calls_client = False
-                for inner in ast.walk(item):
+                pending: list[ast.AST] = list(item.body)
+                while pending:
+                    inner = pending.pop(0)
+                    if isinstance(
+                        inner, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef, ast.GeneratorExp)
+                    ):
+                        continue
+                    pending.extend(ast.iter_child_nodes(inner))
+                    if isinstance(inner, ast.Assign) and len(inner.targets) == 1 and isinstance(inner.targets[0], ast.Name):
+                        aliased = inner.value
+                        if isinstance(aliased, ast.Attribute) and isinstance(aliased.value, ast.Attribute):
+                            if not aliased.attr.startswith("_"):
+                                aliased = aliased.value
+                        if (
+                            isinstance(aliased, ast.Attribute)
+                            and isinstance(aliased.value, ast.Name)
+                            and aliased.value.id == "self"
+                            and aliased.attr in held_clients
+                        ):
+                            client_aliases.add(inner.targets[0].id)
                     if not isinstance(inner, ast.Call):
                         continue
                     callee = inner.func
-                    if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Attribute):
-                        callee = callee.value
+                    if isinstance(callee, ast.Name) and callee.id in client_aliases:
+                        calls_client = True
+                    if not isinstance(callee, ast.Attribute):
+                        continue
+                    if isinstance(callee.value, ast.Name) and callee.value.id == "self" and callee.attr in held_clients:
+                        calls_client = True
+                    if callee.attr.startswith("_"):
+                        continue
+                    receiver = callee.value
+                    if isinstance(receiver, ast.Name) and receiver.id in client_aliases:
+                        calls_client = True
                     if (
-                        isinstance(callee, ast.Attribute)
-                        and isinstance(callee.value, ast.Name)
-                        and callee.value.id == "self"
-                        and callee.attr in held_clients
+                        isinstance(receiver, ast.Attribute)
+                        and isinstance(receiver.value, ast.Name)
+                        and receiver.value.id == "self"
+                        and receiver.attr in held_clients
                     ):
                         calls_client = True
                 if not calls_client:
