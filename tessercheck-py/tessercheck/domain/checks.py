@@ -4926,6 +4926,7 @@ class ClassDecl(ts.Entity):
     _bodies: tuple[Body, ...]
     _held_ports: Names
     _held_relays: Names
+    _idle_handlers: tuple[Fact, ...]
     _stores: tuple[Fact, ...]
     _self_annotations: tuple[Field, ...]
     _registered_containers: Names
@@ -5079,6 +5080,29 @@ class ClassDecl(ts.Entity):
         held_relays = held(RELAY_BLOCK)
         object.__setattr__(self, "_held_ports", Names(held_ports))
         object.__setattr__(self, "_held_relays", Names(held_relays))
+        held_clients = frozenset(held("client"))
+        idle_handlers: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if own_block is not None and str(own_block) == "handler":
+            for item in node.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name.startswith("_"):
+                    continue
+                calls_client = False
+                for inner in ast.walk(item):
+                    if not isinstance(inner, ast.Call):
+                        continue
+                    callee = inner.func
+                    if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Attribute):
+                        callee = callee.value
+                    if (
+                        isinstance(callee, ast.Attribute)
+                        and isinstance(callee.value, ast.Name)
+                        and callee.value.id == "self"
+                        and callee.attr in held_clients
+                    ):
+                        calls_client = True
+                if not calls_client:
+                    idle_handlers.append((item.lineno, "idle_handler", item.name, ()))
+        object.__setattr__(self, "_idle_handlers", tuple(Fact(FactSpec(*row)) for row in idle_handlers))
         stores: list[tuple[int, str, str | None, tuple[str, ...]]] = []
         for inner in ast.walk(node):
             if isinstance(inner, ast.AnnAssign):
@@ -6149,6 +6173,23 @@ class ClassDecl(ts.Entity):
             )
         for line, violation in pending[index:]:
             found.append(violation)
+        return tuple(found)
+
+    def handler_client_violations(self) -> tuple[Violation, ...]:
+        found: list[Violation] = []
+        for fact in self._idle_handlers:
+            where = f"{self._module}.{self._name}.{fact.detail()}"
+            found.append(
+                Violation(ViolationSpec(
+                    str(self._path),
+                    int(fact.lineno()),
+                    "TB082",
+                    f"{where} never calls its client; a handler method calls the context "
+                    "client, because a handler decodes a message, calls the client, and "
+                    "encodes the answer, and a method that reaches no client is doing "
+                    "application or host work in an adapter",
+                ))
+            )
         return tuple(found)
 
     def port_violations(self, signature_policy: SignaturePolicy) -> tuple[Violation, ...]:
@@ -15032,6 +15073,8 @@ class Codebase(ts.AggregateRoot):
                         found.extend(decl.error_name_violations())
                 elif block in ("repository", "gateway", "handler"):
                     found.extend(ADAPTER_RECORDS.violations(decl))
+                    if block == "handler" and str(module.place()) not in TEST_TIER:
+                        found.extend(decl.handler_client_violations())
                 elif block == "port":
                     found.extend(PORT_RECORDS.violations(decl))
                     if str(module.place()) in (

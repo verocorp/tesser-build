@@ -1808,6 +1808,14 @@ class Handler(ts.Handler):
   `HttpRequest`, so a test builds one by hand (bytes body included) and
   asserts on the returned `HttpResponse`. Only a handler imports its own
   context's client (TB060).
+- **Every public handler method calls the context client** (TB082). The
+  analyzer reads the `__init__` parameter annotated with the context's
+  `client.<X>Client`, the `self` attribute it is kept on, and requires each
+  public method to make at least one call on that attribute
+  (`self._client.op(...)`, or `self._client(...)`). A public method that
+  never calls it is application work, or routing the host owns, sitting in
+  an adapter: move the logic behind the client, or the constant into `srv/`.
+  Private (`_`-prefixed) and dunder methods are not read.
 - **The handler matches the context's `ERRORS`; the host catches only its
   own.** A context declares what crosses its `Client` in `client/`
   (`class Rejected(ts.Error)`, and `ERRORS = (Rejected, ...)`); the handler

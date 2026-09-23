@@ -206,6 +206,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Body.adapter_delegation_violations": "public gateway, repository, or runner method",
     "ClassDecl.actions_client_violations": "application client protocol method",
     "Body.port_call_violations": "public actions method",
+    "ClassDecl.handler_client_violations": "public handler method",
     "ClassDecl.store_violations": "store protocol method",
     "ClassDecl.operation_name_violations": "client, port, application client, or relay protocol method",
     "ClassDecl.orchestrator_name_violations": "public orchestrator method",

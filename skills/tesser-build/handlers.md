@@ -42,7 +42,14 @@ Yes → handler.
    concrete service or repository it constructed itself. It does **no domain
    math and touches no repository** — a `for`-loop over domain objects or a DB
    call in a handler belongs in the application service or the domain
-   (`application-services.md#domain-logic-leakage-checks`).
+   (`application-services.md#domain-logic-leakage-checks`). **Every public
+   method of a handler calls the context client** (TB082): a handler decodes
+   a message, calls the client, and encodes the answer, so a public method
+   that makes no call on the client it holds is doing application work, or
+   routing that belongs to the host (`srv.md`), inside an adapter. The
+   analyzer finds the client by the `__init__` parameter annotated with the
+   context's `Client` and the `self` attribute it is kept on; private
+   (`_`-prefixed) helpers are not read.
 2. **A handler is a total transform: request DTO in, response DTO out.** Every
    endpoint method has the same signature — `(HttpRequest) -> Response` — and
    the handler touches nothing else: no socket, no framework request object, no
