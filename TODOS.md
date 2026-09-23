@@ -803,11 +803,10 @@ domain modules out before removing them.
   `RestateIngressConfirmOrderRelay` opens a new `httpx.AsyncClient` per send
   (stated in the README as the cost of nothing async outliving a request);
   `MemoryProductCatalogRepository.close()` clears a dict a live handler may
-  still hold; `runtimes/restate_order_runtime.py` and
-  `runners/restate_invocation_price_product_relay.py` import each other (the runtime
-  builds the runner per invocation, the runner names the runtime as a
-  parameter type); `.importlinter` now carries three pairwise
-  `ignore_imports` holes in the adapters→application contract.
+  still hold; `.importlinter` now carries three pairwise
+  `ignore_imports` holes in the adapters→application contract. (The runtime
+  and runner no longer import each other: since the adapter-shape change a
+  runner calls its far side by name and the runtime holds a workflow.)
 
 ## Left open by the import and naming rulings (2026-09-05, Chris accepted)
 

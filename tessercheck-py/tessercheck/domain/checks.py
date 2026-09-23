@@ -154,6 +154,8 @@ WORKFLOW_OPERATION: typing.Final[str] = "invocation"
 
 WORKFLOW_BLOCK: typing.Final[str] = "workflow"
 
+PACKAGE_MODULE_SEGMENTS: typing.Final[int] = 4
+
 ENGINE_REGISTRATIONS: typing.Final[frozenset[str]] = frozenset({"Service", "Workflow", "VirtualObject"})
 
 AWAIT_MODE: typing.Final[str] = "await_"
@@ -209,7 +211,6 @@ SIGNAL_INFIX: typing.Final[str] = "Signal"
 
 SIGNAL_RELAY_SUFFIX: typing.Final[str] = f"{SIGNAL_INFIX}{RELAY_SUFFIX}"
 
-PROMISE_SUFFIX: typing.Final[str] = "_promise"
 
 HANDLER_SUFFIX: typing.Final[str] = "_handler"
 
@@ -228,7 +229,7 @@ ACTIONS_CLIENT_BLOCK: typing.Final[str] = "actions_client"
 INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = (ORCHESTRATOR_BLOCK, ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK)
 
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"client", "service", "actions", "actions_client", "orchestrator", "relay", "runner", "runtime", "workflow"}
+    {"client", "service", ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK, ORCHESTRATOR_BLOCK, RELAY_BLOCK, RUNNER_BLOCK, RUNTIME_BLOCK, WORKFLOW_BLOCK}
 )
 
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
@@ -351,7 +352,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "actions": "application",
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
-    "workflow": APPLICATION_CLIENT_HOME,
+    WORKFLOW_BLOCK: APPLICATION_CLIENT_HOME,
     RELAY_BLOCK: RELAYS_HOME,
     "relay_request": RELAYS_HOME,
     "relay_response": RELAYS_HOME,
@@ -401,7 +402,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     SNAPSHOT_BLOCK: "a snapshot",
     "port": "a port",
     "store": "a store",
-    "workflow": "a workflow",
+    WORKFLOW_BLOCK: "a workflow",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
     "request": "a request DTO",
@@ -9171,24 +9172,13 @@ class Module(ts.Entity):
         return tuple(rows)
 
     def _far_side_rows(
-        self, blocks: dict[tuple[str, str], str], yields: dict[tuple[str, str], tuple[str, str]]
+        self,
+        blocks: dict[tuple[str, str], str],
+        yields: dict[tuple[str, str], tuple[str, str]],
+        paired: dict[tuple[str, str], tuple[str, str]],
     ) -> tuple[tuple[str, str, str, str], ...]:
         if str(self._placement) in TEST_TIER:
             return ()
-        paired: dict[tuple[str, str], tuple[str, str]] = {}
-        for client_key, client_block in blocks.items():
-            if client_block != ACTIONS_CLIENT_BLOCK:
-                continue
-            parts = client_key[0].split(".")
-            if len(parts) != 4 or parts[1] != APPLICATION_ROLE or parts[2] != APPLICATION_CLIENT_PACKAGE:
-                continue
-            home = ".".join((parts[0], APPLICATION_ROLE, parts[3]))
-            orchestrated = ".".join((parts[0], APPLICATION_ROLE, ORCHESTRATORS_PACKAGE, parts[3]))
-            for actions_key, actions_block in blocks.items():
-                if actions_block == ACTIONS_BLOCK and actions_key[0] == home:
-                    paired[client_key] = actions_key
-                if actions_block == ORCHESTRATOR_BLOCK and actions_key[0] == orchestrated:
-                    paired[client_key] = actions_key
         scope = self._scope
         context = self._name.split(".")[0]
         rows: list[tuple[str, str, str, str]] = []
@@ -9222,25 +9212,18 @@ class Module(ts.Entity):
                     if named is not None:
                         taken[arg.arg] = (str(named.module()), str(named.name()))
                 for stmt in ast.walk(item):
-                    if (
+                    if not (
                         isinstance(stmt, ast.Assign)
                         and len(stmt.targets) == 1
                         and isinstance(stmt.targets[0], ast.Attribute)
                         and isinstance(stmt.targets[0].value, ast.Name)
                         and stmt.targets[0].value.id == "self"
                         and isinstance(stmt.value, ast.Name)
-                        and stmt.value.id in taken
                     ):
+                        continue
+                    if stmt.value.id in taken:
                         held[stmt.targets[0].attr] = taken[stmt.value.id]
-                    if (
-                        isinstance(stmt, ast.Assign)
-                        and len(stmt.targets) == 1
-                        and isinstance(stmt.targets[0], ast.Attribute)
-                        and isinstance(stmt.targets[0].value, ast.Name)
-                        and stmt.targets[0].value.id == "self"
-                        and isinstance(stmt.value, ast.Name)
-                        and stmt.value.id in opened
-                    ):
+                    if stmt.value.id in opened:
                         held_opened[stmt.targets[0].attr] = opened[stmt.value.id]
                 for stmt in item.body:
                     if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -10586,7 +10569,8 @@ class Module(ts.Entity):
                 )
                 if not (
                     isinstance(yielded, ast.Name)
-                    and any(isinstance(other, ast.ClassDef) and other.name == yielded.id for other in self._class_defs)
+                    and str(kind_table.block_of(Symbol(SymbolSpec(module_name, yielded.id))) or "")
+                    == ACTIONS_CLIENT_BLOCK
                 ):
                     found.append(
                         Violation(ViolationSpec(
@@ -11570,7 +11554,7 @@ class Module(ts.Entity):
             if block is None or str(block) != RUNNER_BLOCK:
                 continue
             where = f"{self._name}.{cls.name}"
-            relay_name = ""
+            protocol_name = ""
             relay_module = ""
             for symbol in tuple(operation_rows.owners(Text(RELAY_BLOCK))) + tuple(
                 operation_rows.owners(Text(WORKFLOW_BLOCK))
@@ -11579,11 +11563,11 @@ class Module(ts.Entity):
                 if (
                     str(symbol.module()).split(".")[0] == context
                     and cls.name.endswith(named)
-                    and len(named) > len(relay_name)
+                    and len(named) > len(protocol_name)
                 ):
-                    relay_name = named
+                    protocol_name = named
                     relay_module = str(symbol.module())
-            if not relay_name:
+            if not protocol_name:
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
@@ -11595,7 +11579,7 @@ class Module(ts.Entity):
                     ))
                 )
                 continue
-            carried = tuple(operation_rows.methods(Symbol(SymbolSpec(relay_module, relay_name))))
+            carried = tuple(operation_rows.methods(Symbol(SymbolSpec(relay_module, protocol_name))))
             members = tuple(
                 item
                 for item in cls.body
@@ -11609,7 +11593,7 @@ class Module(ts.Entity):
                             self._path,
                             cls.lineno,
                             "TB081",
-                            f"{where}.{sibling} is not on {relay_name}; a runner's public "
+                            f"{where}.{sibling} is not on {protocol_name}; a runner's public "
                             "methods are exactly its relay's, because it implements that relay "
                             "and nothing else",
                         ))
@@ -11625,7 +11609,7 @@ class Module(ts.Entity):
                             "its relay's, because it implements that relay and nothing else",
                         ))
                     )
-            far_side = relay_name[: -len(RELAY_SUFFIX)]
+            far_side = protocol_name[: -len(RELAY_SUFFIX)] if protocol_name.endswith(RELAY_SUFFIX) else ""
             for member in members:
                 mode = next((prefix for prefix in CALLING_MODES if member.name.startswith(prefix)), None)
                 if mode is None:
@@ -12080,7 +12064,7 @@ class Module(ts.Entity):
             elif (
                 block is not None
                 and str(block) == ORCHESTRATOR_BLOCK
-                and len(parts) == 4
+                and len(parts) == PACKAGE_MODULE_SEGMENTS
                 and parts[1] == APPLICATION_ROLE
                 and parts[2] == ORCHESTRATORS_PACKAGE
             ):
@@ -13320,8 +13304,27 @@ class Codebase(ts.AggregateRoot):
                         yielded = module._resolve(item.returns.slice)
                         if yielded is not None:
                             yields[(module.name(), cls.name)] = yielded
+        paired: dict[tuple[str, str], tuple[str, str]] = {}
+        homes: dict[str, tuple[str, str]] = {
+            key[0]: key for key, block in blocks.items() if block in (ACTIONS_BLOCK, ORCHESTRATOR_BLOCK)
+        }
+        for client_key, client_block in blocks.items():
+            parts = client_key[0].split(".")
+            if (
+                client_block != ACTIONS_CLIENT_BLOCK
+                or len(parts) != PACKAGE_MODULE_SEGMENTS
+                or parts[1] != APPLICATION_ROLE
+                or parts[2] != APPLICATION_CLIENT_PACKAGE
+            ):
+                continue
+            for home in (
+                ".".join((parts[0], APPLICATION_ROLE, parts[3])),
+                ".".join((parts[0], APPLICATION_ROLE, ORCHESTRATORS_PACKAGE, parts[3])),
+            ):
+                if home in homes:
+                    paired[client_key] = homes[home]
         for module in self._modules:
-            for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks, yields):
+            for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks, yields, paired):
                 far_side_seen.setdefault((context_name, operation_name), set()).add((far_module, far_name))
         far_side_rows = tuple(sorted(
             (context_name, operation_name, side[0], side[1])

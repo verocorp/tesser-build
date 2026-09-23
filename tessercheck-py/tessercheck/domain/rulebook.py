@@ -107,7 +107,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "mode": "⟨prefix⟩",
     "count": "⟨count⟩",
     "expected": "⟨class⟩",
-    "relay_name": "⟨class⟩",
+    "protocol_name": "⟨class⟩",
     "reached": "⟨attribute⟩",
     "invoked": "⟨method⟩",
     "registered": "⟨name⟩",
@@ -118,7 +118,6 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "called": "⟨operation⟩",
     "sides": "⟨classes⟩",
     "side": "⟨class⟩",
-    "promise": "⟨attribute⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {

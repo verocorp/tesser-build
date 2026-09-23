@@ -19022,6 +19022,127 @@ def test_a_relay_is_named_for_the_far_side_its_operations_reach() -> None:
     assert not any("QuoteActionsRelay reaches" in f for f in findings), findings
 
 
+def test_a_far_side_is_read_through_a_workflow_a_decorated_handler_opens_from_its_parameter() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "till/application/relays/wrong.py",
+                "till.application.relays.wrong",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class CountItemsRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class CountItemsResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ShelveItemsRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class ShelveItemsResponse(ts.Response):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "class WrongRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_count_items(self, count_items_request: CountItemsRequest)"
+                " -> CountItemsResponse: ...\n"
+                "class StoreRelay(ts.Relay, typing.Protocol):\n"
+                "    async def run_shelve_items(self, shelve_items_request: ShelveItemsRequest)"
+                " -> ShelveItemsResponse: ...\n",
+                False,
+            ),
+            (
+                "till/application/client/tally.py",
+                "till.application.client.tally",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
+                "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
+                " -> wrong.CountItemsResponse: ...\n"
+                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
+                False,
+            ),
+            (
+                "till/application/client/shelf.py",
+                "till.application.client.shelf",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
+                "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
+                " -> wrong.ShelveItemsResponse: ...\n"
+                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
+                False,
+            ),
+            (
+                "till/application/orchestrators/tally.py",
+                "till.application.orchestrators.tally",
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class Tally(ts.Orchestrator):\n"
+                "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
+                " -> wrong.CountItemsResponse:\n"
+                "        return wrong.CountItemsResponse(text=count_items_request.text)\n",
+                False,
+            ),
+            (
+                "till/application/orchestrators/shelf.py",
+                "till.application.orchestrators.shelf",
+                "import tesser.application as ts\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class Shelf(ts.Orchestrator):\n"
+                "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
+                " -> wrong.ShelveItemsResponse:\n"
+                "        return wrong.ShelveItemsResponse(text=shelve_items_request.text)\n",
+                False,
+            ),
+            (
+                "till/adapters/runtimes/engine.py",
+                "till.adapters.runtimes.engine",
+                "import tesser.adapters as ts\n"
+                "import engine\n"
+                "import till.application.client.shelf as shelf\n"
+                "import till.application.client.tally as tally\n"
+                "import till.application.relays.wrong as wrong\n"
+                "class TillRuntime(ts.Runtime):\n"
+                "    def __init__(\n"
+                "        self,\n"
+                "        tally_workflow: tally.TallyWorkflow[engine.Context],\n"
+                "        shelf_workflow: shelf.ShelfWorkflow[engine.Context],\n"
+                "    ) -> None:\n"
+                "        self.tally_workflow = engine.Workflow('Tally')\n"
+                "        self.mixed_workflow = engine.Workflow('Mixed')\n"
+                "        @self.tally_workflow.main()\n"
+                "        async def count_items(engine_context: engine.Context, count_items_request: wrong.CountItemsRequest)"
+                " -> wrong.CountItemsResponse:\n"
+                "            async with tally_workflow.invocation(engine_context) as tally_application_client:\n"
+                "                return await tally_application_client.count_items(count_items_request)\n"
+                "        @self.mixed_workflow.main()\n"
+                "        async def shelve_items(engine_context: engine.Context, shelve_items_request: wrong.ShelveItemsRequest)"
+                " -> wrong.ShelveItemsResponse:\n"
+                "            async with shelf_workflow.invocation(engine_context) as shelf_application_client:\n"
+                "                await shelf_application_client.shelve_items(shelve_items_request)\n"
+                "            async with tally_workflow.invocation(engine_context) as tally_application_client:\n"
+                "                await tally_application_client.count_items(wrong.CountItemsRequest(text='x'))\n"
+                "            return wrong.ShelveItemsResponse(text=shelve_items_request.text)\n"
+                "        self.count_items_handler = count_items\n"
+                "        self.shelve_items_handler = shelve_items\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "till.application.relays.wrong.WrongRelay reaches Tally and is not TallyRelay; a relay is "
+        "named for the far side its operations reach, because the act lives on the method and the "
+        "far side lives on the class" in f
+        for f in findings
+    ), findings
+    assert not any("wrong.StoreRelay reaches" in f for f in findings), findings
+
+
 def test_a_signal_relay_carries_only_await_operations() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -19364,7 +19485,11 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
                 "class LoneWorkflow[C](ts.Workflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[relays.IssueQuoteResponse]: ...\n"
                 "class SecondWorkflow[C](ts.Workflow, typing.Protocol):\n"
-                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n",
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n"
+                "class SiblingWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def invocation(self, context: C, /) -> typing.AsyncContextManager[SecondWorkflow]: ...\n"
+                "class RenamedWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "    def open(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n",
                 False,
             ),
         ))).violations()
@@ -19377,9 +19502,56 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
         for f in findings
     ), findings
     assert not any(f"{where}.SecondWorkflow does not yield" in f for f in findings), findings
+    assert any(f"{where}.SiblingWorkflow does not yield the client beside it" in f for f in findings), findings
+    assert any(f"{where}.RenamedWorkflow does not yield the client beside it" in f for f in findings), findings
     assert any(
-        f"{where} declares 2 workflows; an application client module declares at most one "
+        f"{where} declares 4 workflows; an application client module declares at most one "
         "ts.Workflow, the one that yields its client" in f
+        for f in findings
+    ), findings
+
+
+def test_a_fake_of_a_subscripted_workflow_implements_that_workflow() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/runtimes/stall.py",
+                "shop.adapters.runtimes.stall",
+                "import tesser.adapters as ts\n"
+                "class StallRuntime(ts.Runtime):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/runtimes/test_stall.py",
+                "shop.adapters.runtimes.test_stall",
+                "import contextlib\n"
+                "import typing\n"
+                "import tesser.testing as ts\n"
+                "import engine\n"
+                "import shop.application.client as client\n"
+                "@ts.fake\n"
+                "class FakeFlowWorkflow(client.FlowWorkflow[engine.Context]):\n"
+                "    @contextlib.asynccontextmanager\n"
+                "    async def invocation(self, engine_context: engine.Context)"
+                " -> typing.AsyncIterator[client.FlowApplicationClient]:\n"
+                "        raise NotImplementedError\n"
+                "        yield\n"
+                "@ts.fake\n"
+                "class FakeCounts(list[int]):\n"
+                "    pass\n"
+                "def test_stall_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    where = "shop.adapters.runtimes.test_stall"
+    assert not any(f"{where}.FakeFlowWorkflow implements no" in f for f in findings), findings
+    assert any(
+        f"{where}.FakeCounts implements no application port, store, relay, protocol port, client, "
+        "workflow, or config repository; a fake implements the contract it doubles" in f
         for f in findings
     ), findings
 
@@ -19418,6 +19590,46 @@ def test_an_orchestrator_is_mirrored_by_the_application_client_in_the_module_of_
         for f in findings
     ), findings
     assert not any("orchestrators.flow.Flow is not mirrored" in f for f in findings), findings
+
+
+def test_an_orchestrator_with_a_method_its_application_client_lacks_is_not_mirrored() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/client/pair.py",
+                "shop.application.client.pair",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class PairApplicationClient(ts.Client, typing.Protocol):\n"
+                "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+                " -> relays.IssueQuoteResponse: ...\n",
+                False,
+            ),
+            (
+                "shop/application/orchestrators/pair.py",
+                "shop.application.orchestrators.pair",
+                "import tesser.application as ts\n"
+                "import shop.application.relays as relays\n"
+                "class Pair(ts.Orchestrator):\n"
+                "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+                " -> relays.IssueQuoteResponse:\n"
+                "        return relays.IssueQuoteResponse(text=issue_quote_request.text)\n"
+                "    async def withdraw_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+                " -> relays.IssueQuoteResponse:\n"
+                "        return relays.IssueQuoteResponse(text=issue_quote_request.text)\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any(
+        "shop.application.orchestrators.pair.Pair is not mirrored by an application client in "
+        "shop.application.client.pair; an orchestrator's public methods are exactly the application "
+        "client's in the module of its name" in f
+        for f in findings
+    ), findings
+    assert not any("client.pair.PairApplicationClient has no actions class" in f for f in findings), findings
 
 
 def test_a_runtime_handler_is_its_operation_exposed_with_handler_and_invokes_it() -> None:
