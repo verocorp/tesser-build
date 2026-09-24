@@ -4,33 +4,64 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Left open by the migrate-new-kinds ship review (2026-09-24)
 
-- [ ] **minimal's in-memory widget store is per process.** `keep_widget`
-  runs in the served Restate host (`srv/restate`), so the app that called
-  `create_widget` never sees the kept widget, and a restart of the host
-  loses it although Restate recorded `keep_widget` as done. The root-tier
-  test reads the child `keep_widget` invocation from `sys_invocation`
-  instead of reading the widget back.
-- [ ] **A caller has no bounded, typed way to learn that a started workflow
-  finished (ruling D1 gap).** minimal's `create_widget` now starts the
-  workflow (`start_register_widget`) and `approve_widget` signals it, but
-  the caller cannot learn that the widget was kept without an unbounded
-  wait: the SDK's `restate.client.Client` offers only `*_call`/`*_send` (a
+- [ ] **A started workflow's result is learned only through the store (ruling
+  D1, narrowed by D5).** minimal's widgets are in Postgres now, so a caller
+  in any process learns that the workflow kept a widget from
+  `find_widget` (the CLI's `find <name>`), a bounded read; the root test
+  polls it. What is still missing is a way to read the workflow's own
+  answer: the SDK's `restate.client.Client` offers only `*_call`/`*_send` (a
   second `workflow_call` on a started key is a 409 "already invoked"), and
   the ingress's non-blocking `GET /restate/workflow/<service>/<key>/output`
-  (470 until done, then 200 with the result, measured on restate-server
-  1.7.9) has no typed call, so reaching it means building the route by
-  string. A shared handler that reads workflow state is no tesser kind (a
-  signal must resolve a promise), and a promise the workflow resolves for the
-  signal to await needs a relay mode that writes a promise. Rule on one:
-  a typed read of a workflow's result (a new relay mode, or `await_` outside
-  an invocation), a shared store with a read operation (voice reads
-  Postgres), or the output route read off the handler object.
-- [ ] **minimal's `srv/restate` host binds `0.0.0.0` with no
-  `identity_keys`.** Anyone who can reach the port can invoke the
-  ingress-private `WidgetActions` directly, the same exposure
-  durable-execution's README records for its `/restate` mount. The adapter
-  tests of minimal, durable-execution and the generated trees also bind
-  `0.0.0.0` while they run.
+  (470 until done, then 200, measured on restate-server 1.7.9) has no typed
+  call. A workflow whose result is not written anywhere a read can reach
+  still needs one of: a typed read of a workflow's result (a new relay mode,
+  or `await_` outside an invocation), or the output route read off the
+  handler object.
+- [ ] **A repeated start cannot say "already started" (Chris ruling D4(2),
+  blocked).** A second `create` of a running name, and a second
+  `start_confirm_order` in durable-execution, get Restate's
+  `{"status": "PreviouslyAccepted"}`, but the SDK drops it: `object_send`,
+  `workflow_send` and `generic_send` all return
+  `RestateClientSendHandle(invocation_id, 200)  # TODO: verify`
+  (restate-sdk 1.0.5, `restate/client.py`), so no client call a dispatcher
+  may make can tell a new start from an existing one. Reading the status
+  needs a hand-built ingress request (the route by string this branch
+  removed) or an SDK fix. Separately, minimal cannot declare the outcome
+  either: an `enum.Enum` in a relay module is a TB052 finding (no block) and
+  `import enum` there a TB062 finding; the only markerless shape the
+  analyzer accepts is the enum declared in `alpha/domain` and carried on the
+  relay response, which puts an engine-crossing word
+  (`StartRegisterWidgetOutcome`) in the domain. durable-execution's
+  `StartConfirmOrderOutcome` already carries its TB052 marker. Decide the
+  SDK route and where a relay's own outcome enum lives.
+- [ ] **A call result the snapshot cannot read pauses; an input it cannot read
+  fails (fix 5, rule on it).** On a handler's input the SDK wraps a serde
+  error as a terminal 500 (`invoke_handler`, `restate/handler.py` lines
+  366-369), but on the call-result side inside a workflow it does not:
+  `_create_fetch_result_coroutine`'s `fetch_result` returns
+  `serde.deserialize(res)` unwrapped (`restate/server_context.py:737`), so a
+  response snapshot that raises there is an ordinary exception, retried under
+  the retry policy and then paused. Nothing in the trees changes it. Rule on
+  whether pausing is what a bad response from our own handler should do.
+- [ ] **minimal's app requires RESTATE_INGRESS for every command, `add`
+  included (recorded, not changed).** The component builds its HTTP
+  dispatcher once, at load, for every command the app serves; an app that
+  ran without an ingress would need a second composition, or an optional
+  (union) config field, which TB080 refuses.
+- [ ] **The deployment endpoints take unsigned calls (Chris ruling D6: a
+  follow-up PR).** Every Restate endpoint in the repo is served with no
+  `identity_keys` and bound on `0.0.0.0`: voice (`srv/restate`),
+  durable-execution (`/restate` on the public FastAPI bind, which its README
+  records), minimal (`srv/restate`), and the generator's `srv/restate`
+  template; the adapter tests of all four bind `0.0.0.0` while they run. So
+  anyone who can reach the port calls a handler directly, ingress-private
+  services included, with no workflow and no journal. Reproduced by the
+  Codex review pass: a call sent straight to minimal's deployment at `:9080`
+  (`POST /invoke/WidgetActions/keep_widget`) kept the widget with no
+  workflow. The follow-up: generate a request-identity key pair, give each
+  `restate.app(...)` its public key, configure the Restate server (locally and
+  the CI service containers) to sign with the private key, and bind test
+  endpoints to the address Restate reaches rather than every interface.
 - [ ] **Generated trees read variables their spec does not name.** The
   generated adapter tests read `RESTATE_CALLBACK_HOST` and `RESTATE_ADMIN`,
   but the spec's `[environment_variables]` names only the storage URL and
