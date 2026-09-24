@@ -94,58 +94,62 @@ class TestRestateHttpCallOrchestratorRelay:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
+                os.environ["RESTATE_URL"],
+                restate_conduct_call,
+                restate_person_joined,
+                restate_person_turn_completed,
             )
+            conducting = asyncio.create_task(
+                restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+            )
+            await restate_http_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
+            await restate_http_call_orchestrator_relay.run_person_turn_completed(
+                relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
+            )
+            conduct_call_response = await conducting
+            invoked = await admin.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT target, completion_result FROM sys_invocation "
+                    f"WHERE invoked_by_target = '{call_orchestrator_workflow.name}/{call_id}/conduct_call' "
+                    "ORDER BY created_at"
+                },
+            )
+
+            assert conduct_call_response.call_id == call_id
+            assert [str(recorded.call.person_name) for recorded in fake_call_application_client.recorded] == ["Grace"]
+            assert fake_speech_application_client.said == [
+                "Hello. Please tell me your first name.",
+                "Nice to meet you, Grace. Goodbye.",
+            ]
+            assert [(row["target"], row["completion_result"]) for row in invoked.json()["rows"]] == [
+                (f"DialingActions{suffix}/dial_person", "success"),
+                (f"SpeechActions{suffix}/say_utterance", "success"),
+                (f"SpeechActions{suffix}/say_utterance", "success"),
+                (f"DialingActions{suffix}/hang_up", "success"),
+                (f"CallActions{suffix}/record_call", "success"),
+            ]
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
-            os.environ["RESTATE_URL"],
-            restate_conduct_call,
-            restate_person_joined,
-            restate_person_turn_completed,
-        )
-        conducting = asyncio.create_task(
-            restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
-        )
-        await restate_http_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
-        await restate_http_call_orchestrator_relay.run_person_turn_completed(
-            relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
-        )
-        conduct_call_response = await conducting
-        invoked = await admin.post(
-            "/query",
-            headers={"accept": "application/json"},
-            json={
-                "query": "SELECT target, completion_result FROM sys_invocation "
-                f"WHERE invoked_by_target = '{call_orchestrator_workflow.name}/{call_id}/conduct_call' "
-                "ORDER BY created_at"
-            },
-        )
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-        await asyncio.gather(serving, return_exceptions=True)
-
-        assert conduct_call_response.call_id == call_id
-        assert [str(recorded.call.person_name) for recorded in fake_call_application_client.recorded] == ["Grace"]
-        assert fake_speech_application_client.said == [
-            "Hello. Please tell me your first name.",
-            "Nice to meet you, Grace. Goodbye.",
-        ]
-        assert [(row["target"], row["completion_result"]) for row in invoked.json()["rows"]] == [
-            (f"DialingActions{suffix}/dial_person", "success"),
-            (f"SpeechActions{suffix}/say_utterance", "success"),
-            (f"SpeechActions{suffix}/say_utterance", "success"),
-            (f"DialingActions{suffix}/hang_up", "success"),
-            (f"CallActions{suffix}/record_call", "success"),
-        ]
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
+            await asyncio.gather(serving, return_exceptions=True)
 
     async def test_concurrent_joins_and_completed_turns_for_one_call_are_all_acknowledged(self) -> None:
         call_id = str(uuid.uuid4())
@@ -174,51 +178,55 @@ class TestRestateHttpCallOrchestratorRelay:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
+                os.environ["RESTATE_URL"],
+                restate_conduct_call,
+                restate_person_joined,
+                restate_person_turn_completed,
             )
+            person_joined_responses = await asyncio.gather(
+                *(
+                    restate_http_call_orchestrator_relay.run_person_joined(
+                        relays.PersonJoinedRequest(call_id=call_id)
+                    )
+                    for _ in range(8)
+                )
+            )
+            person_turn_completed_responses = await asyncio.gather(
+                *(
+                    restate_http_call_orchestrator_relay.run_person_turn_completed(
+                        relays.PersonTurnCompletedRequest(call_id=call_id, text=f"turn {turn}")
+                    )
+                    for turn in range(8)
+                )
+            )
+
+            assert [person_joined_response.call_id for person_joined_response in person_joined_responses] == [
+                call_id
+            ] * 8
+            assert [
+                person_turn_completed_response.call_id
+                for person_turn_completed_response in person_turn_completed_responses
+            ] == [call_id] * 8
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
-            os.environ["RESTATE_URL"],
-            restate_conduct_call,
-            restate_person_joined,
-            restate_person_turn_completed,
-        )
-        person_joined_responses = await asyncio.gather(
-            *(
-                restate_http_call_orchestrator_relay.run_person_joined(
-                    relays.PersonJoinedRequest(call_id=call_id)
-                )
-                for _ in range(8)
-            )
-        )
-        person_turn_completed_responses = await asyncio.gather(
-            *(
-                restate_http_call_orchestrator_relay.run_person_turn_completed(
-                    relays.PersonTurnCompletedRequest(call_id=call_id, text=f"turn {turn}")
-                )
-                for turn in range(8)
-            )
-        )
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-        await asyncio.gather(serving, return_exceptions=True)
-
-        assert [person_joined_response.call_id for person_joined_response in person_joined_responses] == [
-            call_id
-        ] * 8
-        assert [
-            person_turn_completed_response.call_id
-            for person_turn_completed_response in person_turn_completed_responses
-        ] == [call_id] * 8
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
+            await asyncio.gather(serving, return_exceptions=True)
 
     async def test_the_key_is_encoded_so_a_call_id_cannot_reshape_the_path(self) -> None:
         call_id = "../admin?x=1#f-" + str(uuid.uuid4())
@@ -247,38 +255,42 @@ class TestRestateHttpCallOrchestratorRelay:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            person_joined_response = await dispatchers.RestateHttpCallOrchestratorRelay(
+                os.environ["RESTATE_URL"],
+                restate_conduct_call,
+                restate_person_joined,
+                restate_person_turn_completed,
+            ).run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
+            promised = await admin.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT key FROM sys_promise "
+                    f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
+                },
             )
+
+            assert person_joined_response.call_id == call_id
+            assert [row["key"] for row in promised.json()["rows"]] == [relays.PERSON_JOINED_PROMISE]
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        person_joined_response = await dispatchers.RestateHttpCallOrchestratorRelay(
-            os.environ["RESTATE_URL"],
-            restate_conduct_call,
-            restate_person_joined,
-            restate_person_turn_completed,
-        ).run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
-        promised = await admin.post(
-            "/query",
-            headers={"accept": "application/json"},
-            json={
-                "query": "SELECT key FROM sys_promise "
-                f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
-            },
-        )
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-        await asyncio.gather(serving, return_exceptions=True)
-
-        assert person_joined_response.call_id == call_id
-        assert [row["key"] for row in promised.json()["rows"]] == [relays.PERSON_JOINED_PROMISE]
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
+            await asyncio.gather(serving, return_exceptions=True)
 
 
 class TestRestatePersonJoined:
@@ -307,29 +319,32 @@ class TestRestatePersonJoined:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
-            )
-            if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
-            with pytest.raises(restate.HttpError) as refused:
-                await restate_client.Client(async_client).workflow_call(
-                    restate_person_joined.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonJoinedRequest(call_id="c7")
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
                 )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
 
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+                with pytest.raises(restate.HttpError) as refused:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_person_joined.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonJoinedRequest(call_id="c7")
+                    )
 
-        assert refused.value.status_code == 400
-        assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
+            assert refused.value.status_code == 400
+            assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
+        finally:
+            if registered.is_success:
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
 
 
 
@@ -359,26 +374,29 @@ class TestRestatePersonTurnCompleted:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
-            )
-            if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
-            with pytest.raises(restate.HttpError) as refused:
-                await restate_client.Client(async_client).workflow_call(
-                    restate_person_turn_completed.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonTurnCompletedRequest(call_id="c7", text="Grace")
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
                 )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
 
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+                with pytest.raises(restate.HttpError) as refused:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_person_turn_completed.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonTurnCompletedRequest(call_id="c7", text="Grace")
+                    )
 
-        assert refused.value.status_code == 400
-        assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
+            assert refused.value.status_code == 400
+            assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
+        finally:
+            if registered.is_success:
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()

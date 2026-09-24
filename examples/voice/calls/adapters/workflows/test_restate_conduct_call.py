@@ -93,53 +93,57 @@ class TestRestateConductCall:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
-            )
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+                sent = await restate_client.Client(async_client).workflow_send(
+                    restate_conduct_call.handler, key=call_id, arg=conduct_call_request(call_id=call_id)
+                )
+            called: list[tuple[str, str]] = []
+            awaited: list[str] = []
+            for _ in range(100):
+                invoked = await admin.post(
+                    "/query",
+                    headers={"accept": "application/json"},
+                    json={
+                        "query": "SELECT target, completion_result FROM sys_invocation "
+                        f"WHERE invoked_by_id = '{sent.invocation_id}' ORDER BY created_at"
+                    },
+                )
+                journaled = await admin.post(
+                    "/query",
+                    headers={"accept": "application/json"},
+                    json={
+                        "query": "SELECT entry_lite_json FROM sys_journal "
+                        f"WHERE id = '{sent.invocation_id}' AND entry_type = 'Command: GetPromise' ORDER BY index"
+                    },
+                )
+                called = [(row["target"], row.get("completion_result", "")) for row in invoked.json()["rows"]]
+                awaited = [
+                    json.loads(row["entry_lite_json"])["Command"]["GetPromise"]["key"] for row in journaled.json()["rows"]
+                ]
+                if awaited:
+                    break
+                await asyncio.sleep(0.05)
+            await admin.patch(f"/invocations/{sent.invocation_id}/kill")
+
+            assert called == [(f"DialingActions{suffix}/dial_person", "success")]
+            assert [str(dialed.call.identity) for dialed in fake_dialing_application_client.dialed] == [call_id]
+            assert awaited == [relays.PERSON_JOINED_PROMISE]
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
-            sent = await restate_client.Client(async_client).workflow_send(
-                restate_conduct_call.handler, key=call_id, arg=conduct_call_request(call_id=call_id)
-            )
-        called: list[tuple[str, str]] = []
-        awaited: list[str] = []
-        for _ in range(100):
-            invoked = await admin.post(
-                "/query",
-                headers={"accept": "application/json"},
-                json={
-                    "query": "SELECT target, completion_result FROM sys_invocation "
-                    f"WHERE invoked_by_id = '{sent.invocation_id}' ORDER BY created_at"
-                },
-            )
-            journaled = await admin.post(
-                "/query",
-                headers={"accept": "application/json"},
-                json={
-                    "query": "SELECT entry_lite_json FROM sys_journal "
-                    f"WHERE id = '{sent.invocation_id}' AND entry_type = 'Command: GetPromise' ORDER BY index"
-                },
-            )
-            called = [(row["target"], row.get("completion_result", "")) for row in invoked.json()["rows"]]
-            awaited = [
-                json.loads(row["entry_lite_json"])["Command"]["GetPromise"]["key"] for row in journaled.json()["rows"]
-            ]
-            if awaited:
-                break
-            await asyncio.sleep(0.05)
-        await admin.patch(f"/invocations/{sent.invocation_id}/kill")
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-        await asyncio.gather(serving, return_exceptions=True)
-
-        assert called == [(f"DialingActions{suffix}/dial_person", "success")]
-        assert [str(dialed.call.identity) for dialed in fake_dialing_application_client.dialed] == [call_id]
-        assert awaited == [relays.PERSON_JOINED_PROMISE]
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
+            await asyncio.gather(serving, return_exceptions=True)

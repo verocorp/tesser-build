@@ -82,29 +82,31 @@ class TestRestateRecordCall:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
-            )
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+                record_call_response = await restate_client.Client(async_client).service_call(
+                    restate_record_call.handler, relays.RecordCallRequest(call=domain.Call(call_spec()))
+                )
+
+            assert record_call_response == relays.RecordCallResponse(call_id="c7")
+            assert [str(request.call.identity) for request in fake_call_application_client.recorded] == ["c7"]
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
-            record_call_response = await restate_client.Client(async_client).service_call(
-                restate_record_call.handler, relays.RecordCallRequest(call=domain.Call(call_spec()))
-            )
-
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-
-        assert registered.is_success
-        assert record_call_response == relays.RecordCallResponse(call_id="c7")
-        assert [str(request.call.identity) for request in fake_call_application_client.recorded] == ["c7"]
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
 
 
 class TestRestateDialPerson:
@@ -127,29 +129,31 @@ class TestRestateDialPerson:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
-            )
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+                dial_person_response = await restate_client.Client(async_client).service_call(
+                    restate_dial_person.handler, relays.DialPersonRequest(call=domain.Call(call_spec()))
+                )
+
+            assert dial_person_response == relays.DialPersonResponse(call_id="c7")
+            assert [str(request.call.identity) for request in fake_dialing_application_client.dialed] == ["c7"]
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
-            dial_person_response = await restate_client.Client(async_client).service_call(
-                restate_dial_person.handler, relays.DialPersonRequest(call=domain.Call(call_spec()))
-            )
-
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-
-        assert registered.is_success
-        assert dial_person_response == relays.DialPersonResponse(call_id="c7")
-        assert [str(request.call.identity) for request in fake_dialing_application_client.dialed] == ["c7"]
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
 
 
 class TestRestateHangUp:
@@ -172,29 +176,31 @@ class TestRestateHangUp:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
-            )
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+                hang_up_response = await restate_client.Client(async_client).service_call(
+                    restate_hang_up.handler, relays.HangUpRequest(call=domain.Call(call_spec()))
+                )
+
+            assert hang_up_response == relays.HangUpResponse(call_id="c7")
+            assert [str(request.call.identity) for request in fake_dialing_application_client.hung_up] == ["c7"]
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
-            hang_up_response = await restate_client.Client(async_client).service_call(
-                restate_hang_up.handler, relays.HangUpRequest(call=domain.Call(call_spec()))
-            )
-
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-
-        assert registered.is_success
-        assert hang_up_response == relays.HangUpResponse(call_id="c7")
-        assert [str(request.call.identity) for request in fake_dialing_application_client.hung_up] == ["c7"]
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
 
 
 class TestRestateSayUtterance:
@@ -217,26 +223,28 @@ class TestRestateSayUtterance:
         )
         admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
         registered = httpx.Response(503)
-        for _ in range(50):
-            registered = await admin.post(
-                "/deployments",
-                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
-            )
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+                say_utterance_response = await restate_client.Client(async_client).service_call(
+                    restate_say_utterance.handler, relays.SayUtteranceRequest(call_id="c7", text="Hello.")
+                )
+
+            assert say_utterance_response == relays.SayUtteranceResponse(call_id="c7")
+            assert fake_speech_application_client.said == [relays.SayUtteranceRequest(call_id="c7", text="Hello.")]
+        finally:
             if registered.is_success:
-                break
-            await asyncio.sleep(0.1)
-
-        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
-            say_utterance_response = await restate_client.Client(async_client).service_call(
-                restate_say_utterance.handler, relays.SayUtteranceRequest(call_id="c7", text="Hello.")
-            )
-
-        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
-        await admin.aclose()
-        shutdown.set()
-        await asyncio.wait([serving], timeout=1.0)
-        serving.cancel()
-
-        assert registered.is_success
-        assert say_utterance_response == relays.SayUtteranceResponse(call_id="c7")
-        assert fake_speech_application_client.said == [relays.SayUtteranceRequest(call_id="c7", text="Hello.")]
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
