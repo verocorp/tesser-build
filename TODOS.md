@@ -39,6 +39,14 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   widget messages other than the request carrying `domain.Name`. Needs the
   scope ruled (requests only, or requests and responses), then the policy
   tightened and those records migrated.
+- [ ] **No record field is a union, optional included (Chris, 2026-09-24).**
+  TB080 already says "a port DTO field is never a union, optional included —
+  model the outcome as an enum", but only for port DTOs. Spec, context DTO
+  and relay DTO constructors still accept `X | None` (the annotation policy
+  allows exactly one `None` side). Widen the rule to every record. Found by
+  the #214 Codex challenge: TB073 compares types as spelled, so a helper
+  typed `None | str` for a `str | None` field is a false mismatch — a case
+  that disappears once no record takes a union.
 - [ ] **A `Mapping` field has no legal helper default.** A dict literal is
   not a legal default (one mutable instance shared by every call), so a
   record with a `Mapping` field gets no helper: llmport's `protocol.Tool`
