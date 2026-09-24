@@ -16,7 +16,17 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   conforming helper fails at run time), follow an `__init__` inherited from a
   parent record (every parameter reads as stray), report an extra decorator
   stacked on a helper (`functools.cache` shares one instance), or name an
-  Optional return annotation as the problem. Open: whether
+  Optional return annotation as the problem. From the adversarial pass: a
+  `Decimal`/`date`/`datetime`/`time` field has no legal default (a
+  constructor call of a stdlib type is refused — needs a ruling like the
+  Mapping entry below); types are compared as spelled, so `Optional[str]`
+  and `str | None` differ; a helper may return a mapper, whose `__init__`
+  runs translation code; an entity-typed helper parameter is exempt from a
+  default by its own annotation, not the constructor's; any non-dunder
+  attribute of a tree enum passes as a member (a method too) while a
+  stdlib enum member does not; a zero-parameter helper passes although
+  testing.md calls a helper with no default a rename; and Helper rebuilds
+  the Registry per helper. Open: whether
   an assembly may take a record's parts at all, how it composes with
   helpers, and whether the other shapes with no home (an async context
   manager that serves an engine, a wired object graph) belong to it.

@@ -4339,6 +4339,14 @@ class Helper(ts.ValueObject):
         constructor = (
             constructor_rows.constructor(constructed) if constructed is not None and not spec.assembly else None
         )
+        if (
+            constructed is not None
+            and constructor is None
+            and not spec.assembly
+            and block is not None
+            and str(block) in DATA_BLOCKS
+        ):
+            rows.append((line, "unread", "", (str(constructed.name()),)))
         if constructed is not None and constructor is not None:
             target_name = str(constructed.name())
             for arg in args:
@@ -4387,6 +4395,7 @@ class Helper(ts.ValueObject):
                 (
                     ast.If, ast.Match, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.TryStar, ast.With,
                     ast.AsyncWith, ast.Raise, ast.Assert, ast.IfExp, ast.BoolOp, ast.NamedExpr,
+                    ast.Yield, ast.YieldFrom, ast.Await,
                     ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp,
                 ),
             ):
@@ -4466,6 +4475,15 @@ class Helper(ts.ValueObject):
                     "TB073",
                     f"{where} parameter {param!r} is {written_type} where {target_name} takes {wanted_type}; "
                     "a helper mirrors the constructor it feeds",
+                )))
+            elif kind == "unread":
+                target_name = traits[0]
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} returns {target_name}, whose constructor the analyzer cannot read; "
+                    "a helper mirrors a constructor declared in the tree",
                 )))
             elif kind == "data":
                 found.append(Violation(ViolationSpec(

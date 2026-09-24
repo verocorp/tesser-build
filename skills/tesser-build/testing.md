@@ -104,8 +104,9 @@ file says *how*, and it is the cross-cutting layer they assume.
 9. **A test helper builds a spec or a DTO, and mirrors the constructor it
    feeds.** A helper's entire job is to hold the values a test does not care
    about, so the test can state only the one or two that make it *that* test.
-   It takes exactly the constructor's parameters — the same names, the same
-   types — each with a default, and its body passes every one of them straight
+   It takes exactly the constructor's parameters — the same names, the types
+   spelled as the constructor spells them — each with a default (an entity or
+   aggregate excepted), and its body passes every one of them straight
    through. It never returns a constructed domain object, and it never calls
    anything but another helper.
 

@@ -5825,7 +5825,10 @@ def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the
                 "    return thing.ThingSpec(text=text)\n"
                 "@th.assembly\n"
                 "def from_a_field(text: str = 'a') -> thing.ThingSpec:\n"
-                "    return thing.ThingSpec(text=thing.ThingSpec(text=text).text.upper())\n",
+                "    return thing.ThingSpec(text=thing.ThingSpec(text=text).text.upper())\n"
+                "@th.assembly\n"
+                "def yielding(text: str = 'a') -> thing.ThingSpec:\n"
+                "    yield thing.ThingSpec(text=text)\n",
                 False,
             ),
         ))).violations()
@@ -5852,6 +5855,7 @@ def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the
     assert sum("test_assemblies.guarded has control flow" in f for f in assembly) == 2, assembly
     assert not any("test_assemblies.built_default calls" in f for f in assembly), assembly
     assert not any("test_assemblies.from_a_field" in f for f in assembly), assembly
+    assert any("test_assemblies.yielding has control flow" in f for f in assembly), assembly
     assert any(
         "test_assemblies.awaited is async; a helper or assembly returns its construction, never a coroutine" in f
         for f in assembly
@@ -5959,6 +5963,34 @@ def test_a_helper_default_builds_a_domain_object_never_a_service() -> None:
         "test_service_relay_helpers.run_request parameter 'runner' defaults to something other than" in f
         for f in findings
     ), [f for f in findings if "TB073" in f]
+
+
+def test_a_helper_whose_constructor_the_analyzer_cannot_read_is_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/application/test_unread_helpers.py",
+                "shop.application.test_unread_helpers",
+                "import tesser.application as ts\n"
+                "import tesser.testing as th\n"
+                "@th.fake\n"
+                "class LocalRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n"
+                "@th.helper\n"
+                "def local_request(text: str = 'x') -> LocalRequest:\n"
+                "    return LocalRequest(text=text)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    helper = [f for f in findings if "test_unread_helpers" in f and "TB073" in f]
+    assert any(
+        "test_unread_helpers.local_request returns LocalRequest, whose constructor the analyzer cannot read; "
+        "a helper mirrors a constructor declared in the tree" in f
+        for f in helper
+    ), helper
 
 
 def test_a_helper_that_invents_reshapes_or_drifts_from_its_constructor_is_flagged() -> None:
