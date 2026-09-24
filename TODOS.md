@@ -11,7 +11,7 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   defaulted, no control flow, no call into the code under test. Known holes
   from the #213 ship review: a call on a local (`made.shout()`) is not
   resolved, so it is not reported; calls outside the tree (a clock, a random
-  source, `open`) pass; a helper default may call an assembly. TB073 also
+  source, `open`) pass. TB073 also
   does not yet model a constructor with positional-only parameters (a
   conforming helper fails at run time), follow an `__init__` inherited from a
   parent record (every parameter reads as stray), report an extra decorator

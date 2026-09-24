@@ -846,7 +846,9 @@ OUTCOME_BASE: typing.Final[tuple[str, str]] = ("tesser.domain", "Outcome")
 
 DOMAIN_OBJECT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({OUTCOME_BLOCK})
 
-DEFAULT_BUILT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({"component_config", "app_config"})
+DEFAULT_BUILT_BLOCKS: typing.Final[frozenset[str]] = frozenset({"valueobject", "component_config", "app_config"})
+
+UNDEFAULTED_BLOCKS: typing.Final[frozenset[str]] = frozenset({"entity", "aggregate"})
 
 DOMAIN_METHOD_PARAMETER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
     {"spec"}
@@ -4266,6 +4268,11 @@ class Helper(ts.ValueObject):
             defaults[arg.arg] = kw_default
         for arg in args:
             given = defaults[arg.arg]
+            held_ref = Annotation(arg.annotation).primary() if arg.annotation is not None else None
+            held = scope.resolve(held_ref) if held_ref is not None else None
+            held_block = kind_table.block_of(held) if held is not None else None
+            if given is None and held_block is not None and str(held_block) in UNDEFAULTED_BLOCKS:
+                continue
             if given is None:
                 rows.append((line, "default", arg.arg, ()))
                 continue
@@ -4286,7 +4293,12 @@ class Helper(ts.ValueObject):
                     continue
                 if isinstance(value, ast.Attribute):
                     member_of = scope.resolve(Text(ast.unparse(value.value)))
-                    composed = member_of is not None and member_of in symbols and not value.attr.startswith("_")
+                    composed = (
+                        member_of is not None
+                        and member_of in symbols
+                        and not value.attr.startswith("__")
+                        and not (value.attr.startswith("_") and value.attr.endswith("_"))
+                    )
                     continue
                 if (
                     isinstance(value, ast.Call)
@@ -4380,12 +4392,18 @@ class Helper(ts.ValueObject):
             ):
                 rows.append((node.lineno, "assembly_control", "", ()))
             if spec.assembly and isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
-                reached: ast.expr = node.func
-                called = scope.resolve(Text(ast.unparse(reached)))
-                while called is None and isinstance(reached, ast.Attribute):
-                    reached = reached.value
-                    called = scope.resolve(Text(ast.unparse(reached)))
+                called = scope.resolve(Text(ast.unparse(node.func)))
                 called_block = kind_table.block_of(called) if called is not None else None
+                reached: ast.expr = node.func
+                while called is None and isinstance(reached, ast.Attribute) and isinstance(
+                    reached.value, (ast.Attribute, ast.Name)
+                ):
+                    reached = reached.value
+                    owner = scope.resolve(Text(ast.unparse(reached)))
+                    owner_block = kind_table.block_of(owner) if owner is not None else None
+                    if owner is not None and owner_block is not None:
+                        called = owner
+                        called_block = owner_block
                 if (
                     called is not None
                     and str(called.module()) in names
@@ -4401,7 +4419,8 @@ class Helper(ts.ValueObject):
                     path,
                     line,
                     "TB073",
-                    f"{where} parameter {param!r} has no default; every helper parameter has a default",
+                    f"{where} parameter {param!r} has no default; every helper parameter but an entity "
+                    "or aggregate has a default",
                 )))
             elif kind == "composed":
                 found.append(Violation(ViolationSpec(
@@ -14394,12 +14413,7 @@ class Module(ts.Entity):
                 None,
             )
             params = (
-                [
-                    arg
-                    for arg in (init.args.posonlyargs + init.args.args)[1:] + init.args.kwonlyargs
-                ]
-                if init is not None
-                else []
+                (init.args.posonlyargs + init.args.args)[1:] + init.args.kwonlyargs if init is not None else []
             )
             rows.append((
                 self._name,

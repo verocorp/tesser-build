@@ -65,7 +65,7 @@ def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> 
 
 @ts.helper
 def confirm_order_request(
-    order: domain.Order = domain.Order(order_spec()),
+    order: domain.Order,
 ) -> relays.ConfirmOrderRequest:
     return relays.ConfirmOrderRequest(order=order)
 
@@ -435,7 +435,7 @@ class TestRestateHttpOrderOrchestratorRelay:
         with pytest.raises(httpx.TransportError):
             await dispatchers.RestateHttpOrderOrchestratorRelay(
                 unreachable, restate_confirm_order
-            ).start_confirm_order(confirm_order_request())
+            ).start_confirm_order(confirm_order_request(order=domain.Order(order_spec())))
 
     async def test_an_unreachable_ingress_is_a_fault_when_running(self) -> None:
         with socket.socket() as closed:
@@ -448,4 +448,4 @@ class TestRestateHttpOrderOrchestratorRelay:
         with pytest.raises(httpx.TransportError):
             await dispatchers.RestateHttpOrderOrchestratorRelay(
                 unreachable, restate_confirm_order
-            ).run_confirm_order(confirm_order_request())
+            ).run_confirm_order(confirm_order_request(order=domain.Order(order_spec())))

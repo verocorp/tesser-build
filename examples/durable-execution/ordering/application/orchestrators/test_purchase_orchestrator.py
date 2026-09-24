@@ -141,7 +141,7 @@ def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 3) -> 
 
 @ts.helper
 def pay_for_order_request(
-    order: domain.Order = domain.Order(order_spec()),
+    order: domain.Order,
     payment_method: domain.PaymentMethod = domain.PaymentMethod("card-4242"),
 ) -> relays.PayForOrderRequest:
     return relays.PayForOrderRequest(order=order, payment_method=payment_method)
@@ -182,7 +182,9 @@ class TestPurchaseOrchestrator:
         asyncio.run(
             orchestrators.PurchaseOrchestrator(
                 fake_purchase_actions_relay, FakeOrderOrchestratorRelay()
-            ).pay_for_order(pay_for_order_request(payment_method=domain.PaymentMethod("card-1234")))
+            ).pay_for_order(pay_for_order_request(
+                order=domain.Order(order_spec()), payment_method=domain.PaymentMethod("card-1234")
+            ))
         )
         assert [m for _, _, m in fake_purchase_actions_relay.taken] == ["card-1234"]
 
@@ -191,7 +193,7 @@ class TestPurchaseOrchestrator:
             asyncio.run(
                 orchestrators.PurchaseOrchestrator(
                     FakePurchaseActionsRelay(cents_charged=700), FakeOrderOrchestratorRelay()
-                ).pay_for_order(pay_for_order_request())
+                ).pay_for_order(pay_for_order_request(order=domain.Order(order_spec())))
             )
         assert "does not settle" in excinfo.value.message
 
@@ -213,7 +215,7 @@ class TestPurchaseOrchestrator:
         pay_for_order_response = asyncio.run(
             orchestrators.PurchaseOrchestrator(
                 fake_purchase_actions_relay, FakeStartedOrderOrchestratorRelay()
-            ).pay_for_order(pay_for_order_request())
+            ).pay_for_order(pay_for_order_request(order=domain.Order(order_spec())))
         )
         assert (
             pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
@@ -225,7 +227,7 @@ class TestPurchaseOrchestrator:
         pay_for_order_response = asyncio.run(
             orchestrators.PurchaseOrchestrator(
                 FakeDecliningPurchaseActionsRelay(), FakeOrderOrchestratorRelay()
-            ).pay_for_order(pay_for_order_request())
+            ).pay_for_order(pay_for_order_request(order=domain.Order(order_spec())))
         )
         assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAYMENT_DECLINED
         assert pay_for_order_response.purchases == ()
@@ -240,7 +242,7 @@ class TestPurchaseOrchestrator:
                 orchestrators.PurchaseOrchestrator(
                     fake_purchase_actions_relay,
                     FakeOrderOrchestratorRelay(order_confirmed="other"),
-                ).pay_for_order(pay_for_order_request())
+                ).pay_for_order(pay_for_order_request(order=domain.Order(order_spec())))
             )
         assert "pricing of order 'other'" in excinfo.value.message
         assert fake_purchase_actions_relay.taken == []

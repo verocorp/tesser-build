@@ -49,7 +49,7 @@ def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 3) -> 
 
 @ts.helper
 def confirm_order_request(
-    order: domain.Order = domain.Order(order_spec()),
+    order: domain.Order,
 ) -> relays.ConfirmOrderRequest:
     return relays.ConfirmOrderRequest(order=order)
 
@@ -93,6 +93,6 @@ class TestOrderOrchestrator:
             asyncio.run(
                 orchestrators.OrderOrchestrator(
                     FakeOrderActionsRelay(cents=10**12)
-                ).confirm_order(confirm_order_request())
+                ).confirm_order(confirm_order_request(order=domain.Order(order_spec())))
             )
         assert "at most" in excinfo.value.message

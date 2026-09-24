@@ -5620,7 +5620,7 @@ def test_helper_rules_are_flagged() -> None:
         ))).violations()
                )
     assert any(
-        "bad_builder" in f and "parameter 'count' has no default; every helper parameter has a default" in f
+        "bad_builder" in f and "parameter 'count' has no default; every helper parameter but an entity or aggregate has a default" in f
         for f in findings
     )
     assert any(
@@ -5735,7 +5735,7 @@ def test_a_helper_names_a_record_parameter_for_the_field_it_feeds() -> None:
     ]
 
 
-def test_a_helper_defaults_a_domain_object_by_building_it_from_a_helper() -> None:
+def test_a_helper_takes_an_aggregate_without_a_default_and_never_shares_one() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in domain.Codebase(_spec(sources=(
@@ -5761,6 +5761,12 @@ def test_a_helper_defaults_a_domain_object_by_building_it_from_a_helper() -> Non
                 "    return thing.ThingSpec(text=text)\n"
                 "@th.helper\n"
                 "def keep_thing_request(\n"
+                "    thing: thing.Thing,\n"
+                "    request_id: str = 'request-1',\n"
+                ") -> thing_relay.KeepThingRequest:\n"
+                "    return thing_relay.KeepThingRequest(request_id=request_id, thing=thing)\n"
+                "@th.helper\n"
+                "def shared_thing_request(\n"
                 "    request_id: str = 'request-1',\n"
                 "    thing: thing.Thing = thing.Thing(thing_spec()),\n"
                 ") -> thing_relay.KeepThingRequest:\n"
@@ -5769,9 +5775,11 @@ def test_a_helper_defaults_a_domain_object_by_building_it_from_a_helper() -> Non
             ),
         ))).violations()
                )
-    assert not any("test_thing_relay_helpers" in f and "TB073" in f for f in findings), [
-        f for f in findings if "test_thing_relay_helpers" in f and "TB073" in f
-    ]
+    helper = [f for f in findings if "test_thing_relay_helpers" in f and "TB073" in f]
+    assert not any("keep_thing_request" in f for f in helper), helper
+    assert any(
+        "shared_thing_request parameter 'thing' defaults to something other than" in f for f in helper
+    ), helper
 
 
 def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the_code() -> None:
@@ -5814,7 +5822,10 @@ def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the
                 "    return thing.ThingSpec(text='b')\n"
                 "@th.assembly\n"
                 "async def awaited(text: str = 'a') -> thing.ThingSpec:\n"
-                "    return thing.ThingSpec(text=text)\n",
+                "    return thing.ThingSpec(text=text)\n"
+                "@th.assembly\n"
+                "def from_a_field(text: str = 'a') -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text=thing.ThingSpec(text=text).text.upper())\n",
                 False,
             ),
         ))).violations()
@@ -5840,6 +5851,7 @@ def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the
     assert any("test_assemblies.through_a_method calls thing.Thing.parse in the code under test" in f for f in assembly), assembly
     assert sum("test_assemblies.guarded has control flow" in f for f in assembly) == 2, assembly
     assert not any("test_assemblies.built_default calls" in f for f in assembly), assembly
+    assert not any("test_assemblies.from_a_field" in f for f in assembly), assembly
     assert any(
         "test_assemblies.awaited is async; a helper or assembly returns its construction, never a coroutine" in f
         for f in assembly

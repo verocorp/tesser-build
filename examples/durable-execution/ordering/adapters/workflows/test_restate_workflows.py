@@ -93,14 +93,14 @@ def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> 
 
 @ts.helper
 def confirm_order_request(
-    order: domain.Order = domain.Order(order_spec()),
+    order: domain.Order,
 ) -> relays.ConfirmOrderRequest:
     return relays.ConfirmOrderRequest(order=order)
 
 
 @ts.helper
 def pay_for_order_request(
-    order: domain.Order = domain.Order(order_spec()),
+    order: domain.Order,
     payment_method: domain.PaymentMethod = domain.PaymentMethod("card-4242"),
 ) -> relays.PayForOrderRequest:
     return relays.PayForOrderRequest(order=order, payment_method=payment_method)

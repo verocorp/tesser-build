@@ -64,7 +64,7 @@ def call_spec(call_id: str = "c7", person_name: str = "") -> domain.CallSpec:
 
 @ts.helper
 def conduct_call_request(
-    call: domain.Call = domain.Call(call_spec()),
+    call: domain.Call,
 ) -> relays.ConductCallRequest:
     return relays.ConductCallRequest(call=call)
 
