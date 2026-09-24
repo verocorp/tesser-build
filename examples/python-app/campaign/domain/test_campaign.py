@@ -474,7 +474,10 @@ def test_construction_refuses_a_duplicate_slug_in_the_spec() -> None:
         domain.Campaign(
             _campaign_spec(
                 links=_short_links_spec(
-                    links=(_short_link_spec(slug="promo"), _short_link_spec(slug="promo"))
+                    links=(
+                        _short_link_spec(slug="promo", target_url="https://ok.example/a"),
+                        _short_link_spec(slug="promo", target_url="https://ok.example/b"),
+                    )
                 )
             )
         )
