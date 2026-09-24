@@ -141,10 +141,10 @@ file says *how*, and it is the cross-cutting layer they assume.
    - **Compose, one helper per object.** A field that holds another spec or
      record defaults to that record's helper, and a test that cares about the
      child passes one: `_order_spec(lines=(_line_spec(quantity=3),))`. A
-     default holds values — a literal, an enum member, another helper's result,
-     a domain object or config built from those (`call: Call = Call(_call_spec())`),
-     or a tuple of those — never a record built in place and never a module
-     constant. Write a helper only where a test needs one, above the helper
+     default holds values — a literal, an enum member, another helper's or an
+     assembly's result, a domain object or config built from those
+     (`call: Call = Call(_call_spec())`), or a tuple of those — never a record
+     built in place, never a service or adapter, and never a module constant. Write a helper only where a test needs one, above the helper
      whose default calls it: a default runs once, when the function is
      defined, and every call shares that instance, which is safe because a
      record is never changed after construction.

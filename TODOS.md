@@ -8,7 +8,15 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   minimal, to unblock #213: the analyzer's own tests assemble codebases from
   a fixed base plus the test's parts, and a helper may no longer do that.
   Today's rule is only: returns construction data, every parameter
-  defaulted, no control flow, no call into the code under test. Open: whether
+  defaulted, no control flow, no call into the code under test. Known holes
+  from the #213 ship review: a call on a local (`made.shout()`) is not
+  resolved, so it is not reported; calls outside the tree (a clock, a random
+  source, `open`) pass; a helper default may call an assembly. TB073 also
+  does not yet model a constructor with positional-only parameters (a
+  conforming helper fails at run time), follow an `__init__` inherited from a
+  parent record (every parameter reads as stray), report an extra decorator
+  stacked on a helper (`functools.cache` shares one instance), or name an
+  Optional return annotation as the problem. Open: whether
   an assembly may take a record's parts at all, how it composes with
   helpers, and whether the other shapes with no home (an async context
   manager that serves an engine, a wired object graph) belong to it.

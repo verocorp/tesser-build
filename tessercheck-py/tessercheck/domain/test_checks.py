@@ -5795,6 +5795,25 @@ def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the
                 "    return thing.ThingSpec(text=str(thing.Thing(thing.ThingSpec(text=text))))\n"
                 "@th.assembly\n"
                 "def undefaulted(text: str) -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text=text)\n"
+                "@th.assembly\n"
+                "def looping(parts: tuple[str, ...] = ('a',)) -> thing.ThingSpec:\n"
+                "    text = ''\n"
+                "    for part in parts:\n"
+                "        text = text + part\n"
+                "    return thing.ThingSpec(text=str([part for part in parts]) + text)\n"
+                "@th.assembly\n"
+                "def through_a_method(text: str = 'a') -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text=thing.Thing.parse(text))\n"
+                "@th.assembly\n"
+                "def guarded(text: str = 'a') -> thing.ThingSpec:\n"
+                "    with open(text) as handle:\n"
+                "        return thing.ThingSpec(text=handle.read() or text)\n"
+                "@th.assembly\n"
+                "def built_default(made: thing.Thing = thing.Thing(thing.ThingSpec(text='a'))) -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text='b')\n"
+                "@th.assembly\n"
+                "async def awaited(text: str = 'a') -> thing.ThingSpec:\n"
                 "    return thing.ThingSpec(text=text)\n",
                 False,
             ),
@@ -5815,7 +5834,119 @@ def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the
     assert any(
         "test_assemblies.undefaulted parameter 'text' has no default" in f for f in assembly
     ), assembly
+    assert sum(
+        "test_assemblies.looping has control flow; an assembly puts parts together" in f for f in assembly
+    ) == 2, assembly
+    assert any("test_assemblies.through_a_method calls thing.Thing.parse in the code under test" in f for f in assembly), assembly
+    assert sum("test_assemblies.guarded has control flow" in f for f in assembly) == 2, assembly
+    assert not any("test_assemblies.built_default calls" in f for f in assembly), assembly
+    assert any(
+        "test_assemblies.awaited is async; a helper or assembly returns its construction, never a coroutine" in f
+        for f in assembly
+    ), assembly
     assert not any("TB071" in f and "test_assemblies" in f for f in findings), findings
+
+
+def test_a_helper_reports_each_constructor_edge_in_the_order_it_was_written() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/application/ports/stock.py",
+                "shop.application.ports.stock",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Label(ts.Response):\n"
+                "    def __init__(self, *, text: str = 'x', note: typing.Literal['\u00e9\u00e9'] = '\u00e9\u00e9') -> None:\n"
+                "        self.text = text\n"
+                "        self.note = note\n"
+                "class Count(ts.Response):\n"
+                "    def __init__(self, units: int, loose) -> None:\n"
+                "        self.units = units\n"
+                "        self.loose = loose\n"
+                "class Empty(ts.Response):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/application/test_stock_helpers.py",
+                "shop.application.test_stock_helpers",
+                "import typing\n"
+                "import tesser.testing as th\n"
+                "import shop.application.ports.stock as stock\n"
+                "@th.helper\n"
+                "def label(*, text: str = 'x', note: typing.Literal['\u00e9\u00e9'] = '\u00e9\u00e9') -> stock.Label:\n"
+                "    return stock.Label(text=text, note=note)\n"
+                "@th.helper\n"
+                "def count(units: str = '1', loose: int = 1) -> stock.Count:\n"
+                "    return stock.Count(units, loose=loose)\n"
+                "@th.helper\n"
+                "def untyped(units=1, loose: int = 1) -> stock.Count:\n"
+                "    return stock.Count(units=units, loose=loose)\n"
+                "@th.helper\n"
+                "def empty(extra: str = 'x') -> stock.Empty:\n"
+                "    return stock.Empty(extra=extra)\n"
+                "@th.helper\n"
+                "def swallowing(units: int = ..., loose: int = 1, *rest: str) -> stock.Count:\n"
+                "    return stock.Count(units=units, loose=loose)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    helper = [f for f in findings if "test_stock_helpers" in f and "TB073" in f]
+    assert not any("test_stock_helpers.label " in f for f in helper), helper
+    assert any(
+        "test_stock_helpers.count parameter 'units' is str where Count takes int; "
+        "a helper mirrors the constructor it feeds" in f
+        for f in helper
+    ), helper
+    assert not any("count parameter 'loose'" in f for f in helper), helper
+    assert any("test_stock_helpers.count does not pass each parameter through" in f for f in helper), helper
+    assert any(
+        "test_stock_helpers.untyped parameter 'units' has no annotation where Count takes int" in f for f in helper
+    ), helper
+    assert any(
+        "test_stock_helpers.empty parameter 'extra' is not a parameter of Empty" in f for f in helper
+    ), helper
+    assert any(
+        "test_stock_helpers.swallowing parameter 'units' defaults to something other than" in f for f in helper
+    ), helper
+    assert any(
+        "test_stock_helpers.swallowing parameter 'rest' is not a parameter of Count" in f for f in helper
+    ), helper
+
+
+def test_a_helper_default_builds_a_domain_object_never_a_service() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/application/relays/service_relay.py",
+                "shop.application.relays.service_relay",
+                "import tesser.application as ts\n"
+                "import shop.application.service as service\n"
+                "class RunRequest(ts.Request):\n"
+                "    def __init__(self, runner: service.AskService) -> None:\n"
+                "        self.runner = runner\n",
+                False,
+            ),
+            (
+                "shop/application/test_service_relay_helpers.py",
+                "shop.application.test_service_relay_helpers",
+                "import tesser.testing as th\n"
+                "import shop.application.relays.service_relay as service_relay\n"
+                "import shop.application.service as service\n"
+                "@th.helper\n"
+                "def run_request(runner: service.AskService = service.AskService()) -> service_relay.RunRequest:\n"
+                "    return service_relay.RunRequest(runner=runner)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert any(
+        "test_service_relay_helpers.run_request parameter 'runner' defaults to something other than" in f
+        for f in findings
+    ), [f for f in findings if "TB073" in f]
 
 
 def test_a_helper_that_invents_reshapes_or_drifts_from_its_constructor_is_flagged() -> None:

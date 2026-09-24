@@ -846,6 +846,8 @@ OUTCOME_BASE: typing.Final[tuple[str, str]] = ("tesser.domain", "Outcome")
 
 DOMAIN_OBJECT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({OUTCOME_BLOCK})
 
+DEFAULT_BUILT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({"component_config", "app_config"})
+
 DOMAIN_METHOD_PARAMETER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
     {"spec"}
 )
@@ -4159,6 +4161,7 @@ class TypeForm(ts.ValueObject):
     def __init__(self, spec: TypeFormSpec) -> None:
         scope = Scope(spec.scope)
         refs: list[tuple[int, int, str]] = []
+        encoded = spec.source.encode()
         stack: list[ast.AST] = [ast.parse(spec.source, mode="eval").body]
         while stack:
             node = stack.pop()
@@ -4171,10 +4174,9 @@ class TypeForm(ts.ValueObject):
                     refs.append((node.col_offset, node.end_col_offset, f"{symbol.module()}.{symbol.name()}"))
                 continue
             stack.extend(ast.iter_child_nodes(node))
-        canonical = spec.source
         for start, end, resolved in sorted(refs, reverse=True):
-            canonical = canonical[:start] + resolved + canonical[end:]
-        object.__setattr__(self, "_text", Text(canonical))
+            encoded = encoded[:start] + resolved.encode() + encoded[end:]
+        object.__setattr__(self, "_text", Text(encoded.decode()))
 
     def text(self) -> Text:
         return self._text
@@ -4209,13 +4211,16 @@ class ConstructorRows(ts.ValueObject):
     _items: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...]
 
     def __init__(self, items: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...]) -> None:
-        object.__setattr__(self, "_items", items)
+        object.__setattr__(self, "_items", tuple(sorted(items)))
 
     def constructor(self, symbol: Symbol) -> Constructor | None:
-        for module_name, cls, params, types in self._items:
-            if module_name == str(symbol.module()) and cls == str(symbol.name()):
-                return Constructor(ConstructorSpec(params, types))
-        return None
+        module_name = str(symbol.module())
+        cls = str(symbol.name())
+        index = bisect.bisect_left(self._items, (module_name, cls, (), ()))
+        if index == len(self._items) or self._items[index][:2] != (module_name, cls):
+            return None
+        _, _, params, types = self._items[index]
+        return Constructor(ConstructorSpec(params, types))
 
 
 class HelperSpec(ts.Spec):
@@ -4241,18 +4246,17 @@ class HelperSpec(ts.Spec):
 
 class Helper(ts.ValueObject):
 
-    _where: Text
-    _path: Path
-    _facts: tuple[Fact, ...]
+    _found: tuple[Violation, ...]
 
     def __init__(self, spec: HelperSpec) -> None:
         fn = spec.node
         registry = Registry(spec.registry)
         kind_table = registry.kinds()
         constructor_rows = registry.constructors()
+        symbols = registry.enums()
         scope = Scope(spec.scope)
         line = fn.lineno
-        rows: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        rows: list[tuple[int, str, str, tuple[str, ...]]] = []
         args = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
         positional = fn.args.posonlyargs + fn.args.args
         defaults: dict[str, ast.expr | None] = {arg.arg: None for arg in args}
@@ -4269,7 +4273,7 @@ class Helper(ts.ValueObject):
             composed = True
             while pending and composed:
                 value = pending.pop()
-                if isinstance(value, ast.Constant):
+                if isinstance(value, ast.Constant) and value.value is not Ellipsis:
                     continue
                 if (
                     isinstance(value, ast.UnaryOp)
@@ -4282,7 +4286,7 @@ class Helper(ts.ValueObject):
                     continue
                 if isinstance(value, ast.Attribute):
                     member_of = scope.resolve(Text(ast.unparse(value.value)))
-                    composed = member_of is not None and member_of in registry.enums()
+                    composed = member_of is not None and member_of in symbols and not value.attr.startswith("_")
                     continue
                 if (
                     isinstance(value, ast.Call)
@@ -4302,7 +4306,7 @@ class Helper(ts.ValueObject):
                 if (
                     isinstance(value, ast.Call)
                     and built_block is not None
-                    and str(built_block) not in DATA_BLOCKS
+                    and str(built_block) in DEFAULT_BUILT_BLOCKS
                     and all(keyword.arg is not None for keyword in value.keywords)
                 ):
                     pending.extend(value.args)
@@ -4319,7 +4323,7 @@ class Helper(ts.ValueObject):
             symbol = registry.mapper_target(symbol)
             block = kind_table.block_of(symbol) if symbol is not None else None
         if block is None or str(block) not in DATA_BLOCKS:
-            rows.append((line, "data", None, ()))
+            rows.append((line, "data", "", ()))
         constructor = (
             constructor_rows.constructor(constructed) if constructed is not None and not spec.assembly else None
         )
@@ -4329,6 +4333,8 @@ class Helper(ts.ValueObject):
                 wanted = constructor.type_of(Text(arg.arg))
                 if arg.arg not in constructor.params():
                     rows.append((line, "stray", arg.arg, (target_name,)))
+                elif wanted is None:
+                    continue
                 elif arg.annotation is None:
                     rows.append((line, "untyped", arg.arg, (target_name, str(wanted))))
                 else:
@@ -4338,6 +4344,9 @@ class Helper(ts.ValueObject):
             for name in constructor.params():
                 if name not in defaults:
                     rows.append((line, "missing", name, (target_name,)))
+            for extra in (fn.args.vararg, fn.args.kwarg):
+                if extra is not None:
+                    rows.append((line, "stray", extra.arg, (target_name,)))
         passed = False
         returned = fn.body[0].value if len(fn.body) == 1 and isinstance(fn.body[0], ast.Return) else None
         if isinstance(returned, ast.Call):
@@ -4354,21 +4363,28 @@ class Helper(ts.ValueObject):
                 and passed_names == sorted(defaults)
             )
         if not passed and not spec.assembly:
-            rows.append((line, "through", None, ()))
+            rows.append((line, "through", "", ()))
+        if isinstance(fn, ast.AsyncFunctionDef):
+            rows.append((line, "async", "", ()))
         names = registry.module_names()
-        for node in ast.walk(fn):
+        for node in (walked for stmt in fn.body for walked in ast.walk(stmt)):
             if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)) and not spec.assembly:
-                rows.append((node.lineno, "control", None, ()))
+                rows.append((node.lineno, "control", "", ()))
             if spec.assembly and isinstance(
                 node,
                 (
-                    ast.If, ast.Match, ast.For, ast.While, ast.Try, ast.Assert, ast.IfExp,
+                    ast.If, ast.Match, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.TryStar, ast.With,
+                    ast.AsyncWith, ast.Raise, ast.Assert, ast.IfExp, ast.BoolOp, ast.NamedExpr,
                     ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp,
                 ),
             ):
-                rows.append((node.lineno, "assembly_control", None, ()))
+                rows.append((node.lineno, "assembly_control", "", ()))
             if spec.assembly and isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
-                called = scope.resolve(Text(ast.unparse(node.func)))
+                reached: ast.expr = node.func
+                called = scope.resolve(Text(ast.unparse(reached)))
+                while called is None and isinstance(reached, ast.Attribute):
+                    reached = reached.value
+                    called = scope.resolve(Text(ast.unparse(reached)))
                 called_block = kind_table.block_of(called) if called is not None else None
                 if (
                     called is not None
@@ -4376,33 +4392,23 @@ class Helper(ts.ValueObject):
                     and (called_block is None or str(called_block) not in DATA_BLOCKS)
                 ):
                     rows.append((node.lineno, "assembly_call", ast.unparse(node.func), ()))
-        object.__setattr__(self, "_where", Text(spec.where))
-        object.__setattr__(self, "_path", Path(spec.path))
-        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*row)) for row in rows))
-
-    def violations(self) -> tuple[Violation, ...]:
-        where = str(self._where)
-        path = str(self._path)
+        where = spec.where
+        path = spec.path
         found: list[Violation] = []
-        for fact in self._facts:
-            kind = str(fact.kind())
-            line = int(fact.lineno())
-            detail = fact.detail()
-            arg = str(detail) if detail is not None else ""
-            traits = tuple(fact.traits())
+        for line, kind, param, traits in rows:
             if kind == "default":
                 found.append(Violation(ViolationSpec(
                     path,
                     line,
                     "TB073",
-                    f"{where} parameter {arg!r} has no default; every helper parameter has a default",
+                    f"{where} parameter {param!r} has no default; every helper parameter has a default",
                 )))
             elif kind == "composed":
                 found.append(Violation(ViolationSpec(
                     path,
                     line,
                     "TB073",
-                    f"{where} parameter {arg!r} defaults to something other than a literal, an enum member, "
+                    f"{where} parameter {param!r} defaults to something other than a literal, an enum member, "
                     "a helper's result, a domain object or config built from those, or a tuple of those; "
                     "a default holds values and builds a record only through its helper",
                 )))
@@ -4412,7 +4418,7 @@ class Helper(ts.ValueObject):
                     path,
                     line,
                     "TB073",
-                    f"{where} parameter {arg!r} is not a parameter of {target_name}; "
+                    f"{where} parameter {param!r} is not a parameter of {target_name}; "
                     "a helper mirrors the constructor it feeds",
                 )))
             elif kind == "missing":
@@ -4421,7 +4427,7 @@ class Helper(ts.ValueObject):
                     path,
                     line,
                     "TB073",
-                    f"{where} takes no {arg!r}, which {target_name} takes; "
+                    f"{where} takes no {param!r}, which {target_name} takes; "
                     "a helper mirrors the constructor it feeds",
                 )))
             elif kind == "untyped":
@@ -4430,7 +4436,7 @@ class Helper(ts.ValueObject):
                     path,
                     line,
                     "TB073",
-                    f"{where} parameter {arg!r} has no annotation where {target_name} takes {wanted_type}; "
+                    f"{where} parameter {param!r} has no annotation where {target_name} takes {wanted_type}; "
                     "a helper mirrors the constructor it feeds",
                 )))
             elif kind == "typed":
@@ -4439,7 +4445,7 @@ class Helper(ts.ValueObject):
                     path,
                     line,
                     "TB073",
-                    f"{where} parameter {arg!r} is {written_type} where {target_name} takes {wanted_type}; "
+                    f"{where} parameter {param!r} is {written_type} where {target_name} takes {wanted_type}; "
                     "a helper mirrors the constructor it feeds",
                 )))
             elif kind == "data":
@@ -4457,6 +4463,13 @@ class Helper(ts.ValueObject):
                     f"{where} does not pass each parameter through by name to one construction; "
                     "a helper's body invents nothing",
                 )))
+            elif kind == "async":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} is async; a helper or assembly returns its construction, never a coroutine",
+                )))
             elif kind == "assembly_control":
                 found.append(Violation(ViolationSpec(
                     path,
@@ -4469,7 +4482,7 @@ class Helper(ts.ValueObject):
                     path,
                     line,
                     "TB073",
-                    f"{where} calls {arg} in the code under test; an assembly builds a test input and runs nothing",
+                    f"{where} calls {param} in the code under test; an assembly builds a test input and runs nothing",
                 )))
             else:
                 found.append(Violation(ViolationSpec(
@@ -4478,7 +4491,10 @@ class Helper(ts.ValueObject):
                     "TB073",
                     f"{where} has control flow; a helper only constructs",
                 )))
-        return tuple(found)
+        object.__setattr__(self, "_found", tuple(found))
+
+    def violations(self) -> tuple[Violation, ...]:
+        return self._found
 
 
 class DependencyPolicySpec(ts.Spec):
