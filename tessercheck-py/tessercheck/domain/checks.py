@@ -2156,6 +2156,14 @@ class RegistrationRows(ts.ValueObject):
                 return Text(handler)
         return None
 
+    def signals(self, symbol: Symbol) -> Names:
+        wanted = (str(symbol.module()), str(symbol.name()))
+        return Names(tuple(
+            f"{module_name}.{cls}"
+            for module_name, cls, block, far_module, far_name, _ in self._items
+            if block == SIGNAL_BLOCK and (far_module, far_name) == wanted
+        ))
+
     def main_handlers(self, symbol: Symbol) -> Names:
         wanted = (str(symbol.module()), str(symbol.name()))
         return Names(tuple(
@@ -12783,6 +12791,7 @@ class Module(ts.Entity):
             wanted_states = registration_rows.main_handlers(far_side) if far_side is not None else None
             if str(block) == WORKFLOW_BLOCK:
                 wanted_states = Names((handler.name,))
+            started_lines: list[int] = []
             for call in ast.walk(handler):
                 if not (
                     str(block) in (WORKFLOW_BLOCK, SIGNAL_BLOCK)
@@ -12822,8 +12831,58 @@ class Module(ts.Entity):
                             "the signal learns from it that the main has started",
                         ))
                     )
+                else:
+                    started_lines.append(call.lineno)
+            if (
+                str(block) == WORKFLOW_BLOCK
+                and far_side is not None
+                and registration_rows.signals(far_side)
+                and not started_lines
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} sets no started state; a workflow's main whose container "
+                        "has a signal sets the state named for its own operation before it waits, because "
+                        "its signals refuse a key whose main never started",
+                    ))
+                )
             if str(block) != SIGNAL_BLOCK:
                 continue
+            if not started_lines:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} reads no started state; a signal refuses a key whose main "
+                        "never started, because Restate runs a shared handler on a key whose main never ran "
+                        "and keeps the promise it resolves",
+                    ))
+                )
+            resolve_lines = [
+                node.lineno
+                for node in ast.walk(handler)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == RESOLVE_CALL
+                and isinstance(node.func.value, ast.Call)
+                and isinstance(node.func.value.func, ast.Attribute)
+                and node.func.value.func.attr == PROMISE_CALL
+            ]
+            if started_lines and resolve_lines and min(resolve_lines) < min(started_lines):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        min(resolve_lines),
+                        "TB085",
+                        f"{where}.{handler.name} resolves its promise before it reads the started state; "
+                        "a signal reads the started state first, because a promise it has resolved stays "
+                        "resolved whatever it reads after",
+                    ))
+                )
             resolved = any(
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)

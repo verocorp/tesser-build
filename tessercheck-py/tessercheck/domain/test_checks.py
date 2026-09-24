@@ -20796,6 +20796,7 @@ def _engine_kinds_spec(
             "from shop.application.relays.flow_signal_relay import "
             "AwaitQuoteAcceptedResponse as AwaitQuoteAcceptedResponse\n"
             "from shop.application.relays.flow_signal_relay import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n"
+            "from shop.application.relays.flow_signal_relay import ISSUE_QUOTE_STATE as ISSUE_QUOTE_STATE\n"
             "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
             "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
             "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n",
@@ -20831,6 +20832,7 @@ def _engine_kinds_spec(
             "import typing\n"
             "import tesser.application as ts\n"
             "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n"
+            "ISSUE_QUOTE_STATE: typing.Final[str] = 'issue_quote'\n"
             "class AwaitQuoteAcceptedRequest(ts.Request):\n"
             "    def __init__(self, text: str) -> None:\n"
             "        self.text = text\n"
@@ -20912,6 +20914,7 @@ def _engine_kinds_spec(
             "        async def issue_quote(\n"
             "            engine_workflow_context: restate.WorkflowContext, issue_quote_request: relays.IssueQuoteRequest\n"
             "        ) -> relays.IssueQuoteResponse:\n"
+            "            engine_workflow_context.set(relays.ISSUE_QUOTE_STATE, b'')\n"
             "            return await orchestrators.Flow(\n"
             "                EngineInvocationQuoteActionsRelay(engine_workflow_context, engine_quote_price),\n"
             "                EngineInvocationFlowSignalRelay(engine_workflow_context),\n"
@@ -20944,6 +20947,8 @@ def _engine_kinds_spec(
             "            engine_workflow_shared_context: restate.WorkflowSharedContext,\n"
             "            quote_accepted_request: relays.QuoteAcceptedRequest,\n"
             "        ) -> relays.QuoteAcceptedResponse:\n"
+            "            if await engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE) is None:\n"
+            "                raise restate.TerminalError('not started', status_code=412)\n"
             "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n"
             "            return relays.QuoteAcceptedResponse(text=quote_accepted_request.text)\n"
             "        self.handler = quote_accepted\n"
@@ -21732,28 +21737,10 @@ def _gated_engine_kinds_spec(
     state_constant: str = "issue_quote", written: str = "relays.ISSUE_QUOTE_STATE", read: str = "relays.ISSUE_QUOTE_STATE"
 ) -> domain.CodebaseSpec:
     return _engine_kinds_spec(edits=(
-            (
-                "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n",
-                "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n"
-                f"ISSUE_QUOTE_STATE: typing.Final[str] = {state_constant!r}\n",
-            ),
-            (
-                "import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n",
-                "import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n"
-                "from shop.application.relays.flow_signal_relay import ISSUE_QUOTE_STATE as ISSUE_QUOTE_STATE\n",
-            ),
-            (
-                "            return await orchestrators.Flow(\n",
-                f"            engine_workflow_context.set({written}, b'')\n"
-                "            return await orchestrators.Flow(\n",
-            ),
-            (
-                "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n",
-                f"            if await engine_workflow_shared_context.get({read}) is None:\n"
-                "                raise restate.TerminalError('not started', status_code=412)\n"
-                "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n",
-            ),
-        ))
+        ("ISSUE_QUOTE_STATE: typing.Final[str] = 'issue_quote'\n", f"ISSUE_QUOTE_STATE: typing.Final[str] = {state_constant!r}\n"),
+        ("engine_workflow_context.set(relays.ISSUE_QUOTE_STATE,", f"engine_workflow_context.set({written},"),
+        ("engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE)", f"engine_workflow_shared_context.get({read})"),
+    ))
 
 
 def test_a_signal_reads_only_the_state_its_workflows_main_writes_by_a_relays_constant() -> None:
@@ -21790,6 +21777,75 @@ def test_a_signal_reads_only_the_state_its_workflows_main_writes_by_a_relays_con
     assert any("EngineQuoteAccepted.quote_accepted names the state quote_issued;" in f for f in named_for_nothing), (
         named_for_nothing
     )
+
+
+def test_a_signal_reads_the_started_state_of_its_workflows_main() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old=(
+                "            if await engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE) is None:\n                raise restate.TerminalError('not started', status_code=412)\n"
+            ),
+            new="",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineQuoteAccepted.quote_accepted reads no started "
+        "state; a signal refuses a key whose main never started, because Restate runs a shared handler on a key "
+        "whose main never ran and keeps the promise it resolves" in f
+        for f in findings
+    ), findings
+
+
+def test_a_signal_reads_the_started_state_before_it_resolves_its_promise() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old=(
+                "            if await engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE) is None:\n                raise restate.TerminalError('not started', status_code=412)\n"
+                "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n"
+            ),
+            new=(
+                "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n"
+                "            if await engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE) is None:\n                raise restate.TerminalError('not started', status_code=412)\n"
+            ),
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineQuoteAccepted.quote_accepted resolves its promise "
+        "before it reads the started state; a signal reads the started state first, because a promise it has "
+        "resolved stays resolved whatever it reads after" in f
+        for f in findings
+    ), findings
+
+
+def test_a_workflow_main_whose_container_has_a_signal_sets_its_started_state() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="            engine_workflow_context.set(relays.ISSUE_QUOTE_STATE, b'')\n",
+            new="",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineIssueQuote.issue_quote sets no started state; a "
+        "workflow's main whose container has a signal sets the state named for its own operation before it "
+        "waits, because its signals refuse a key whose main never started" in f
+        for f in findings
+    ), findings
+
+
+def test_a_workflow_main_whose_container_has_no_signal_is_not_asked_for_a_started_state() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="            engine_workflow_context.set(relays.ISSUE_QUOTE_STATE, b'')\n",
+            new="",
+            old_also="dispatchers.EngineQuoteAccepted(self.flow_workflow)",
+            new_also="dispatchers.EngineQuoteAccepted(restate.Workflow('Elsewhere'))",
+        )).violations()
+    )
+    assert findings == (), findings
 
 
 def test_a_dispatcher_field_kept_with_an_annotation_is_read_like_one_kept_without() -> None:

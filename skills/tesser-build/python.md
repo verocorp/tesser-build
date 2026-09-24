@@ -1232,7 +1232,10 @@ handler calls `.promise(...).resolve(...)`; (m) a relays constant is assigned
 once; (n) a workflow's `main` sets, and a signal gets, workflow state only by a
 relays constant, and that constant equals the operation of the `main` on the
 signal's container, so the one state a signal may read is the one its
-workflow's `main` writes. A signal relay's
+workflow's `main` writes; and the guard is required: every signal gets that
+started state before it resolves its promise, and a `main` whose container
+has a signal sets it (a `main` with no signal on its container is not asked
+to). A signal relay's
 name is derived today only through a `run_` operation that reaches its signal;
 an `await_`-only relay is not derived yet (`TODOS.md`).
 

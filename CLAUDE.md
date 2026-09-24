@@ -132,7 +132,9 @@ performs its operation (an activity calls its application client, a signal
 resolves its promise), a container to unique handler names, a dispatcher to no
 engine call by name and to the call kind of its target, a relays constant
 to one assignment, and a state a `main` sets or a signal gets to a relays
-constant equal to that `main`'s operation; a `workflows/` module imports no HTTP client and reads no
+constant equal to that `main`'s operation — a guard that is required: every
+signal gets that started state before it resolves its promise, and a `main`
+whose container has a signal sets it; a `workflows/` module imports no HTTP client and reads no
 `restate` client factory (TB060), because a call from inside an invocation
 goes through its context, where the engine journals it.
 `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`,

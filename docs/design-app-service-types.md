@@ -195,7 +195,10 @@ because the analyzer reads one value and Python keeps the last. (n) A
 workflow's `main` sets, and a signal gets, workflow state only by a relays
 constant, and that constant equals the operation of the `main` registered on
 the signal's container, because the signal learns from that state that the
-`main` has started. A signal relay's name is derived
+`main` has started. The guard is required, not only checked when present:
+every signal gets that started state, and gets it before it resolves its
+promise (read in source order); a `main` whose container has a signal sets
+it; a `main` with no signal on its container is not asked to. A signal relay's name is derived
 today only through a `run_` operation that reaches its signal; an
 `await_`-only relay is not derived yet (`TODOS.md`).
 
