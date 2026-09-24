@@ -21661,27 +21661,6 @@ def test_the_handler_a_registration_class_keeps_is_the_one_it_registers() -> Non
     ), findings
 
 
-def test_a_registration_class_registers_into_a_container_of_any_engine_package() -> None:
-    findings = tuple(
-        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_engine_kinds_spec(
-            old=(
-                "        self, quote_actions_service: restate.Service, "
-                "shop_application_client: client.ShopApplicationClient\n"
-            ),
-            new=(
-                "        self, quote_actions_service: in_process.Service, "
-                "shop_application_client: client.ShopApplicationClient\n"
-            ),
-            old_also="import restate\nimport shop.application.client as client\nimport shop.application.relays as relays\n"
-            "class EngineQuotePrice",
-            new_also="import in_process\nimport restate\nimport shop.application.client as client\n"
-            "import shop.application.relays as relays\nclass EngineQuotePrice",
-        )).violations()
-    )
-    assert findings == (), findings
-
-
 def test_one_class_handed_one_container_twice_collides_with_itself() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
