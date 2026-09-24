@@ -7,11 +7,13 @@ import typing
 import uuid
 
 import tesser.testing as ts
+import pytest
 import httpx
 import hypercorn.asyncio as hypercorn_asyncio
 import hypercorn.config as hypercorn_config
 import hypercorn.typing as hypercorn_typing
 import restate
+import restate.client as restate_client
 
 import calls.adapters.activities as activities
 import calls.adapters.dispatchers as dispatchers
@@ -277,3 +279,106 @@ class TestRestateHttpCallOrchestratorRelay:
 
         assert person_joined_response.call_id == call_id
         assert [row["key"] for row in promised.json()["rows"]] == [relays.PERSON_JOINED_PROMISE]
+
+
+class TestRestatePersonJoined:
+    async def test_restate_refuses_a_person_joined_signal_whose_call_id_is_not_the_workflows_key(self) -> None:
+        call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
+        workflows.RestateConductCall(
+            call_orchestrator_workflow,
+            activities.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
+            activities.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
+        )
+        restate_person_joined = dispatchers.RestatePersonJoined(call_orchestrator_workflow)
+        with socket.socket() as probe:
+            probe.bind(("0.0.0.0", 0))
+            port = probe.getsockname()[1]
+        hypercorn_config_config = hypercorn_config.Config()
+        hypercorn_config_config.bind = [f"0.0.0.0:{port}"]
+        shutdown = asyncio.Event()
+        serving = asyncio.create_task(
+            hypercorn_asyncio.serve(
+                typing.cast(hypercorn_typing.ASGIFramework, restate.app([call_orchestrator_workflow])),
+                hypercorn_config_config,
+                shutdown_trigger=shutdown.wait,
+            )
+        )
+        admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
+        registered = httpx.Response(503)
+        for _ in range(50):
+            registered = await admin.post(
+                "/deployments",
+                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+            )
+            if registered.is_success:
+                break
+            await asyncio.sleep(0.1)
+
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+            with pytest.raises(restate.HttpError) as refused:
+                await restate_client.Client(async_client).workflow_call(
+                    restate_person_joined.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonJoinedRequest(call_id="c7")
+                )
+
+        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+        await admin.aclose()
+        shutdown.set()
+        await asyncio.wait([serving], timeout=1.0)
+        serving.cancel()
+
+        assert refused.value.status_code == 400
+        assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
+
+
+
+class TestRestatePersonTurnCompleted:
+    async def test_restate_refuses_a_person_turn_completed_signal_whose_call_id_is_not_the_workflows_key(self) -> None:
+        call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
+        workflows.RestateConductCall(
+            call_orchestrator_workflow,
+            activities.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
+            activities.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
+            activities.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
+        )
+        restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(call_orchestrator_workflow)
+        with socket.socket() as probe:
+            probe.bind(("0.0.0.0", 0))
+            port = probe.getsockname()[1]
+        hypercorn_config_config = hypercorn_config.Config()
+        hypercorn_config_config.bind = [f"0.0.0.0:{port}"]
+        shutdown = asyncio.Event()
+        serving = asyncio.create_task(
+            hypercorn_asyncio.serve(
+                typing.cast(hypercorn_typing.ASGIFramework, restate.app([call_orchestrator_workflow])),
+                hypercorn_config_config,
+                shutdown_trigger=shutdown.wait,
+            )
+        )
+        admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
+        registered = httpx.Response(503)
+        for _ in range(50):
+            registered = await admin.post(
+                "/deployments",
+                json={"uri": f"http://{os.environ['VOICE_CALLBACK_HOST']}:{port}", "force": True},
+            )
+            if registered.is_success:
+                break
+            await asyncio.sleep(0.1)
+
+        async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
+            with pytest.raises(restate.HttpError) as refused:
+                await restate_client.Client(async_client).workflow_call(
+                    restate_person_turn_completed.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonTurnCompletedRequest(call_id="c7", text="Grace")
+                )
+
+        await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+        await admin.aclose()
+        shutdown.set()
+        await asyncio.wait([serving], timeout=1.0)
+        serving.cancel()
+
+        assert refused.value.status_code == 400
+        assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
