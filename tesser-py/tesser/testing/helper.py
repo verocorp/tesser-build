@@ -6,3 +6,7 @@ F = typing.TypeVar("F", bound=collections_abc.Callable[..., object])  # tesser:d
 
 def helper(fn: F) -> F:
     return fn
+
+
+def assembly(fn: F) -> F:
+    return fn

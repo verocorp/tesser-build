@@ -69,6 +69,7 @@ TESSER_DECORATORS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.app", "load"): "load",
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",
+    ("tesser.testing", "assembly"): "assembly",
 }
 
 TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
@@ -4227,6 +4228,7 @@ class HelperSpec(ts.Spec):
         scope: ScopeSpec,
         registry: RegistrySpec,
         helpers: tuple[str, ...],
+        assembly: bool = False,
     ) -> None:
         self.node = node
         self.where = where
@@ -4234,6 +4236,7 @@ class HelperSpec(ts.Spec):
         self.scope = scope
         self.registry = registry
         self.helpers = helpers
+        self.assembly = assembly
 
 
 class Helper(ts.ValueObject):
@@ -4290,6 +4293,21 @@ class Helper(ts.ValueObject):
                 ):
                     pending.extend(keyword.value for keyword in value.keywords)
                     continue
+                built = (
+                    scope.resolve(Text(ast.unparse(value.func)))
+                    if isinstance(value, ast.Call) and isinstance(value.func, (ast.Name, ast.Attribute))
+                    else None
+                )
+                built_block = kind_table.block_of(built) if built is not None else None
+                if (
+                    isinstance(value, ast.Call)
+                    and built_block is not None
+                    and str(built_block) not in DATA_BLOCKS
+                    and all(keyword.arg is not None for keyword in value.keywords)
+                ):
+                    pending.extend(value.args)
+                    pending.extend(keyword.value for keyword in value.keywords)
+                    continue
                 composed = False
             if not composed:
                 rows.append((line, "composed", arg.arg, ()))
@@ -4302,7 +4320,9 @@ class Helper(ts.ValueObject):
             block = kind_table.block_of(symbol) if symbol is not None else None
         if block is None or str(block) not in DATA_BLOCKS:
             rows.append((line, "data", None, ()))
-        constructor = constructor_rows.constructor(constructed) if constructed is not None else None
+        constructor = (
+            constructor_rows.constructor(constructed) if constructed is not None and not spec.assembly else None
+        )
         if constructed is not None and constructor is not None:
             target_name = str(constructed.name())
             for arg in args:
@@ -4333,11 +4353,29 @@ class Helper(ts.ValueObject):
                 )
                 and passed_names == sorted(defaults)
             )
-        if not passed:
+        if not passed and not spec.assembly:
             rows.append((line, "through", None, ()))
+        tree_modules = registry.module_names()
         for node in ast.walk(fn):
-            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)):
+            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)) and not spec.assembly:
                 rows.append((node.lineno, "control", None, ()))
+            if spec.assembly and isinstance(
+                node,
+                (
+                    ast.If, ast.Match, ast.For, ast.While, ast.Try, ast.Assert, ast.IfExp,
+                    ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp,
+                ),
+            ):
+                rows.append((node.lineno, "assembly_control", None, ()))
+            if spec.assembly and isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
+                called = scope.resolve(Text(ast.unparse(node.func)))
+                called_block = kind_table.block_of(called) if called is not None else None
+                if (
+                    called is not None
+                    and str(called.module()) in tree_modules
+                    and (called_block is None or str(called_block) not in DATA_BLOCKS)
+                ):
+                    rows.append((node.lineno, "assembly_call", ast.unparse(node.func), ()))
         object.__setattr__(self, "_where", Text(spec.where))
         object.__setattr__(self, "_path", Path(spec.path))
         object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*row)) for row in rows))
@@ -4365,7 +4403,8 @@ class Helper(ts.ValueObject):
                     line,
                     "TB073",
                     f"{where} parameter {arg!r} defaults to something other than a literal, an enum member, "
-                    "a helper's result, or a tuple of those; a default holds values and calls only helpers",
+                    "a helper's result, a domain object or config built from those, or a tuple of those; "
+                    "a default holds values and builds a record only through its helper",
                 )))
             elif kind == "stray":
                 target_name = traits[0]
@@ -4417,6 +4456,20 @@ class Helper(ts.ValueObject):
                     "TB073",
                     f"{where} does not pass each parameter through by name to one construction; "
                     "a helper's body invents nothing",
+                )))
+            elif kind == "assembly_control":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} has control flow; an assembly puts parts together without branching or looping",
+                )))
+            elif kind == "assembly_call":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} calls {arg} in the code under test; an assembly builds a test input and runs nothing",
                 )))
             else:
                 found.append(Violation(ViolationSpec(
@@ -11894,7 +11947,8 @@ class Module(ts.Entity):
         helper_names = tuple(sorted(
             stmt.name
             for stmt in self._body
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and decorated_as(stmt, "helper")
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and (decorated_as(stmt, "helper") or decorated_as(stmt, "assembly"))
         ))
         for stmt in self._body:
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
@@ -11908,13 +11962,20 @@ class Module(ts.Entity):
                         Helper(HelperSpec(stmt, where, self._path, scope_spec, registry_spec, helper_names)).violations()
                     )
                     continue
+                if decorated_as(stmt, "assembly"):
+                    found.extend(
+                        Helper(HelperSpec(
+                            stmt, where, self._path, scope_spec, registry_spec, helper_names, assembly=True
+                        )).violations()
+                    )
+                    continue
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
                         stmt.lineno,
                         "TB071",
                         f"{where} is neither a test nor a declared helper; a test module holds "
-                        "tests, @ts.helper builders, and @ts.fake doubles",
+                        "tests, @ts.helper builders, @ts.assembly inputs, and @ts.fake doubles",
                     ))
                 )
             elif isinstance(stmt, ast.ClassDef):

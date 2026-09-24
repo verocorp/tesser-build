@@ -5556,7 +5556,7 @@ def test_test_module_totality_is_flagged() -> None:
         ))).violations()
                )
     assert any(
-        "test_junk.build" in f and "a test module holds tests, @ts.helper builders, and @ts.fake doubles" in f
+        "test_junk.build" in f and "a test module holds tests, @ts.helper builders, @ts.assembly inputs, and @ts.fake doubles" in f
         for f in findings
     )
     assert any(
@@ -5735,6 +5735,89 @@ def test_a_helper_names_a_record_parameter_for_the_field_it_feeds() -> None:
     ]
 
 
+def test_a_helper_defaults_a_domain_object_by_building_it_from_a_helper() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/application/relays/thing_relay.py",
+                "shop.application.relays.thing_relay",
+                "import tesser.application as ts\n"
+                "import shop.domain.thing as thing\n"
+                "class KeepThingRequest(ts.Request):\n"
+                "    def __init__(self, request_id: str, thing: thing.Thing) -> None:\n"
+                "        self.request_id = request_id\n"
+                "        self.thing = thing\n",
+                False,
+            ),
+            (
+                "shop/application/test_thing_relay_helpers.py",
+                "shop.application.test_thing_relay_helpers",
+                "import tesser.testing as th\n"
+                "import shop.application.relays.thing_relay as thing_relay\n"
+                "import shop.domain.thing as thing\n"
+                "@th.helper\n"
+                "def thing_spec(text: str = 'a thing') -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text=text)\n"
+                "@th.helper\n"
+                "def keep_thing_request(\n"
+                "    request_id: str = 'request-1',\n"
+                "    thing: thing.Thing = thing.Thing(thing_spec()),\n"
+                ") -> thing_relay.KeepThingRequest:\n"
+                "    return thing_relay.KeepThingRequest(request_id=request_id, thing=thing)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("test_thing_relay_helpers" in f and "TB073" in f for f in findings), [
+        f for f in findings if "test_thing_relay_helpers" in f and "TB073" in f
+    ]
+
+
+def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the_code() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/domain/test_assemblies.py",
+                "shop.domain.test_assemblies",
+                "import tesser.testing as th\n"
+                "import shop.domain.thing as thing\n"
+                "@th.assembly\n"
+                "def joined(head: str = 'a', tail: str = 'b') -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text=(head + tail).replace('a', 'c'))\n"
+                "@th.assembly\n"
+                "def branching(parts: tuple[str, ...] = ('a',)) -> thing.ThingSpec:\n"
+                "    assert parts\n"
+                "    return thing.ThingSpec(text=''.join(part for part in parts))\n"
+                "@th.assembly\n"
+                "def running(text: str = 'a') -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text=str(thing.Thing(thing.ThingSpec(text=text))))\n"
+                "@th.assembly\n"
+                "def undefaulted(text: str) -> thing.ThingSpec:\n"
+                "    return thing.ThingSpec(text=text)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assembly = [f for f in findings if "test_assemblies" in f and "TB073" in f]
+    assert not any("test_assemblies.joined" in f for f in assembly), assembly
+    assert any(
+        "test_assemblies.branching has control flow; an assembly puts parts together without branching or looping"
+        in f
+        for f in assembly
+    ), assembly
+    assert any(
+        "test_assemblies.running calls thing.Thing in the code under test; "
+        "an assembly builds a test input and runs nothing" in f
+        for f in assembly
+    ), assembly
+    assert any(
+        "test_assemblies.undefaulted parameter 'text' has no default" in f for f in assembly
+    ), assembly
+    assert not any("TB071" in f and "test_assemblies" in f for f in findings), findings
+
+
 def test_a_helper_that_invents_reshapes_or_drifts_from_its_constructor_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -5824,7 +5907,7 @@ def test_a_helper_that_invents_reshapes_or_drifts_from_its_constructor_is_flagge
     ), helper
     assert any(
         "built_default parameter 'lines' defaults to something other than a literal" in f
-        and "a default holds values and calls only helpers" in f
+        and "a default holds values and builds a record only through its helper" in f
         for f in helper
     ), helper
     assert any("constant_default parameter 'sku' defaults to something other than" in f for f in helper), helper
@@ -10471,7 +10554,7 @@ def test_the_shells_tests_keep_function_totality() -> None:
     )
     assert any(
         "is neither a test nor a declared helper; a test module holds "
-        "tests, @ts.helper builders, and @ts.fake doubles" in f
+        "tests, @ts.helper builders, @ts.assembly inputs, and @ts.fake doubles" in f
         for f in findings
     ), findings
     assert any(
