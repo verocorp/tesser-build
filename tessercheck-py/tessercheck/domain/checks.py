@@ -4355,7 +4355,7 @@ class Helper(ts.ValueObject):
             )
         if not passed and not spec.assembly:
             rows.append((line, "through", None, ()))
-        tree_modules = registry.module_names()
+        names = registry.module_names()
         for node in ast.walk(fn):
             if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)) and not spec.assembly:
                 rows.append((node.lineno, "control", None, ()))
@@ -4372,7 +4372,7 @@ class Helper(ts.ValueObject):
                 called_block = kind_table.block_of(called) if called is not None else None
                 if (
                     called is not None
-                    and str(called.module()) in tree_modules
+                    and str(called.module()) in names
                     and (called_block is None or str(called_block) not in DATA_BLOCKS)
                 ):
                     rows.append((node.lineno, "assembly_call", ast.unparse(node.func), ()))

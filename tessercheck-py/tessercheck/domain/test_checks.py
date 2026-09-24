@@ -13,7 +13,7 @@ import tesser.testing as ts
 import tessercheck.domain as domain
 
 
-@ts.helper
+@ts.assembly
 def _spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
     declared: str = "app",
@@ -6865,7 +6865,7 @@ def test_reader_findings_are_never_inline_suppressible() -> None:
     assert not any("TB090" in f for f in findings)
 
 
-@ts.helper
+@ts.assembly
 def _universe_spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
     base: tuple[tuple[str, str, str | None, bool], ...] = (
@@ -9334,7 +9334,7 @@ def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
     ), member
 
 
-@ts.helper
+@ts.assembly
 def _context_kernel_spec(
     extra: tuple[tuple[str, str, str | None, bool], ...] = (),
     money: str = "import tesser.domain as ts\n"
@@ -9751,16 +9751,13 @@ def test_a_future_import_is_not_a_member_import() -> None:
     assert not any("fut.domain.thing" in f for f in findings), findings
 
 
-@ts.helper
+@ts.assembly
 def _stdlib_spec(
-    module: str = "collections",
+    aliased_import: str = "import collections\n",
     stdlib: tuple[str, ...] = ("collections", "typing", "enum"),
     pure_stdlib: tuple[str, ...] = (),
     extra: tuple[tuple[str, str, str | None, bool], ...] = (),
 ) -> domain.CodebaseSpec:
-    aliased_import = (
-        f"import {module} as {module.replace('.', '_')}\n" if "." in module else f"import {module}\n"
-    )
     return _spec(
         sources=(
             (
@@ -9816,7 +9813,7 @@ def test_a_stdlib_declaration_widens_the_domain_and_the_kernel() -> None:
     submodule = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_stdlib_spec(
-            module="http.client",
+            aliased_import="import http.client as http_client\n",
             stdlib=("http", "typing", "enum"),
             pure_stdlib=("http",),
         )).violations()
@@ -9945,7 +9942,7 @@ def test_a_stdlib_declaration_below_a_default_module_is_a_repeat() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_stdlib_spec(
-            module="typing",
+            aliased_import="import typing\n",
             pure_stdlib=("typing.io",),
         )).violations()
     )
@@ -10364,7 +10361,7 @@ def test_a_ports_module_and_an_init_need_no_sibling_test() -> None:
     )
 
 
-@ts.helper
+@ts.assembly
 def _tesser_export_spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
     exports: tuple[str, ...] = ("tesser",),
@@ -12596,7 +12593,7 @@ def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
     assert len(tb084) == 15
 
 
-@ts.helper
+@ts.assembly
 def _kinds_spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
     base: tuple[tuple[str, str, str | None, bool], ...] = (
@@ -12674,48 +12671,6 @@ def _kinds_spec(
             "        self.text = text\n"
             "class Catalog(ts.Port, typing.Protocol):\n"
             "    def find_item(self, find_item_request: FindItemRequest) -> FindItemResponse: ...\n",
-            False,
-        ),
-        (
-            "shop/application/relays/__init__.py",
-            "shop.application.relays",
-            "from shop.application.relays.flow_relay import IssueQuoteRequest as IssueQuoteRequest\n"
-            "from shop.application.relays.flow_relay import IssueQuoteResponse as IssueQuoteResponse\n"
-            "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
-            "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
-            "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n",
-            True,
-        ),
-        (
-            "shop/application/relays/flow_relay.py",
-            "shop.application.relays.flow_relay",
-            "import typing\n"
-            "import tesser.application as ts\n"
-            "class IssueQuoteRequest(ts.Request):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class IssueQuoteResponse(ts.Response):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class FlowRelay(ts.Relay, typing.Protocol):\n"
-            "    async def run_issue_quote(self, issue_quote_request: IssueQuoteRequest)"
-            " -> IssueQuoteResponse: ...\n",
-            False,
-        ),
-        (
-            "shop/application/relays/quote_actions_relay.py",
-            "shop.application.relays.quote_actions_relay",
-            "import typing\n"
-            "import tesser.application as ts\n"
-            "class QuotePriceRequest(ts.Request):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class QuotePriceResponse(ts.Response):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class QuoteActionsRelay(ts.Relay, typing.Protocol):\n"
-            "    async def run_quote_price(self, quote_price_request: QuotePriceRequest)"
-            " -> QuotePriceResponse: ...\n",
             False,
         ),
         (
@@ -12802,43 +12757,6 @@ def _kinds_spec(
             "from shop.application.orchestrators.flow import Flow as Flow\n",
             True,
         ),
-        (
-            "shop/application/orchestrators/flow.py",
-            "shop.application.orchestrators.flow",
-            "import tesser.application as ts\n"
-            "import shop.application.relays as relays\n"
-            "import shop.domain.thing as thing\n"
-            "class MapToQuotePriceRequest(ts.Mapper, relays.QuotePriceRequest):\n"
-            "    def __init__(self, name: thing.Name) -> None:\n"
-            "        super().__init__(text=str(name))\n"
-            "class MapToIssueQuoteResponse(ts.Mapper, relays.IssueQuoteResponse):\n"
-            "    def __init__(self, quote_price_response: relays.QuotePriceResponse) -> None:\n"
-            "        super().__init__(text=quote_price_response.text)\n"
-            "class Flow(ts.Orchestrator):\n"
-            "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
-            "        self._quote_actions_relay = quote_actions_relay\n"
-            "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
-            " -> relays.IssueQuoteResponse:\n"
-            "        name = thing.Name(issue_quote_request.text)\n"
-            "        quote_price_response = await self._quote_actions_relay.run_quote_price(MapToQuotePriceRequest(name))\n"
-            "        return MapToIssueQuoteResponse(quote_price_response)\n",
-            False,
-        ),
-        (
-            "shop/application/orchestrators/test_flow.py",
-            "shop.application.orchestrators.test_flow",
-            "import tesser.testing as ts\n"
-            "import shop.application.orchestrators as orchestrators\n"
-            "import shop.application.relays as relays\n"
-            "@ts.fake\n"
-            "class FakeQuoteActionsRelay(relays.QuoteActionsRelay):\n"
-            "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
-            " -> relays.QuotePriceResponse:\n"
-            "        return relays.QuotePriceResponse(text=quote_price_request.text)\n"
-            "def test_flow_exists() -> None:\n"
-            "    assert orchestrators.Flow is not None\n",
-            False,
-        ),
         ("shop/adapters/__init__.py", "shop.adapters", "", True),
         ("shop/adapters/gateways/__init__.py", "shop.adapters.gateways", "", True),
         (
@@ -12901,28 +12819,6 @@ def _kinds_spec(
             True,
         ),
         (
-            "shop/adapters/runners/inline_quote_actions_relay.py",
-            "shop.adapters.runners.inline_quote_actions_relay",
-            "import contextlib\n"
-            "import typing\n"
-            "import tesser.adapters as ts\n"
-            "import engine\n"
-            "import shop.application.orchestrators as orchestrators\n"
-            "import shop.application.relays as relays\n"
-            "class InlineQuoteActionsRelay(ts.Runner):\n"
-            "    def __init__(self, engine_context: engine.Context) -> None:\n"
-            "        self._engine_context = engine_context\n"
-            "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
-            " -> relays.QuotePriceResponse:\n"
-            "        return await self._engine_context.generic_call('QuoteActions', 'quote_price', b'')\n"
-            "class InlineFlowWorkflow(ts.Runner):\n"
-            "    @contextlib.asynccontextmanager\n"
-            "    async def invocation(self, engine_context: engine.Context)"
-            " -> typing.AsyncIterator[orchestrators.Flow]:\n"
-            "        yield orchestrators.Flow(InlineQuoteActionsRelay(engine_context))\n",
-            False,
-        ),
-        (
             "shop/adapters/runners/test_inline_quote_actions_relay.py",
             "shop.adapters.runners.test_inline_quote_actions_relay",
             "def test_inline_quote_actions_relay_exists() -> None:\n"
@@ -12934,35 +12830,6 @@ def _kinds_spec(
             "shop.adapters.runtimes",
             "from shop.adapters.runtimes.engine import EngineRuntime as EngineRuntime\n",
             True,
-        ),
-        (
-            "shop/adapters/runtimes/engine.py",
-            "shop.adapters.runtimes.engine",
-            "import tesser.adapters as ts\n"
-            "import engine\n"
-            "import shop.application.client as client\n"
-            "import shop.application.relays as relays\n"
-            "class EngineRuntime(ts.Runtime):\n"
-            "    def __init__(\n"
-            "        self,\n"
-            "        shop_application_client: client.ShopApplicationClient,\n"
-            "        flow_workflow: client.FlowWorkflow[engine.Context],\n"
-            "    ) -> None:\n"
-            "        self._shop_application_client = shop_application_client\n"
-            "        self._flow_workflow = flow_workflow\n"
-            "        self.quote_actions_service = engine.Service('QuoteActions')\n"
-            "        @self.quote_actions_service.handler()\n"
-            "        async def quote_price(\n"
-            "            engine_context: engine.Context, quote_price_request: relays.QuotePriceRequest\n"
-            "        ) -> relays.QuotePriceResponse:\n"
-            "            return shop_application_client.quote_price(quote_price_request)\n"
-            "        self.quote_price_handler = quote_price\n"
-            "    async def issue_quote_handler(\n"
-            "        self, engine_context: engine.Context, issue_quote_request: relays.IssueQuoteRequest\n"
-            "    ) -> relays.IssueQuoteResponse:\n"
-            "        async with self._flow_workflow.invocation(engine_context) as flow_application_client:\n"
-            "            return await flow_application_client.issue_quote(issue_quote_request)\n",
-            False,
         ),
         (
             "shop/adapters/runtimes/test_engine.py",
@@ -13020,9 +12887,141 @@ def _kinds_spec(
             False,
         ),
     ),
+    durable: tuple[tuple[str, str, str | None, bool], ...] = (
+        (
+            "shop/application/relays/__init__.py",
+            "shop.application.relays",
+            "from shop.application.relays.flow_relay import IssueQuoteRequest as IssueQuoteRequest\n"
+            "from shop.application.relays.flow_relay import IssueQuoteResponse as IssueQuoteResponse\n"
+            "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
+            "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
+            "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n",
+            True,
+        ),
+        (
+            "shop/application/relays/flow_relay.py",
+            "shop.application.relays.flow_relay",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "class IssueQuoteRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class IssueQuoteResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class FlowRelay(ts.Relay, typing.Protocol):\n"
+            "    async def run_issue_quote(self, issue_quote_request: IssueQuoteRequest)"
+            " -> IssueQuoteResponse: ...\n",
+            False,
+        ),
+        (
+            "shop/application/relays/quote_actions_relay.py",
+            "shop.application.relays.quote_actions_relay",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "class QuotePriceRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class QuotePriceResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class QuoteActionsRelay(ts.Relay, typing.Protocol):\n"
+            "    async def run_quote_price(self, quote_price_request: QuotePriceRequest)"
+            " -> QuotePriceResponse: ...\n",
+            False,
+        ),
+        (
+            "shop/application/orchestrators/flow.py",
+            "shop.application.orchestrators.flow",
+            "import tesser.application as ts\n"
+            "import shop.application.relays as relays\n"
+            "import shop.domain.thing as thing\n"
+            "class MapToQuotePriceRequest(ts.Mapper, relays.QuotePriceRequest):\n"
+            "    def __init__(self, name: thing.Name) -> None:\n"
+            "        super().__init__(text=str(name))\n"
+            "class MapToIssueQuoteResponse(ts.Mapper, relays.IssueQuoteResponse):\n"
+            "    def __init__(self, quote_price_response: relays.QuotePriceResponse) -> None:\n"
+            "        super().__init__(text=quote_price_response.text)\n"
+            "class Flow(ts.Orchestrator):\n"
+            "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+            "        self._quote_actions_relay = quote_actions_relay\n"
+            "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+            " -> relays.IssueQuoteResponse:\n"
+            "        name = thing.Name(issue_quote_request.text)\n"
+            "        quote_price_response = await self._quote_actions_relay.run_quote_price(MapToQuotePriceRequest(name))\n"
+            "        return MapToIssueQuoteResponse(quote_price_response)\n",
+            False,
+        ),
+        (
+            "shop/application/orchestrators/test_flow.py",
+            "shop.application.orchestrators.test_flow",
+            "import tesser.testing as ts\n"
+            "import shop.application.orchestrators as orchestrators\n"
+            "import shop.application.relays as relays\n"
+            "@ts.fake\n"
+            "class FakeQuoteActionsRelay(relays.QuoteActionsRelay):\n"
+            "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
+            " -> relays.QuotePriceResponse:\n"
+            "        return relays.QuotePriceResponse(text=quote_price_request.text)\n"
+            "def test_flow_exists() -> None:\n"
+            "    assert orchestrators.Flow is not None\n",
+            False,
+        ),
+        (
+            "shop/adapters/runners/inline_quote_actions_relay.py",
+            "shop.adapters.runners.inline_quote_actions_relay",
+            "import contextlib\n"
+            "import typing\n"
+            "import tesser.adapters as ts\n"
+            "import engine\n"
+            "import shop.application.orchestrators as orchestrators\n"
+            "import shop.application.relays as relays\n"
+            "class InlineQuoteActionsRelay(ts.Runner):\n"
+            "    def __init__(self, engine_context: engine.Context) -> None:\n"
+            "        self._engine_context = engine_context\n"
+            "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
+            " -> relays.QuotePriceResponse:\n"
+            "        return await self._engine_context.generic_call('QuoteActions', 'quote_price', b'')\n"
+            "class InlineFlowWorkflow(ts.Runner):\n"
+            "    @contextlib.asynccontextmanager\n"
+            "    async def invocation(self, engine_context: engine.Context)"
+            " -> typing.AsyncIterator[orchestrators.Flow]:\n"
+            "        yield orchestrators.Flow(InlineQuoteActionsRelay(engine_context))\n",
+            False,
+        ),
+        (
+            "shop/adapters/runtimes/engine.py",
+            "shop.adapters.runtimes.engine",
+            "import tesser.adapters as ts\n"
+            "import engine\n"
+            "import shop.application.client as client\n"
+            "import shop.application.relays as relays\n"
+            "class EngineRuntime(ts.Runtime):\n"
+            "    def __init__(\n"
+            "        self,\n"
+            "        shop_application_client: client.ShopApplicationClient,\n"
+            "        flow_workflow: client.FlowWorkflow[engine.Context],\n"
+            "    ) -> None:\n"
+            "        self._shop_application_client = shop_application_client\n"
+            "        self._flow_workflow = flow_workflow\n"
+            "        self.quote_actions_service = engine.Service('QuoteActions')\n"
+            "        @self.quote_actions_service.handler()\n"
+            "        async def quote_price(\n"
+            "            engine_context: engine.Context, quote_price_request: relays.QuotePriceRequest\n"
+            "        ) -> relays.QuotePriceResponse:\n"
+            "            return shop_application_client.quote_price(quote_price_request)\n"
+            "        self.quote_price_handler = quote_price\n"
+            "    async def issue_quote_handler(\n"
+            "        self, engine_context: engine.Context, issue_quote_request: relays.IssueQuoteRequest\n"
+            "    ) -> relays.IssueQuoteResponse:\n"
+            "        async with self._flow_workflow.invocation(engine_context) as flow_application_client:\n"
+            "            return await flow_application_client.issue_quote(issue_quote_request)\n",
+            False,
+        ),
+    ),
 ) -> domain.CodebaseSpec:
     return domain.CodebaseSpec(
-        sources=base + sources,
+        sources=base + durable + sources,
         declared="app",
         nested=(),
         symlinked=(),
@@ -14219,7 +14218,7 @@ def test_a_call_on_the_repository_a_store_yields_is_an_actions_one_port_call() -
     )
 
 
-@ts.helper
+@ts.assembly
 def _handler_spec(methods: str = "") -> domain.CodebaseSpec:
     return _kinds_spec(sources=(
         (
@@ -16541,7 +16540,7 @@ def test_a_store_yields_exactly_one_port() -> None:
     assert any("Pair.transaction" in f for f in findings), findings
 
 
-@ts.helper
+@ts.assembly
 def _reexport_spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
     base: tuple[tuple[str, str, str | None, bool], ...] = (
@@ -16637,7 +16636,7 @@ def _reexport_spec(
     )
 
 
-@ts.helper
+@ts.assembly
 def _ports_sources(
     quotes: str = "mod.application.ports.quotes",
     other: str = "mod.application.ports.other",
@@ -19118,7 +19117,7 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
     assert not any("imports shop.application.relays;" in f for f in findings), findings
 
 
-@ts.helper
+@ts.assembly
 def _two_loose_spec(
     scoped: tuple[str, ...] = (),
     declared: str = "app",
@@ -21055,265 +21054,408 @@ def test_only_an_engine_container_handed_to_an_activity_workflow_or_signal_is_pu
     assert any("shop.component.registered.Registered publishes client; " in f for f in findings), findings
 
 
-@ts.helper
+@ts.assembly
 def _engine_kinds_spec(
     old: str = "",
     new: str = "",
     old_also: str = "",
     new_also: str = "",
+    old_too: str = "",
+    new_too: str = "",
     extra: tuple[tuple[str, str, str | None, bool], ...] = (),
-    edits: tuple[tuple[str, str], ...] = (),
 ) -> domain.CodebaseSpec:
-    replaced = {
-        "shop/application/relays/__init__.py": (
-            "shop.application.relays",
-            "from shop.application.relays.flow_relay import IssueQuoteRequest as IssueQuoteRequest\n"
-            "from shop.application.relays.flow_relay import IssueQuoteResponse as IssueQuoteResponse\n"
-            "from shop.application.relays.flow_relay import QuoteAcceptedRequest as QuoteAcceptedRequest\n"
-            "from shop.application.relays.flow_relay import QuoteAcceptedResponse as QuoteAcceptedResponse\n"
-            "from shop.application.relays.flow_signal_relay import "
-            "AwaitQuoteAcceptedRequest as AwaitQuoteAcceptedRequest\n"
-            "from shop.application.relays.flow_signal_relay import "
-            "AwaitQuoteAcceptedResponse as AwaitQuoteAcceptedResponse\n"
-            "from shop.application.relays.flow_signal_relay import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n"
-            "from shop.application.relays.flow_signal_relay import ISSUE_QUOTE_STATE as ISSUE_QUOTE_STATE\n"
-            "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
-            "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
-            "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n",
-            True,
-        ),
-        "shop/application/relays/flow_relay.py": (
-            "shop.application.relays.flow_relay",
-            "import typing\n"
-            "import tesser.application as ts\n"
-            "class IssueQuoteRequest(ts.Request):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class IssueQuoteResponse(ts.Response):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class QuoteAcceptedRequest(ts.Request):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class QuoteAcceptedResponse(ts.Response):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class FlowRelay(ts.Relay, typing.Protocol):\n"
-            "    async def run_issue_quote(self, issue_quote_request: IssueQuoteRequest)"
-            " -> IssueQuoteResponse: ...\n"
-            "    async def run_quote_accepted(self, quote_accepted_request: QuoteAcceptedRequest)"
-            " -> QuoteAcceptedResponse: ...\n",
-            False,
-        ),
-    }
-    files: dict[str, tuple[str, str, bool]] = {
-        "shop/application/relays/flow_signal_relay.py": (
-            "shop.application.relays.flow_signal_relay",
-            "import typing\n"
-            "import tesser.application as ts\n"
-            "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n"
-            "ISSUE_QUOTE_STATE: typing.Final[str] = 'issue_quote'\n"
-            "class AwaitQuoteAcceptedRequest(ts.Request):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class AwaitQuoteAcceptedResponse(ts.Response):\n"
-            "    def __init__(self, text: str) -> None:\n"
-            "        self.text = text\n"
-            "class FlowSignalRelay(ts.Relay, typing.Protocol):\n"
-            "    async def await_quote_accepted(self, await_quote_accepted_request: AwaitQuoteAcceptedRequest)"
-            " -> AwaitQuoteAcceptedResponse: ...\n",
-            False,
-        ),
-        "shop/application/relays/test_flow_signal_relay.py": (
-            "shop.application.relays.test_flow_signal_relay",
-            "def test_flow_signal_relay_exists() -> None:\n"
-            "    assert True\n",
-            False,
-        ),
-        "shop/adapters/activities/__init__.py": (
-            "shop.adapters.activities",
-            "from shop.adapters.activities.engine_activities import EngineQuotePrice as EngineQuotePrice\n",
-            True,
-        ),
-        "shop/adapters/activities/engine_activities.py": (
-            "shop.adapters.activities.engine_activities",
-            "import tesser.adapters as ts\n"
-            "import restate\n"
-            "import shop.application.client as client\n"
-            "import shop.application.relays as relays\n"
-            "class EngineQuotePrice(ts.Activity):\n"
-            "    def __init__(\n"
-            "        self, quote_actions_service: restate.Service, shop_application_client: client.ShopApplicationClient\n"
-            "    ) -> None:\n"
-            "        @quote_actions_service.handler()\n"
-            "        async def quote_price(\n"
-            "            engine_context: restate.Context, quote_price_request: relays.QuotePriceRequest\n"
-            "        ) -> relays.QuotePriceResponse:\n"
-            "            return shop_application_client.quote_price(quote_price_request)\n"
-            "        self.handler = quote_price\n",
-            False,
-        ),
-        "shop/adapters/activities/test_engine_activities.py": (
-            "shop.adapters.activities.test_engine_activities",
-            "def test_engine_activities_exist() -> None:\n"
-            "    assert True\n",
-            False,
-        ),
-        "shop/adapters/workflows/__init__.py": (
-            "shop.adapters.workflows",
-            "from shop.adapters.workflows.engine_issue_quote import EngineIssueQuote as EngineIssueQuote\n",
-            True,
-        ),
-        "shop/adapters/workflows/engine_issue_quote.py": (
-            "shop.adapters.workflows.engine_issue_quote",
-            "import tesser.adapters as ts\n"
-            "import restate\n"
-            "import shop.adapters.activities as activities\n"
-            "import shop.application.orchestrators as orchestrators\n"
-            "import shop.application.relays as relays\n"
-            "class EngineInvocationQuoteActionsRelay(ts.Dispatcher):\n"
-            "    def __init__(\n"
-            "        self, engine_workflow_context: restate.WorkflowContext, engine_quote_price: activities.EngineQuotePrice\n"
-            "    ) -> None:\n"
-            "        self._engine_workflow_context = engine_workflow_context\n"
-            "        self._engine_quote_price = engine_quote_price\n"
-            "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
-            " -> relays.QuotePriceResponse:\n"
-            "        return await self._engine_workflow_context.service_call(\n"
-            "            self._engine_quote_price.handler, quote_price_request\n"
-            "        )\n"
-            "class EngineInvocationFlowSignalRelay(ts.Dispatcher):\n"
-            "    def __init__(self, engine_workflow_context: restate.WorkflowContext) -> None:\n"
-            "        self._engine_workflow_context = engine_workflow_context\n"
-            "    async def await_quote_accepted(self, await_quote_accepted_request: relays.AwaitQuoteAcceptedRequest)"
-            " -> relays.AwaitQuoteAcceptedResponse:\n"
-            "        return await self._engine_workflow_context.promise(relays.QUOTE_ACCEPTED_PROMISE).value()\n"
-            "class EngineIssueQuote(ts.Workflow):\n"
-            "    def __init__(self, flow_workflow: restate.Workflow, engine_quote_price: activities.EngineQuotePrice) -> None:\n"
-            "        @flow_workflow.main()\n"
-            "        async def issue_quote(\n"
-            "            engine_workflow_context: restate.WorkflowContext, issue_quote_request: relays.IssueQuoteRequest\n"
-            "        ) -> relays.IssueQuoteResponse:\n"
-            "            engine_workflow_context.set(relays.ISSUE_QUOTE_STATE, b'')\n"
-            "            return await orchestrators.Flow(\n"
-            "                EngineInvocationQuoteActionsRelay(engine_workflow_context, engine_quote_price),\n"
-            "                EngineInvocationFlowSignalRelay(engine_workflow_context),\n"
-            "            ).issue_quote(issue_quote_request)\n"
-            "        self.handler = issue_quote\n",
-            False,
-        ),
-        "shop/adapters/workflows/test_engine_issue_quote.py": (
-            "shop.adapters.workflows.test_engine_issue_quote",
-            "def test_engine_issue_quote_exists() -> None:\n"
-            "    assert True\n",
-            False,
-        ),
-        "shop/adapters/dispatchers/__init__.py": (
-            "shop.adapters.dispatchers",
-            "from shop.adapters.dispatchers.engine_http_flow_relay import EngineHttpFlowRelay as EngineHttpFlowRelay\n"
-            "from shop.adapters.dispatchers.engine_http_flow_relay import EngineQuoteAccepted as EngineQuoteAccepted\n",
-            True,
-        ),
-        "shop/adapters/dispatchers/engine_http_flow_relay.py": (
-            "shop.adapters.dispatchers.engine_http_flow_relay",
-            "import tesser.adapters as ts\n"
-            "import restate\n"
-            "import shop.adapters.workflows as workflows\n"
-            "import shop.application.relays as relays\n"
-            "class EngineQuoteAccepted(ts.Signal):\n"
-            "    def __init__(self, flow_workflow: restate.Workflow) -> None:\n"
-            "        @flow_workflow.handler()\n"
-            "        async def quote_accepted(\n"
-            "            engine_workflow_shared_context: restate.WorkflowSharedContext,\n"
-            "            quote_accepted_request: relays.QuoteAcceptedRequest,\n"
-            "        ) -> relays.QuoteAcceptedResponse:\n"
-            "            if await engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE) is None:\n"
-            "                raise restate.TerminalError('not started', status_code=412)\n"
-            "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n"
-            "            return relays.QuoteAcceptedResponse(text=quote_accepted_request.text)\n"
-            "        self.handler = quote_accepted\n"
-            "class EngineHttpFlowRelay(ts.Dispatcher):\n"
-            "    def __init__(\n"
-            "        self,\n"
-            "        engine_client: restate.Client,\n"
-            "        engine_issue_quote: workflows.EngineIssueQuote,\n"
-            "        engine_quote_accepted: EngineQuoteAccepted,\n"
-            "    ) -> None:\n"
-            "        self._engine_client = engine_client\n"
-            "        self._engine_issue_quote = engine_issue_quote\n"
-            "        self._engine_quote_accepted = engine_quote_accepted\n"
-            "    async def run_issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
-            " -> relays.IssueQuoteResponse:\n"
-            "        return await self._engine_client.workflow_call(\n"
-            "            self._engine_issue_quote.handler, key=issue_quote_request.text, arg=issue_quote_request\n"
-            "        )\n"
-            "    async def run_quote_accepted(self, quote_accepted_request: relays.QuoteAcceptedRequest)"
-            " -> relays.QuoteAcceptedResponse:\n"
-            "        return await self._engine_client.workflow_call(\n"
-            "            self._engine_quote_accepted.handler, key=quote_accepted_request.text, arg=quote_accepted_request\n"
-            "        )\n",
-            False,
-        ),
-        "shop/adapters/dispatchers/test_engine_http_flow_relay.py": (
-            "shop.adapters.dispatchers.test_engine_http_flow_relay",
-            "def test_engine_http_flow_relay_exists() -> None:\n"
-            "    assert True\n",
-            False,
-        ),
-        "shop/component/engine.py": (
-            "shop.component.engine",
-            "import tesser.component as ts\n"
-            "import restate\n"
-            "import shop.adapters.activities as activities\n"
-            "import shop.adapters.dispatchers as dispatchers\n"
-            "import shop.adapters.gateways as gateways\n"
-            "import shop.adapters.workflows as workflows\n"
-            "import shop.application.quotes as quotes\n"
-            "import shop.application.service as service\n"
-            "import shop.client.client as client\n"
-            "class EngineShop(ts.Component):\n"
-            "    def __init__(self, engine_client: restate.Client) -> None:\n"
-            "        self.quote_actions_service: restate.Service = restate.Service('QuoteActions')\n"
-            "        self.flow_workflow: restate.Workflow = restate.Workflow('Flow')\n"
-            "        engine_quote_price = activities.EngineQuotePrice(\n"
-            "            self.quote_actions_service, quotes.QuoteActions(gateways.CatalogGateway())\n"
-            "        )\n"
-            "        engine_issue_quote = workflows.EngineIssueQuote(self.flow_workflow, engine_quote_price)\n"
-            "        engine_quote_accepted = dispatchers.EngineQuoteAccepted(self.flow_workflow)\n"
-            "        self._engine_http_flow_relay = dispatchers.EngineHttpFlowRelay(\n"
-            "            engine_client, engine_issue_quote, engine_quote_accepted\n"
-            "        )\n"
-            "        self.client: client.Client = service.AskService()\n"
-            "    def close(self) -> None:\n"
-            "        return None\n",
-            False,
-        ),
-        "shop/component/test_engine.py": (
-            "shop.component.test_engine",
-            "def test_engine_exists() -> None:\n"
-            "    assert True\n",
-            False,
-        ),
-    }
-    base = tuple(
-        (path, *replaced[path]) if path in replaced else (path, module, source, package)
-        for path, module, source, package in inspect.signature(_kinds_spec).parameters["base"].default
+    return _kinds_spec(
+        sources=(
+            (
+                "shop/application/relays/__init__.py",
+                "shop.application.relays",
+                (
+                    "from shop.application.relays.flow_relay import IssueQuoteRequest as IssueQuoteRequest\n"
+                    "from shop.application.relays.flow_relay import IssueQuoteResponse as IssueQuoteResponse\n"
+                    "from shop.application.relays.flow_relay import QuoteAcceptedRequest as QuoteAcceptedRequest\n"
+                    "from shop.application.relays.flow_relay import QuoteAcceptedResponse as QuoteAcceptedResponse\n"
+                    "from shop.application.relays.flow_signal_relay import "
+                    "AwaitQuoteAcceptedRequest as AwaitQuoteAcceptedRequest\n"
+                    "from shop.application.relays.flow_signal_relay import "
+                    "AwaitQuoteAcceptedResponse as AwaitQuoteAcceptedResponse\n"
+                    "from shop.application.relays.flow_signal_relay import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n"
+                    "from shop.application.relays.flow_signal_relay import ISSUE_QUOTE_STATE as ISSUE_QUOTE_STATE\n"
+                    "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
+                    "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
+                    "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                True,
+            ),
+            (
+                "shop/application/relays/flow_relay.py",
+                "shop.application.relays.flow_relay",
+                (
+                    "import typing\n"
+                    "import tesser.application as ts\n"
+                    "class IssueQuoteRequest(ts.Request):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class IssueQuoteResponse(ts.Response):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class QuoteAcceptedRequest(ts.Request):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class QuoteAcceptedResponse(ts.Response):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class FlowRelay(ts.Relay, typing.Protocol):\n"
+                    "    async def run_issue_quote(self, issue_quote_request: IssueQuoteRequest)"
+                    " -> IssueQuoteResponse: ...\n"
+                    "    async def run_quote_accepted(self, quote_accepted_request: QuoteAcceptedRequest)"
+                    " -> QuoteAcceptedResponse: ...\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/application/relays/quote_actions_relay.py",
+                "shop.application.relays.quote_actions_relay",
+                (
+                    "import typing\n"
+                    "import tesser.application as ts\n"
+                    "class QuotePriceRequest(ts.Request):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class QuotePriceResponse(ts.Response):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class QuoteActionsRelay(ts.Relay, typing.Protocol):\n"
+                    "    async def run_quote_price(self, quote_price_request: QuotePriceRequest)"
+                    " -> QuotePriceResponse: ...\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/application/orchestrators/flow.py",
+                "shop.application.orchestrators.flow",
+                (
+                    "import tesser.application as ts\n"
+                    "import shop.application.relays as relays\n"
+                    "import shop.domain.thing as thing\n"
+                    "class MapToQuotePriceRequest(ts.Mapper, relays.QuotePriceRequest):\n"
+                    "    def __init__(self, name: thing.Name) -> None:\n"
+                    "        super().__init__(text=str(name))\n"
+                    "class MapToIssueQuoteResponse(ts.Mapper, relays.IssueQuoteResponse):\n"
+                    "    def __init__(self, quote_price_response: relays.QuotePriceResponse) -> None:\n"
+                    "        super().__init__(text=quote_price_response.text)\n"
+                    "class Flow(ts.Orchestrator):\n"
+                    "    def __init__(self, quote_actions_relay: relays.QuoteActionsRelay) -> None:\n"
+                    "        self._quote_actions_relay = quote_actions_relay\n"
+                    "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+                    " -> relays.IssueQuoteResponse:\n"
+                    "        name = thing.Name(issue_quote_request.text)\n"
+                    "        quote_price_response = await self._quote_actions_relay.run_quote_price(MapToQuotePriceRequest(name))\n"
+                    "        return MapToIssueQuoteResponse(quote_price_response)\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/application/orchestrators/test_flow.py",
+                "shop.application.orchestrators.test_flow",
+                (
+                    "import tesser.testing as ts\n"
+                    "import shop.application.orchestrators as orchestrators\n"
+                    "import shop.application.relays as relays\n"
+                    "@ts.fake\n"
+                    "class FakeQuoteActionsRelay(relays.QuoteActionsRelay):\n"
+                    "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
+                    " -> relays.QuotePriceResponse:\n"
+                    "        return relays.QuotePriceResponse(text=quote_price_request.text)\n"
+                    "def test_flow_exists() -> None:\n"
+                    "    assert orchestrators.Flow is not None\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/runners/inline_quote_actions_relay.py",
+                "shop.adapters.runners.inline_quote_actions_relay",
+                (
+                    "import contextlib\n"
+                    "import typing\n"
+                    "import tesser.adapters as ts\n"
+                    "import engine\n"
+                    "import shop.application.orchestrators as orchestrators\n"
+                    "import shop.application.relays as relays\n"
+                    "class InlineQuoteActionsRelay(ts.Runner):\n"
+                    "    def __init__(self, engine_context: engine.Context) -> None:\n"
+                    "        self._engine_context = engine_context\n"
+                    "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
+                    " -> relays.QuotePriceResponse:\n"
+                    "        return await self._engine_context.generic_call('QuoteActions', 'quote_price', b'')\n"
+                    "class InlineFlowWorkflow(ts.Runner):\n"
+                    "    @contextlib.asynccontextmanager\n"
+                    "    async def invocation(self, engine_context: engine.Context)"
+                    " -> typing.AsyncIterator[orchestrators.Flow]:\n"
+                    "        yield orchestrators.Flow(InlineQuoteActionsRelay(engine_context))\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/runtimes/engine.py",
+                "shop.adapters.runtimes.engine",
+                (
+                    "import tesser.adapters as ts\n"
+                    "import engine\n"
+                    "import shop.application.client as client\n"
+                    "import shop.application.relays as relays\n"
+                    "class EngineRuntime(ts.Runtime):\n"
+                    "    def __init__(\n"
+                    "        self,\n"
+                    "        shop_application_client: client.ShopApplicationClient,\n"
+                    "        flow_workflow: client.FlowWorkflow[engine.Context],\n"
+                    "    ) -> None:\n"
+                    "        self._shop_application_client = shop_application_client\n"
+                    "        self._flow_workflow = flow_workflow\n"
+                    "        self.quote_actions_service = engine.Service('QuoteActions')\n"
+                    "        @self.quote_actions_service.handler()\n"
+                    "        async def quote_price(\n"
+                    "            engine_context: engine.Context, quote_price_request: relays.QuotePriceRequest\n"
+                    "        ) -> relays.QuotePriceResponse:\n"
+                    "            return shop_application_client.quote_price(quote_price_request)\n"
+                    "        self.quote_price_handler = quote_price\n"
+                    "    async def issue_quote_handler(\n"
+                    "        self, engine_context: engine.Context, issue_quote_request: relays.IssueQuoteRequest\n"
+                    "    ) -> relays.IssueQuoteResponse:\n"
+                    "        async with self._flow_workflow.invocation(engine_context) as flow_application_client:\n"
+                    "            return await flow_application_client.issue_quote(issue_quote_request)\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/application/relays/flow_signal_relay.py",
+                "shop.application.relays.flow_signal_relay",
+                (
+                    "import typing\n"
+                    "import tesser.application as ts\n"
+                    "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n"
+                    "ISSUE_QUOTE_STATE: typing.Final[str] = 'issue_quote'\n"
+                    "class AwaitQuoteAcceptedRequest(ts.Request):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class AwaitQuoteAcceptedResponse(ts.Response):\n"
+                    "    def __init__(self, text: str) -> None:\n"
+                    "        self.text = text\n"
+                    "class FlowSignalRelay(ts.Relay, typing.Protocol):\n"
+                    "    async def await_quote_accepted(self, await_quote_accepted_request: AwaitQuoteAcceptedRequest)"
+                    " -> AwaitQuoteAcceptedResponse: ...\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/application/relays/test_flow_signal_relay.py",
+                "shop.application.relays.test_flow_signal_relay",
+                (
+                    "def test_flow_signal_relay_exists() -> None:\n"
+                    "    assert True\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/activities/__init__.py",
+                "shop.adapters.activities",
+                (
+                    "from shop.adapters.activities.engine_activities import EngineQuotePrice as EngineQuotePrice\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                True,
+            ),
+            (
+                "shop/adapters/activities/engine_activities.py",
+                "shop.adapters.activities.engine_activities",
+                (
+                    "import tesser.adapters as ts\n"
+                    "import restate\n"
+                    "import shop.application.client as client\n"
+                    "import shop.application.relays as relays\n"
+                    "class EngineQuotePrice(ts.Activity):\n"
+                    "    def __init__(\n"
+                    "        self, quote_actions_service: restate.Service, shop_application_client: client.ShopApplicationClient\n"
+                    "    ) -> None:\n"
+                    "        @quote_actions_service.handler()\n"
+                    "        async def quote_price(\n"
+                    "            engine_context: restate.Context, quote_price_request: relays.QuotePriceRequest\n"
+                    "        ) -> relays.QuotePriceResponse:\n"
+                    "            return shop_application_client.quote_price(quote_price_request)\n"
+                    "        self.handler = quote_price\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/activities/test_engine_activities.py",
+                "shop.adapters.activities.test_engine_activities",
+                (
+                    "def test_engine_activities_exist() -> None:\n"
+                    "    assert True\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/workflows/__init__.py",
+                "shop.adapters.workflows",
+                (
+                    "from shop.adapters.workflows.engine_issue_quote import EngineIssueQuote as EngineIssueQuote\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                True,
+            ),
+            (
+                "shop/adapters/workflows/engine_issue_quote.py",
+                "shop.adapters.workflows.engine_issue_quote",
+                (
+                    "import tesser.adapters as ts\n"
+                    "import restate\n"
+                    "import shop.adapters.activities as activities\n"
+                    "import shop.application.orchestrators as orchestrators\n"
+                    "import shop.application.relays as relays\n"
+                    "class EngineInvocationQuoteActionsRelay(ts.Dispatcher):\n"
+                    "    def __init__(\n"
+                    "        self, engine_workflow_context: restate.WorkflowContext, engine_quote_price: activities.EngineQuotePrice\n"
+                    "    ) -> None:\n"
+                    "        self._engine_workflow_context = engine_workflow_context\n"
+                    "        self._engine_quote_price = engine_quote_price\n"
+                    "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
+                    " -> relays.QuotePriceResponse:\n"
+                    "        return await self._engine_workflow_context.service_call(\n"
+                    "            self._engine_quote_price.handler, quote_price_request\n"
+                    "        )\n"
+                    "class EngineInvocationFlowSignalRelay(ts.Dispatcher):\n"
+                    "    def __init__(self, engine_workflow_context: restate.WorkflowContext) -> None:\n"
+                    "        self._engine_workflow_context = engine_workflow_context\n"
+                    "    async def await_quote_accepted(self, await_quote_accepted_request: relays.AwaitQuoteAcceptedRequest)"
+                    " -> relays.AwaitQuoteAcceptedResponse:\n"
+                    "        return await self._engine_workflow_context.promise(relays.QUOTE_ACCEPTED_PROMISE).value()\n"
+                    "class EngineIssueQuote(ts.Workflow):\n"
+                    "    def __init__(self, flow_workflow: restate.Workflow, engine_quote_price: activities.EngineQuotePrice) -> None:\n"
+                    "        @flow_workflow.main()\n"
+                    "        async def issue_quote(\n"
+                    "            engine_workflow_context: restate.WorkflowContext, issue_quote_request: relays.IssueQuoteRequest\n"
+                    "        ) -> relays.IssueQuoteResponse:\n"
+                    "            engine_workflow_context.set(relays.ISSUE_QUOTE_STATE, b'')\n"
+                    "            return await orchestrators.Flow(\n"
+                    "                EngineInvocationQuoteActionsRelay(engine_workflow_context, engine_quote_price),\n"
+                    "                EngineInvocationFlowSignalRelay(engine_workflow_context),\n"
+                    "            ).issue_quote(issue_quote_request)\n"
+                    "        self.handler = issue_quote\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/workflows/test_engine_issue_quote.py",
+                "shop.adapters.workflows.test_engine_issue_quote",
+                (
+                    "def test_engine_issue_quote_exists() -> None:\n"
+                    "    assert True\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/dispatchers/__init__.py",
+                "shop.adapters.dispatchers",
+                (
+                    "from shop.adapters.dispatchers.engine_http_flow_relay import EngineHttpFlowRelay as EngineHttpFlowRelay\n"
+                    "from shop.adapters.dispatchers.engine_http_flow_relay import EngineQuoteAccepted as EngineQuoteAccepted\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                True,
+            ),
+            (
+                "shop/adapters/dispatchers/engine_http_flow_relay.py",
+                "shop.adapters.dispatchers.engine_http_flow_relay",
+                (
+                    "import tesser.adapters as ts\n"
+                    "import restate\n"
+                    "import shop.adapters.workflows as workflows\n"
+                    "import shop.application.relays as relays\n"
+                    "class EngineQuoteAccepted(ts.Signal):\n"
+                    "    def __init__(self, flow_workflow: restate.Workflow) -> None:\n"
+                    "        @flow_workflow.handler()\n"
+                    "        async def quote_accepted(\n"
+                    "            engine_workflow_shared_context: restate.WorkflowSharedContext,\n"
+                    "            quote_accepted_request: relays.QuoteAcceptedRequest,\n"
+                    "        ) -> relays.QuoteAcceptedResponse:\n"
+                    "            if await engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE) is None:\n"
+                    "                raise restate.TerminalError('not started', status_code=412)\n"
+                    "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n"
+                    "            return relays.QuoteAcceptedResponse(text=quote_accepted_request.text)\n"
+                    "        self.handler = quote_accepted\n"
+                    "class EngineHttpFlowRelay(ts.Dispatcher):\n"
+                    "    def __init__(\n"
+                    "        self,\n"
+                    "        engine_client: restate.Client,\n"
+                    "        engine_issue_quote: workflows.EngineIssueQuote,\n"
+                    "        engine_quote_accepted: EngineQuoteAccepted,\n"
+                    "    ) -> None:\n"
+                    "        self._engine_client = engine_client\n"
+                    "        self._engine_issue_quote = engine_issue_quote\n"
+                    "        self._engine_quote_accepted = engine_quote_accepted\n"
+                    "    async def run_issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+                    " -> relays.IssueQuoteResponse:\n"
+                    "        return await self._engine_client.workflow_call(\n"
+                    "            self._engine_issue_quote.handler, key=issue_quote_request.text, arg=issue_quote_request\n"
+                    "        )\n"
+                    "    async def run_quote_accepted(self, quote_accepted_request: relays.QuoteAcceptedRequest)"
+                    " -> relays.QuoteAcceptedResponse:\n"
+                    "        return await self._engine_client.workflow_call(\n"
+                    "            self._engine_quote_accepted.handler, key=quote_accepted_request.text, arg=quote_accepted_request\n"
+                    "        )\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/adapters/dispatchers/test_engine_http_flow_relay.py",
+                "shop.adapters.dispatchers.test_engine_http_flow_relay",
+                (
+                    "def test_engine_http_flow_relay_exists() -> None:\n"
+                    "    assert True\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/component/engine.py",
+                "shop.component.engine",
+                (
+                    "import tesser.component as ts\n"
+                    "import restate\n"
+                    "import shop.adapters.activities as activities\n"
+                    "import shop.adapters.dispatchers as dispatchers\n"
+                    "import shop.adapters.gateways as gateways\n"
+                    "import shop.adapters.workflows as workflows\n"
+                    "import shop.application.quotes as quotes\n"
+                    "import shop.application.service as service\n"
+                    "import shop.client.client as client\n"
+                    "class EngineShop(ts.Component):\n"
+                    "    def __init__(self, engine_client: restate.Client) -> None:\n"
+                    "        self.quote_actions_service: restate.Service = restate.Service('QuoteActions')\n"
+                    "        self.flow_workflow: restate.Workflow = restate.Workflow('Flow')\n"
+                    "        engine_quote_price = activities.EngineQuotePrice(\n"
+                    "            self.quote_actions_service, quotes.QuoteActions(gateways.CatalogGateway())\n"
+                    "        )\n"
+                    "        engine_issue_quote = workflows.EngineIssueQuote(self.flow_workflow, engine_quote_price)\n"
+                    "        engine_quote_accepted = dispatchers.EngineQuoteAccepted(self.flow_workflow)\n"
+                    "        self._engine_http_flow_relay = dispatchers.EngineHttpFlowRelay(\n"
+                    "            engine_client, engine_issue_quote, engine_quote_accepted\n"
+                    "        )\n"
+                    "        self.client: client.Client = service.AskService()\n"
+                    "    def close(self) -> None:\n"
+                    "        return None\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+            (
+                "shop/component/test_engine.py",
+                "shop.component.test_engine",
+                (
+                    "def test_engine_exists() -> None:\n"
+                    "    assert True\n"
+                ).replace(old, new).replace(old_also, new_also).replace(old_too, new_too),
+                False,
+            ),
+        )
+        + extra,
+        durable=(),
     )
-    sources = tuple((path, module, source, package) for path, (module, source, package) in files.items())
-    assert not old or any(old in source for _, _, source, _ in base + sources), old
-    assert not old_also or any(old_also in source for _, _, source, _ in base + sources), old_also
-    changed = tuple(
-        (path, module, source.replace(old, new) if old else source, package)
-        for path, module, source, package in base + sources
-    )
-    edited = tuple(
-        (path, module, source.replace(old_also, new_also) if old_also else source, package)
-        for path, module, source, package in changed
-    )
-    return _kinds_spec(sources=extra, base=tuple(
-        (path, module, next((source.replace(edit_old, edit_new) for edit_old, edit_new in edits if edit_old in source), source), package)
-        for path, module, source, package in edited
-    ))
 
 
 def test_activities_workflows_signals_and_dispatchers_stand_clean_together() -> None:
@@ -21322,6 +21464,26 @@ def test_activities_workflows_signals_and_dispatchers_stand_clean_together() -> 
         for v in domain.Codebase(_engine_kinds_spec()).violations()
     )
     assert findings == (), findings
+
+
+def test_every_text_an_engine_kinds_test_replaces_is_in_the_engine_tree() -> None:
+    module = ast.parse(pathlib.Path(__file__).read_text(encoding="utf-8"))
+    replaced = tuple(
+        keyword.value
+        for function in module.body
+        if isinstance(function, ast.FunctionDef)
+        and function.name != "test_every_text_an_engine_kinds_test_replaces_is_in_the_engine_tree"
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_engine_kinds_spec"
+        for keyword in node.keywords
+        if keyword.arg in ("old", "old_also", "old_too")
+    )
+    assert len(replaced) > 50, len(replaced)
+    unchanged = _engine_kinds_spec().sources
+    for value in replaced:
+        text = ast.literal_eval(value)
+        assert text, ast.unparse(value)
+        assert _engine_kinds_spec(old=text, new="").sources != unchanged, text
 
 
 def test_a_relay_is_named_for_the_far_side_a_dispatcher_reaches_through_a_typed_handler() -> None:
@@ -22012,15 +22174,18 @@ def test_a_signal_handler_resolves_its_promise() -> None:
         ), (replacement, findings)
 
 
-@ts.helper
+@ts.assembly
 def _gated_engine_kinds_spec(
     state_constant: str = "issue_quote", written: str = "relays.ISSUE_QUOTE_STATE", read: str = "relays.ISSUE_QUOTE_STATE"
 ) -> domain.CodebaseSpec:
-    return _engine_kinds_spec(edits=(
-        ("ISSUE_QUOTE_STATE: typing.Final[str] = 'issue_quote'\n", f"ISSUE_QUOTE_STATE: typing.Final[str] = {state_constant!r}\n"),
-        ("engine_workflow_context.set(relays.ISSUE_QUOTE_STATE,", f"engine_workflow_context.set({written},"),
-        ("engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE)", f"engine_workflow_shared_context.get({read})"),
-    ))
+    return _engine_kinds_spec(
+        old="ISSUE_QUOTE_STATE: typing.Final[str] = 'issue_quote'\n",
+        new=f"ISSUE_QUOTE_STATE: typing.Final[str] = {state_constant!r}\n",
+        old_also="engine_workflow_context.set(relays.ISSUE_QUOTE_STATE,",
+        new_also=f"engine_workflow_context.set({written},",
+        old_too="engine_workflow_shared_context.get(relays.ISSUE_QUOTE_STATE)",
+        new_too=f"engine_workflow_shared_context.get({read})",
+    )
 
 
 def test_a_signal_reads_only_the_state_its_workflows_main_writes_by_a_relays_constant() -> None:
