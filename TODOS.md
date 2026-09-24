@@ -2,6 +2,36 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the typed-handler ship review (2026-09-23, PR #210)
+
+- [ ] **An activity's engine container is ingress-private, checked.** voice's
+  three actions services now set `ingress_private=True` (Chris, 2026-09-23):
+  only `conduct_call` and the two signals are reachable from Restate's
+  ingress, so nobody who reaches the ingress can place a call or write a
+  record around `CallService`. Nothing checks it. Add a rule that a container
+  an activity registers into is built with `ingress_private=True`, and that a
+  workflow's container is not.
+- [ ] **`place_call` can wait forever on a paused workflow.** The HTTP
+  dispatcher's `run_conduct_call` has no read limit (`read=None`), and an
+  activity that exhausts its 5 attempts pauses the workflow
+  (`on_max_attempts="pause"`), so the caller holds a connection and a
+  coroutine until someone resumes it. A caller that retries on its own
+  timeout gets a new call id each time and places a second real call. Part of
+  the voice call-lifecycle design (timeouts, hang-up on failure, no re-dial).
+- [ ] **Caller-side errors from the HTTP dispatcher.** Its response serdes
+  raise `restate.TerminalError(400)` on an empty body inside the host
+  process, a malformed ingress response surfaces as the snapshot's
+  `errors.invalid`, and `restate.HttpError` is not mapped at all, so an
+  engine fault can reach the client as a 4xx or a bare 500.
+- [ ] **Review gaps left open.** `conduct_call` does not check that the
+  request's call id is its workflow key, as the signals do; the new checks
+  each rebuild the kind table per module, as about 24 older checks already
+  do (cache it on the registry); the adapter tests probe a free port and bind
+  it later (a race); the hostile-key test covers only `run_person_joined`;
+  the concurrency test does not assert which turn the promise kept; an
+  activity or workflow whose far side the analyzer cannot read gets no
+  container-name check and no finding.
+
 ## Left open by the adapter-shape ship review (2026-09-22, Chris)
 
 - [x] **The runner-to-runtime link is held only by a string (Chris: "properly

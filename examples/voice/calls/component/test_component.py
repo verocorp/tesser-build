@@ -84,3 +84,20 @@ class TestCalls:
         assert [(policy.max_attempts, policy.on_max_attempts) for policy in policies if policy is not None] == [
             (5, "pause")
         ] * 4
+
+    async def test_only_the_workflow_is_reachable_from_ingress(self) -> None:
+        config = component.Config(_spec(storage="postgres://nobody@nowhere/none"))
+
+        calls = component.Calls(config, pgdatabase_database.Database(config.database))
+        private = [
+            registration.ingress_private
+            for registration in (
+                calls.call_actions_service,
+                calls.dialing_actions_service,
+                calls.speech_actions_service,
+                calls.call_orchestrator_workflow,
+            )
+        ]
+        await calls.close()
+
+        assert private == [True, True, True, None]
