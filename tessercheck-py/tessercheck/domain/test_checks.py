@@ -5620,11 +5620,7 @@ def test_helper_rules_are_flagged() -> None:
         ))).violations()
                )
     assert any(
-        "bad_builder" in f and "parameter 'thing' is not a primitive; a helper takes only defaulted primitives" in f
-        for f in findings
-    )
-    assert any(
-        "bad_builder" in f and "parameter 'count' has no default; a helper takes only defaulted primitives" in f
+        "bad_builder" in f and "parameter 'count' has no default; every helper parameter has a default" in f
         for f in findings
     )
     assert any(
@@ -5632,7 +5628,162 @@ def test_helper_rules_are_flagged() -> None:
         and "returns no construction data; a helper builds a spec or a DTO" in f
         for f in findings
     )
+    assert any(
+        "bad_builder" in f
+        and "does not pass each parameter through by name to one construction; a helper's body invents nothing" in f
+        for f in findings
+    )
     assert any("bad_builder" in f and "has control flow" in f and "a helper only constructs" in f for f in findings)
+
+
+def test_a_helper_mirrors_the_constructor_it_feeds_and_composes_other_helpers() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "ordering/application/ports/catalog.py",
+                "ordering.application.ports.catalog",
+                "import enum\n"
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Availability(enum.Enum):\n"
+                "    IN_STOCK = 'in_stock'\n"
+                "    BACKORDERED = 'backordered'\n"
+                "class LineRecord(ts.Response):\n"
+                "    def __init__(self, sku: str, quantity: int) -> None:\n"
+                "        self.sku = sku\n"
+                "        self.quantity = quantity\n"
+                "class OrderRecord(ts.Response):\n"
+                "    def __init__(\n"
+                "        self, order_id: str, availability: Availability, lines: tuple[LineRecord, ...]\n"
+                "    ) -> None:\n"
+                "        self.order_id = order_id\n"
+                "        self.availability = availability\n"
+                "        self.lines = lines\n"
+                "class ReadOrderRequest(ts.Request):\n"
+                "    def __init__(self, order_id: str) -> None:\n"
+                "        self.order_id = order_id\n"
+                "class Catalog(ts.Port, typing.Protocol):\n"
+                "    def read_order(self, read_order_request: ReadOrderRequest) -> OrderRecord: ...\n",
+                False,
+            ),
+            (
+                "ordering/application/test_helpers_shape.py",
+                "ordering.application.test_helpers_shape",
+                "import tesser.testing as th\n"
+                "import ordering.application.ports.catalog as catalog\n"
+                "@th.helper\n"
+                "def line_record(sku: str = 'sku-1', quantity: int = 1) -> catalog.LineRecord:\n"
+                "    return catalog.LineRecord(sku=sku, quantity=quantity)\n"
+                "@th.helper\n"
+                "def order_record(\n"
+                "    order_id: str = 'order-1',\n"
+                "    availability: catalog.Availability = catalog.Availability.IN_STOCK,\n"
+                "    lines: tuple[catalog.LineRecord, ...] = (line_record(), line_record(sku='sku-2', quantity=-1)),\n"
+                ") -> catalog.OrderRecord:\n"
+                "    return catalog.OrderRecord(order_id=order_id, availability=availability, lines=lines)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("TB073" in f for f in findings), [f for f in findings if "TB073" in f]
+
+
+def test_a_helper_that_invents_reshapes_or_drifts_from_its_constructor_is_flagged() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "ordering/application/ports/catalog.py",
+                "ordering.application.ports.catalog",
+                "import enum\n"
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class Availability(enum.Enum):\n"
+                "    IN_STOCK = 'in_stock'\n"
+                "    BACKORDERED = 'backordered'\n"
+                "class LineRecord(ts.Response):\n"
+                "    def __init__(self, sku: str, quantity: int) -> None:\n"
+                "        self.sku = sku\n"
+                "        self.quantity = quantity\n"
+                "class OrderRecord(ts.Response):\n"
+                "    def __init__(\n"
+                "        self, order_id: str, availability: Availability, lines: tuple[LineRecord, ...]\n"
+                "    ) -> None:\n"
+                "        self.order_id = order_id\n"
+                "        self.availability = availability\n"
+                "        self.lines = lines\n"
+                "class ReadOrderRequest(ts.Request):\n"
+                "    def __init__(self, order_id: str) -> None:\n"
+                "        self.order_id = order_id\n"
+                "class Catalog(ts.Port, typing.Protocol):\n"
+                "    def read_order(self, read_order_request: ReadOrderRequest) -> OrderRecord: ...\n",
+                False,
+            ),
+            (
+                "ordering/application/test_helpers_drift.py",
+                "ordering.application.test_helpers_drift",
+                "import tesser.testing as th\n"
+                "import ordering.application.ports.catalog as catalog\n"
+                "DEFAULT_SKU = 'sku-1'\n"
+                "@th.helper\n"
+                "def invented(order_id: str = 'order-1') -> catalog.OrderRecord:\n"
+                "    return catalog.OrderRecord(\n"
+                "        order_id=order_id, availability=catalog.Availability.IN_STOCK, lines=()\n"
+                "    )\n"
+                "@th.helper\n"
+                "def reshaped(\n"
+                "    order_id: str = 'order-1',\n"
+                "    availability: catalog.Availability = catalog.Availability.IN_STOCK,\n"
+                "    line_quantity: int = 1,\n"
+                ") -> catalog.OrderRecord:\n"
+                "    return catalog.OrderRecord(\n"
+                "        order_id=order_id,\n"
+                "        availability=availability,\n"
+                "        lines=(catalog.LineRecord(sku='sku-1', quantity=line_quantity),),\n"
+                "    )\n"
+                "@th.helper\n"
+                "def drifted(sku: int = 1, quantity: int = 1) -> catalog.LineRecord:\n"
+                "    return catalog.LineRecord(sku=sku, quantity=quantity)\n"
+                "@th.helper\n"
+                "def built_default(\n"
+                "    order_id: str = 'order-1',\n"
+                "    availability: catalog.Availability = catalog.Availability.IN_STOCK,\n"
+                "    lines: tuple[catalog.LineRecord, ...] = (catalog.LineRecord(sku='sku-1', quantity=1),),\n"
+                ") -> catalog.OrderRecord:\n"
+                "    return catalog.OrderRecord(order_id=order_id, availability=availability, lines=lines)\n"
+                "@th.helper\n"
+                "def constant_default(sku: str = DEFAULT_SKU, quantity: int = 1) -> catalog.LineRecord:\n"
+                "    return catalog.LineRecord(sku=sku, quantity=quantity)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    helper = [f for f in findings if "TB073" in f]
+    assert any(
+        "invented takes no 'availability', which OrderRecord takes; a helper mirrors the constructor it feeds" in f
+        for f in helper
+    ), helper
+    assert any("invented takes no 'lines'" in f for f in helper), helper
+    assert any("invented does not pass each parameter through" in f for f in helper), helper
+    assert any(
+        "reshaped parameter 'line_quantity' is not a parameter of OrderRecord; a helper mirrors the constructor it feeds"
+        in f
+        for f in helper
+    ), helper
+    assert any("reshaped does not pass each parameter through" in f for f in helper), helper
+    assert any(
+        "drifted parameter 'sku' is int where LineRecord takes str; a helper mirrors the constructor it feeds" in f
+        for f in helper
+    ), helper
+    assert any(
+        "built_default parameter 'lines' defaults to something other than a literal" in f
+        and "a default holds values and calls only helpers" in f
+        for f in helper
+    ), helper
+    assert any("constant_default parameter 'sku' defaults to something other than" in f for f in helper), helper
+    assert not any("built_default does not pass" in f for f in helper), helper
+    assert not any("constant_default does not pass" in f for f in helper), helper
 
 
 def test_a_helper_is_reported_where_it_stands_in_its_module() -> None:
@@ -5656,7 +5807,7 @@ def test_a_helper_is_reported_where_it_stands_in_its_module() -> None:
     body = [f for f in findings if "shop/test_placed_helpers.py" in f]
     helper = next(
         index for index, f in enumerate(body)
-        if "a helper takes only defaulted primitives" in f
+        if "a helper's body invents nothing" in f
     )
     undeclared = next(
         index for index, f in enumerate(body)

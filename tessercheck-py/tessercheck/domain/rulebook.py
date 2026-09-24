@@ -100,6 +100,8 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "field.name()": "⟨field⟩",
     "method.name()": "⟨method⟩",
     "arg": "⟨name⟩",
+    "written_type": "⟨type⟩",
+    "wanted_type": "⟨type⟩",
     "class_decl.module()": "⟨module⟩",
     "class_decl.name()": "⟨class⟩",
     "delegate": "⟨method⟩",
