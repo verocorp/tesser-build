@@ -5,6 +5,81 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.3.0.0] - 2026-09-23
+
+No Restate handler in the voice example is addressed by a hand-written
+string. Each caller holds the object that registered the handler and passes
+its `.handler` to the Restate SDK's typed call, so a renamed service or
+handler moves with its registration, and the analyzer checks every name
+from typed references instead of comparing two copies of a literal.
+
+### Added
+- **Four adapter kinds, each naming what a class is.**
+  - `ts.Activity` (`adapters/activities/`) registers one action for the
+    engine to run.
+  - `ts.Workflow` (`adapters/workflows/`) registers the workflow's `main` and
+    builds the orchestrator for each invocation.
+  - `ts.Dispatcher` implements a relay. It sends a call across the engine,
+    either from inside an invocation through its context, or from outside
+    over HTTP with a client opened per call, as Restate's docs do.
+  - `ts.Signal` is a shared handler that delivers an event into a running
+    workflow by resolving its promise.
+
+  Imports go one way: dispatchers → workflows → activities.
+- **The component builds the Restate containers** and publishes them, then
+  builds activities → workflow → signals → dispatcher → services. The host
+  binds the containers.
+- **Name rules derived from typed references (TB085).** A relay is named for
+  the far side its dispatchers reach through `.handler`: an activity's class
+  of actions, a workflow's orchestrator, or a signal's workflow. On top of
+  that, the analyzer checks that:
+  - `run_X`/`start_X` passes the handler registered as `X`, named
+    positionally or with `name=`;
+  - `run_` waits, `start_` sends, and each call uses the engine call for its
+    target's kind;
+  - `await_X` and the signal registered as `X` use a relays constant equal
+    to `"X"`, assigned once, and the signal actually resolves it;
+  - each engine container is named for its far side and holds one handler
+    per name;
+  - every activity, workflow and signal registers exactly one handler, keeps
+    it as `self.handler`, and is reached by a dispatcher;
+  - an activity's handler calls its application client's method for that
+    operation;
+  - a dispatcher never calls the engine by name;
+  - a `workflows/` module reaches no HTTP client (TB060), because a call made
+    over HTTP from inside a workflow isn't journaled and runs again on every
+    replay.
+- **Promise names are constants in `application/relays`,** read by both the
+  waiting and the resolving side.
+
+### Changed
+- **The application-side `ts.Workflow` protocol is now
+  `ts.DeprecatedWorkflow`,** and `ts.Workflow` means the new adapter kind.
+  durable-execution, minimal and the generator keep the runner/runtime kinds
+  and their string-name rules until they migrate.
+- **voice's Restate adapters are tested through a real Restate.** Each test
+  serves its registrations on a real endpoint, registers it, calls through
+  the ingress with `.handler`, and tears down in `finally`. A signal whose
+  call id isn't its workflow's key is refused with a 400.
+- **Only the workflow is reachable from Restate's ingress.** voice's three
+  actions services are ingress-private, so nobody who can reach the ingress
+  can place a call or write a record around `CallService`.
+- **Names:** voice reads `RESTATE_URL` (was `RESTATE_INGRESS`) into
+  `restate_url`, and the HTTP dispatcher is `RestateHttpCallOrchestratorRelay`.
+- **Docs:** CLAUDE.md, the skill (version 85) and
+  `docs/design-app-service-types.md` teach the new shape. The design doc
+  records the durable call path reduced to nine lines, and the dependency
+  chain behind it.
+
+### Fixed
+- **A component publishes only engine containers without a kind** (TB081).
+  An attribute is exempt only when it's assigned from a Restate registration
+  constructor and handed to an activity, workflow or signal; `client` never
+  is.
+
+### Removed
+- voice's `adapters/runners/`, `adapters/runtimes/` and `CallWorkflow[C]`.
+
 ## [0.2.0.0] - 2026-09-23
 
 No adapter imports another. A runner reaches its far side by name, a runtime
