@@ -5,6 +5,60 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.4.0.0] - 2026-09-24
+
+Every durable tree now runs on activities, workflows, signals and
+dispatchers against a real Restate, and no call site names a service or
+handler by string. A signal refuses a key whose workflow never started, and
+the analyzer requires it.
+
+### Added
+- **TB085 (n): a signal refuses a key whose workflow never started.**
+  Restate runs a workflow's shared handler on a key whose main never ran and
+  keeps the promise it resolves, so an approval sent before the start used
+  to count. A workflow main whose container has a signal now sets a started
+  state named for its own operation (a constant in `application/relays/`),
+  and each signal reads that state before it resolves its promise and
+  refuses with 412 when it is absent. Leaving out either end, or reading
+  after resolving, is a finding.
+- **minimal shows every durable kind on Restate and Postgres.** alpha's
+  create starts a workflow that waits for an approval signal and then keeps
+  the widget; the CLI gains `create`, `approve` and `find` beside `add`, and
+  `find_widget` reads the kept widget back from Postgres from any process.
+- **Tests of what Restate refuses** in durable-execution and the generated
+  trees: an unreadable body is a terminal 500 that is not retried, and a
+  call to an ingress-private actions service is refused.
+
+### Changed
+- **durable-execution and the generator's templates** move from runners
+  and runtimes to activities, workflows and dispatchers. Each caller holds
+  the object that registered a handler and passes its `.handler` to the
+  SDK's typed call, and each actions service is ingress-private.
+- **minimal runs on real Restate and Postgres,** with no `skip` line in its
+  `.tesser-root`: the stand-in client package and in-memory widget store are
+  gone.
+- **Each workflow and signal refuses a body whose key is not its own,**
+  with a terminal 400, in durable-execution, minimal, voice and the
+  generator. A body under one key can no longer act on another.
+- **voice's `person_joined` and `person_turn_completed` refuse a call that
+  has not started,** and `conduct_call` records that it started before it
+  dials.
+- **Docs:** the design doc, `python.md`, CLAUDE.md and the coverage row
+  state rule (n), say that only the deprecated kinds remain with no tree on
+  them, and describe what the SDK does with a payload that does not parse
+  (skill version 88).
+
+### Fixed
+- **minimal's invalid names fail once instead of pausing a workflow:** the
+  request snapshot builds the domain name, so a bad name is refused as the
+  input is decoded.
+- **Names made only of dots reach their own workflow** instead of being
+  normalized out of the ingress path.
+- **A second approval of the same widget is acknowledged** rather than
+  failing.
+- **Generated tests no longer break when an identity field shares a name
+  with a test local** (for example `shutdown`).
+
 ## [0.3.1.0] - 2026-09-24
 
 A handler routes a message to the application and does nothing else: every
