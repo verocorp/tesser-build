@@ -4,6 +4,7 @@ import asyncio
 import os
 import socket
 import typing
+import urllib.parse as urllib_parse
 import uuid
 
 import tesser.testing as ts
@@ -11,6 +12,7 @@ import httpx
 import hypercorn.asyncio as hypercorn_asyncio
 import hypercorn.config as hypercorn_config
 import hypercorn.typing as hypercorn_typing
+import pytest
 import restate
 import restate.client as restate_client
 
@@ -166,6 +168,12 @@ class TestRestateConfirmOrder:
             async with httpx.AsyncClient(
                 base_url=os.environ["RESTATE_INGRESS"], timeout=30.0
             ) as async_client:
+                with pytest.raises(restate.HttpError) as foreign:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_confirm_order.handler,
+                        key="other-" + order_id,
+                        arg=confirm_order_request(order_id=order_id),
+                    )
                 confirm_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_confirm_order.handler,
                     key=order_id,
@@ -181,6 +189,7 @@ class TestRestateConfirmOrder:
                 },
             )
 
+            assert foreign.value.status_code == 400
             assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
             assert confirm_order_response.confirmed_orders == (relays.ConfirmedOrder(total_cents=500),)
             assert [
@@ -339,7 +348,7 @@ class TestRestatePayForOrder:
             ) as async_client:
                 pay_for_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_pay_for_order.handler,
-                    key="pay-" + str(uuid.uuid4()),
+                    key=urllib_parse.quote(order_id, safe=""),
                     arg=pay_for_order_request(order_id=order_id),
                 )
             invoked = await admin.post(
@@ -609,12 +618,19 @@ class TestRestatePayForOrder:
             async with httpx.AsyncClient(
                 base_url=os.environ["RESTATE_INGRESS"], timeout=30.0
             ) as async_client:
+                with pytest.raises(restate.HttpError) as foreign:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_pay_for_order.handler,
+                        key="other-" + order_id,
+                        arg=pay_for_order_request(order_id=order_id),
+                    )
                 pay_for_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_pay_for_order.handler,
                     key=order_id,
                     arg=pay_for_order_request(order_id=order_id),
                 )
 
+            assert foreign.value.status_code == 400
             assert pay_for_order_response.outcome is relays.PayForOrderOutcome.PAYMENT_DECLINED
             assert pay_for_order_response.reasons == (
                 f"the processor declined the charge for order {order_id!r}",

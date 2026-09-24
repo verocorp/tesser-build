@@ -12,6 +12,7 @@ import ordering.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
+_FOREIGN_ORDER: typing.Final[str] = "a request names the order its workflow is keyed by"
 
 
 class RestateConfirmOrderRequestSerde(ts.Serde, restate_serde.Serde[relays.ConfirmOrderRequest]):
@@ -99,6 +100,8 @@ class RestateConfirmOrder(ts.Workflow):
             restate_workflow_context: restate.WorkflowContext,
             confirm_order_request: relays.ConfirmOrderRequest,
         ) -> relays.ConfirmOrderResponse:
+            if str(confirm_order_request.order.identity) != restate_workflow_context.key():
+                raise restate.TerminalError(_FOREIGN_ORDER, status_code=400)
             return await orchestrators.OrderOrchestrator(
                 RestateInvocationOrderActionsRelay(restate_workflow_context, restate_price_product)
             ).confirm_order(confirm_order_request)
@@ -180,6 +183,8 @@ class RestatePayForOrder(ts.Workflow):
             restate_workflow_context: restate.WorkflowContext,
             pay_for_order_request: relays.PayForOrderRequest,
         ) -> relays.PayForOrderResponse:
+            if str(pay_for_order_request.order.identity) != restate_workflow_context.key():
+                raise restate.TerminalError(_FOREIGN_ORDER, status_code=400)
             return await orchestrators.PurchaseOrchestrator(
                 RestateInvocationPurchaseActionsRelay(restate_workflow_context, restate_take_payment),
                 RestateInvocationOrderOrchestratorRelay(restate_workflow_context, restate_confirm_order),

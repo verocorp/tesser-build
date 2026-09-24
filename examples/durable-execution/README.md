@@ -399,6 +399,13 @@ that key into the request path unencoded (`restate/client.py`,
 dispatchers percent-encode it
 (`urllib.parse.quote(key, safe="")`); an `order_id` of `../admin` reaches the
 ingress as `/OrderOrchestrator/..%2Fadmin/confirm_order/send`, not as a different route.
+`OrderId` refuses `.` and `..`, the two ids percent-encoding leaves alone.
+
+The two workflow mains read the same identity once more, to refuse a body
+whose order is not the workflow's key: `confirm_order` and `pay_for_order`
+compare `str(<request>.order.identity)` with `restate_workflow_context.key()`
+and raise a terminal `400` on a mismatch. Without it, a request sent to the
+ingress under key A ran the workflow for another order under A's key.
 
 An `OrderSnapshot` on the way in checks the shape of what it reads before
 the constructor sees it: `order_id` and `sku` must be strings and `quantity`
