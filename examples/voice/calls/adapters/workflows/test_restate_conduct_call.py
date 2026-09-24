@@ -62,6 +62,13 @@ def call_spec(call_id: str = "c7", person_name: str = "") -> domain.CallSpec:
     return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
+@ts.helper
+def conduct_call_request(
+    call: domain.Call = domain.Call(call_spec()),
+) -> relays.ConductCallRequest:
+    return relays.ConductCallRequest(call=call)
+
+
 class TestRestateConductCall:
     async def test_conduct_call_reaches_the_handler_it_holds_and_waits_on_the_promise_the_relays_name(
         self,
@@ -106,7 +113,7 @@ class TestRestateConductCall:
 
             async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
                 sent = await restate_client.Client(async_client).workflow_send(
-                    restate_conduct_call.handler, key=call_id, arg=relays.ConductCallRequest(call=domain.Call(call_spec(call_id=call_id)))
+                    restate_conduct_call.handler, key=call_id, arg=conduct_call_request(call=domain.Call(call_spec(call_id=call_id)))
                 )
             called: list[tuple[str, str]] = []
             awaited: list[str] = []

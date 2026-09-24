@@ -63,6 +63,14 @@ def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> 
     return domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)
 
 
+@ts.helper
+def pay_for_order_request(
+    order: domain.Order = domain.Order(order_spec()),
+    payment_method: domain.PaymentMethod = domain.PaymentMethod("card-4242"),
+) -> relays.PayForOrderRequest:
+    return relays.PayForOrderRequest(order=order, payment_method=payment_method)
+
+
 class TestRestateHttpPurchaseOrchestratorRelay:
 
     async def test_running_calls_the_workflow_and_answers_with_its_result(self) -> None:
@@ -122,10 +130,7 @@ class TestRestateHttpPurchaseOrchestratorRelay:
             order_id = str(uuid.uuid4())
             pay_for_order_response = await dispatchers.RestateHttpPurchaseOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"], restate_pay_for_order
-            ).run_pay_for_order(relays.PayForOrderRequest(
-                order=domain.Order(order_spec(order_id=order_id, quantity=2)),
-                payment_method=domain.PaymentMethod("card-4242"),
-            ))
+            ).run_pay_for_order(pay_for_order_request(order=domain.Order(order_spec(order_id=order_id, quantity=2))))
             invoked = await admin.post(
                 "/query",
                 headers={"accept": "application/json"},
@@ -214,16 +219,10 @@ class TestRestateHttpPurchaseOrchestratorRelay:
                 os.environ["RESTATE_INGRESS"], restate_pay_for_order
             )
             first = await restate_http_purchase_orchestrator_relay.run_pay_for_order(
-                relays.PayForOrderRequest(
-                    order=domain.Order(order_spec(order_id=order_id)),
-                    payment_method=domain.PaymentMethod("card-4242"),
-                )
+                pay_for_order_request(order=domain.Order(order_spec(order_id=order_id)))
             )
             second = await restate_http_purchase_orchestrator_relay.run_pay_for_order(
-                relays.PayForOrderRequest(
-                    order=domain.Order(order_spec(order_id=order_id)),
-                    payment_method=domain.PaymentMethod("card-4242"),
-                )
+                pay_for_order_request(order=domain.Order(order_spec(order_id=order_id)))
             )
 
             assert first.outcome is relays.PayForOrderOutcome.PAID
@@ -260,7 +259,4 @@ class TestRestateHttpPurchaseOrchestratorRelay:
         with pytest.raises(httpx.TransportError):
             await dispatchers.RestateHttpPurchaseOrchestratorRelay(
                 unreachable, restate_pay_for_order
-            ).run_pay_for_order(relays.PayForOrderRequest(
-                order=domain.Order(order_spec()),
-                payment_method=domain.PaymentMethod("card-4242"),
-            ))
+            ).run_pay_for_order(pay_for_order_request())

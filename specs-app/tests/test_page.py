@@ -22,16 +22,19 @@ def http_spec(host: str = "127.0.0.1", port: int = 0) -> app.HttpSpec:
     return app.HttpSpec(host=host, port=port)
 
 
+@ts.helper
+def app_spec(
+    specification: specification_component.Config = specification_component.Config(specification_spec()),
+    http: app.HttpConfig = app.HttpConfig(http_spec()),
+) -> app.Spec:
+    return app.Spec(specification=specification, http=http)
+
+
 class TestAddStoryOnThePage:
 
     def test_s1_1_a_saved_story_is_nested_under_its_jtbd_with_its_identifier_level_and_links(self) -> None:
         specs_app = app.SpecsApp(
-            app.AppConfig(
-                app.Spec(
-                    specification=specification_component.Config(specification_spec(storage="memory")),
-                    http=app.HttpConfig(http_spec()),
-                )
-            )
+            app.AppConfig(app_spec())
         )
         http_host = srv_http.HttpHost(("127.0.0.1", 0), specs_app)
         stop = threading.Event()

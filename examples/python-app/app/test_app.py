@@ -27,6 +27,21 @@ def _http_spec(host: str = "", port: int = 8080) -> app.HttpSpec:
     return app.HttpSpec(host=host, port=port)
 
 
+@ts.helper
+def _reports_spec() -> reports_component.Spec:
+    return reports_component.Spec()
+
+
+@ts.helper
+def _app_spec(
+    campaign: campaign_component.Config = campaign_component.Config(_campaign_spec()),
+    linkpolicy: linkpolicy_component.Config = linkpolicy_component.Config(_linkpolicy_spec()),
+    reports: reports_component.Config = reports_component.Config(_reports_spec()),
+    http: app.HttpConfig = app.HttpConfig(_http_spec()),
+) -> app.Spec:
+    return app.Spec(campaign=campaign, linkpolicy=linkpolicy, reports=reports, http=http)
+
+
 @ts.fake
 class FakeConfigRepository(app.AppConfigRepository):
 
@@ -35,23 +50,14 @@ class FakeConfigRepository(app.AppConfigRepository):
 
     def get(self) -> app.AppConfig:
         self.reads += 1
-        return app.AppConfig(
-            app.Spec(
-                campaign=campaign_component.Config(_campaign_spec()),
-                linkpolicy=linkpolicy_component.Config(_linkpolicy_spec()),
-                reports=reports_component.Config(reports_component.Spec()),
-                http=app.HttpConfig(_http_spec(port=8080)),
-            )
-        )
+        return app.AppConfig(_app_spec(http=app.HttpConfig(_http_spec(port=8080))))
 
 
 def test_a_config_carries_one_slice_per_component() -> None:
     app_config = app.AppConfig(
-        app.Spec(
+        _app_spec(
             campaign=campaign_component.Config(_campaign_spec(storage="memory")),
             linkpolicy=linkpolicy_component.Config(_linkpolicy_spec(storage="postgres")),
-            reports=reports_component.Config(reports_component.Spec()),
-            http=app.HttpConfig(_http_spec()),
         )
     )
 
@@ -60,7 +66,7 @@ def test_a_config_carries_one_slice_per_component() -> None:
 
 
 def test_an_http_config_carries_the_coordinate_it_was_given() -> None:
-    http_config = app.HttpConfig(app.HttpSpec("127.0.0.1", 9091))
+    http_config = app.HttpConfig(_http_spec(host="127.0.0.1", port=9091))
 
     assert http_config.host == "127.0.0.1"
     assert http_config.port == 9091
@@ -68,14 +74,7 @@ def test_an_http_config_carries_the_coordinate_it_was_given() -> None:
 
 def test_an_app_builds_one_component_per_slice() -> None:
     python_app = app.PythonApp(
-        app.AppConfig(
-            app.Spec(
-                campaign=campaign_component.Config(_campaign_spec()),
-                linkpolicy=linkpolicy_component.Config(_linkpolicy_spec()),
-                reports=reports_component.Config(reports_component.Spec()),
-                http=app.HttpConfig(_http_spec()),
-            )
-        )
+        app.AppConfig(_app_spec())
     )
 
     assert python_app.campaign.client is not None
@@ -85,14 +84,7 @@ def test_an_app_builds_one_component_per_slice() -> None:
 
 def test_an_app_wires_its_components_to_each_other() -> None:
     python_app = app.PythonApp(
-        app.AppConfig(
-            app.Spec(
-                campaign=campaign_component.Config(_campaign_spec()),
-                linkpolicy=linkpolicy_component.Config(_linkpolicy_spec()),
-                reports=reports_component.Config(reports_component.Spec()),
-                http=app.HttpConfig(_http_spec()),
-            )
-        )
+        app.AppConfig(_app_spec())
     )
 
     create_campaign_response = python_app.campaign.client.create_campaign(
@@ -113,14 +105,7 @@ def test_an_app_wires_its_components_to_each_other() -> None:
 def test_an_app_refuses_a_slice_its_component_rejects() -> None:
     with pytest.raises(errors.DomainError) as caught:
         app.PythonApp(
-            app.AppConfig(
-                app.Spec(
-                    campaign=campaign_component.Config(_campaign_spec(storage="")),
-                    linkpolicy=linkpolicy_component.Config(_linkpolicy_spec()),
-                    reports=reports_component.Config(reports_component.Spec()),
-                    http=app.HttpConfig(_http_spec()),
-                )
-            )
+            app.AppConfig(_app_spec(campaign=campaign_component.Config(_campaign_spec(storage=""))))
         )
 
     assert caught.value.code == "missing_coordinate"
@@ -129,14 +114,7 @@ def test_an_app_refuses_a_slice_its_component_rejects() -> None:
 def test_an_app_refuses_an_unsupported_backend() -> None:
     with pytest.raises(errors.DomainError) as caught:
         app.PythonApp(
-            app.AppConfig(
-                app.Spec(
-                    campaign=campaign_component.Config(_campaign_spec()),
-                    linkpolicy=linkpolicy_component.Config(_linkpolicy_spec(storage="redis")),
-                    reports=reports_component.Config(reports_component.Spec()),
-                    http=app.HttpConfig(_http_spec()),
-                )
-            )
+            app.AppConfig(_app_spec(linkpolicy=linkpolicy_component.Config(_linkpolicy_spec(storage="redis"))))
         )
 
     assert caught.value.code == "unknown_backend"
@@ -144,14 +122,7 @@ def test_an_app_refuses_an_unsupported_backend() -> None:
 
 def test_an_app_carries_the_http_slice_its_host_reads() -> None:
     python_app = app.PythonApp(
-        app.AppConfig(
-            app.Spec(
-                campaign=campaign_component.Config(_campaign_spec()),
-                linkpolicy=linkpolicy_component.Config(_linkpolicy_spec()),
-                reports=reports_component.Config(reports_component.Spec()),
-                http=app.HttpConfig(_http_spec(host="127.0.0.1", port=9091)),
-            )
-        )
+        app.AppConfig(_app_spec(http=app.HttpConfig(_http_spec(host="127.0.0.1", port=9091))))
     )
 
     assert python_app.http.host == "127.0.0.1"

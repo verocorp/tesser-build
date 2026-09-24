@@ -16,11 +16,7 @@ import tesser.errors as errors
 class FakeConfigRepository(app.AppConfigRepository):
 
     def get(self) -> app.AppConfig:
-        spec = app.Spec(
-            specification=specification_component.Config(specification_component.Spec("memory")),
-            http=app.HttpConfig(app.HttpSpec(host="127.0.0.1", port=0)),
-        )
-        return app.AppConfig(spec)
+        return app.AppConfig(app_spec())
 
 
 @ts.helper
@@ -33,13 +29,18 @@ def http_spec(host: str = "127.0.0.1", port: int = 0) -> app.HttpSpec:
     return app.HttpSpec(host=host, port=port)
 
 
+@ts.helper
+def app_spec(
+    specification: specification_component.Config = specification_component.Config(specification_spec()),
+    http: app.HttpConfig = app.HttpConfig(http_spec()),
+) -> app.Spec:
+    return app.Spec(specification=specification, http=http)
+
+
 class TestAppConfig:
 
     def test_a_config_carries_each_part(self) -> None:
-        spec = app.Spec(
-            specification=specification_component.Config(specification_spec()),
-            http=app.HttpConfig(http_spec(port=8080)),
-        )
+        spec = app_spec(http=app.HttpConfig(http_spec(port=8080)))
         app_config = app.AppConfig(spec)
         assert app_config.specification is spec.specification
         assert app_config.http.port == 8080
@@ -65,12 +66,7 @@ class TestApp:
 
     def test_the_app_wires_the_specification_context(self) -> None:
         specs_app = app.SpecsApp(
-            app.AppConfig(
-                app.Spec(
-                    specification=specification_component.Config(specification_spec(storage="memory")),
-                    http=app.HttpConfig(http_spec()),
-                )
-            )
+            app.AppConfig(app_spec())
         )
         add_story_response = specs_app.specification.client.add_story(
             specification_client.AddStoryRequest(jtbd_id="j-root", given="g", when="w", then="t")
