@@ -4,27 +4,64 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 
 ## Left open by the adapter-shape ship review (2026-09-22, Chris)
 
-- [ ] **The runner-to-runtime link is held only by a string (Chris: "properly
-  handle this, not just rely on the analyzer").** HIGH PRIORITY. Since the
-  adapter-shape change a runner reaches its far side by literal service and
-  handler name (`generic_call("CallActions", "record_call", ...)`) and the
-  runtime registers under literals too. Nothing in Python connects the two
-  ends; the analyzer is the only thing holding them to one name (the
-  runtime obligation, and the reverse row added in this review). Decide a
-  structural mechanism so the name has one source both ends read, not a
-  check that two copies agree: for example the relay declares its far
-  side's service name and operation names as data that the runner and the
-  runtime's registration both read, or the engine registration is derived
-  from the relay. Until then, three shapes still evade the analyzer (below).
-- [ ] **Three ways around the name checks, found by red team and left open
-  pending the item above.** Each gives zero findings on a copy of voice:
-  (1) a handler registered under another name, positionally
-  (`@svc.handler("renamed")`) or through a constant (`name=_RENAMED`) — the
-  row reads only a literal `name=` keyword and the obligation uses the
-  function name; (2) a `restate.Service` built into a local variable and
-  decorated through it instead of `self.x = ...` in `__init__`; (3) the two
-  shared handlers resolving each other's promise — nothing checks that the
-  promise a shared handler resolves is the one named for it.
+- [x] **The runner-to-runtime link is held only by a string (Chris: "properly
+  handle this, not just rely on the analyzer").** RESOLVED FOR VOICE on
+  branch `name-strings` (PR #210, 2026-09-23). Runners and runtimes are gone
+  from voice: an activity, a workflow, and a signal each register their
+  handler into the engine container the component hands them and keep it as
+  `self.handler`, and a dispatcher holds the instance it calls and passes its
+  `.handler` to the SDK's typed call (`wf_ctx.service_call(...)`,
+  `restate.client.Client(...).workflow_call(...)`), so the SDK reads the
+  service and handler name off the registered object. Each container's name
+  is written once, in the component, and each promise's name once, as a
+  constant in `application/relays/` that both the dispatcher's `await_X` and
+  the signal read. durable-execution, minimal and the generator's templates
+  still hold the link by string (see the migration item below).
+- [x] **Three ways around the name checks, found by red team.** RESOLVED FOR
+  VOICE on branch `name-strings`, by removing what they got around rather
+  than by patching the literal checks: no dispatcher in voice names a service
+  or handler by string, so there is no second copy of a name to disagree.
+  What TB085 checks for the new kinds instead: (1) a dispatcher passes the
+  handler `def X` for `run_X`/`start_X`, and a handler whose `name=` differs
+  from its function name is a finding; (2) every engine container is built
+  by the component, named as a literal for its far side, and handed to the
+  activity, workflow, or signal that registers into it; (3) the signal named
+  `X` resolves the relays constant equal to `"X"`, so two signals cannot
+  resolve each other's promise. The original three shapes were not re-run as
+  a red team against the new kinds; a positional or constant name on
+  `@svc.handler(...)` is not covered by a test yet. All three shapes still
+  pass on the runner/runtime kinds in durable-execution, minimal and the
+  generator until they migrate.
+- [ ] **Migrate durable-execution, minimal and the generator to activities,
+  workflows and dispatchers (Chris, 2026-09-23; follow-up to PR #210).**
+  Voice is the only tree on the new kinds. `examples/durable-execution/`
+  (two workflows, one orchestrator starting another, and the two
+  implementations of `OrderOrchestratorRelay`) and the generator's templates
+  (`generator/templates/{{context}}/adapters/runners/`, `runtimes/`, the
+  `ts.DeprecatedWorkflow` protocol in `application/client/`) still use
+  `ts.Runner`, `ts.Runtime` and `ts.DeprecatedWorkflow`, whose TB085 rules
+  still check string literals. `examples/minimal/` shows none of the durable
+  kinds: restore them over a small in-process engine that registers a
+  handler object and calls it by that object, the way the Restate SDK's typed
+  calls do, so minimal exercises `ts.Relay`, `ts.Orchestrator`, `ts.Actions`,
+  the application client, `ts.Activity`, `ts.Workflow`, `ts.Signal` and
+  `ts.Dispatcher` without Restate (this replaces the 2026-09-22 minimal item
+  below, which planned dispatch by name). When all three have moved, delete
+  `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`, the `runners`/`runtimes`
+  kind packages, and their TB041/TB052/TB060/TB070/TB081/TB082/TB085 rows,
+  and drop the "trees not yet migrated" notes from CLAUDE.md, the skill and
+  `docs/design-app-service-types.md`.
+- [ ] **TB085 does not derive the name of a signal relay reached only by
+  `await_` (PR #210 gap).** A relay's far side is derived from the handlers
+  its dispatchers pass; an `await_` operation passes no handler, it reads a
+  relays constant. A signal relay's name is checked today only because a
+  `run_` operation on another relay reaches the signal that resolves the same
+  promise (voice: `CallOrchestratorRelay.run_person_joined` reaches
+  `RestatePersonJoined`, registered on `CallOrchestrator`). A signal relay
+  whose promises no `run_` operation reaches gets no name check. Derive the
+  far side from the promise constant instead: the signal that resolves the
+  constant registers on a workflow container, and that workflow is the far
+  side.
 - [ ] **voice: the first completed turn wins, whatever it was.** The agent
   session starts listening before `person_joined` is sent and before the
   question is said, and `person_turn_completed` keeps the first value it
@@ -157,7 +194,9 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   cut (one messages module beside each relay, or a `messages/` package),
   what the runner and the runtime then import, and whether ports get the
   same split, since `ports/` has the identical shape.
-- **minimal exercises every `ts.*` again — an in-process engine by name
+- **SUPERSEDED 2026-09-23 by the migration item at the top of this file
+  (an in-process engine that calls by handler object, not by name).**
+  **minimal exercises every `ts.*` again — an in-process engine by name
   (Chris, 2026-09-22; the third PR after the adapter-shape PR).** minimal's
   requirement is that every `ts.*` kind is shown and exercised. The
   adapter-shape PR dropped its durable half (relays, runners, runtime,

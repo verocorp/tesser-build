@@ -31,13 +31,13 @@ myself?* Yes → application service.
   starts.)
 - A **DTO / request struct** — data crossing the boundary. It has no behavior.
 - An **orchestrator** — the body of a workflow on a durable-execution engine.
-  Same four-step shape, but built per invocation by a workflow runner,
-  depending on relays and action ports only, storing nothing, reached only
-  through its application client, and never on the public `Client`. Not an application service; a kind of its own (`ts.Orchestrator`,
+  Same four-step shape, but built per invocation by a workflow adapter
+  (`ts.Workflow`), depending on relays and action ports only, storing
+  nothing, and never on the public `Client`. Not an application service; a kind of its own (`ts.Orchestrator`,
   `python.md#orchestrators-actions-relays`).
 - A **class of actions** — application-service-shaped, but with exactly one
   port and exactly one call on it per method (the engine's retry unit), and
-  reachable only through an application client a runtime holds — never on the
+  reachable only through an application client an activity holds — never on the
   public `Client`, and never holding a relay of its own (`ts.Actions`,
   `python.md#orchestrators-actions-relays`).
 

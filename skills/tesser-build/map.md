@@ -38,7 +38,7 @@ prescribed):
 |---|---|---|
 | **domain** | VOs / entities / aggregates | `value-objects.md`, `entities.md`, `aggregates.md`, `domain-services.md` |
 | **application** | use-case services (Convert → Delegate → Persist → Respond); no business logic — plus the **outbound ports the context owns**, in an `application/ports/` package (one port per module, with the request/response DTOs it speaks), and the domain ↔ port-DTO mapping | `application-services.md`, `repositories.md` |
-| **adapters** | inbound `handlers` and `runtimes` + outbound `gateways`, `repositories`, and `runners` — five kind packages (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md`, `python.md#orchestrators-actions-relays` |
+| **adapters** | inbound `handlers` + outbound `gateways` and `repositories` + the engine's `activities`, `workflows`, and `dispatchers` — six kind packages (taxonomy below) | `handlers.md`, `repositories.md`, `gateway-cross-context.md`, `python.md#orchestrators-actions-relays` |
 | **component** | the context's own construction + its `Config` | `component.md` |
 
 The context's **`client` role is its public interface**: the `Client` interface +
@@ -66,30 +66,35 @@ split stands on private fields + constructor-only construction; Go's
 `internal/` or Python's `_internal` + import-linter are optional hardening over
 it, not the boundary itself.
 
-## Adapters: handlers, runtimes, gateways, repositories, runners {#adapters}
+## Adapters: handlers, gateways, repositories, activities, workflows, dispatchers {#adapters}
 
 **Adapters** is the umbrella: everything that touches the outside world on a
-context's behalf. Five kinds, split by direction — **inbound needs a server
+context's behalf. Six kind packages, split by direction — **inbound needs a server
 (something calls *in*); outbound doesn't (it calls out)** — and each kind is
 its own package, because the package is what carries the module's reach.
 
 - **Handlers (inbound)** — translate one delivery mechanism's wire format to and
   from the context's `Client`: HTTP, CLI, event-consumer. → `handlers.md`
-- **Runtimes (inbound, engine)** — where a durable-execution engine hands work
-  back: a runtime registers the engine's handlers and calls an application
-  client — a class of actions directly, an orchestrator through the
-  `ts.Workflow` whose invocation yields its client. It constructs nothing but
-  its registrations and serdes, and registers only what a runner of its
-  context reaches. A handler calls the context client; a runtime never does.
+- **Activities, workflows, and signals (inbound, engine)** — where a
+  durable-execution engine hands work back. Each registers a handler into the
+  engine container the component hands it and keeps it as `self.handler`: an
+  activity (`ts.Activity`, `adapters/activities/`) calls an application
+  client, a class of actions; a workflow (`ts.Workflow`,
+  `adapters/workflows/`) registers the workflow's `main` and builds the
+  orchestrator for each invocation; a signal (`ts.Signal`,
+  `adapters/dispatchers/`) resolves the running workflow's promise. A handler
+  calls the context client; none of these does.
   → `python.md#orchestrators-actions-relays`
-- **Runners (outbound, engine)** — the implementations of the context's
+- **Dispatchers (outbound, engine)** — the implementations of the context's
   **relays** (`application/relays/`), the protocols whose far side is this same
-  context reached across the engine, and of its workflows. A relay runner
-  reaches its far side by literal service and handler name; a workflow runner
-  builds the orchestrator over that invocation's runners. A runner may hold
-  an invocation's engine context; a gateway or a repository never does. No
-  adapters kind package imports another. →
-  `python.md#orchestrators-actions-relays`
+  context reached across the engine. A dispatcher (`ts.Dispatcher`, in
+  `adapters/workflows/` inside an invocation, or `adapters/dispatchers/` over
+  HTTP) holds the instance it calls and passes its `.handler` to the SDK's
+  typed call, so no service or handler name is written at the call site. A
+  dispatcher inside an invocation holds that invocation's engine context; a
+  gateway or a repository never does. Imports go one way, dispatchers →
+  workflows → activities, and no other pair of adapters kind packages imports
+  each other. → `python.md#orchestrators-actions-relays`
 - **Gateways (outbound)** — satisfy a port the context owns, by reaching
   something outside it that is **not** its own storage. The port and its DTOs
   live in the context's `application/ports/`; the gateway imports that ports
@@ -106,8 +111,9 @@ its own package, because the package is what carries the module's reach.
   `adapters/gateways/` (TB052). → `repositories.md`
 
 Enforced layout (TB041/TB052): `adapters/handlers`, `adapters/gateways`,
-`adapters/repositories`, `adapters/runners`, and `adapters/runtimes` are the
-adapter kind packages;
+`adapters/repositories`, `adapters/activities`, `adapters/workflows`, and
+`adapters/dispatchers` are the adapter kind packages (`adapters/runners` and
+`adapters/runtimes` remain in trees not yet migrated);
 every adapters module lives in one and holds the kind its package names,
 because the package is what carries the module's reach (TB060). Each
 implementation module is named for its backing (`file_repository.py`,
