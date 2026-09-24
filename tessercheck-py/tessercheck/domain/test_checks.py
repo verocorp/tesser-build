@@ -13629,7 +13629,7 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
     ), findings
     assert any(
         "shop.tests.test_peek imports shop.application.orchestrators, but only a test placed in "
-        "runners or b reaches the orchestrators; a test reaches only what its placement allows" in f
+        "runners or workflows reaches the orchestrators; a test reaches only what its placement allows" in f
         for f in findings
     ), findings
     assert not any(

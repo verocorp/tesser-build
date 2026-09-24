@@ -11724,7 +11724,7 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runners or b reaches the orchestrators; a test reaches only what its "
+                            "runners or workflows reaches the orchestrators; a test reaches only what its "
                             "placement allows",
                         ))
                     )
