@@ -11,6 +11,7 @@ import {{context}}.application.orchestrators as orchestrators
 import {{context}}.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
+_FOREIGN_KEY: typing.Final[str] = "a request names the {{aggregate}} its workflow is keyed by"
 
 
 class Restate{{Conduct}}RequestSerde(ts.Serde, restate_serde.Serde[relays.{{Conduct}}Request]):
@@ -63,6 +64,8 @@ class Restate{{Conduct}}(ts.Workflow):
         async def {{conduct}}(
             restate_workflow_context: restate.WorkflowContext, {{conduct}}_request: relays.{{Conduct}}Request
         ) -> relays.{{Conduct}}Response:
+            if {{conduct}}_request.{{identity}} != restate_workflow_context.key():
+                raise restate.TerminalError(_FOREIGN_KEY, status_code=400)
             return await orchestrators.{{Aggregate}}Orchestrator(
                 RestateInvocation{{Aggregate}}ActionsRelay(restate_workflow_context, restate_{{record}})
             ).{{conduct}}({{conduct}}_request)

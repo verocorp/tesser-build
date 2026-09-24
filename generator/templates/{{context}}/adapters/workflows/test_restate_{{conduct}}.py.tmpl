@@ -11,6 +11,7 @@ import httpx
 import hypercorn.asyncio as hypercorn_asyncio
 import hypercorn.config as hypercorn_config
 import hypercorn.typing as hypercorn_typing
+import pytest
 import restate
 import restate.client as restate_client
 
@@ -34,11 +35,11 @@ class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
 class TestRestate{{Conduct}}:
 
     async def test_{{conduct}}_calls_{{record}}_through_the_engine_and_answers_with_what_it_recorded(self) -> None:
-        {{identity}} = str(uuid.uuid4())
+        workflow_key = str(uuid.uuid4())
         suffix = uuid.uuid4().hex
         {{aggregate}}_actions_service = restate.Service(f"{{Aggregate}}Actions{suffix}")
         {{aggregate}}_orchestrator_workflow = restate.Workflow(f"{{Aggregate}}Orchestrator{suffix}")
-        parent_target = f"{{Aggregate}}Orchestrator{suffix}/" + {{identity}} + "/{{conduct}}"
+        parent_target = f"{{Aggregate}}Orchestrator{suffix}/" + workflow_key + "/{{conduct}}"
         fake_{{aggregate}}_application_client = Fake{{Aggregate}}ApplicationClient()
         restate_{{conduct}} = workflows.Restate{{Conduct}}(
             {{aggregate}}_orchestrator_workflow,
@@ -71,8 +72,12 @@ class TestRestate{{Conduct}}:
             assert registered.is_success, registered.text
 
             async with httpx.AsyncClient(base_url=os.environ["{{ingress_env}}"], timeout=30.0) as async_client:
+                with pytest.raises(restate.HttpError) as foreign:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_{{conduct}}.handler, key="other-" + workflow_key, arg=relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}workflow_key{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
+                    )
                 {{conduct}}_response = await restate_client.Client(async_client).workflow_call(
-                    restate_{{conduct}}.handler, key={{identity}}, arg=relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
+                    restate_{{conduct}}.handler, key=workflow_key, arg=relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}workflow_key{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
                 )
             invoked = await admin.post(
                 "/query",
@@ -83,8 +88,9 @@ class TestRestate{{Conduct}}:
                 },
             )
 
-            assert {{conduct}}_response == relays.{{Conduct}}Response({{identity}}={{identity}})
-            assert [recorded.{{identity}} for recorded in fake_{{aggregate}}_application_client.recorded] == [{{identity}}]
+            assert foreign.value.status_code == 400
+            assert {{conduct}}_response == relays.{{Conduct}}Response({{identity}}=workflow_key)
+            assert [recorded.{{identity}} for recorded in fake_{{aggregate}}_application_client.recorded] == [workflow_key]
             assert [(row["target"], row["completion_result"]) for row in invoked.json()["rows"]] == [
                 (f"{{Aggregate}}Actions{suffix}/{{record}}", "success")
             ]

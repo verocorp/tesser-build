@@ -34,7 +34,7 @@ class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
 class TestRestateHttp{{Aggregate}}OrchestratorRelay:
 
     async def test_{{conduct}}_runs_the_workflow_the_engine_keys_by_the_{{identity}}(self) -> None:
-        {{identity}} = "../admin?x=1#f-" + str(uuid.uuid4())
+        workflow_key = "../admin?x=1#f-" + str(uuid.uuid4())
         suffix = uuid.uuid4().hex
         {{aggregate}}_actions_service = restate.Service(f"{{Aggregate}}Actions{suffix}")
         {{aggregate}}_orchestrator_workflow = restate.Workflow(f"{{Aggregate}}Orchestrator{suffix}")
@@ -70,7 +70,7 @@ class TestRestateHttp{{Aggregate}}OrchestratorRelay:
 
             {{conduct}}_response = await dispatchers.RestateHttp{{Aggregate}}OrchestratorRelay(
                 os.environ["{{ingress_env}}"], restate_{{conduct}}
-            ).run_{{conduct}}(relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}}))
+            ).run_{{conduct}}(relays.{{Conduct}}Request({{#record_fields}}{{field}}={{#is_identity}}workflow_key{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}}))
             invoked = await admin.post(
                 "/query",
                 headers={"accept": "application/json"},
@@ -80,10 +80,10 @@ class TestRestateHttp{{Aggregate}}OrchestratorRelay:
                 },
             )
 
-            assert {{conduct}}_response == relays.{{Conduct}}Response({{identity}}={{identity}})
+            assert {{conduct}}_response == relays.{{Conduct}}Response({{identity}}=workflow_key)
             assert [
                 (row["target_service_key"], row["invoked_by"], row["completion_result"]) for row in invoked.json()["rows"]
-            ] == [({{identity}}, "ingress", "success")]
+            ] == [(workflow_key, "ingress", "success")]
         finally:
             if registered.is_success:
                 await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})

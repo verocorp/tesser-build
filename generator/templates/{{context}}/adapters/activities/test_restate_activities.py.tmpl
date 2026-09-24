@@ -35,7 +35,7 @@ class Fake{{Aggregate}}ApplicationClient(client.{{Aggregate}}ApplicationClient):
 class TestRestate{{Record}}:
 
     async def test_restate_serves_{{record}}_and_a_call_made_with_its_handler_reaches_the_application_client(self) -> None:
-        {{identity}} = str(uuid.uuid4())
+        workflow_key = str(uuid.uuid4())
         {{aggregate}}_actions_service = restate.Service(f"{{Aggregate}}Actions{uuid.uuid4().hex}")
         fake_{{aggregate}}_application_client = Fake{{Aggregate}}ApplicationClient()
         restate_{{record}} = activities.Restate{{Record}}({{aggregate}}_actions_service, fake_{{aggregate}}_application_client)
@@ -67,11 +67,11 @@ class TestRestate{{Record}}:
 
             async with httpx.AsyncClient(base_url=os.environ["{{ingress_env}}"], timeout=30.0) as async_client:
                 {{record}}_response = await restate_client.Client(async_client).service_call(
-                    restate_{{record}}.handler, relays.{{Record}}Request({{#record_fields}}{{field}}={{#is_identity}}{{field}}{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
+                    restate_{{record}}.handler, relays.{{Record}}Request({{#record_fields}}{{field}}={{#is_identity}}workflow_key{{/is_identity}}{{^is_identity}}{{sample}}{{/is_identity}}{{comma}}{{/record_fields}})
                 )
 
-            assert {{record}}_response == relays.{{Record}}Response({{identity}}={{identity}})
-            assert [recorded.{{identity}} for recorded in fake_{{aggregate}}_application_client.recorded] == [{{identity}}]
+            assert {{record}}_response == relays.{{Record}}Response({{identity}}=workflow_key)
+            assert [recorded.{{identity}} for recorded in fake_{{aggregate}}_application_client.recorded] == [workflow_key]
         finally:
             if registered.is_success:
                 await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
