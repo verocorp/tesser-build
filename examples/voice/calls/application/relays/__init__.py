@@ -43,6 +43,12 @@ from calls.application.relays.call_orchestrator_signal_relay import (
 from calls.application.relays.call_orchestrator_signal_relay import (
     CallOrchestratorSignalRelay as CallOrchestratorSignalRelay,
 )
+from calls.application.relays.call_orchestrator_signal_relay import (
+    PERSON_JOINED_PROMISE as PERSON_JOINED_PROMISE,
+)
+from calls.application.relays.call_orchestrator_signal_relay import (
+    PERSON_TURN_COMPLETED_PROMISE as PERSON_TURN_COMPLETED_PROMISE,
+)
 from calls.application.relays.dialing_actions_relay import DialingActionsRelay as DialingActionsRelay
 from calls.application.relays.dialing_actions_relay import DialPersonRequest as DialPersonRequest
 from calls.application.relays.dialing_actions_relay import DialPersonRequestSnapshot as DialPersonRequestSnapshot

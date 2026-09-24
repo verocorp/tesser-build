@@ -1,161 +1,228 @@
-# Application-service types — orchestrators, actions, relays, runners, runtimes
+# Application-service types — orchestrators, actions, relays, activities, workflows, dispatchers
 
 Status: **RULED, 2026-09-11 (Chris); the dependency shape re-ruled
-2026-09-22.** The section immediately below is the convention. Everything from "The three application kinds" onward is the
+2026-09-22; the adapter kinds re-ruled 2026-09-23.** The section immediately
+below is the convention. Everything from "The three application kinds" onward is the
 2026-08-29 record that produced it and is **historical**: it is kept because it
 carries provenance that cannot be reconstructed — the fifteen codex challenge
 findings and which were taken, the survey of seven orchestrators in
 `~/workspace/flow`, the package names considered and rejected, and the two
 options the job-context ruling chose between. Read it for *why*, never for
-*what*. Where the two disagree, this section wins; the tree
-(`examples/durable-execution/`, `examples/voice/`, the generator's templates) and
+*what*. Where the two disagree, this section wins; `examples/voice/` and
 `skills/tesser-build/python.md#orchestrators-actions-relays` are the spec.
+`examples/durable-execution/`, `examples/minimal/` and the generator's
+templates have not migrated yet; see **Trees not yet migrated** below.
 
-## The ruling, 2026-09-11 — the word "job" goes
+## The convention, 2026-09-23
 
 There is no `ts.Job`, no `ts.JobContext`, no `adapters/jobs/` package, and no
-job context threaded as the leading parameter of an action-port call. Three
-kinds replace all of it.
+job context threaded as the leading parameter of an action-port call (the
+2026-09-11 ruling). Three application kinds and four adapter kinds replace all
+of it, and no call site in Python addresses a handler by a written string.
 
 | kind | base | lives in | built | depends on | reached through |
 |---|---|---|---|---|---|
-| relay | `ts.Relay` (`tesser.application.Relay`) | `application/relays/`, one per module, named for its far side, with the messages it speaks and a snapshot for each | declared, not built — it is a protocol | nothing | a service, through an ingress runner; an orchestrator, through an in-invocation runner |
-| workflow | `ts.Workflow` (`tesser.application.Workflow`) | `application/client/`, beside the orchestrator's application client it yields, generic in the engine's context (`CallWorkflow[C]`) | declared, not built — it is a protocol | the application client beside it | a runtime, which binds the context type (`client.CallWorkflow[restate.WorkflowContext]`) |
-| runner | `ts.Runner` (`tesser.adapters.Runner`) | `adapters/runners/` | an ingress runner and a workflow runner once, by the component; an invocation runner per invocation, by the workflow runner in its module | the relays; a workflow runner also the orchestrators | whoever holds the relay or workflow it implements |
-| runtime | `ts.Runtime` (`tesser.adapters.Runtime`) | `adapters/runtimes/` | once, by the component, handed the application clients and workflows | the application client (its clients and workflows) and the relays | the engine, and the host that mounts what it registers |
+| relay | `ts.Relay` (`tesser.application.Relay`) | `application/relays/`, one per module, named for its far side, with the messages it speaks, a snapshot for each, and the names of the promises it awaits as constants | declared, not built — it is a protocol | nothing | a service or an orchestrator, through a dispatcher |
+| activity | `ts.Activity` (`tesser.adapters.Activity`) | `adapters/activities/` | once, by the component, handed a `restate.Service` and an application client | the application client and the relays | the dispatcher that holds it, through its `.handler` |
+| workflow | `ts.Workflow` (`tesser.adapters.Workflow`) | `adapters/workflows/`, beside the dispatchers it builds per invocation | once, by the component, handed a `restate.Workflow` and the activities | the orchestrators, the relays, and the activities | the dispatcher that holds it, through its `.handler` |
+| signal | `ts.Signal` (`tesser.adapters.Signal`) | `adapters/dispatchers/` | once, by the component, handed the workflow's `restate.Workflow` | the relays | the dispatcher that holds it, through its `.handler` |
+| dispatcher | `ts.Dispatcher` (`tesser.adapters.Dispatcher`) | `adapters/workflows/` (inside an invocation) or `adapters/dispatchers/` (over HTTP) | inside an invocation, per invocation by the workflow; over HTTP, once by the component | the relays, and the activity, workflow, or signal instances it calls | whoever holds the relay it implements |
 
-**One relay kind; lifetime is not a property of the protocol.** The two
-action relays, `OrderActionsRelay` and `PurchaseActionsRelay`, once written as
-`ts.JobContext`, are `ts.Relay` now, like the orchestrator relays beside them. The proof that lifetime does
-not belong on the protocol is in the tree: `OrderOrchestratorRelay` has two
-implementations — `RestateIngressOrderOrchestratorRelay`, built once at wiring and
-entering through the engine's ingress, and `RestateInvocationOrderOrchestratorRelay`,
-built per invocation by `RestatePurchaseWorkflow` and running the workflow as a
-child — and the orchestrator holding one cannot tell which it has.
+**The call path, reduced to its essentials** (Chris, 2026-09-23). Every
+durable path in the tree is some walk through these lines; relays,
+dispatchers, application clients, and serdes are how each line is carried,
+not extra steps.
+
+```
+tesser.Service.operation            -> restate.Client.operation
+restate.Client.operation            ⇒  restate.Workflow.main | restate.Workflow.handler
+restate.Workflow.main(wf_ctx)       -> tesser.Orchestrator(wf_ctx) -> tesser.Orchestrator.operation
+tesser.Orchestrator.operation       -> wf_ctx.promise(name).value
+restate.Workflow.handler(shared)    -> shared.promise(name).resolve
+tesser.Orchestrator.operation       -> wf_ctx.operation
+wf_ctx.operation                    ⇒  restate.Service.handler | restate.Workflow.main
+restate.Service.handler(ctx)        -> tesser.Action.operation
+tesser.Action.operation             -> tesser.Port.operation
+```
+
+`->` is a Python call, held by imports, protocols, and constructors, so the
+type checker sees both ends. `⇒` crosses the engine, and so does the pair
+`promise(name).value` / `promise(name).resolve`, which meet only in the
+engine's journal. The engine addresses these three links by name; Python
+gets each name from the object that registered it:
+
+| link | addressed by | carried in the tree by |
+|---|---|---|
+| `restate.Client.operation ⇒ …` | service, key, handler | a dispatcher over HTTP: `restate.client.Client(httpx.AsyncClient(...)).workflow_call(self._restate_conduct_call.handler, key=..., arg=...)` |
+| `wf_ctx.operation ⇒ …` | service, handler | a dispatcher inside the invocation: `wf_ctx.service_call(self._restate_record_call.handler, request)` |
+| `.value` ↔ `.resolve` | promise name, within one workflow key | a relays constant (`PERSON_JOINED_PROMISE`), read by the dispatcher's `await_person_joined` and by the signal `person_joined` |
+
+The SDK reads the service and handler name off the registered handler object
+it is passed, and the component writes each container's name once, as a
+literal. So a call names what it calls by holding the Python object that
+registered it, and the type checker sees both ends of every line.
+
+Separated this way, the dependencies form a straight chain with no loop.
+Each row holds the row above it; a row never holds a row below.
+
+| row | kind | package | constructed with | registers or calls |
+|---|---|---|---|---|
+| action handler | `ts.Activity` | `activities/` | `restate.Service`, application client | registers `record_call` on `CallActions`; calls the application client |
+| workflow `main` | `ts.Workflow` | `workflows/` | `restate.Workflow`, the activities | registers `conduct_call` on `CallOrchestrator`; builds the orchestrator per invocation |
+| invocation dispatcher | `ts.Dispatcher` | `workflows/` | `wf_ctx`, the activities it calls | `wf_ctx.service_call(activity.handler, ...)`, `wf_ctx.promise(CONSTANT).value()` |
+| shared handler | `ts.Signal` | `dispatchers/` | the workflow's `restate.Workflow` | registers `person_joined` on `CallOrchestrator`; resolves `promise(CONSTANT)` |
+| HTTP dispatcher | `ts.Dispatcher` | `dispatchers/` | `restate_url`, the workflow, the signals | `workflow_call(workflow.handler, ...)` or `workflow_call(signal.handler, ...)` |
+| service | `ts.ApplicationService` | `application/` | the relay the HTTP dispatcher implements | `relay.run_conduct_call(...)` |
+
+Notes on the lines, from the code and the Restate Python SDK (1.0.4):
+
+- `wf_ctx` is `restate.WorkflowContext` and exists only in a workflow's `main`
+  handler. A shared handler gets `restate.WorkflowSharedContext`, and a
+  service handler gets a plain `restate.Context`, which the actions handlers do
+  not use.
+- The orchestrator is not handed `wf_ctx` itself: the workflow builds it over
+  dispatchers that each hold `wf_ctx`. The line is written
+  `tesser.Orchestrator(wf_ctx)` because that is the dependency once the
+  dispatchers are taken out.
+- `wf_ctx.operation ⇒ restate.Workflow.main` is one orchestrator starting
+  another (`examples/durable-execution/`: `pay_for_order` reaching
+  `OrderOrchestrator.confirm_order`).
+- An action is reached only through the engine and never uses a relay; it
+  uses one port.
+- A durable promise can be resolved only from inside a handler of its own
+  workflow: the SDK exposes `promise(...)` on `WorkflowContext` and
+  `WorkflowSharedContext` only, and the HTTP client offers only calls and
+  sends. That is why an outside event goes `restate.Client.operation ⇒
+  restate.Workflow.handler -> .resolve` instead of resolving the promise
+  directly, and why a signal registers on the container its workflow's `main`
+  is registered on. A resolved promise cannot be resolved again.
+- A dispatcher over HTTP opens an `httpx.AsyncClient` per call, as Restate's
+  documentation does. One long-lived client crossed event loops in the LiveKit
+  worker, and calls waiting on the workflow's `main` held every connection
+  while the signals waited for one.
+
+**One relay kind; lifetime is not a property of the protocol.** A relay
+implemented over HTTP from outside the engine and one implemented inside an
+invocation are the same `ts.Relay`, and the code holding one cannot tell which
+it has. `examples/durable-execution/` still shows it with two implementations
+of `OrderOrchestratorRelay` (one built once at wiring, one built per
+invocation that runs the workflow as a child), in the older runner shape.
 
 **A relay is named for its far side and carries any number of operations**
-(Chris, 2026-09-22, reversing the 2026-09-14 rule that a relay carried one
-operation and took that operation's name). A relay method is
-`<mode>_<operation>` and the mode is the act, so the class name is free to say
-what sits on the other side of the engine: the orchestrator a `run_`/`start_`
-handler builds and calls, or the class of actions behind the application
-client it calls. `CallOrchestratorRelay` carries `run_conduct_call`,
-`run_person_joined`, and `run_person_turn_completed` because all three are
-handlers on the same workflow; `OrderActionsRelay` carries `run_price_product`
-because that handler reaches `OrderActions`. Every operation on one relay must
-derive the same far side. The 2026-09-14 reason — that a name for what sits
-behind a relay is a pattern word — was written when the class name was the only
-place the act could live; with the act on the method it no longer holds.
+(Chris, 2026-09-22). A relay method is `<mode>_<operation>` and the mode is
+the act, so the class name is free to say what sits on the other side of the
+engine. The far side is what its dispatchers reach through a handler: an
+activity's class of actions, a workflow's orchestrator, or a signal's
+workflow. `CallOrchestratorRelay` carries `run_conduct_call`,
+`run_person_joined`, and `run_person_turn_completed` because the first reaches
+the workflow whose orchestrator is `CallOrchestrator` and the other two reach
+signals on that same workflow; `CallActionsRelay` carries `run_record_call`
+because that handler's activity calls `CallActions`. Every operation on one
+relay must derive the same far side.
 
 **There are three calling modes, and a signal relay is the one that awaits.**
 `start_` sends and does not wait, `run_` sends and waits for the answer, and
 `await_` sends nothing and waits for the far side's report — a durable promise
-the far side's shared handler resolves. `await_X` reads the promise named `X`,
-which the handler named `X` resolves, which `run_X` invokes: one name across
-the crossing. A relay that awaits is named `<FarSide>SignalRelay` and carries
-only `await_` operations; no other relay carries one. Nothing outside an
-invocation can read a durable promise, so a signal relay has an invocation
-runner only, while a plain relay has an ingress runner and may have an
-invocation runner — and a Protocol cannot be partially implemented, so the two
-must not mix. `examples/voice/` is the worked case:
-`CallOrchestratorSignalRelay` carries `await_person_joined` and
-`await_person_turn_completed`, and `RestateInvocationCallOrchestratorSignalRelay`
-is its only runner.
+a signal resolves. `await_X` reads the promise whose name is the relays
+constant equal to `"X"`, which the signal named `X` resolves, which `run_X`
+invokes: one name, written once in `application/relays/`, read by both ends.
+A relay that awaits is named `<FarSide>SignalRelay` and carries only `await_`
+operations; no other relay carries one. Nothing outside an invocation can read
+a durable promise, so a signal relay is implemented only inside an invocation,
+and a Protocol cannot be partially implemented, so the two must not mix.
+`examples/voice/` is the worked case: `CallOrchestratorSignalRelay` carries
+`await_person_joined` and `await_person_turn_completed`, and
+`RestateInvocationCallOrchestratorSignalRelay` is its only implementation.
 
-**Lifetime is carried by placement instead.** A runner may hold an
-invocation's engine context; a gateway and a repository never do. The old rule
-said the same thing by naming the job context; the analyzer cannot name an
-engine context (a gateway legitimately holds foreign SDK objects), so the
-threading rule is dropped rather than re-keyed on something the analyzer would
-have to guess at. A port method takes exactly one `ts.Request`, with nothing
-before it.
+**Lifetime is carried by placement instead.** A dispatcher inside an
+invocation may hold that invocation's engine context; a gateway and a
+repository never do. A port method takes exactly one `ts.Request`, with
+nothing before it.
 
-**A runner reaches its far side by literal name** (2026-09-22). A `run_`
-operation is `generic_call(<far side>, <operation>, <snapshot bytes>)`, a
-`start_` operation is `generic_send` with the same arguments, and an `await_`
-operation reads `promise("<operation>", serde=BytesSerde())`: the service is
-the relay's name without `Relay`, and the handler and the promise are the
-operation. The runner serializes the request and deserializes the answer
-through the relay's snapshots. An ingress runner makes the same calls through
-the Restate client, and states `headers={"content-type": "application/json"}`,
-because Restate's ingress answers 400 to a call by name without one. The
-names are string literals so the analyzer can read them: it checks each
-against the relay's far side, the operation, and the mode (`run_` must wait,
-`start_` must not). A runner imports no runtime, so the runtime's handler
-object is no longer how a runner finds its target; the name is.
+**A caller holds the callee's instance** (2026-09-23). An activity, a
+workflow, and a signal each register their handler in `__init__` on the
+container the component hands them and keep it as `self.handler`. A
+dispatcher is constructed with the instances it calls and passes their
+`.handler` to the SDK's typed call. The SDK serializes through the serdes
+bound at registration, so a dispatcher names a snapshot only where it reads a
+promise. Because the caller imports the callee's package, **imports go one
+way: dispatchers → workflows → activities.** A dispatcher's name ends in the
+relay it implements (`RestateInvocationCallActionsRelay`,
+`RestateHttpCallOrchestratorRelay`), and its public methods are exactly the
+relay's.
 
-**The orchestrator is reached through its application client, from a
-workflow** (2026-09-22). `application/client/<m>.py` declares the
-orchestrator's application client (`CallOrchestratorApplicationClient(ts.Client)`)
-and, beside it, a workflow protocol generic in the engine's context:
+**The analyzer derives every name from those references** (TB085). (a) A
+relay is named for the far side its dispatchers reach through
+`self._x.handler`. (b) `run_X`/`start_X` passes the handler `def X`, with no
+differing name, positional or `name=`. (c) `run_` waits (`*_call`) and `start_` does not
+(`*_send`); an activity's handler is reached with `service_*`, a workflow's or
+a signal's with `workflow_*`. (d) `await_X` and the signal named `X` use a relays constant equal
+to `"X"`. (e) Each engine container is named for its far side, as a literal, positional or `name=`.
+(f) Every activity, workflow, and signal is reached by a dispatcher, so the
+engine holds no registration nobody calls. (g) An activity, workflow, or signal
+registers exactly one handler, the one it keeps as `self.handler`: any function
+in `__init__`, at any depth, decorated from or passed to `.handler(...)`/`.main(...)`
+on a `restate` container parameter or the attribute holding one. (h) A handler
+name is unique in its engine container, because the SDK keeps one handler per
+name. (i) A dispatcher never calls `generic_call`/`generic_send`. (j) A
+`workflows/` module imports no HTTP client (`restate.client`, `httpx`,
+`aiohttp`, `requests`, `urllib.request`, `urllib3`) and reads neither
+`restate.create_client` nor `restate.RestateClient` (TB060): a call from inside
+an invocation goes through its context, where the engine journals it, not over
+HTTP, where it runs again on every replay. (k) An activity's handler calls its
+application client's method named for the operation. (l) A signal's handler
+calls `.promise(...).resolve(...)`. (m) A relays constant is assigned once,
+because the analyzer reads one value and Python keeps the last. A signal relay's name is derived
+today only through a `run_` operation that reaches its signal; an
+`await_`-only relay is not derived yet (`TODOS.md`).
 
-```python
-class CallWorkflow[C](ts.Workflow, typing.Protocol):
-
-    def invocation(self, context: C, /) -> typing.AsyncContextManager[CallOrchestratorApplicationClient]: ...
-```
-
-The application never names the engine; the runtime binds it by holding
-`client.CallWorkflow[restate.WorkflowContext]`. This is the store's shape: a
-`ts.Store` sits beside the repository its `transaction()` yields, and a
-`ts.Workflow` sits beside the client its `invocation()` yields. A client
-module declares one `ts.Client` and at most one `ts.Workflow`, the one that
-yields that client. An application client fronts the actions class in
-`application/<m>.py` or the orchestrator in `application/orchestrators/<m>.py`,
-and an orchestrator's public methods are exactly its client's, so an
-orchestrator's messages are relay messages.
-
-The implementation is a runner: `RestateCallWorkflow(ts.Runner)` in
-`adapters/runners/restate_call_workflow.py` opens an invocation by building
-the orchestrator over that invocation's runners, which are declared in the
-same module and not exported. `PostgresCallStore` and the
-`PostgresCallRepository` it yields share a module for the same reason: the
-inner object exists only for the outer one, so it is tested through it, and
-the module's sibling test drives an invocation. A context with two
-orchestrators has two workflow modules (`restate_order_workflow.py`,
-`restate_purchase_workflow.py`), since they share no invocation runner.
-
-**A runtime registers; it does not build.** It holds the application
-clients and the workflows it is handed and constructs no orchestrator, runner,
-or other adapter (it still builds its engine registrations, its serdes, and the
-messages its shared handlers answer with). No runtime translates a `DomainError`
-into the engine's terminal error today; one is retried under the registration's
-retry policy. A main handler opens the invocation and calls the operation:
+**The workflow builds the orchestrator.** Its `main` handler constructs the
+orchestrator over that invocation's dispatchers and calls the operation:
 
 ```python
-async with call_workflow.invocation(restate_workflow_context) as call_orchestrator_application_client:
-    return await call_orchestrator_application_client.conduct_call(conduct_call_request)
+return await orchestrators.CallOrchestrator(
+    RestateInvocationDialingActionsRelay(restate_workflow_context, restate_dial_person, restate_hang_up),
+    RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context),
+    RestateInvocationSpeechActionsRelay(restate_workflow_context, restate_say_utterance),
+    RestateInvocationCallActionsRelay(restate_workflow_context, restate_record_call),
+).conduct_call(conduct_call_request)
 ```
 
-It still exposes each handler as `<operation>_handler`. It invokes no relay
-itself, and **every service, handler, and promise it registers must be one a
-runner of its context reaches**: a runtime has this context on both ends, so
-a callback only the outside world invokes is a handler, not a runtime.
-Registration and promise names are literals for the same reason a runner's
-are. The component constructs the workflow runner and hands it to the runtime
-(`runners.RestateCallWorkflow()`).
+Those dispatchers are declared in the workflow's module, since they exist
+only for it and are tested through it. An orchestrator's public methods are
+exactly those of the application client of its name in
+`application/client/`, so its messages are relay messages. An activity
+reaches a class of actions only through that class's application client,
+which is the only way anything outside the application reaches it.
 
-**Open, 2026-09-22.** The workflow runner names the orchestrator
-implementation directly (`orchestrators.CallOrchestrator(...)`); that is
-accepted for now and not settled (Chris: "we still haven't uncovered the right
-architecture"). `examples/minimal/` no longer shows the durable kinds: its
-inline engine had no invocation context and its runners called the runtime's
-handlers directly, which the closed import rule forbids; `TODOS.md` carries
-the plan to restore it over an in-process engine. An `await_` operation's
-request is read by nothing in its runner.
+**No adapter translates a `DomainError`** into the engine's terminal error
+today; one is retried under the registration's retry policy. A payload the
+snapshot cannot parse is treated the same way: the engine-side serde turns
+only an empty body into a terminal 400, and anything else the snapshot raises
+is retried and then pauses the invocation under the retry policy.
+
+**Open, 2026-09-23.** The workflow names the orchestrator implementation
+directly (`orchestrators.CallOrchestrator(...)`); that is accepted for now and
+not settled (Chris: "we still haven't uncovered the right architecture").
+Nothing in voice holds the orchestrator's application client, which is
+declared only because TB081 has the orchestrator mirror it. An `await_`
+operation's request is read by nothing in its dispatcher. The workflows test
+sits below the signals, so it cannot resolve the promises: it asserts the
+journal up to the first promise wait, and the dispatchers test runs the whole
+call.
 
 **A relay message may carry a domain object, and that is not a widening of the
 no-outward-representation line.** A relay is *inward*: it crosses the engine
 inside one context and is never operated through the client. A `ts.Client`
 faces outsiders and a `ts.Port` faces a foreign system, so those stay
 primitives-only; a relay has us on both ends, so
-`ConfirmOrderRequest(order: domain.Order)` is legal and the order comes
-back whole. A bare bool and a union are findings on a relay message too.
+`RecordCallRequest(call: domain.Call)` is legal and the call comes back whole.
+A bare bool and a union are findings on a relay message too.
 
-**Who may invoke a relay.** A service, through an ingress runner, and an
-orchestrator, through an in-invocation runner. Never an action — an action has
-one port and one call on it, and a relay inside an action is the engine calling
-the engine. Never a handler, never a runtime, never a component. An actions
+**Who may invoke a relay.** A service, through a dispatcher over HTTP, and an
+orchestrator, through a dispatcher inside the invocation. Never an action — an
+action has one port and one call on it, and a relay inside an action is the
+engine calling the engine. Never a handler, never a component. An actions
 class depends only on ports and the stores that yield them; a service and an
 orchestrator may depend on ports, relays, and stores; nothing else may hold a
 relay.
@@ -174,37 +241,56 @@ constructor call. The only calls a snapshot may name are `json.dumps`,
 `.get` with one argument, the message and spec constructors, and another
 snapshot's `serialize`/`deserialize`. A second branch, a loop that computes,
 `.get` with a fallback, arithmetic, and any domain method are findings. The
-engine-side serde (`tesser.adapters.Serde`, in `adapters/runtimes/`) keeps its
-narrower form: one guard on the empty payload, then delegation to the snapshot.
+engine-side serde (`tesser.adapters.Serde`, in the module of the activity,
+workflow, or signal that binds it) keeps its narrower form: one guard on the
+empty payload, then delegation to the snapshot.
 
 **Reach.** An adapters module lives in `handlers/`, `gateways/`,
-`repositories/`, `runners/`, or `runtimes/` and holds the kind its package
-names; only a runtimes module holds a runtime beside the serdes it binds.
-`handlers/` → the context client. `runners/` → `application.relays`,
-`application.orchestrators`. `runtimes/` → `application.client`,
-`application.relays`. `gateways/`, `repositories/` → `application.ports`.
-**No adapters kind package imports another**: a runner finds its target by
-name, and a runtime is handed its workflows, so neither needs the other's
-module. `application/relays/` is
-imported by the application (services, orchestrators, and the application
-client modules for the messages they speak), by `adapters/runners/`, and by
-`adapters/runtimes/`, and by nothing else. **Only a runtime imports the
-application client**, because an action is reachable only through the engine,
-and **only a runner imports the orchestrators**, because the workflow runner
-that builds one lives beside that invocation's runners. A host reaches a context only through its handlers and its
-runtimes. A component publishes only its client, typed as its `ts.Client`, and
-its runtimes, each typed as a `ts.Runtime`.
+`repositories/`, `activities/`, `workflows/`, or `dispatchers/` and holds the
+kinds its package names. `handlers/` → the context client. `gateways/`,
+`repositories/` → `application.ports`. `activities/` → `application.client`,
+`application.relays`. `workflows/` → `application.orchestrators`,
+`application.relays`, `activities`. `dispatchers/` → `application.relays`,
+`workflows`. Dispatchers → workflows → activities is the one order in which
+adapters kind packages import each other; every other pair still may not.
+**Only an activity imports the application client**, because an action is
+reachable only through the engine, and **only a workflow imports the
+orchestrators**, because it builds one per invocation. Each of the three
+packages is one module in voice: a module imports no sibling module, and the
+HTTP dispatcher names the signal classes beside it.
+
+**What the component builds and publishes.** The component builds the
+`restate.Service` and `restate.Workflow` containers, naming each once as a
+literal, then builds activities → workflow → signals → dispatcher → services,
+each handed what the one before it built. It publishes `client`, typed as its
+`ts.Client`, and each attribute assigned from an engine registration
+constructor (`restate.Service`, `restate.Workflow`, `restate.VirtualObject`)
+that it hands to an activity, workflow, or signal constructor; `client` is
+never such an attribute (TB081). The host binds the published containers
+(`restate.app([...])`) and knows nothing else about the engine.
 
 **What transfers from the service body rules to the adapter kinds.** Of the
 four call-then-map rules (skill ruling 2026-08-30), exactly one costs nothing
 on the trees as they stand, so exactly one ships: **a gateway, a repository,
-and a runner inline their logic** — no delegation to a private method or a
+and a dispatcher inline their logic** — no delegation to a private method or a
 module function beside it. The other three were measured over all eleven app
 trees and are not implemented: "name what you compute" would take 79 sites,
 "decide nothing in the open body" 107 (40 of them in `layout/`'s single
 `FilesystemRepoReader.read` and 35 in `tessercheck-py/`'s two filesystem
 repositories), and "one call on the backend per method" 1. "An adapter raises
 no domain kind" was rejected outright. The numbers are in `TODOS.md`.
+
+**Trees not yet migrated.** `examples/durable-execution/` and the generator's
+templates still use the older kinds, and `examples/minimal/` shows none of the
+durable kinds until an in-process engine restores them. The older kinds' rules
+still run: a runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its far side by literal
+service and handler name (`generic_call`/`generic_send`, `promise("X")`), and a
+workflow runner implements `ts.DeprecatedWorkflow` (the application-side
+protocol formerly called `ts.Workflow`, declared beside an orchestrator's
+application client and yielding it per invocation); a runtime (`ts.Runtime`,
+`adapters/runtimes/`) registers the engine's handlers under literals and may
+register only what a runner of its context reaches. TB085 checks those
+literals against the relay. The migration is in `TODOS.md`.
 
 ---
 

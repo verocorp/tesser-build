@@ -99,31 +99,41 @@ the application-service types (a relay, `ts.Relay` in `application/relays/`,
 is the protocol whose far side is this same context across a
 durable-execution engine, declared with the messages it speaks and a
 snapshot — `ts.Serde` — for each; one relay kind, because lifetime is not a
-property of the protocol. It is named for its far side — the orchestrator or
-class of actions the runtime handler of each operation it carries reaches —
+property of the protocol. It is named for its far side — the class of
+actions, orchestrator, or workflow its dispatchers reach through a handler —
 and carries any number of operations, each written `start_`, `run_`, or
 `await_` plus the operation; a relay that awaits a durable promise is named
-`<FarSide>SignalRelay` and carries only `await_` operations. An orchestrator, `ts.Orchestrator` in
-`application/orchestrators/`, depends on relays and action ports and is
-reached, like a class of actions, only through a `tesser.application.Client`
-in `application/client/`; beside that client sits a `ts.Workflow` protocol,
-generic in the engine's context (`class CallWorkflow[C](ts.Workflow,
-typing.Protocol)`), whose one `invocation(context)` yields it. A class of
-actions, `ts.Actions`, has exactly one port and one call on it per method and
-never holds a relay. A runner, `ts.Runner` in `adapters/runners/`, is an
-implementation of a relay or of a workflow: a relay runner reaches its far
-side by literal name (`generic_call("CallActions", "record_call", ...)`, the
-service named for the relay's far side and the handler named for the
-operation; `await_` reads the promise named for the operation); a workflow
-runner builds the orchestrator over that invocation's runners, which live in
-its module. A runtime, `ts.Runtime` in `adapters/runtimes/`, is the engine's
-callback surface — it holds application clients and workflows, constructs
-no orchestrator, runner, or other adapter, and every service, handler, and
-promise it registers must be one a runner of its context reaches. No adapters
-kind package imports another; only a runner imports the orchestrators, and
-only a runtime the application client. Reach is carried by the
-adapter kind package and a component publishes only its client and its
-runtimes — `TB041`/`TB052`/`TB060`/`TB081`/`TB082`/`TB085`;
+`<FarSide>SignalRelay` and carries only `await_` operations, and the
+promise's name is a constant in `application/relays/`. An orchestrator,
+`ts.Orchestrator` in `application/orchestrators/`, depends on relays and
+action ports; a class of actions, `ts.Actions`, has exactly one port and one
+call on it per method, never holds a relay, and is reached only through a
+`tesser.application.Client` in `application/client/`. Four adapter kinds
+carry the engine, and no call site writes a service or handler name: an
+activity, `ts.Activity` in `adapters/activities/`, registers one action's
+handler into the engine container it is handed and keeps it as
+`self.handler`; a workflow, `ts.Workflow` in `adapters/workflows/`, registers
+the workflow's `main` and builds the orchestrator for each invocation; a
+signal, `ts.Signal` in `adapters/dispatchers/`, registers a shared handler
+that resolves the workflow's promise; a dispatcher, `ts.Dispatcher` in
+`workflows/` or `dispatchers/`, implements a relay by holding the callee's
+instance and passing its `.handler` to the SDK's typed call
+(`wf_ctx.service_call(...)` inside an invocation, `workflow_call(...)` over
+HTTP from outside). Imports go one way, dispatchers → workflows →
+activities; only an activity imports the application client and only a
+workflow the orchestrators. The component builds the engine containers and
+publishes them beside its client, then builds activities → workflow →
+signals → dispatcher → services; TB085 derives every name from those typed
+references, and holds a registration class to one registered handler that
+performs its operation (an activity calls its application client, a signal
+resolves its promise), a container to unique handler names, a dispatcher to no
+engine call by name and to the call kind of its target, and a relays constant
+to one assignment; a `workflows/` module imports no HTTP client and reads no
+`restate` client factory (TB060), because a call from inside an invocation
+goes through its context, where the engine journals it.
+`ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`,
+`adapters/runners/` and `adapters/runtimes/` remain in trees not yet migrated
+— `TB041`/`TB052`/`TB060`/`TB070`/`TB081`/`TB082`/`TB085`;
 `docs/design-app-service-types.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which
 convention has a doc, an example, and a checker is `roadmap/ROADMAP.md`.

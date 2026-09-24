@@ -10,10 +10,10 @@ import calls.component as calls_component
 
 
 @ts.helper
-def calls_spec(storage: str = "postgres://a@b/calls", ingress: str = "http://localhost:8080") -> calls_component.Spec:
+def calls_spec(storage: str = "postgres://a@b/calls", restate_url: str = "http://localhost:8080") -> calls_component.Spec:
     return calls_component.Spec(
         storage=storage,
-        ingress=ingress,
+        restate_url=restate_url,
         livekit_url="ws://livekit",
         livekit_api_key="key",
         livekit_api_secret="secret",
@@ -28,7 +28,7 @@ class FakeConfigRepository(app.AppConfigRepository):
         return app.AppConfig(
             app.Spec(
                 calls_component.Config(
-                    calls_spec(storage=os.environ["CALLS_STORAGE"], ingress=os.environ["RESTATE_INGRESS"])
+                    calls_spec(storage=os.environ["CALLS_STORAGE"], restate_url=os.environ["RESTATE_URL"])
                 )
             )
         )
@@ -50,7 +50,7 @@ class TestEnvConfigRepository:
         app_config = app.EnvConfigRepository().get()
 
         assert app_config.calls.storage == os.environ["CALLS_STORAGE"]
-        assert app_config.calls.ingress == os.environ["RESTATE_INGRESS"]
+        assert app_config.calls.restate_url == os.environ["RESTATE_URL"]
         assert app_config.calls.livekit_url == os.environ["LIVEKIT_URL"]
         assert app_config.calls.livekit_agent_name == os.environ["LIVEKIT_AGENT_NAME"]
 

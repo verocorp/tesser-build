@@ -1,30 +1,38 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.component as ts
 import livekit.api as livekit_api
 import livekit.rtc as livekit_rtc
+import restate
 
+import calls.adapters.activities as activities
+import calls.adapters.dispatchers as dispatchers
 import calls.adapters.gateways as gateways
 import calls.adapters.repositories as repositories
-import calls.adapters.runners as runners
-import calls.adapters.runtimes as runtimes
+import calls.adapters.workflows as workflows
 import calls.application as application
 import calls.client as client
 import pgdatabase.database as pgdatabase_database
+
+_RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
+    max_attempts=5, on_max_attempts="pause"
+)
 
 
 class Spec(ts.Spec):
     def __init__(
         self,
         storage: str,
-        ingress: str,
+        restate_url: str,
         livekit_url: str,
         livekit_api_key: str,
         livekit_api_secret: str,
         livekit_agent_name: str,
     ) -> None:
         self.storage = storage
-        self.ingress = ingress
+        self.restate_url = restate_url
         self.livekit_url = livekit_url
         self.livekit_api_key = livekit_api_key
         self.livekit_api_secret = livekit_api_secret
@@ -34,7 +42,7 @@ class Spec(ts.Spec):
 class Config(ts.Config):
     def __init__(self, spec: Spec) -> None:
         self.storage = spec.storage
-        self.ingress = spec.ingress
+        self.restate_url = spec.restate_url
         self.livekit_url = spec.livekit_url
         self.livekit_api_key = spec.livekit_api_key
         self.livekit_api_secret = spec.livekit_api_secret
@@ -68,17 +76,34 @@ class Calls(ts.Component):
 
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_call_store = repositories.PostgresCallStore(database)
-        self.restate_call_runtime: runtimes.RestateCallRuntime = runtimes.RestateCallRuntime(
-            application.CallActions(self._postgres_call_store),
-            application.DialingActions(
-                gateways.LivekitDialing(
-                    livekit_api.LiveKitAPI,
-                    config.livekit_url,
-                    config.livekit_api_key,
-                    config.livekit_api_secret,
-                    config.livekit_agent_name,
-                )
-            ),
+        self.call_actions_service: restate.Service = restate.Service(
+            "CallActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
+        )
+        self.dialing_actions_service: restate.Service = restate.Service(
+            "DialingActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
+        )
+        self.speech_actions_service: restate.Service = restate.Service(
+            "SpeechActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
+        )
+        self.call_orchestrator_workflow: restate.Workflow = restate.Workflow(
+            "CallOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
+        dialing_actions = application.DialingActions(
+            gateways.LivekitDialing(
+                livekit_api.LiveKitAPI,
+                config.livekit_url,
+                config.livekit_api_key,
+                config.livekit_api_secret,
+                config.livekit_agent_name,
+            )
+        )
+        restate_record_call = activities.RestateRecordCall(
+            self.call_actions_service, application.CallActions(self._postgres_call_store)
+        )
+        restate_dial_person = activities.RestateDialPerson(self.dialing_actions_service, dialing_actions)
+        restate_hang_up = activities.RestateHangUp(self.dialing_actions_service, dialing_actions)
+        restate_say_utterance = activities.RestateSayUtterance(
+            self.speech_actions_service,
             application.SpeechActions(
                 gateways.LivekitSpeech(
                     gateways.LivekitAgentRpc(
@@ -90,16 +115,25 @@ class Calls(ts.Component):
                     )
                 )
             ),
-            runners.RestateCallWorkflow(),
+        )
+        restate_conduct_call = workflows.RestateConductCall(
+            self.call_orchestrator_workflow,
+            restate_record_call,
+            restate_dial_person,
+            restate_hang_up,
+            restate_say_utterance,
+        )
+        restate_person_joined = dispatchers.RestatePersonJoined(self.call_orchestrator_workflow)
+        restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(self.call_orchestrator_workflow)
+        restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
+            config.restate_url,
+            restate_conduct_call,
+            restate_person_joined,
+            restate_person_turn_completed,
         )
         self.client: client.CallsClient = Calls.Client(
-            application.CallService(
-                runners.RestateIngressCallOrchestratorRelay(config.ingress),
-                self._postgres_call_store,
-            ),
-            application.CallEventsService(
-                runners.RestateIngressCallOrchestratorRelay(config.ingress)
-            ),
+            application.CallService(restate_http_call_orchestrator_relay, self._postgres_call_store),
+            application.CallEventsService(restate_http_call_orchestrator_relay),
         )
 
     async def close(self) -> None:

@@ -93,7 +93,7 @@ The rules that follow from it, each with its code:
   library, a dotted stdlib module — is imported under its first and last
   segments joined: a gateway in `alpha/` writes `import beta.client as
   beta_client`, `app/app.py` writes `import alpha.component as
-  alpha_component`, a runner writes `import restate.client as restate_client`,
+  alpha_component`, a dispatcher writes `import restate.client as restate_client`,
   and a domain module writes `import urllib.parse as urllib_parse`. The first
   segment is the distribution — the context or the library — and the last is
   the module; the segments between (`cloud` in `google.cloud.storage`, `ext`
@@ -260,7 +260,7 @@ the module-import rule exempts, so it costs nothing to add. The reason is
 mechanical: the analyzer reads annotations to decide what a class is, what a
 method takes, and what crosses a boundary, and a quoted annotation resolves to
 nothing — so `spec: 'TagSpec'` is not a spec, `-> 'Reply'` is not an outcome,
-and `runner: 'ts.Runner'` is not a runner. Quoting a type does not make
+and `dispatcher: 'ts.Dispatcher'` is not a dispatcher. Quoting a type does not make
 a rule pass; it makes the rule blind, which is why the quoting itself is what
 gets reported. Strings inside `typing.Literal[...]` are data, not types, and
 are left alone.
@@ -1102,51 +1102,51 @@ repo's silent-site metric in `docs/design-application-ports.md` — the enum is 
 union-free one that scores **zero** silent sites; a `found: bool` flag and a
 0-or-1 tuple each leave the reader silently wrong.
 
-## Orchestrators, actions, relays, runners, runtimes {#orchestrators-actions-relays}
+## Orchestrators, actions, relays, activities, workflows, dispatchers {#orchestrators-actions-relays}
 
 A workflow on a durable-execution engine (Restate, Temporal) adds three
-application kinds that are **not** application services, and two adapter kinds
-that carry the engine. The rules and the why are
-`docs/design-app-service-types.md`; the verified impl is
-`examples/durable-execution/`, with `examples/voice/` for the signal relay
-(`examples/minimal/` shows none of these kinds until an in-process engine
-restores them; `TODOS.md`).
+application kinds that are **not** application services, and four adapter
+kinds that carry the engine. The rules and the why are
+`docs/design-app-service-types.md`; the worked example is `examples/voice/`.
+`examples/durable-execution/`, `examples/minimal/` and the generator's
+templates still carry the older runner/runtime shape until they migrate
+(`TODOS.md`; see **Trees not yet migrated**, below).
 All of them keep the service body rules above (one `ts.Request` in, one
 `ts.Response` out, `match` only, mappers for every translation) — what differs
 is scope, reach, and what each may depend on.
+
+**The application side** names no engine.
 
 - **A relay** (`ts.Relay`, in `application/relays/`, one per module) is a
   protocol whose far side is this same context's own application code, reached
   across the engine. It is declared together with the `ts.Request`/`ts.Response`
   messages it speaks and a **snapshot** for each. There is one relay kind:
-  lifetime is not a property of the protocol. `OrderOrchestratorRelay` has two
-  implementations — one built once at wiring that enters through the engine's
-  ingress, one built per invocation by `RestatePurchaseWorkflow` that runs the
-  workflow as a child — and the orchestrator holding it cannot tell which it
-  has.
+  lifetime is not a property of the protocol — `CallOrchestratorRelay` is
+  implemented over HTTP from outside the engine, and a relay held by an
+  orchestrator is implemented inside an invocation, and the code holding
+  either cannot tell which it has.
   **It is named for its far side and carries any number of operations**
-  (TB085): the far side is the orchestrator the runtime handler of an operation
-  builds and calls, or the class of actions behind the application client that
-  handler calls, so `OrderOrchestratorRelay` and `OrderActionsRelay`. Every
+  (TB085): the far side is the class of actions, the orchestrator, or the
+  workflow its dispatchers reach through a handler (below), so
+  `CallActionsRelay`, `DialingActionsRelay`, `CallOrchestratorRelay`. Every
   operation on one relay must derive the same far side. A method is
   `<mode>_<operation>` and there are three modes — `start_` sends and does not
   wait, `run_` sends and waits for the answer, `await_` sends nothing and waits
-  for the far side's report, a durable promise. `await_X` reads the promise
-  named `X`, which the shared handler named `X` resolves, which `run_X`
-  invokes: one name across the crossing. A relay that awaits is named
+  for the far side's report, a durable promise. A relay that awaits is named
   `<FarSide>SignalRelay` and carries **only** `await_` operations, and no other
-  relay carries one — nothing outside an invocation can read a durable promise,
-  so a signal relay has an invocation runner only, and a Protocol cannot be
-  partially implemented. `examples/voice/` has the worked case
-  (`CallOrchestratorRelay`, `CallOrchestratorSignalRelay`).
+  relay carries one — nothing outside an invocation can read a durable
+  promise, so a signal relay is implemented only inside an invocation, and a
+  Protocol cannot be partially implemented. `await_X` reads the promise whose
+  name is a constant in `application/relays/` equal to `"X"`
+  (`PERSON_JOINED_PROMISE = "person_joined"`), which the signal named `X`
+  resolves, which `run_X` invokes: one name, written once, read by both ends.
 - **An orchestrator** (`ts.Orchestrator`, in `application/orchestrators/`, one
-  per module) is built **per invocation by a workflow runner**, over that
-  invocation's runners, and reached only through its application client. It
-  depends on relays and **action ports** — a port some application client
-  speaks (below) — never a repository; it stores nothing but those, because
-  everything it does between journaled calls re-runs on replay. Its public
-  methods are exactly its application client's, so it takes a relay request
-  and returns a relay response.
+  per module) is built **per invocation by a workflow** (below). It depends on
+  relays and **action ports** — a port some application client speaks — never
+  a repository; it stores nothing but those, because everything it does
+  between journaled calls re-runs on replay. Its public methods are exactly
+  those of the application client in `application/client/` of its name, so it
+  takes a relay request and returns a relay response.
 - **A class of actions** (`ts.Actions`, beside the services) takes **exactly
   one port** in `__init__` and each public method calls it **exactly once**: an
   action is the engine's retry unit, and one side effect per unit is what keeps
@@ -1157,170 +1157,168 @@ is scope, reach, and what each may depend on.
   `transaction()` call opens the unit and is not a second call. It is **not on
   the public `Client`**.
 - **An application client** (`tesser.application.Client`, in
-  `application/client/`, one protocol per module) is how a runtime reaches a
-  class of actions or an orchestrator — the inbound twin of a port. The module
-  is named for what it fronts: `client/order_actions.py` fronts
-  `application/order_actions.py`, `client/order_orchestrator.py` fronts
-  `application/orchestrators/order_orchestrator.py` (TB081). Same word as the
+  `application/client/`, one protocol per module) is how an activity reaches a
+  class of actions — the inbound twin of a port. The module is named for what
+  it fronts: `client/call_actions.py` fronts `application/call_actions.py`,
+  `client/call_orchestrator.py` fronts
+  `application/orchestrators/call_orchestrator.py` (TB081). Same word as the
   context client, different package, exactly as `Request`/`Response` already
   are. It speaks the DTOs of exactly one message package, a `ports` module or
-  a `relays` module; only a runtime may import it.
-- **A workflow** (`ts.Workflow`, from `tesser.application`, a plain marker
-  like `ts.Store`) is declared beside an orchestrator's application client,
-  generic in the engine's context: `class OrderWorkflow[C](ts.Workflow,
-  typing.Protocol)` with one `invocation(context: C, /)` that yields that
-  client. The application never names the engine; the runtime binds it by
-  holding `client.OrderWorkflow[restate.WorkflowContext]`. A client module
-  declares one `ts.Client` and at most one `ts.Workflow`, the one that yields
-  it (TB052) — the same pairing as a store and the repository its
-  `transaction()` yields.
-- **A runner** (`ts.Runner`, in `adapters/runners/`) implements a relay or a
-  workflow. Lifetime is carried by placement, not by the base: a runner may
-  hold an invocation's engine context, a gateway or a repository never does.
-  A relay runner reaches its far side **by literal name**: `run_X` is
-  `generic_call("<FarSide>", "X", <request snapshot bytes>)`, `start_X` is
-  `generic_send` with the same arguments, and `await_X` reads
-  `promise("X", serde=BytesSerde())` — the service is the relay's name without
-  `Relay`, and the handler and the promise are the operation (TB085). The
-  names are literals because the analyzer reads them and checks them against
-  the relay; a constant, a variable, or an f-string is a finding. An ingress
-  runner calls through the Restate client and states
-  `headers={"content-type": "application/json"}`, because Restate's ingress
-  answers 400 to a call by name without it. A workflow runner
-  (`RestateOrderWorkflow`) builds the orchestrator over that invocation's
-  runners, which sit in its module unexported — as `PostgresCallRepository`
-  sits beside the `PostgresCallStore` that yields it — and are tested through
-  it. A runner reaches `application.relays` and `application.orchestrators`,
-  and **only a runner imports the orchestrators**.
-- **A runtime** (`ts.Runtime`, in `adapters/runtimes/`) is the engine's
-  callback surface. It holds the application clients and workflows the
-  component hands it and constructs no orchestrator, runner, or other adapter;
-  a main handler opens `async with workflow.invocation(ctx) as client` and
-  returns `await client.<operation>(request)`. It binds the serdes over the
-  relay messages and exposes each handler as `<operation>_handler`; a
-  `DomainError` raised behind it reaches the engine as an ordinary failure,
-  retried under the registration's retry policy (no runtime translates it to a
-  terminal error today). **It invokes no
-  relay itself**, and every service, handler, and promise it registers must be
-  one a runner of its context reaches (TB085) — a callback only the outside
-  world invokes is a handler. It reaches `application.client` and
-  `application.relays`.
-- **Not yet settled** (2026-09-22): the workflow runner naming the
-  orchestrator implementation directly is accepted for now, not ruled right;
-  an `await_` operation's request is read by nothing in its runner.
+  a `relays` module.
 
-**Who may invoke a relay:** a service, through an ingress runner, and an
-orchestrator, through an in-invocation runner. Never an action, never a
-handler, never a runtime, never a component (TB081).
+**The adapter side** carries the engine in four kinds. Each registration is a
+Python object, and every caller holds the instance of what it calls and passes
+that instance's `.handler` to the SDK's typed call, so no call site writes a
+service or handler name.
+
+- **An activity** (`ts.Activity`, from `tesser.adapters`, in
+  `adapters/activities/`) registers one action for the engine to run. It takes
+  the `restate.Service` it registers into and the application client it
+  calls, registers its handler in `__init__`, and keeps it as `self.handler`.
+  The handler calls the application client's method of the same name.
+- **A workflow** (`ts.Workflow`, in `adapters/workflows/`) registers the
+  workflow's `main` on the `restate.Workflow` it is handed, and for each
+  invocation builds the orchestrator over that invocation's dispatchers, which
+  it constructs with the invocation's `restate.WorkflowContext` and the
+  activities it was handed. Those dispatchers sit in the workflow's module.
+- **A signal** (`ts.Signal`, in `adapters/dispatchers/`) registers a shared
+  handler on the workflow's container that delivers an event into a running
+  workflow by resolving its promise, named by the relays constant. A durable
+  promise can be resolved only from inside a handler of its own workflow, so
+  a signal registers on the container the workflow's `main` is registered on.
+- **A dispatcher** (`ts.Dispatcher`, in `adapters/workflows/` or
+  `adapters/dispatchers/`) implements a relay. From inside an invocation it
+  calls through the workflow context,
+  `wf_ctx.service_call(self._restate_record_call.handler, request)`; from
+  outside it goes over HTTP, opening an `httpx.AsyncClient` per call wrapped in
+  `restate.client.Client` and calling
+  `workflow_call(self._restate_conduct_call.handler, key=..., arg=...)`. Its
+  name ends in the relay it implements (`RestateInvocationCallActionsRelay`,
+  `RestateHttpCallOrchestratorRelay`), and its public methods are exactly the
+  relay's (TB081). The SDK serializes through the serdes bound at
+  registration, so a dispatcher names no snapshot except when it reads a
+  promise.
+
+**TB085 derives every name from these typed references**, not from strings:
+(a) a relay is named for the far side its dispatchers reach through
+`self._x.handler` — an activity's actions class, a workflow's orchestrator, or
+a signal's workflow; (b) `run_X`/`start_X` passes the handler `def X`, with no
+differing name, positional or `name=`; (c) `run_` waits (`*_call`) and `start_` does not
+(`*_send`), and an activity's handler is reached with `service_*`, a
+workflow's or a signal's with `workflow_*`; (d) `await_X` and the signal named `X` use a relays constant equal
+to `"X"`; (e) each engine container is named for its far side, as a literal,
+positional or `name=`; (f) every
+activity, workflow, and signal is reached by a dispatcher; (g) an activity,
+workflow, or signal registers exactly one handler, the one it keeps as
+`self.handler` (a function in `__init__`, at any depth, decorated from or
+passed to `.handler(...)`/`.main(...)` on a `restate` container parameter or
+the attribute holding one); (h) a handler name is unique in its engine container; (i) a
+dispatcher never calls `generic_call`/`generic_send`; (j) a `workflows/` module
+imports no HTTP client (`restate.client`, `httpx`, `aiohttp`, `requests`,
+`urllib.request`, `urllib3`) and reads neither `restate.create_client` nor
+`restate.RestateClient` (TB060), because a call from inside an invocation goes
+through its context, where the engine journals it; (k) an activity's handler
+calls its application client's method named for the operation; (l) a signal's
+handler calls `.promise(...).resolve(...)`; (m) a relays constant is assigned
+once. A signal relay's
+name is derived today only through a `run_` operation that reaches its signal;
+an `await_`-only relay is not derived yet (`TODOS.md`).
+
+**Who may invoke a relay:** a service, through a dispatcher over HTTP, and an
+orchestrator, through a dispatcher inside the invocation. Never an action,
+never a handler, never a component (TB081).
 
 ```python
-# ordering/application/relays/order_actions_relay.py (verified impl: examples/durable-execution/)
-class PriceProductRequest(ts.Request):
+# calls/application/relays/call_actions_relay.py (verified impl: examples/voice/)
+class RecordCallResponseSnapshot(ts.Serde):
 
-    def __init__(self, sku: str) -> None:
-        self.sku = sku
+    def serialize(self, record_call_response: RecordCallResponse) -> bytes:
+        return json.dumps({"call_id": record_call_response.call_id}).encode()
 
-
-class PriceProductRequestSnapshot(ts.Serde):
-
-    def serialize(self, price_product_request: PriceProductRequest) -> bytes:
-        return json.dumps({"sku": price_product_request.sku}).encode()
-
-    def deserialize(self, buf: bytes) -> PriceProductRequest:
+    def deserialize(self, buf: bytes) -> RecordCallResponse:
         snapshot = json.loads(buf)
-        if not (isinstance(snapshot, dict) and isinstance(snapshot.get("sku"), str) and snapshot["sku"]):
-            raise errors.invalid("malformed_price_product_request_snapshot", "a price product request is a sku")
-        return PriceProductRequest(sku=snapshot["sku"])
+        if not (isinstance(snapshot, dict) and isinstance(snapshot.get("call_id"), str)):
+            raise errors.invalid("invalid_snapshot", "a record call response is a call_id")
+        return RecordCallResponse(call_id=snapshot["call_id"])
 
 
-class OrderActionsRelay(ts.Relay, typing.Protocol):          # named for OrderActions, the far side
+class CallActionsRelay(ts.Relay, typing.Protocol):          # named for CallActions, the far side
 
-    async def run_price_product(self, price_product_request: PriceProductRequest) -> PriceProductResponse: ...
-
-
-# ordering/application/client/order_actions.py (verified impl: examples/durable-execution/)
-class OrderingApplicationClient(ts.Client, typing.Protocol):
-
-    def price_product(self, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse: ...
+    async def run_record_call(self, record_call_request: RecordCallRequest) -> RecordCallResponse: ...
 
 
-# ordering/application/order_actions.py (verified impl: examples/durable-execution/)
-class OrderActions(ts.Actions):
-
-    def __init__(self, product_catalog_repository: ports.ProductCatalogRepository) -> None:
-        self._product_catalog_repository = product_catalog_repository
-
-    def price_product(self, price_product_request: relays.PriceProductRequest) -> relays.PriceProductResponse:
-        sku = domain.Sku(price_product_request.sku)
-        look_up_price_response = self._product_catalog_repository.look_up_price(MapToLookUpPriceRequest(sku))
-        return MapToPriceProductResponse(look_up_price_response)
+# calls/application/relays/call_orchestrator_signal_relay.py (verified impl: examples/voice/)
+PERSON_JOINED_PROMISE: typing.Final[str] = "person_joined"
 
 
-# ordering/application/orchestrators/order_orchestrator.py (verified impl: examples/durable-execution/)
-class OrderOrchestrator(ts.Orchestrator):
+# calls/application/client/call_actions.py (verified impl: examples/voice/)
+class CallApplicationClient(ts.Client, typing.Protocol):
 
-    def __init__(self, order_actions_relay: relays.OrderActionsRelay) -> None:
-        self._order_actions_relay = order_actions_relay
-
-    async def confirm_order(self, confirm_order_request: relays.ConfirmOrderRequest) -> relays.ConfirmOrderResponse:
-        order = confirm_order_request.order
-        price_product_response = await self._order_actions_relay.run_price_product(MapToPriceProductRequest(order))
-        match price_product_response.outcome:
-            case relays.PriceProductOutcome.PRICED:
-                price = order.total(MapToPriceSpec(price_product_response))
-                return MapToConfirmOrderResponseFromPrice(order, price)
-            case relays.PriceProductOutcome.PRICE_NOT_FOUND:
-                return MapToConfirmOrderResponseFromPriceProductResponse(order, price_product_response)
-            case _ as never:
-                typing.assert_never(never)
+    async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse: ...
 
 
-# ordering/application/client/order_orchestrator.py (verified impl: examples/durable-execution/)
-class OrderOrchestratorApplicationClient(ts.Client, typing.Protocol):
+# calls/application/call_actions.py (verified impl: examples/voice/)
+class CallActions(ts.Actions):
 
-    async def confirm_order(
-        self, confirm_order_request: relays.ConfirmOrderRequest
-    ) -> relays.ConfirmOrderResponse: ...
+    def __init__(self, call_store: ports.CallStore) -> None:
+        self._call_store = call_store
 
-
-class OrderWorkflow[C](ts.Workflow, typing.Protocol):
-    def invocation(
-        self, context: C, /
-    ) -> typing.AsyncContextManager[OrderOrchestratorApplicationClient]: ...
+    async def record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
+        async with self._call_store.transaction() as call_repository:
+            save_call_response = await call_repository.save_call(MapToSaveCallRequest(record_call_request))
+        return MapToRecordCallResponse(save_call_response)
 
 
-# ordering/adapters/runners/restate_order_workflow.py (verified impl: examples/durable-execution/)
-class RestateInvocationOrderActionsRelay(ts.Runner):
+# calls/application/orchestrators/call_orchestrator.py (verified impl: examples/voice/)
+class CallOrchestrator(ts.Orchestrator):
+    def __init__(
+        self,
+        dialing_actions_relay: relays.DialingActionsRelay,
+        call_orchestrator_signal_relay: relays.CallOrchestratorSignalRelay,
+        speech_actions_relay: relays.SpeechActionsRelay,
+        call_actions_relay: relays.CallActionsRelay,
+    ) -> None:
+        ...
 
-    def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
+    async def conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
+        call = conduct_call_request.call
+        await self._dialing_actions_relay.run_dial_person(MapToDialPersonRequest(call))
+        await self._call_orchestrator_signal_relay.await_person_joined(MapToAwaitPersonJoinedRequest(call))
+        ...
+        record_call_response = await self._call_actions_relay.run_record_call(MapToRecordCallRequest(call))
+        return MapToConductCallResponse(record_call_response)
+
+
+# calls/adapters/activities/restate_activities.py (verified impl: examples/voice/)
+class RestateRecordCall(ts.Activity):
+    def __init__(
+        self, call_actions_service: restate.Service, call_application_client: client.CallApplicationClient
+    ) -> None:
+        @call_actions_service.handler(
+            input_serde=RestateRecordCallRequestSerde(),
+            output_serde=RestateRecordCallResponseSerde(),
+        )
+        async def record_call(
+            restate_context: restate.Context, record_call_request: relays.RecordCallRequest
+        ) -> relays.RecordCallResponse:
+            return await call_application_client.record_call(record_call_request)
+
+        self.handler = record_call
+
+
+# calls/adapters/workflows/restate_conduct_call.py (verified impl: examples/voice/)
+class RestateInvocationCallActionsRelay(ts.Dispatcher):
+    def __init__(
+        self, restate_workflow_context: restate.WorkflowContext, restate_record_call: activities.RestateRecordCall
+    ) -> None:
         self._restate_workflow_context = restate_workflow_context
+        self._restate_record_call = restate_record_call
 
-    async def run_price_product(
-        self, price_product_request: relays.PriceProductRequest
-    ) -> relays.PriceProductResponse:
-        return relays.PriceProductResponseSnapshot().deserialize(
-            await self._restate_workflow_context.generic_call(
-                "OrderActions",
-                "price_product",
-                relays.PriceProductRequestSnapshot().serialize(price_product_request),
-            )
-        )
+    async def run_record_call(self, record_call_request: relays.RecordCallRequest) -> relays.RecordCallResponse:
+        return await self._restate_workflow_context.service_call(self._restate_record_call.handler, record_call_request)
 
 
-class RestateOrderWorkflow(ts.Runner):
-
-    @contextlib.asynccontextmanager
-    async def invocation(
-        self, restate_workflow_context: restate.WorkflowContext
-    ) -> typing.AsyncIterator[orchestrators.OrderOrchestrator]:
-        yield orchestrators.OrderOrchestrator(
-            RestateInvocationOrderActionsRelay(restate_workflow_context)
-        )
-
-
-# calls/adapters/runners/restate_call_workflow.py (verified impl: examples/voice/) — an await_ reads the promise named for its operation
-class RestateInvocationCallOrchestratorSignalRelay(ts.Runner):
-
+class RestateInvocationCallOrchestratorSignalRelay(ts.Dispatcher):
     def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
         self._restate_workflow_context = restate_workflow_context
 
@@ -1328,127 +1326,120 @@ class RestateInvocationCallOrchestratorSignalRelay(ts.Runner):
         self, await_person_joined_request: relays.AwaitPersonJoinedRequest
     ) -> relays.AwaitPersonJoinedResponse:
         return relays.AwaitPersonJoinedResponseSnapshot().deserialize(
-            await self._restate_workflow_context.promise("person_joined", serde=restate_serde.BytesSerde()).value()
+            await self._restate_workflow_context.promise(
+                relays.PERSON_JOINED_PROMISE, serde=restate_serde.BytesSerde()
+            ).value()
         )
 
 
-# ordering/adapters/runtimes/restate_order_runtime.py (verified impl: examples/durable-execution/)
-class RestatePriceProductRequestSerde(ts.Serde, restate.serde.Serde[relays.PriceProductRequest]):
-
-    def serialize(self, price_product_request: relays.PriceProductRequest | None) -> bytes:
-        if price_product_request is None:
-            return b""
-        return relays.PriceProductRequestSnapshot().serialize(price_product_request)
-
-    def deserialize(self, buf: bytes) -> relays.PriceProductRequest | None:
-        if not buf:
-            raise restate.TerminalError("a message crosses the engine with a body", status_code=400)
-        return relays.PriceProductRequestSnapshot().deserialize(buf)
-
-
-class RestateOrderRuntime(ts.Runtime):
-
+class RestateConductCall(ts.Workflow):
     def __init__(
         self,
-        ordering_application_client: client.OrderingApplicationClient,
-        purchase_application_client: client.PurchaseApplicationClient,
-        order_workflow: client.OrderWorkflow[restate.WorkflowContext],
-        purchase_workflow: client.PurchaseWorkflow[restate.WorkflowContext],
+        call_orchestrator_workflow: restate.Workflow,
+        restate_record_call: activities.RestateRecordCall,
+        restate_dial_person: activities.RestateDialPerson,
+        restate_hang_up: activities.RestateHangUp,
+        restate_say_utterance: activities.RestateSayUtterance,
     ) -> None:
-        self.order_actions_service = restate.Service(
-            "OrderActions", invocation_retry_policy=_RETRY_POLICY
+        @call_orchestrator_workflow.main(
+            input_serde=RestateConductCallRequestSerde(),
+            output_serde=RestateConductCallResponseSerde(),
         )
-        self.order_orchestrator_workflow = restate.Workflow(
-            "OrderOrchestrator", invocation_retry_policy=_RETRY_POLICY
-        )
-        self.purchase_actions_service = restate.Service(
-            "PurchaseActions", invocation_retry_policy=_RETRY_POLICY
-        )
-        self.purchase_orchestrator_workflow = restate.Workflow(
-            "PurchaseOrchestrator", invocation_retry_policy=_RETRY_POLICY
-        )
+        async def conduct_call(
+            restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
+        ) -> relays.ConductCallResponse:
+            return await orchestrators.CallOrchestrator(
+                RestateInvocationDialingActionsRelay(restate_workflow_context, restate_dial_person, restate_hang_up),
+                RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context),
+                RestateInvocationSpeechActionsRelay(restate_workflow_context, restate_say_utterance),
+                RestateInvocationCallActionsRelay(restate_workflow_context, restate_record_call),
+            ).conduct_call(conduct_call_request)
 
-        @self.order_actions_service.handler(
-            input_serde=RestatePriceProductRequestSerde(),
-            output_serde=RestatePriceProductResponseSerde(),
-        )
-        async def price_product(
-            restate_context: restate.Context, price_product_request: relays.PriceProductRequest
-        ) -> relays.PriceProductResponse:
-            return ordering_application_client.price_product(price_product_request)
+        self.handler = conduct_call
 
-        @self.order_orchestrator_workflow.main(
-            input_serde=RestateConfirmOrderRequestSerde(),
-            output_serde=RestateConfirmOrderResponseSerde(),
+
+# calls/adapters/dispatchers/restate_http_call_orchestrator_relay.py (verified impl: examples/voice/)
+class RestatePersonJoined(ts.Signal):
+    def __init__(self, call_orchestrator_workflow: restate.Workflow) -> None:
+        @call_orchestrator_workflow.handler(
+            input_serde=RestatePersonJoinedRequestSerde(),
+            output_serde=RestatePersonJoinedResponseSerde(),
         )
-        async def confirm_order(
-            restate_workflow_context: restate.WorkflowContext,
-            confirm_order_request: relays.ConfirmOrderRequest,
-        ) -> relays.ConfirmOrderResponse:
-            async with order_workflow.invocation(
-                restate_workflow_context
-            ) as order_orchestrator_application_client:
-                return await order_orchestrator_application_client.confirm_order(
-                    confirm_order_request
+        async def person_joined(
+            restate_workflow_shared_context: restate.WorkflowSharedContext,
+            person_joined_request: relays.PersonJoinedRequest,
+        ) -> relays.PersonJoinedResponse:
+            call_id = restate_workflow_shared_context.key()
+            if person_joined_request.call_id != call_id:
+                raise restate.TerminalError(_FOREIGN_CALL_ID, status_code=400)
+            try:
+                await restate_workflow_shared_context.promise(
+                    relays.PERSON_JOINED_PROMISE, serde=restate_serde.BytesSerde()
+                ).resolve(
+                    relays.AwaitPersonJoinedResponseSnapshot().serialize(relays.AwaitPersonJoinedResponse(call_id=call_id))
                 )
+            except restate.TerminalError as terminal_error:
+                if terminal_error.status_code != _ALREADY_COMPLETED:
+                    raise
+            return relays.PersonJoinedResponse(call_id=call_id)
 
-        @self.purchase_actions_service.handler(
-            input_serde=RestateTakePaymentRequestSerde(),
-            output_serde=RestateTakePaymentResponseSerde(),
+        self.handler = person_joined
+
+
+class RestateHttpCallOrchestratorRelay(ts.Dispatcher):
+    def __init__(
+        self,
+        restate_url: str,
+        restate_conduct_call: workflows.RestateConductCall,
+        restate_person_joined: RestatePersonJoined,
+        restate_person_turn_completed: RestatePersonTurnCompleted,
+    ) -> None:
+        ...
+
+    async def run_conduct_call(self, conduct_call_request: relays.ConductCallRequest) -> relays.ConductCallResponse:
+        async with httpx.AsyncClient(base_url=self._restate_url, timeout=_MAIN_TIMEOUT) as async_client:
+            return await restate_client.Client(async_client).workflow_call(
+                self._restate_conduct_call.handler,
+                key=urllib_parse.quote(str(conduct_call_request.call.identity), safe=""),
+                arg=conduct_call_request,
+            )
+
+
+# calls/component/component.py (verified impl: examples/voice/) — containers, then activities → workflow → signals → dispatcher → services
+class Calls(ts.Component):
+
+    def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
+        self._postgres_call_store = repositories.PostgresCallStore(database)
+        self.call_actions_service: restate.Service = restate.Service(
+            "CallActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
         )
-        async def take_payment(
-            restate_context: restate.Context, take_payment_request: relays.TakePaymentRequest
-        ) -> relays.TakePaymentResponse:
-            return purchase_application_client.take_payment(take_payment_request)
-
-        @self.purchase_orchestrator_workflow.main(
-            input_serde=RestatePayForOrderRequestSerde(),
-            output_serde=RestatePayForOrderResponseSerde(),
+        ...
+        self.call_orchestrator_workflow: restate.Workflow = restate.Workflow(
+            "CallOrchestrator", invocation_retry_policy=_RETRY_POLICY
         )
-        async def pay_for_order(
-            restate_workflow_context: restate.WorkflowContext,
-            pay_for_order_request: relays.PayForOrderRequest,
-        ) -> relays.PayForOrderResponse:
-            async with purchase_workflow.invocation(
-                restate_workflow_context
-            ) as purchase_orchestrator_application_client:
-                return await purchase_orchestrator_application_client.pay_for_order(
-                    pay_for_order_request
-                )
-
-        self.price_product_handler = price_product
-        self.confirm_order_handler = confirm_order
-        self.take_payment_handler = take_payment
-        self.pay_for_order_handler = pay_for_order
-
-
-# ordering/component/component.py (verified impl: examples/durable-execution/)
-class Ordering(ts.Component):
-
-    def __init__(self, config: Config) -> None:
-        self._memory_product_catalog_repository = repositories.MemoryProductCatalogRepository()
-        self._order_actions = application.OrderActions(self._memory_product_catalog_repository)
-        self._memory_payment_processor = gateways.MemoryPaymentProcessor()
-        self._purchase_actions = application.PurchaseActions(self._memory_payment_processor)
-        self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(
-            self._order_actions,
-            self._purchase_actions,
-            runners.RestateOrderWorkflow(),
-            runners.RestatePurchaseWorkflow(),
+        restate_record_call = activities.RestateRecordCall(
+            self.call_actions_service, application.CallActions(self._postgres_call_store)
         )
-        self.client: client.OrderingClient = Ordering.Client(
-            application.OrderService(runners.RestateIngressOrderOrchestratorRelay(config.ingress)),
-            application.PurchaseService(
-                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress)
-            ),
+        ...
+        restate_conduct_call = workflows.RestateConductCall(
+            self.call_orchestrator_workflow, restate_record_call, restate_dial_person, restate_hang_up, restate_say_utterance
+        )
+        restate_person_joined = dispatchers.RestatePersonJoined(self.call_orchestrator_workflow)
+        restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(self.call_orchestrator_workflow)
+        restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
+            config.restate_url, restate_conduct_call, restate_person_joined, restate_person_turn_completed
+        )
+        self.client: client.CallsClient = Calls.Client(
+            application.CallService(restate_http_call_orchestrator_relay, self._postgres_call_store),
+            application.CallEventsService(restate_http_call_orchestrator_relay),
         )
 ```
 
 - **A relay message may carry a domain object** (TB080), and that is not a
   widening of the no-outward-representation line: a relay is **inward**. It
   crosses the engine inside one context and is never operated through the
-  client, so `ConfirmOrderRequest(order: domain.Order)` is legal and the
-  order comes back whole. A `ts.Client` faces outsiders and a `ts.Port` faces a
+  client, so `RecordCallRequest(call: domain.Call)` is legal and the call
+  comes back whole. A `ts.Client` faces outsiders and a `ts.Port` faces a
   foreign system; those stay primitives-only. A bare bool and a union are
   findings on a relay message too.
 - **A snapshot decides once, on shape** (TB081/TB082). It holds nothing:
@@ -1468,55 +1459,81 @@ class Ordering(ts.Component):
   before the constructor sees it is what a snapshot is for; deciding anything
   else is a decision no domain object owns. A snapshot several relays share —
   one over a domain aggregate — lives in `application/snapshots/`.
-- **The engine-side serde is narrower** (`tesser.adapters.Serde`, in
-  `adapters/runtimes/`, maintainer ruling 2026-08-30). It declares exactly
-  `serialize` and `deserialize` over **one type** — a type parameter, or the
-  one shape its base is subscripted with — may hold at most the target type it
-  was built with, and branches on nothing but the empty payload before
-  delegating to the snapshot. It is the **one adapter class allowed a base from
-  outside the tree** (TB052): the engine is the caller and the SDK's ABC is the
-  shape it calls, so the class reads
+- **The engine-side serde is narrower** (`tesser.adapters.Serde`, in the
+  module of the activity, workflow, or signal that binds it; maintainer ruling
+  2026-08-30). It declares exactly `serialize` and `deserialize` over **one
+  type** — a type parameter, or the one shape its base is subscripted with —
+  may hold at most the target type it was built with, and branches on nothing
+  but the empty payload before delegating to the snapshot. A payload the
+  snapshot cannot parse raises from the snapshot, and the engine retries it
+  and then pauses the invocation under the registration's retry policy; the
+  serde turns only the empty body into a terminal 400. It is the **one adapter
+  class allowed a base from outside the tree** (TB052): the engine is the
+  caller and the SDK's ABC is the shape it calls, so the class reads
   `class RestateXSerde(ts.Serde, restate.serde.Serde[relays.X])`.
 - **`json` is legal in `application/relays/` and `application/snapshots/`** and
   nowhere else in the application role (TB062): a snapshot is the one place a
   message becomes bytes.
-- **A component publishes only its client and its runtimes** (TB081): `client`
-  typed as the context's `ts.Client`, and every other public attribute typed as
-  a `ts.Runtime` — one runtime or a tuple of them. Every other attribute is
-  private. The host mounts what the runtime registers and knows nothing else
+- **The component builds the engine containers and publishes them** (TB081).
+  It publishes `client`, typed as the context's `ts.Client`, and each
+  attribute assigned from an engine registration constructor
+  (`restate.Service`, `restate.Workflow`, `restate.VirtualObject`) that it
+  hands to an activity, workflow, or signal constructor; every other attribute
+  is private, and `client` is never a container. It builds in import order —
+  containers, activities, the workflow, signals, the dispatcher, services —
+  because each constructor takes what the one before it built. The host binds
+  the published containers (`restate.app([...])`) and knows nothing else
   about the engine.
-- **A gateway, a repository, and a runner inline their logic** (TB082), as a
-  service does: one call on the backend and the mapping of what it answered,
+- **A gateway, a repository, and a dispatcher inline their logic** (TB082), as
+  a service does: one call on the backend and the mapping of what it answered,
   read on the page — no delegation to a private method or a module function
   beside it.
 - **Reach is carried by the adapter kind package** (TB041/TB052/TB060). An
   adapters module lives in `handlers/`, `gateways/`, `repositories/`,
-  `runners/`, or `runtimes/`, and holds the kind its package names — only a
-  runtimes module holds a runtime beside the serdes it binds. `handlers/` →
-  the context client; `runners/` → `application.relays` and
-  `application.orchestrators`; `runtimes/` → `application.client` and
-  `application.relays`; `gateways/` and `repositories/` →
-  `application.ports`. **No adapters kind package imports another**: a runner
-  finds its far side by name, and the component hands the runtime its
-  workflows. **Only a runtime imports the application client**, because an
-  action is reachable only through the engine, and **only a runner imports
-  the orchestrators**, because the workflow runner that builds one sits
-  beside that invocation's runners. A host reaches a context only through its
-  handlers and its runtimes (TB063).
-- **Test placement follows** (TB070): `runners/` and `runtimes/` are test
-  tiers, and a test placed in either reaches what its package reaches plus
-  `domain` (it builds the objects a relay message carries). A runtime test
-  fakes the workflow and the application clients, both tesser contracts; a
-  workflow module's sibling test opens an invocation and runs the flow
-  through it (`examples/durable-execution/` drives it through the ingress
-  runner against real Restate and asserts the child call in
-  `sys_invocation`).
+  `activities/`, `workflows/`, or `dispatchers/`, and holds the kinds its
+  package names. `handlers/` → the context client; `gateways/` and
+  `repositories/` → `application.ports`; `activities/` → `application.client`
+  and `application.relays`; `workflows/` → `application.relays`,
+  `application.orchestrators`, and `activities`; `dispatchers/` →
+  `application.relays` and `workflows`. **Imports go one way, dispatchers →
+  workflows → activities**, because each caller holds the instance of what it
+  calls; no other pair of kind packages imports each other. **Only an
+  activity imports the application client**, because an action is reachable
+  only through the engine, and **only a workflow imports the orchestrators**,
+  because it builds one per invocation. Each package is one module today: a
+  module imports no sibling module (TB060), and the HTTP dispatcher names the
+  signal classes beside it.
+- **Test placement follows** (TB070): `activities/`, `workflows/`, and
+  `dispatchers/` are test tiers, and a test placed in one reaches what its
+  package reaches plus `domain` (it builds the objects a relay message
+  carries). Each test serves its package's registrations on a real endpoint,
+  registers it with Restate, and drives it with the objects' `.handler`s
+  (`testing.md` rule 10: an adapter's dependency is exercised, not doubled). The
+  activities test calls each handler; the workflows test sits below the
+  signals, so it cannot resolve the promises and asserts the journal up to
+  the first promise wait; the dispatchers test runs the whole call.
 
+- **Not yet settled** (2026-09-23): the workflow names the orchestrator
+  implementation directly (`orchestrators.CallOrchestrator(...)`), and the
+  orchestrator's application client is declared but nothing holds it; an
+  `await_` operation's request is read by nothing in its dispatcher.
 - **Not yet ruled:** payload versioning on a durable leg (a field added to a
   relay message changes the bytes an in-flight journal holds — relay messages
   on a durable leg are append-only until it is); the Temporal mirror binds its
   serde at the client/worker rather than at a decorator, and the kinds are
   expected to survive it unchanged.
+
+**Trees not yet migrated.** `examples/durable-execution/` and the generator's
+templates still use the older kinds, and `examples/minimal/` shows none of the
+durable kinds until an in-process engine restores them (`TODOS.md`). There, a
+runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its
+far side by literal service and handler name (`generic_call`/`generic_send`,
+`promise("X")`), and a workflow runner implements the application-side
+`ts.DeprecatedWorkflow` protocol, which yields the orchestrator's application
+client per invocation; a runtime (`ts.Runtime`, `adapters/runtimes/`)
+registers the engine's handlers under literals and registers only what a
+runner of its context reaches. TB085 checks those literals against the relay.
+Write new durable code in the shape above, not this one.
 
 ## Repositories
 

@@ -2,29 +2,96 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the typed-handler ship review (2026-09-23, PR #210)
+
+- [ ] **An activity's engine container is ingress-private, checked.** voice's
+  three actions services now set `ingress_private=True` (Chris, 2026-09-23):
+  only `conduct_call` and the two signals are reachable from Restate's
+  ingress, so nobody who reaches the ingress can place a call or write a
+  record around `CallService`. Nothing checks it. Add a rule that a container
+  an activity registers into is built with `ingress_private=True`, and that a
+  workflow's container is not.
+- [ ] **`place_call` can wait forever on a paused workflow.** The HTTP
+  dispatcher's `run_conduct_call` has no read limit (`read=None`), and an
+  activity that exhausts its 5 attempts pauses the workflow
+  (`on_max_attempts="pause"`), so the caller holds a connection and a
+  coroutine until someone resumes it. A caller that retries on its own
+  timeout gets a new call id each time and places a second real call. Part of
+  the voice call-lifecycle design (timeouts, hang-up on failure, no re-dial).
+- [ ] **Caller-side errors from the HTTP dispatcher.** Its response serdes
+  raise `restate.TerminalError(400)` on an empty body inside the host
+  process, a malformed ingress response surfaces as the snapshot's
+  `errors.invalid`, and `restate.HttpError` is not mapped at all, so an
+  engine fault can reach the client as a 4xx or a bare 500.
+- [ ] **Review gaps left open.** `conduct_call` does not check that the
+  request's call id is its workflow key, as the signals do; the new checks
+  each rebuild the kind table per module, as about 24 older checks already
+  do (cache it on the registry); the adapter tests probe a free port and bind
+  it later (a race); the hostile-key test covers only `run_person_joined`;
+  the concurrency test does not assert which turn the promise kept; an
+  activity or workflow whose far side the analyzer cannot read gets no
+  container-name check and no finding.
+
 ## Left open by the adapter-shape ship review (2026-09-22, Chris)
 
-- [ ] **The runner-to-runtime link is held only by a string (Chris: "properly
-  handle this, not just rely on the analyzer").** HIGH PRIORITY. Since the
-  adapter-shape change a runner reaches its far side by literal service and
-  handler name (`generic_call("CallActions", "record_call", ...)`) and the
-  runtime registers under literals too. Nothing in Python connects the two
-  ends; the analyzer is the only thing holding them to one name (the
-  runtime obligation, and the reverse row added in this review). Decide a
-  structural mechanism so the name has one source both ends read, not a
-  check that two copies agree: for example the relay declares its far
-  side's service name and operation names as data that the runner and the
-  runtime's registration both read, or the engine registration is derived
-  from the relay. Until then, three shapes still evade the analyzer (below).
-- [ ] **Three ways around the name checks, found by red team and left open
-  pending the item above.** Each gives zero findings on a copy of voice:
-  (1) a handler registered under another name, positionally
-  (`@svc.handler("renamed")`) or through a constant (`name=_RENAMED`) — the
-  row reads only a literal `name=` keyword and the obligation uses the
-  function name; (2) a `restate.Service` built into a local variable and
-  decorated through it instead of `self.x = ...` in `__init__`; (3) the two
-  shared handlers resolving each other's promise — nothing checks that the
-  promise a shared handler resolves is the one named for it.
+- [x] **The runner-to-runtime link is held only by a string (Chris: "properly
+  handle this, not just rely on the analyzer").** RESOLVED FOR VOICE on
+  branch `name-strings` (PR #210, 2026-09-23). Runners and runtimes are gone
+  from voice: an activity, a workflow, and a signal each register their
+  handler into the engine container the component hands them and keep it as
+  `self.handler`, and a dispatcher holds the instance it calls and passes its
+  `.handler` to the SDK's typed call (`wf_ctx.service_call(...)`,
+  `restate.client.Client(...).workflow_call(...)`), so the SDK reads the
+  service and handler name off the registered object. Each container's name
+  is written once, in the component, and each promise's name once, as a
+  constant in `application/relays/` that both the dispatcher's `await_X` and
+  the signal read. durable-execution, minimal and the generator's templates
+  still hold the link by string (see the migration item below).
+- [x] **Three ways around the name checks, found by red team.** RESOLVED FOR
+  VOICE on branch `name-strings`, by removing what they got around rather
+  than by patching the literal checks: no dispatcher in voice names a service
+  or handler by string, so there is no second copy of a name to disagree.
+  What TB085 checks for the new kinds instead: (1) a dispatcher passes the
+  handler `def X` for `run_X`/`start_X`, and a handler whose `name=` differs
+  from its function name is a finding; (2) every engine container is built
+  by the component, named as a literal for its far side, and handed to the
+  activity, workflow, or signal that registers into it; (3) the signal named
+  `X` resolves the relays constant equal to `"X"`, so two signals cannot
+  resolve each other's promise. The original three shapes were not re-run as
+  a red team against the new kinds; a positional or constant name on
+  `@svc.handler(...)` is not covered by a test yet. All three shapes still
+  pass on the runner/runtime kinds in durable-execution, minimal and the
+  generator until they migrate.
+- [ ] **Migrate durable-execution, minimal and the generator to activities,
+  workflows and dispatchers (Chris, 2026-09-23; follow-up to PR #210).**
+  Voice is the only tree on the new kinds. `examples/durable-execution/`
+  (two workflows, one orchestrator starting another, and the two
+  implementations of `OrderOrchestratorRelay`) and the generator's templates
+  (`generator/templates/{{context}}/adapters/runners/`, `runtimes/`, the
+  `ts.DeprecatedWorkflow` protocol in `application/client/`) still use
+  `ts.Runner`, `ts.Runtime` and `ts.DeprecatedWorkflow`, whose TB085 rules
+  still check string literals. `examples/minimal/` shows none of the durable
+  kinds: restore them over a small in-process engine that registers a
+  handler object and calls it by that object, the way the Restate SDK's typed
+  calls do, so minimal exercises `ts.Relay`, `ts.Orchestrator`, `ts.Actions`,
+  the application client, `ts.Activity`, `ts.Workflow`, `ts.Signal` and
+  `ts.Dispatcher` without Restate (this replaces the 2026-09-22 minimal item
+  below, which planned dispatch by name). When all three have moved, delete
+  `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`, the `runners`/`runtimes`
+  kind packages, and their TB041/TB052/TB060/TB070/TB081/TB082/TB085 rows,
+  and drop the "trees not yet migrated" notes from CLAUDE.md, the skill and
+  `docs/design-app-service-types.md`.
+- [ ] **TB085 does not derive the name of a signal relay reached only by
+  `await_` (PR #210 gap).** A relay's far side is derived from the handlers
+  its dispatchers pass; an `await_` operation passes no handler, it reads a
+  relays constant. A signal relay's name is checked today only because a
+  `run_` operation on another relay reaches the signal that resolves the same
+  promise (voice: `CallOrchestratorRelay.run_person_joined` reaches
+  `RestatePersonJoined`, registered on `CallOrchestrator`). A signal relay
+  whose promises no `run_` operation reaches gets no name check. Derive the
+  far side from the promise constant instead: the signal that resolves the
+  constant registers on a workflow container, and that workflow is the far
+  side.
 - [ ] **voice: the first completed turn wins, whatever it was.** The agent
   session starts listening before `person_joined` is sent and before the
   question is said, and `person_turn_completed` keeps the first value it
@@ -36,10 +103,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 - [ ] **voice hardening and test debt.** (e) `dial_person` and `say` are
   at-least-once under the Restate retry policy but LiveKit's
   `create_dispatch` and the `say` RPC are not idempotent: a retried dispatch
-  sends a second agent job to the room, a retried say speaks twice. (f) The
-  voice runner and ingress tests still fake Restate (the carried TB072/TB085
-  markers) where durable-execution and the generator run the same shapes
-  against the real engine and assert `sys_invocation`; migrate them. (g)
+  sends a second agent job to the room, a retried say speaks twice. (f) ~~The
+  voice runner and ingress tests still fake Restate~~ Done in PR #210: the
+  activity, workflow and dispatcher tests serve their registrations on a real
+  endpoint, register it with Restate, and call through it. (g)
   `scripts/verify` starts the LiveKit agent server under `VOICE_EVALS=1` and
   runs pytest at once, with no readiness wait. (h) `LivekitHandler.start_job`
   and `CallAgent.say` run only in the gated eval. (i) A body the snapshots
@@ -69,22 +136,22 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   list them).** Net, the two PRs remove 61 markers (454 on main, 393 after),
   but these lines carry a marker in the added code; each names the design
   question that retires it:
-  - `examples/voice/calls/adapters/runtimes/restate_call_runtime.py` — the
-    two shared handlers `person_joined`, `person_turn_completed` (TB085: they
-    build messages and branch instead of invoking one operation). Retired by
-    moving the resolve into something a handler can invoke, or by ruling
-    what a shared handler that resolves a promise is.
+  - ~~`examples/voice/calls/adapters/runtimes/restate_call_runtime.py` — the
+    two shared handlers `person_joined`, `person_turn_completed` (TB085).~~
+    Retired on branch `name-strings`: the shared handlers are signals
+    (`ts.Signal`) now, outside the runtime name rules, and read the promise name from
+    `application/relays`.
   - `examples/voice/calls/adapters/handlers/livekit.py` `CallAgent` (TB052:
     the LiveKit SDK subclass has no ts.* kind of its own). Retired by ruling
     on SDK subclasses in handlers.
   - `examples/voice/srv/livekit/agent_server.py` (TB060). Retired with the
     host's import row for the LiveKit worker.
-  - `examples/voice/calls/adapters/runners/test_restate_call_workflow.py`,
+  - ~~`examples/voice/calls/adapters/runners/test_restate_call_workflow.py`,
     `test_restate_ingress_call_orchestrator_relay.py`,
     `runtimes/test_restate_call_runtime.py` (TB072 fakes of the Restate
-    context and ingress, TB085 on their locals; mostly carried when test
-    files merged or moved). Retired by the voice Restate test migration
-    (hardening item (f) above).
+    context and ingress, TB085 on their locals).~~ Retired on branch
+    `name-strings`: the workflows and dispatchers tests serve their own endpoint under
+    fresh service names and drive it through the real Restate.
 - [ ] **durable-execution: an invocation runner's `start_` path is never
   run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`
   exists because the runner implements the whole relay, but
@@ -157,7 +224,9 @@ right; collisions carry `# tesser:debt` markers meanwhile.
   cut (one messages module beside each relay, or a `messages/` package),
   what the runner and the runtime then import, and whether ports get the
   same split, since `ports/` has the identical shape.
-- **minimal exercises every `ts.*` again — an in-process engine by name
+- **SUPERSEDED 2026-09-23 by the migration item at the top of this file
+  (an in-process engine that calls by handler object, not by name).**
+  **minimal exercises every `ts.*` again — an in-process engine by name
   (Chris, 2026-09-22; the third PR after the adapter-shape PR).** minimal's
   requirement is that every `ts.*` kind is shown and exercised. The
   adapter-shape PR dropped its durable half (relays, runners, runtime,

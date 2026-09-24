@@ -24,7 +24,7 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.application", "Actions"): "actions",
     ("tesser.application", "Relay"): "relay",
     ("tesser.application", "Serde"): "snapshot",
-    ("tesser.application", "Workflow"): "workflow",
+    ("tesser.application", "DeprecatedWorkflow"): "deprecated_workflow",
     ("tesser.context", "Request"): "request",
     ("tesser.context", "Response"): "response",
     ("tesser.context", "Client"): "client",
@@ -39,6 +39,10 @@ TESSER_BASE_BLOCKS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.adapters", "Handler"): "handler",
     ("tesser.adapters", "Runner"): "runner",
     ("tesser.adapters", "Runtime"): "runtime",
+    ("tesser.adapters", "Activity"): "activity",
+    ("tesser.adapters", "Workflow"): "workflow",
+    ("tesser.adapters", "Dispatcher"): "dispatcher",
+    ("tesser.adapters", "Signal"): "signal",
     ("tesser.adapters", "Mapper"): "mapper",
     ("tesser.adapters", "Serde"): "serde",
     ("tesser.adapters", "Relay"): "relay",
@@ -148,11 +152,22 @@ START_MODE: typing.Final[str] = "start_"
 
 ENGINE_CALLS: typing.Final[dict[str, str]] = {"generic_call": RUN_MODE, "generic_send": START_MODE}
 
+DISPATCH_CALLS: typing.Final[dict[str, str]] = {
+    "service_call": RUN_MODE,
+    "object_call": RUN_MODE,
+    "workflow_call": RUN_MODE,
+    "service_send": START_MODE,
+    "object_send": START_MODE,
+    "workflow_send": START_MODE,
+}
+
+REGISTERED_HANDLER: typing.Final[str] = "handler"
+
 PROMISE_CALL: typing.Final[str] = "promise"
 
-WORKFLOW_OPERATION: typing.Final[str] = "invocation"
+DEPRECATED_WORKFLOW_OPERATION: typing.Final[str] = "invocation"
 
-WORKFLOW_BLOCK: typing.Final[str] = "workflow"
+DEPRECATED_WORKFLOW_BLOCK: typing.Final[str] = "deprecated_workflow"
 
 PACKAGE_MODULE_SEGMENTS: typing.Final[int] = 4
 
@@ -207,6 +222,20 @@ RUNNER_BLOCK: typing.Final[str] = "runner"
 
 RUNTIME_BLOCK: typing.Final[str] = "runtime"
 
+ACTIVITY_BLOCK: typing.Final[str] = "activity"
+
+WORKFLOW_BLOCK: typing.Final[str] = "workflow"
+
+DISPATCHER_BLOCK: typing.Final[str] = "dispatcher"
+
+SIGNAL_BLOCK: typing.Final[str] = "signal"
+
+COMPONENT_BLOCK: typing.Final[str] = "component"
+
+REGISTRATION_BLOCKS: typing.Final[frozenset[str]] = frozenset({ACTIVITY_BLOCK, WORKFLOW_BLOCK, SIGNAL_BLOCK})
+
+RELAY_IMPLEMENTATION_BLOCKS: typing.Final[frozenset[str]] = frozenset({RUNNER_BLOCK, DISPATCHER_BLOCK})
+
 RELAY_SUFFIX: typing.Final[str] = "Relay"
 
 SIGNAL_INFIX: typing.Final[str] = "Signal"
@@ -231,16 +260,24 @@ ACTIONS_CLIENT_BLOCK: typing.Final[str] = "actions_client"
 INVOKED_OPERATION_BLOCKS: typing.Final[tuple[str, ...]] = (ORCHESTRATOR_BLOCK, ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK)
 
 CHAIN_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"client", "service", ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK, ORCHESTRATOR_BLOCK, RELAY_BLOCK, RUNNER_BLOCK, RUNTIME_BLOCK, WORKFLOW_BLOCK}
+    {"client", "service", ACTIONS_BLOCK, ACTIONS_CLIENT_BLOCK, ORCHESTRATOR_BLOCK, RELAY_BLOCK, RUNNER_BLOCK, RUNTIME_BLOCK, DEPRECATED_WORKFLOW_BLOCK}
 )
 
 ADAPTER_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"handler", "gateway", "repository", RUNNER_BLOCK, RUNTIME_BLOCK}
+    {"handler", "gateway", "repository", RUNNER_BLOCK, RUNTIME_BLOCK, DISPATCHER_BLOCK} | REGISTRATION_BLOCKS
 )
 
 RUNNERS_PACKAGE: typing.Final[str] = "runners"
 
 RUNTIMES_PACKAGE: typing.Final[str] = "runtimes"
+
+ACTIVITIES_PACKAGE: typing.Final[str] = "activities"
+
+WORKFLOWS_PACKAGE: typing.Final[str] = "workflows"
+
+DISPATCHERS_PACKAGE: typing.Final[str] = "dispatchers"
+
+ENGINE_ADAPTER_PACKAGES: typing.Final[tuple[str, ...]] = (ACTIVITIES_PACKAGE, WORKFLOWS_PACKAGE, DISPATCHERS_PACKAGE)
 
 ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
@@ -248,13 +285,34 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "repositories": frozenset({"repository"}),
     RUNNERS_PACKAGE: frozenset({RUNNER_BLOCK}),
     RUNTIMES_PACKAGE: frozenset({RUNTIME_BLOCK, "serde"}),
+    ACTIVITIES_PACKAGE: frozenset({ACTIVITY_BLOCK, "serde"}),
+    WORKFLOWS_PACKAGE: frozenset({WORKFLOW_BLOCK, DISPATCHER_BLOCK, "serde"}),
+    DISPATCHERS_PACKAGE: frozenset({DISPATCHER_BLOCK, SIGNAL_BLOCK, "serde"}),
 }
 
-RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
+OUT_OF_INVOCATION_IMPORTS: typing.Final[tuple[str, ...]] = (
+    "restate.client", "httpx", "aiohttp", "requests", "urllib.request", "urllib3"
+)
 
-ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE})
+ENGINE_PACKAGE: typing.Final[str] = "restate"
 
-ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, or runtimes"
+OUT_OF_INVOCATION_READS: typing.Final[frozenset[str]] = frozenset({"create_client", "RestateClient"})
+
+REGISTRATION_CALLS: typing.Final[frozenset[str]] = frozenset({"handler", "main"})
+
+RESOLVE_CALL: typing.Final[str] = "resolve"
+
+DISPATCH_PREFIXES: typing.Final[dict[str, str]] = {
+    ACTIVITY_BLOCK: "service_",
+    WORKFLOW_BLOCK: "workflow_",
+    SIGNAL_BLOCK: "workflow_",
+}
+
+RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, ACTIVITIES_PACKAGE})
+
+RUNNER_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNNERS_PACKAGE, WORKFLOWS_PACKAGE})
+
+ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, ACTIVITIES_PACKAGE, WORKFLOWS_PACKAGE, DISPATCHERS_PACKAGE})
 
 SERDE_BLOCK: typing.Final[str] = "serde"
 
@@ -333,6 +391,9 @@ ADAPTER_KIND_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "repositories": (PORTS_IMPORT_PATH,),
     RUNNERS_PACKAGE: (RELAYS_IMPORT, ORCHESTRATORS_IMPORT),
     RUNTIMES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
+    ACTIVITIES_PACKAGE: (APPLICATION_CLIENT_IMPORT, RELAYS_IMPORT),
+    WORKFLOWS_PACKAGE: (ORCHESTRATORS_IMPORT, RELAYS_IMPORT, f"adapters.{ACTIVITIES_PACKAGE}"),
+    DISPATCHERS_PACKAGE: (RELAYS_IMPORT, f"adapters.{WORKFLOWS_PACKAGE}"),
 }
 
 HOST_KINDS: typing.Final[frozenset[str]] = frozenset({"handler", RUNTIME_BLOCK})
@@ -354,7 +415,7 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "actions": "application",
     "orchestrator": ORCHESTRATORS_HOME,
     "actions_client": APPLICATION_CLIENT_HOME,
-    WORKFLOW_BLOCK: APPLICATION_CLIENT_HOME,
+    DEPRECATED_WORKFLOW_BLOCK: APPLICATION_CLIENT_HOME,
     RELAY_BLOCK: RELAYS_HOME,
     "relay_request": RELAYS_HOME,
     "relay_response": RELAYS_HOME,
@@ -372,6 +433,10 @@ KIND_ROLE: typing.Final[dict[str, str]] = {
     "handler": "adapters",
     RUNNER_BLOCK: "adapters",
     RUNTIME_BLOCK: "adapters",
+    ACTIVITY_BLOCK: "adapters",
+    WORKFLOW_BLOCK: "adapters",
+    DISPATCHER_BLOCK: "adapters",
+    SIGNAL_BLOCK: "adapters",
     "serde": "adapters",
     "component": "component",
     "component_config": "component",
@@ -404,7 +469,7 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     SNAPSHOT_BLOCK: "a snapshot",
     "port": "a port",
     "store": "a store",
-    WORKFLOW_BLOCK: "a workflow",
+    DEPRECATED_WORKFLOW_BLOCK: "a deprecated workflow",
     "port_request": "a port request DTO",
     "port_response": "a port response DTO",
     "request": "a request DTO",
@@ -416,6 +481,10 @@ KIND_NAME: typing.Final[dict[str, str]] = {
     "handler": "an inbound handler",
     RUNNER_BLOCK: "a runner",
     RUNTIME_BLOCK: "a runtime",
+    ACTIVITY_BLOCK: "an activity",
+    WORKFLOW_BLOCK: "a workflow",
+    DISPATCHER_BLOCK: "a dispatcher",
+    SIGNAL_BLOCK: "a signal",
     "serde": "a serde",
     "component": "a component",
     "component_config": "a component config",
@@ -641,6 +710,9 @@ TEST_TIER_HOME: typing.Final[dict[str, tuple[str, str | None]]] = {
     "repositories": ("adapters", "repositories"),
     RUNNERS_PACKAGE: ("adapters", RUNNERS_PACKAGE),
     RUNTIMES_PACKAGE: ("adapters", RUNTIMES_PACKAGE),
+    ACTIVITIES_PACKAGE: ("adapters", ACTIVITIES_PACKAGE),
+    WORKFLOWS_PACKAGE: ("adapters", WORKFLOWS_PACKAGE),
+    DISPATCHERS_PACKAGE: ("adapters", DISPATCHERS_PACKAGE),
     ORCHESTRATORS_PACKAGE: ("application", ORCHESTRATORS_PACKAGE),
     RELAYS_PACKAGE: ("application", RELAYS_PACKAGE),
     SNAPSHOTS_PACKAGE: ("application", SNAPSHOTS_PACKAGE),
@@ -656,6 +728,10 @@ TEST_TIER_REACH: typing.Final[dict[str, tuple[str, ...]]] = {
     "repositories": SAME_CONTEXT_IMPORTS["adapters"],
     RUNNERS_PACKAGE: ADAPTER_KIND_REACH[RUNNERS_PACKAGE] + ("domain",),
     RUNTIMES_PACKAGE: ADAPTER_KIND_REACH[RUNTIMES_PACKAGE] + ("domain",),
+    ACTIVITIES_PACKAGE: ADAPTER_KIND_REACH[ACTIVITIES_PACKAGE] + ("domain",),
+    WORKFLOWS_PACKAGE: ADAPTER_KIND_REACH[WORKFLOWS_PACKAGE] + (APPLICATION_CLIENT_IMPORT, "domain"),
+    DISPATCHERS_PACKAGE: ADAPTER_KIND_REACH[DISPATCHERS_PACKAGE]
+    + (APPLICATION_CLIENT_IMPORT, f"adapters.{ACTIVITIES_PACKAGE}", "domain"),
     ORCHESTRATORS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
     + (ORCHESTRATORS_IMPORT, PORTS_IMPORT_PATH, RELAYS_IMPORT),
     RELAYS_PACKAGE: SAME_CONTEXT_IMPORTS["application"]
@@ -672,6 +748,7 @@ TEST_TIER_FOREIGN: typing.Final[dict[str, tuple[str, ...]]] = {
 
 ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
     {"handlers", "gateways", "repositories", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
+    | frozenset(ENGINE_ADAPTER_PACKAGES)
 )
 
 SRV_TIER: typing.Final[str] = "srv"
@@ -703,6 +780,9 @@ TEST_TIER_SHELL: typing.Final[dict[str, frozenset[str]]] = {
     "repositories": frozenset(),
     RUNNERS_PACKAGE: frozenset(),
     RUNTIMES_PACKAGE: frozenset(),
+    ACTIVITIES_PACKAGE: frozenset(),
+    WORKFLOWS_PACKAGE: frozenset(),
+    DISPATCHERS_PACKAGE: frozenset(),
     ORCHESTRATORS_PACKAGE: frozenset(),
     RELAYS_PACKAGE: frozenset(),
     SNAPSHOTS_PACKAGE: frozenset(),
@@ -1733,11 +1813,11 @@ class Comment(ts.ValueObject):
 
 
 BODY_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"service", "actions", "orchestrator", "repository", "gateway", "handler", "runner"}
+    {"service", "actions", "orchestrator", "repository", "gateway", "handler"} | RELAY_IMPLEMENTATION_BLOCKS
 )
 
 INLINING_BLOCKS: typing.Final[frozenset[str]] = frozenset(
-    {"repository", "gateway", "runner"}
+    {"repository", "gateway"} | RELAY_IMPLEMENTATION_BLOCKS
 )
 
 
@@ -2051,6 +2131,43 @@ class FarSideRows(ts.ValueObject):
         return None
 
 
+class RegistrationRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str, str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str, str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def far_side(self, symbol: Symbol) -> Symbol | None:
+        wanted = (str(symbol.module()), str(symbol.name()))
+        for module_name, cls, _, far_module, far_name, _ in self._items:
+            if (module_name, cls) == wanted and far_name:
+                return Symbol(SymbolSpec(far_module, far_name))
+        return None
+
+    def handler(self, symbol: Symbol) -> Text | None:
+        wanted = (str(symbol.module()), str(symbol.name()))
+        for module_name, cls, _, _, _, handler in self._items:
+            if (module_name, cls) == wanted and handler:
+                return Text(handler)
+        return None
+
+
+class ConstantRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, str], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, str], ...]) -> None:
+        object.__setattr__(self, "_items", items)
+
+    def value(self, symbol: Symbol) -> Text | None:
+        wanted = (str(symbol.module()), str(symbol.name()))
+        for module_name, name, value in self._items:
+            if (module_name, name) == wanted:
+                return Text(value)
+        return None
+
+
 class ReturnRows(ts.ValueObject):
 
     _items: tuple[tuple[str, str, str, str, str], ...]
@@ -2138,7 +2255,13 @@ class RegistrySpec(ts.Spec):
         far_sides: tuple[tuple[str, str, str, str], ...] = (),
         engine_targets: tuple[str, ...] = (),
         engine_registrations: tuple[str, ...] = (),
+        registrations: tuple[tuple[str, str, str, str, str, str], ...] = (),
+        dispatched: tuple[str, ...] = (),
+        relay_constants: tuple[tuple[str, str, str], ...] = (),
     ) -> None:
+        self.registrations = registrations
+        self.dispatched = dispatched
+        self.relay_constants = relay_constants
         self.engine_registrations = engine_registrations
         self.engine_targets = engine_targets
         self.far_sides = far_sides
@@ -2195,8 +2318,14 @@ class Registry(ts.ValueObject):
     _far_sides: FarSideRows
     _engine_targets: NameRows
     _engine_registrations: NameRows
+    _registrations: RegistrationRows
+    _dispatched: NameRows
+    _relay_constants: ConstantRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_registrations", RegistrationRows(spec.registrations))
+        object.__setattr__(self, "_dispatched", NameRows(spec.dispatched))
+        object.__setattr__(self, "_relay_constants", ConstantRows(spec.relay_constants))
         object.__setattr__(self, "_engine_registrations", NameRows(spec.engine_registrations))
         object.__setattr__(self, "_engine_targets", NameRows(spec.engine_targets))
         object.__setattr__(self, "_far_sides", FarSideRows(spec.far_sides))
@@ -2298,6 +2427,15 @@ class Registry(ts.ValueObject):
 
     def engine_registrations(self) -> Names:
         return self._engine_registrations.names()
+
+    def registrations(self) -> RegistrationRows:
+        return self._registrations
+
+    def dispatched(self) -> Names:
+        return self._dispatched.names()
+
+    def relay_constants(self) -> ConstantRows:
+        return self._relay_constants
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
@@ -3679,8 +3817,8 @@ class Body(ts.ValueObject):
                     str(self._path),
                     int(fact.lineno()),
                     "TB082",
-                    f"{where} delegates to {target}; a gateway, a repository, and a "
-                    "runner inline their logic, as a service does — one call on the "
+                    f"{where} delegates to {target}; a gateway, a repository, a runner, "
+                    "and a dispatcher inline their logic, as a service does — one call on the "
                     "backend and the mapping of what it answered, read on the page",
                 ))
             )
@@ -4790,6 +4928,7 @@ class ClassDecl(ts.Entity):
     _held_relays: Names
     _stores: tuple[Fact, ...]
     _self_annotations: tuple[Field, ...]
+    _registered_containers: Names
     _bases: Names
     _decoration: Names
     _extras: tuple[Fact, ...]
@@ -4964,6 +5103,41 @@ class ClassDecl(ts.Entity):
             ):
                 self_annotations.append(Field(FieldSpec(inner.target.attr, inner.annotation, inner.lineno)))
         object.__setattr__(self, "_self_annotations", tuple(self_annotations))
+        engine_containers: set[str] = set()
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Assign) and len(inner.targets) == 1:
+                container_target: ast.expr = inner.targets[0]
+            elif isinstance(inner, ast.AnnAssign):
+                container_target = inner.target
+            else:
+                continue
+            maker = inner.value.func if isinstance(inner.value, ast.Call) else None
+            made = maker.attr if isinstance(maker, ast.Attribute) else maker.id if isinstance(maker, ast.Name) else ""
+            if (
+                made in ENGINE_REGISTRATIONS
+                and isinstance(container_target, ast.Attribute)
+                and isinstance(container_target.value, ast.Name)
+                and container_target.value.id == "self"
+            ):
+                engine_containers.add(container_target.attr)
+        registered_containers: set[str] = set()
+        for inner in ast.walk(node) if engine_containers else ():
+            if not isinstance(inner, ast.Call):
+                continue
+            called = scope.resolve(Text(ast.unparse(inner.func)))
+            called_block = kind_table.block_of(called) if called is not None else None
+            if called_block is None or str(called_block) not in REGISTRATION_BLOCKS:
+                continue
+            for argument in list(inner.args) + [keyword.value for keyword in inner.keywords]:
+                if (
+                    isinstance(argument, ast.Attribute)
+                    and isinstance(argument.value, ast.Name)
+                    and argument.value.id == "self"
+                    and argument.attr in engine_containers
+                    and argument.attr != "client"
+                ):
+                    registered_containers.add(argument.attr)
+        object.__setattr__(self, "_registered_containers", Names(tuple(sorted(registered_containers))))
         bases: list[str] = []
         for base in node.bases:
             base_ref = Annotation(base).primary()
@@ -6369,7 +6543,7 @@ class ClassDecl(ts.Entity):
         fields: dict[str, Annotation] = {str(field.name()): field.annotation() for field in self._fields}
         for fact in self._stores:
             published = str(fact.detail())
-            if published.startswith("_"):
+            if published.startswith("_") or published in self._registered_containers:
                 continue
             annotated = dict(fields)
             for field in self._self_annotations:
@@ -6397,7 +6571,8 @@ class ClassDecl(ts.Entity):
                         "TB081",
                         f"{self._module}.{self._name} publishes {published}; "
                         "a component publishes only its client, typed as its ts.Client, "
-                        "and its runtimes, each typed as a ts.Runtime",
+                        "its runtimes, each typed as a ts.Runtime, and the engine "
+                        "containers it hands an activity, a workflow, or a signal to register into",
                     ))
                 )
         return tuple(found)
@@ -7565,6 +7740,125 @@ class Module(ts.Entity):
         self._broken_relatives: tuple[tuple[str, int], ...] = tuple(broken_relatives)
         self._functions: frozenset[str] = frozenset(functions)
         self._class_defs: tuple[ast.ClassDef, ...] = tuple(self._classes.values())
+        registration_handlers: dict[
+            str,
+            tuple[
+                ast.FunctionDef | ast.AsyncFunctionDef | None,
+                tuple[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.Call | None], ...],
+            ],
+        ] = {}
+        kept_registrations: dict[str, tuple[bool, str | None]] = {}
+        for registering in self._class_defs if self._adapter_side else ():
+            kept_handler: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+            registered_fns: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.Call | None]] = []
+            for init in registering.body:
+                if not isinstance(init, (ast.FunctionDef, ast.AsyncFunctionDef)) or init.name != "__init__":
+                    continue
+                statements: list[ast.stmt] = []
+                pending: list[ast.stmt] = list(init.body)
+                while pending:
+                    stmt = pending.pop(0)
+                    statements.append(stmt)
+                    if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While)):
+                        pending.extend(stmt.body + stmt.orelse)
+                    elif isinstance(stmt, (ast.With, ast.AsyncWith)):
+                        pending.extend(stmt.body)
+                    elif isinstance(stmt, (ast.Try, ast.TryStar)):
+                        pending.extend(stmt.body)
+                        for caught in stmt.handlers:
+                            pending.extend(caught.body)
+                        pending.extend(stmt.orelse + stmt.finalbody)
+                    elif isinstance(stmt, ast.Match):
+                        for case in stmt.cases:
+                            pending.extend(case.body)
+                typed: list[tuple[str, ast.expr | None]] = [
+                    (param.arg, param.annotation)
+                    for param in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+                    if param.arg != "self"
+                ] + [
+                    (local.target.id, local.annotation)
+                    for local in statements
+                    if isinstance(local, ast.AnnAssign) and isinstance(local.target, ast.Name)
+                ]
+                roots: set[str] = set()
+                for typed_name, typed_as in typed:
+                    engine_typed = self._resolve(typed_as) if typed_as is not None else None
+                    if typed_as is None or (
+                        engine_typed is not None
+                        and engine_typed[0].split(".")[0] == ENGINE_PACKAGE
+                        and engine_typed[1] in ENGINE_REGISTRATIONS
+                    ):
+                        roots.add(typed_name)
+                held_roots: set[str] = set()
+                defined: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {
+                    local.name: local for local in statements if isinstance(local, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                for local in statements:
+                    stored = (
+                        local.targets[0] if isinstance(local, ast.Assign) and len(local.targets) == 1
+                        else local.target if isinstance(local, ast.AnnAssign)
+                        else None
+                    )
+                    if not (
+                        isinstance(local, (ast.Assign, ast.AnnAssign))
+                        and isinstance(stored, ast.Attribute)
+                        and isinstance(stored.value, ast.Name)
+                        and stored.value.id == "self"
+                        and isinstance(local.value, ast.Name)
+                    ):
+                        continue
+                    if local.value.id in roots:
+                        held_roots.add(stored.attr)
+                    if stored.attr == REGISTERED_HANDLER and local.value.id in defined:
+                        kept_handler = defined[local.value.id]
+                candidates: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.expr]] = [
+                    (defined_fn, decorator) for defined_fn in defined.values() for decorator in defined_fn.decorator_list
+                ]
+                for local in statements:
+                    if isinstance(local, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        continue
+                    candidates.extend(
+                        (defined[passed_fn.id], call.func)
+                        for call in ast.walk(local)
+                        if isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Call)
+                        and isinstance(call.func.func, ast.Attribute)
+                        and call.func.func.attr in REGISTRATION_CALLS
+                        for passed_fn in call.args
+                        if isinstance(passed_fn, ast.Name) and passed_fn.id in defined
+                    )
+                for candidate_fn, chain in candidates:
+                    link: ast.expr = chain
+                    on_engine: bool | None = None
+                    while isinstance(link, (ast.Attribute, ast.Call)) and on_engine is None:
+                        if isinstance(link, ast.Attribute) and isinstance(link.value, ast.Name) and link.value.id == "self":
+                            on_engine = link.attr in held_roots
+                        else:
+                            link = link.value if isinstance(link, ast.Attribute) else link.func
+                    if on_engine is None:
+                        on_engine = isinstance(link, ast.Name) and link.id in roots
+                    if on_engine and all(candidate_fn is not registered_fn for registered_fn, _ in registered_fns):
+                        registered_fns.append((candidate_fn, chain if isinstance(chain, ast.Call) else None))
+            registration_handlers[registering.name] = (kept_handler, tuple(registered_fns))
+            kept_registration = next(
+                (registration for registrant, registration in registered_fns if registrant is kept_handler), None
+            )
+            kept_registered = kept_handler is not None and any(
+                registrant is kept_handler for registrant, _ in registered_fns
+            )
+            registered_as: str | None = kept_handler.name if kept_handler is not None else None
+            if kept_registration is not None:
+                named = kept_registration.args[0] if kept_registration.args else None
+                for keyword in kept_registration.keywords:
+                    if keyword.arg == "name" and named is None:
+                        named = keyword.value
+                if named is not None:
+                    registered_as = (
+                        named.value if isinstance(named, ast.Constant) and isinstance(named.value, str) else None
+                    )
+            kept_registrations[registering.name] = (kept_registered, registered_as)
+        self._kept_registrations = kept_registrations
+        self._registration_handlers = registration_handlers
         self._bound_names: tuple[tuple[str, str, str], ...] = tuple(
             (local, target, original) for local, (target, original) in self._imported.items()
         )
@@ -9286,7 +9580,7 @@ class Module(ts.Entity):
                             if not (
                                 isinstance(opening, ast.Call)
                                 and isinstance(opening.func, ast.Attribute)
-                                and opening.func.attr == WORKFLOW_OPERATION
+                                and opening.func.attr == DEPRECATED_WORKFLOW_OPERATION
                                 and isinstance(with_item.optional_vars, ast.Name)
                             ):
                                 continue
@@ -9328,6 +9622,148 @@ class Module(ts.Entity):
                 for side in carried:
                     rows.append((context, operation, side[0], side[1]))
         return tuple(sorted(rows))
+
+    def _registration_rows(
+        self,
+        blocks: dict[tuple[str, str], str],
+        paired: dict[tuple[str, str], tuple[str, str]],
+    ) -> tuple[tuple[str, str, str, str, str, str], ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        rows: list[tuple[str, str, str, str, str, str]] = []
+        for cls in self._class_defs:
+            block = blocks.get((self._name, cls.name))
+            if block not in REGISTRATION_BLOCKS:
+                continue
+            handler = self._registration_handlers.get(cls.name, (None, ()))[0]
+            sides: set[tuple[str, str]] = set()
+            for item in cls.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name != "__init__":
+                    continue
+                if block != ACTIVITY_BLOCK:
+                    continue
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
+                    named = self._resolve(arg.annotation) if arg.annotation is not None else None
+                    if named is None:
+                        continue
+                    named = paired.get(named, named)
+                    if blocks.get(named) in (ACTIONS_BLOCK, ORCHESTRATOR_BLOCK):
+                        sides.add(named)
+            if block == WORKFLOW_BLOCK and handler is not None:
+                for call in ast.walk(handler):
+                    if not isinstance(call, ast.Call):
+                        continue
+                    made = self._resolve(call.func)
+                    if made is not None and blocks.get(made) == ORCHESTRATOR_BLOCK:
+                        sides.add(made)
+            side = sorted(sides)[0] if len(sides) == 1 else ("", "")
+            registered_as = self._kept_registrations.get(cls.name, (False, None))[1]
+            rows.append((self._name, cls.name, block, side[0], side[1], registered_as or ""))
+        return tuple(rows)
+
+    def _container_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, str, str], ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        rows: set[tuple[str, str, str, str]] = set()
+        for cls in self._class_defs:
+            if blocks.get((self._name, cls.name)) != COMPONENT_BLOCK:
+                continue
+            containers: set[str] = set()
+            for node in ast.walk(cls):
+                if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                    target: ast.expr = node.targets[0]
+                elif isinstance(node, ast.AnnAssign):
+                    target = node.target
+                else:
+                    continue
+                maker = node.value.func if isinstance(node.value, ast.Call) else None
+                made = maker.attr if isinstance(maker, ast.Attribute) else maker.id if isinstance(maker, ast.Name) else ""
+                if (
+                    made in ENGINE_REGISTRATIONS
+                    and isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                ):
+                    containers.add(target.attr)
+            for node in ast.walk(cls):
+                if not isinstance(node, ast.Call):
+                    continue
+                called = self._resolve(node.func)
+                if called is None or blocks.get(called) not in REGISTRATION_BLOCKS:
+                    continue
+                for argument in list(node.args) + [keyword.value for keyword in node.keywords]:
+                    if (
+                        isinstance(argument, ast.Attribute)
+                        and isinstance(argument.value, ast.Name)
+                        and argument.value.id == "self"
+                        and argument.attr in containers
+                    ):
+                        rows.add((f"{self._name}|{cls.name}", argument.attr, called[0], called[1]))
+        return tuple(sorted(rows))
+
+    def _dispatch_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, str, str, str], ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        rows: set[tuple[str, str, str, str, str]] = set()
+        for cls in self._class_defs:
+            if blocks.get((self._name, cls.name)) != DISPATCHER_BLOCK:
+                continue
+            taken: dict[str, tuple[str, str]] = {}
+            held: dict[str, tuple[str, str]] = {}
+            for item in cls.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name != "__init__":
+                    continue
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
+                    named = self._resolve(arg.annotation) if arg.annotation is not None else None
+                    if named is not None:
+                        taken[arg.arg] = named
+                for stmt in ast.walk(item):
+                    kept_as = (
+                        stmt.targets[0] if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
+                        else stmt.target if isinstance(stmt, ast.AnnAssign)
+                        else None
+                    )
+                    if (
+                        isinstance(stmt, (ast.Assign, ast.AnnAssign))
+                        and isinstance(kept_as, ast.Attribute)
+                        and isinstance(kept_as.value, ast.Name)
+                        and kept_as.value.id == "self"
+                        and isinstance(stmt.value, ast.Name)
+                        and stmt.value.id in taken
+                    ):
+                        held[kept_as.attr] = taken[stmt.value.id]
+            for member in cls.body:
+                if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name.startswith("_"):
+                    continue
+                mode = next((prefix for prefix in CALLING_MODES if member.name.startswith(prefix)), None)
+                operation = member.name[len(mode):] if mode is not None else ""
+                for node in ast.walk(member):
+                    if (
+                        isinstance(node, ast.Attribute)
+                        and node.attr == REGISTERED_HANDLER
+                        and isinstance(node.value, ast.Attribute)
+                        and isinstance(node.value.value, ast.Name)
+                        and node.value.value.id == "self"
+                        and node.value.attr in held
+                    ):
+                        reached = held[node.value.attr]
+                        rows.add((self._name, cls.name, operation, reached[0], reached[1]))
+        return tuple(sorted(rows))
+
+    def _relay_constant_rows(self) -> tuple[tuple[str, str, str], ...]:
+        if str(self._placement) not in ("relays", "relays-file"):
+            return ()
+        rows: list[tuple[str, str, str]] = []
+        for stmt in self._body:
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                name, value = stmt.target.id, stmt.value
+            elif isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
+                name, value = stmt.targets[0].id, stmt.value
+            else:
+                continue
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                rows.append((self._name, name, value.value))
+        return tuple(rows)
 
     def _declared_returns(self) -> tuple[tuple[str, str, str, str], ...]:
         scope = self._scope
@@ -10106,8 +10542,8 @@ class Module(ts.Entity):
                     1,
                     "TB041",
                     f"{module_name} is not in an adapter kind package; an adapters "
-                    "module lives in handlers, gateways, repositories, runners, or "
-                    "runtimes, because placement is what carries an adapter's reach",
+                    "module lives in handlers, gateways, repositories, runners, "
+                    "runtimes, activities, workflows, or dispatchers, because placement is what carries an adapter's reach",
                 ))
             )
         for stmt in self._body:
@@ -10289,11 +10725,67 @@ class Module(ts.Entity):
             str(kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "gateway"
             for cls in self._class_defs
         )
+        tested = own[-1].startswith(TEST_PREFIX) or own[-1] == "conftest"
         found: list[Violation] = []
+        if kind_package == WORKFLOWS_PACKAGE and not tested:
+            for imported_from, imported_name, _, imported_line in self._members:
+                target = f"{imported_from}.{imported_name}"
+                if any(
+                    imported_from == banned or imported_from.startswith(banned + ".")
+                    for banned in OUT_OF_INVOCATION_IMPORTS
+                ):
+                    continue
+                if target in OUT_OF_INVOCATION_IMPORTS or (
+                    imported_from == ENGINE_PACKAGE and imported_name in OUT_OF_INVOCATION_READS
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            imported_line,
+                            "TB060",
+                            f"{module_name} imports {target}; a workflows module calls across the engine "
+                            "only through its invocation's context, because the engine journals a call made "
+                            "through the context and a call made over HTTP runs again on every replay",
+                        ))
+                    )
+            for read in self._attributes:
+                if not (
+                    read.attr in OUT_OF_INVOCATION_READS
+                    and isinstance(read.value, ast.Name)
+                    and self._package_aliases.get(read.value.id) == ENGINE_PACKAGE
+                ):
+                    continue
+                target = f"{ENGINE_PACKAGE}.{read.attr}"
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        read.lineno,
+                        "TB060",
+                        f"{module_name} reads {target}; a workflows module calls across the engine only "
+                        "through its invocation's context, because the engine journals a call made through "
+                        "the context and a call made over HTTP runs again on every replay",
+                    ))
+                )
         for edge in self._edges:
             target = str(edge._target)
             lineno = int(edge._lineno)
             pieces = target.split(".")
+            if (
+                kind_package == WORKFLOWS_PACKAGE
+                and not tested
+                and any(target == banned or target.startswith(banned + ".") for banned in OUT_OF_INVOCATION_IMPORTS)
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB060",
+                        f"{module_name} imports {target}; a workflows module calls across the engine "
+                        "only through its invocation's context, because the engine journals a call made "
+                        "through the context and a call made over HTTP runs again on every replay",
+                    ))
+                )
+                continue
             if pieces[0] == TESSER:
                 continue
             elif pieces[0] in contexts:
@@ -10329,18 +10821,18 @@ class Module(ts.Entity):
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runtime imports "
+                            f"{module_name} imports {target}; only a runtime or an activity imports "
                             "the application client, because an action is reachable only "
                             "through the engine",
                         ))
                     )
-                elif pieces[0] == context and runner_only and kind_package != RUNNERS_PACKAGE:
+                elif pieces[0] == context and runner_only and kind_package not in RUNNER_KIND_PACKAGES:
                     denied.append(
                         Violation(ViolationSpec(
                             self._path,
                             lineno,
                             "TB060",
-                            f"{module_name} imports {target}; only a runner imports the "
+                            f"{module_name} imports {target}; only a runner or a workflow imports the "
                             "orchestrators, because an orchestrator is built per invocation by "
                             "the workflow that runs beside that invocation's runners",
                         ))
@@ -10360,7 +10852,9 @@ class Module(ts.Entity):
                                 "the context client, a gateway or a repository the ports, "
                                 "a runner its relays and the orchestrators its workflow "
                                 "builds, a runtime the application client and the relays "
-                                "it registers, and none of them another adapters package",
+                                "it registers, an activity what a runtime reaches, a workflow the relays, "
+                                "the orchestrators and activities, a dispatcher the relays and workflows, and none of "
+                                "them another adapters package",
                             ))
                         )
                 elif pieces[0] == context:
@@ -10590,7 +11084,7 @@ class Module(ts.Entity):
             where = f"{module_name}.{stmt.name}"
             named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
             block = str(named) if named is not None else None
-            if block == WORKFLOW_BLOCK:
+            if block == DEPRECATED_WORKFLOW_BLOCK:
                 workflows.append(stmt)
                 opens = tuple(
                     item
@@ -10600,7 +11094,7 @@ class Module(ts.Entity):
                 yielded = (
                     opens[0].returns.slice
                     if len(opens) == 1
-                    and opens[0].name == WORKFLOW_OPERATION
+                    and opens[0].name == DEPRECATED_WORKFLOW_OPERATION
                     and isinstance(opens[0].returns, ast.Subscript)
                     else None
                 )
@@ -10615,7 +11109,7 @@ class Module(ts.Entity):
                             stmt.lineno,
                             "TB052",
                             f"{where} does not yield the client beside it from one invocation; a "
-                            "workflow in an application client module declares only invocation, "
+                            "deprecated workflow in an application client module declares only invocation, "
                             "and what it yields is the client that module declares",
                         ))
                     )
@@ -10681,8 +11175,8 @@ class Module(ts.Entity):
                     self._path,
                     workflows[1].lineno,
                     "TB052",
-                    f"{module_name} declares {len(workflows)} workflows; an application client "
-                    "module declares at most one ts.Workflow, the one that yields its client",
+                    f"{module_name} declares {len(workflows)} deprecated workflows; an application client "
+                    "module declares at most one ts.DeprecatedWorkflow, the one that yields its client",
                 ))
             )
         return tuple(found)
@@ -11195,7 +11689,7 @@ class Module(ts.Entity):
                             RELAY_BLOCK,
                             "protocol_port",
                             "config_repository",
-                            WORKFLOW_BLOCK,
+                            DEPRECATED_WORKFLOW_BLOCK,
                         ):
                             doubles = True
                     if not doubles:
@@ -11205,7 +11699,7 @@ class Module(ts.Entity):
                                 stmt.lineno,
                                 "TB072",
                                 f"{where} implements no application port, store, relay, protocol "
-                                "port, client, workflow, or config repository; a fake implements "
+                                "port, client, deprecated workflow, or config repository; a fake implements "
                                 "the contract it doubles",
                             ))
                         )
@@ -11237,7 +11731,7 @@ class Module(ts.Entity):
                     "TB070",
                     f"{module_name} resolves to no test tier; "
                     "a sibling test lives in a role package, an adapter kind package "
-                    "(handlers, gateways, repositories, runners, or runtimes), or the "
+                    "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
                     "orchestrators package",
                 )),
             )
@@ -11397,11 +11891,11 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runtimes reaches the application client; a test reaches only what "
+                            "runtimes, activities, workflows, or dispatchers reaches the application client; a test reaches only what "
                             "its placement allows",
                         ))
                     )
-                elif allowed and tier != RUNNERS_PACKAGE and not at_home and any(
+                elif allowed and tier not in RUNNER_KIND_PACKAGES and not at_home and any(
                     inner == entry or inner.startswith(f"{entry}.")
                     for entry in RUNNER_ONLY_IMPORTS
                 ):
@@ -11411,7 +11905,7 @@ class Module(ts.Entity):
                             lineno,
                             "TB070",
                             f"{module_name} imports {target}, but only a test placed in "
-                            "runners reaches the orchestrators; a test reaches only what its "
+                            "runners or workflows reaches the orchestrators; a test reaches only what its "
                             "placement allows",
                         ))
                     )
@@ -11485,6 +11979,42 @@ class Module(ts.Entity):
                     "TB083",
                     f"{module_name}.{shared_class} takes {spec_label}, which {owner_label} already takes; "
                     "a spec constructs exactly one object",
+                ))
+            )
+        return tuple(found)
+
+    def relay_constant_violations(self) -> tuple[Violation, ...]:
+        if str(self._placement) not in ("relays", "relays-file"):
+            return ()
+        module_name = self._name
+        assigned: dict[str, list[ast.stmt]] = {}
+        constants: set[str] = set()
+        for stmt in self._body:
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                names, value = [stmt.target.id], stmt.value
+            elif isinstance(stmt, ast.Assign):
+                names = [target.id for target in stmt.targets if isinstance(target, ast.Name)]
+                value = stmt.value
+            elif isinstance(stmt, ast.AugAssign) and isinstance(stmt.target, ast.Name):
+                names, value = [stmt.target.id], None
+            else:
+                continue
+            for name in names:
+                assigned.setdefault(name, []).append(stmt)
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    constants.add(name)
+        found: list[Violation] = []
+        for constant in sorted(constants):
+            count = len(assigned[constant])
+            if count < 2:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    assigned[constant][1].lineno,
+                    "TB085",
+                    f"{module_name}.{constant} is assigned {count} times; a relays constant is assigned "
+                    "once, because the analyzer reads one value and Python keeps the last",
                 ))
             )
         return tuple(found)
@@ -11606,7 +12136,7 @@ class Module(ts.Entity):
             protocol_name = ""
             relay_module = ""
             for symbol in tuple(operation_rows.owners(Text(RELAY_BLOCK))) + tuple(
-                operation_rows.owners(Text(WORKFLOW_BLOCK))
+                operation_rows.owners(Text(DEPRECATED_WORKFLOW_BLOCK))
             ):
                 named = str(symbol.name())
                 if (
@@ -11768,6 +12298,579 @@ class Module(ts.Entity):
                                 "carries, because one operation keeps one name across a relay",
                             ))
                         )
+        return tuple(found)
+
+    def dispatcher_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        operation_rows = registry.operations()
+        registration_rows = registry.registrations()
+        constant_rows = registry.relay_constants()
+        context = self._name.split(".")[0]
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) != DISPATCHER_BLOCK:
+                continue
+            where = f"{self._name}.{cls.name}"
+            taken: dict[str, tuple[str, str]] = {}
+            held: dict[str, tuple[str, str]] = {}
+            for item in cls.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name != "__init__":
+                    continue
+                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
+                    named = self._resolve(arg.annotation) if arg.annotation is not None else None
+                    if named is not None:
+                        taken[arg.arg] = named
+                for stmt in ast.walk(item):
+                    kept_as = (
+                        stmt.targets[0] if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
+                        else stmt.target if isinstance(stmt, ast.AnnAssign)
+                        else None
+                    )
+                    if (
+                        isinstance(stmt, (ast.Assign, ast.AnnAssign))
+                        and isinstance(kept_as, ast.Attribute)
+                        and isinstance(kept_as.value, ast.Name)
+                        and kept_as.value.id == "self"
+                        and isinstance(stmt.value, ast.Name)
+                        and stmt.value.id in taken
+                    ):
+                        held[kept_as.attr] = taken[stmt.value.id]
+            members = tuple(
+                item
+                for item in cls.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+            )
+            protocol_name = ""
+            relay_module = ""
+            for symbol in operation_rows.owners(Text(RELAY_BLOCK)):
+                named_relay = str(symbol.name())
+                if (
+                    str(symbol.module()).split(".")[0] == context
+                    and cls.name.endswith(named_relay)
+                    and len(named_relay) > len(protocol_name)
+                ):
+                    protocol_name = named_relay
+                    relay_module = str(symbol.module())
+            if not protocol_name:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} ends in no relay's name; a dispatcher is its engine's word "
+                        "followed by the name of the relay it implements, because its name is "
+                        "how that protocol is found",
+                    ))
+                )
+            else:
+                carried = tuple(operation_rows.methods(Symbol(SymbolSpec(relay_module, protocol_name))))
+                implemented = tuple(member.name for member in members)
+                for sibling in implemented:
+                    if sibling not in carried:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                cls.lineno,
+                                "TB081",
+                                f"{where}.{sibling} is not on {protocol_name}; a dispatcher's public "
+                                "methods are exactly its relay's, because it implements that relay "
+                                "and nothing else",
+                            ))
+                        )
+                for sibling in carried:
+                    if sibling not in implemented:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                cls.lineno,
+                                "TB081",
+                                f"{where} lacks {sibling}; a dispatcher's public methods are exactly "
+                                "its relay's, because it implements that relay and nothing else",
+                            ))
+                        )
+            for method in cls.body:
+                if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for node in ast.walk(method):
+                    if (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr in ENGINE_CALLS
+                    ):
+                        by_name = node.func.attr
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB085",
+                                f"{where}.{method.name} calls {by_name}; a dispatcher reaches the engine "
+                                "only through the typed handler of an activity, a workflow, or a signal, "
+                                "or through promise in an await_ method, because a name the analyzer "
+                                "cannot read is a name it is not checking",
+                            ))
+                        )
+            for member in members:
+                for node in ast.walk(member):
+                    if not (
+                        isinstance(node, ast.Attribute)
+                        and node.attr == REGISTERED_HANDLER
+                        and isinstance(node.value, ast.Attribute)
+                        and isinstance(node.value.value, ast.Name)
+                        and node.value.value.id == "self"
+                    ):
+                        continue
+                    reached = held.get(node.value.attr)
+                    reached_block = (
+                        kind_table.block_of(Symbol(SymbolSpec(reached[0], reached[1]))) if reached is not None else None
+                    )
+                    if reached_block is None or str(reached_block) not in REGISTRATION_BLOCKS:
+                        field = node.value.attr
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reads the handler of self.{field}, which is not "
+                                "an activity, a workflow, or a signal; a dispatcher reaches only a "
+                                "handler an activity, a workflow, or a signal of its context registers, "
+                                "because nothing else registers a handler with the engine",
+                            ))
+                        )
+                mode = next((prefix for prefix in CALLING_MODES if member.name.startswith(prefix)), None)
+                if mode is None:
+                    continue
+                operation = member.name[len(mode):]
+                if mode == AWAIT_MODE:
+                    promises = tuple(
+                        node
+                        for node in ast.walk(member)
+                        if isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == PROMISE_CALL
+                    )
+                    if not promises:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                member.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reads no promise; an await_ method reads the "
+                                "durable promise named for the operation it waits on, because one "
+                                "operation keeps one name across a relay",
+                            ))
+                        )
+                    for call in promises:
+                        first = call.args[0] if call.args else None
+                        promised = self._resolve(first) if isinstance(first, (ast.Name, ast.Attribute)) else None
+                        value = (
+                            constant_rows.value(Symbol(SymbolSpec(promised[0], promised[1])))
+                            if promised is not None
+                            else None
+                        )
+                        if value is None:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    call.lineno,
+                                    "TB085",
+                                    f"{where}.{member.name} names its promise with something other than "
+                                    "a constant in application/relays; a dispatcher names the promise it "
+                                    "reads by a relays constant, because a name the analyzer cannot read "
+                                    "is a name it is not checking",
+                                ))
+                            )
+                        elif str(value) != operation:
+                            found.append(
+                                Violation(ViolationSpec(
+                                    self._path,
+                                    call.lineno,
+                                    "TB085",
+                                    f"{where}.{member.name} reads the promise {value}; an await_ "
+                                    "method reads the durable promise named for the operation it "
+                                    "waits on, because one operation keeps one name across a relay",
+                                ))
+                            )
+                    continue
+                dispatched = tuple(
+                    (node, node.func.attr, argument.value.attr)
+                    for node in ast.walk(member)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in DISPATCH_CALLS
+                    for argument in list(node.args) + [keyword.value for keyword in node.keywords]
+                    if isinstance(argument, ast.Attribute)
+                    and argument.attr == REGISTERED_HANDLER
+                    and isinstance(argument.value, ast.Attribute)
+                    and isinstance(argument.value.value, ast.Name)
+                    and argument.value.value.id == "self"
+                )
+                if not dispatched:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            member.lineno,
+                            "TB085",
+                            f"{where}.{member.name} passes no handler to the engine; a dispatcher "
+                            "method passes the handler of the activity, workflow, or signal its "
+                            "operation reaches, because that handler is the typed reference that "
+                            "holds the two ends together",
+                        ))
+                    )
+                for call, engine_call, field in dispatched:
+                    if DISPATCH_CALLS[engine_call] != mode:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches its far side through {engine_call}; "
+                                "a run_ operation calls and waits and a start_ operation sends and "
+                                "does not, because the mode on the method is the mode on the engine",
+                            ))
+                        )
+                    reached = held.get(field)
+                    target_block = (
+                        kind_table.block_of(Symbol(SymbolSpec(reached[0], reached[1]))) if reached is not None else None
+                    )
+                    wanted_prefix = DISPATCH_PREFIXES.get(str(target_block)) if target_block is not None else None
+                    if reached is not None and wanted_prefix is not None and not engine_call.startswith(wanted_prefix):
+                        target_kind = str(target_block)
+                        target_class = reached[1]
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches the {target_kind} {target_class} through "
+                                f"{engine_call}; a dispatcher calls an activity's handler with service_call "
+                                "or service_send and a workflow's or a signal's with workflow_call or "
+                                "workflow_send, because the engine routes a call by the kind of container "
+                                "its handler is registered on",
+                            ))
+                        )
+                    registered = (
+                        registration_rows.handler(Symbol(SymbolSpec(reached[0], reached[1])))
+                        if reached is not None
+                        else None
+                    )
+                    if reached is not None and registered is not None and str(registered) != operation:
+                        passed = f"{reached[1]}.{registered}"
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} passes {passed}; a dispatcher method passes "
+                                "the handler named for the operation it carries, because one "
+                                "operation keeps one name across a relay",
+                            ))
+                        )
+        return tuple(found)
+
+    def registration_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        constant_rows = registry.relay_constants()
+        names = registry.dispatched()
+        context = self._name.split(".")[0]
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) not in REGISTRATION_BLOCKS:
+                continue
+            where = f"{self._name}.{cls.name}"
+            if f"{self._name}|{cls.name}" not in names:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} registers a handler no dispatcher in {context} reads; an activity, "
+                        "a workflow, or a signal registers only what a dispatcher of its context "
+                        "reaches, because a registration nothing reaches is a name the engine holds "
+                        "for no one",
+                    ))
+                )
+            handler, registrants = self._registration_handlers.get(cls.name, (None, ()))
+            if handler is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} keeps no handler as self.handler; an activity, a workflow, or a "
+                        "signal keeps the one handler it registers as self.handler, because a "
+                        "dispatcher reaches the handler through that attribute",
+                    ))
+                )
+                continue
+            for registrant, _ in registrants:
+                if registrant is handler:
+                    continue
+                stray = registrant.name
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        registrant.lineno,
+                        "TB085",
+                        f"{where} registers {stray} beside its handler; a registration class "
+                        "registers exactly one handler, the one it keeps as self.handler, because "
+                        "a handler no dispatcher reaches is a name nobody checks",
+                    ))
+                )
+            kept_registered, registered = self._kept_registrations.get(cls.name, (False, None))
+            if not kept_registered:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where} keeps {handler.name} as self.handler but does not register it; an "
+                        "activity, a workflow, or a signal keeps the handler it registers, because a "
+                        "dispatcher that passes an unregistered handler names nothing the engine holds",
+                    ))
+                )
+            if registered is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} registers under a name that is not a string "
+                        "literal; a handler registers under the operation it is named for, "
+                        "because a name the analyzer cannot read is a name it is not checking",
+                    ))
+                )
+            elif registered != handler.name:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} registers as {registered}; a handler "
+                        "registers under the operation it is named for, because the "
+                        "engine's name and the dispatcher's are one name",
+                    ))
+                )
+            if str(block) == ACTIVITY_BLOCK:
+                clients: set[str] = set()
+                for init in cls.body:
+                    if not isinstance(init, (ast.FunctionDef, ast.AsyncFunctionDef)) or init.name != "__init__":
+                        continue
+                    for param in init.args.posonlyargs + init.args.args + init.args.kwonlyargs:
+                        typed_as = self._resolve(param.annotation) if param.annotation is not None else None
+                        typed_block = (
+                            kind_table.block_of(Symbol(SymbolSpec(typed_as[0], typed_as[1])))
+                            if typed_as is not None
+                            else None
+                        )
+                        if typed_block is not None and str(typed_block) in INVOKED_OPERATION_BLOCKS:
+                            clients.add(param.arg)
+                performed = any(
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in clients
+                    and node.func.attr == handler.name
+                    for node in ast.walk(handler)
+                )
+                if not performed:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            handler.lineno,
+                            "TB085",
+                            f"{where}.{handler.name} calls no application client method named "
+                            f"{handler.name}; an activity's handler performs its operation by calling "
+                            "the method of that name on the application client it takes, because a "
+                            "handler that answers without it reports work nothing did",
+                        ))
+                    )
+            if str(block) != SIGNAL_BLOCK:
+                continue
+            resolved = any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == RESOLVE_CALL
+                and isinstance(node.func.value, ast.Call)
+                and isinstance(node.func.value.func, ast.Attribute)
+                and node.func.value.func.attr == PROMISE_CALL
+                for node in ast.walk(handler)
+            )
+            if not resolved:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} resolves no promise; a signal's handler resolves "
+                        "the durable promise named for its operation, because a signal that "
+                        "does not resolve its promise leaves its workflow waiting",
+                    ))
+                )
+            for call in ast.walk(cls):
+                if not (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == PROMISE_CALL
+                ):
+                    continue
+                first = call.args[0] if call.args else None
+                promised = self._resolve(first) if isinstance(first, (ast.Name, ast.Attribute)) else None
+                value = (
+                    constant_rows.value(Symbol(SymbolSpec(promised[0], promised[1])))
+                    if promised is not None
+                    else None
+                )
+                if value is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            call.lineno,
+                            "TB085",
+                            f"{where} names its promise with something other than a constant in "
+                            "application/relays; a signal names the promise it resolves by a relays "
+                            "constant, because a name the analyzer cannot read is a name it is not "
+                            "checking",
+                        ))
+                    )
+                elif str(value) != handler.name:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            call.lineno,
+                            "TB085",
+                            f"{where} resolves the promise {value}; a signal resolves the durable "
+                            "promise named for the operation its handler is named for, because one "
+                            "operation keeps one name across a relay",
+                        ))
+                    )
+        return tuple(found)
+
+    def container_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        if str(self._placement) in TEST_TIER:
+            return ()
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        registration_rows = registry.registrations()
+        found: list[Violation] = []
+        for cls in self._class_defs:
+            block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name)))
+            if block is None or str(block) != COMPONENT_BLOCK:
+                continue
+            where = f"{self._name}.{cls.name}"
+            containers: dict[str, tuple[str, int]] = {}
+            for node in ast.walk(cls):
+                if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                    target: ast.expr = node.targets[0]
+                elif isinstance(node, ast.AnnAssign):
+                    target = node.target
+                else:
+                    continue
+                maker = node.value.func if isinstance(node.value, ast.Call) else None
+                made = maker.attr if isinstance(maker, ast.Attribute) else maker.id if isinstance(maker, ast.Name) else ""
+                if not (
+                    made in ENGINE_REGISTRATIONS
+                    and isinstance(node.value, ast.Call)
+                    and isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                ):
+                    continue
+                first = node.value.args[0] if node.value.args else None
+                for keyword in node.value.keywords:
+                    if keyword.arg == "name" and first is None:
+                        first = keyword.value
+                literal = first.value if isinstance(first, ast.Constant) and isinstance(first.value, str) else ""
+                containers[target.attr] = (literal, node.lineno)
+            handed: list[tuple[str, str, str]] = []
+            for node in ast.walk(cls):
+                if not isinstance(node, ast.Call):
+                    continue
+                called = self._resolve(node.func)
+                called_block = kind_table.block_of(Symbol(SymbolSpec(called[0], called[1]))) if called else None
+                if called is None or called_block is None or str(called_block) not in REGISTRATION_BLOCKS:
+                    continue
+                for argument in list(node.args) + [keyword.value for keyword in node.keywords]:
+                    if (
+                        isinstance(argument, ast.Attribute)
+                        and isinstance(argument.value, ast.Name)
+                        and argument.value.id == "self"
+                        and argument.attr in containers
+                    ):
+                        handed.append((argument.attr, called[0], called[1]))
+            workflow_held = {
+                attr
+                for attr, handed_module, handed_name in handed
+                if str(kind_table.block_of(Symbol(SymbolSpec(handed_module, handed_name)))) == WORKFLOW_BLOCK
+            }
+            registered_names: dict[tuple[str, str], list[str]] = {}
+            for attr, handed_module, handed_name in sorted(handed):
+                registered_as = registration_rows.handler(Symbol(SymbolSpec(handed_module, handed_name)))
+                if registered_as is not None and str(registered_as):
+                    registered_names.setdefault((attr, str(registered_as)), []).append(handed_name)
+            for (attr, handler_name), registrants in sorted(registered_names.items()):
+                if len(registrants) < 2:
+                    continue
+                line = containers[attr][1]
+                shared = " and ".join(registrants)
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        line,
+                        "TB085",
+                        f"{where} hands {attr} to {shared}, which both register {handler_name}; a "
+                        "handler name is unique in its engine container, because the engine keeps one "
+                        "handler per name and a second registration silently replaces the first",
+                    ))
+                )
+            for attr, handed_module, handed_name in sorted(set(handed)):
+                literal, line = containers[attr]
+                symbol = Symbol(SymbolSpec(handed_module, handed_name))
+                if not literal:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            line,
+                            "TB085",
+                            f"{where} names {attr} with something other than a string literal; a "
+                            "component names each engine container as a literal, because a name the "
+                            "analyzer cannot read is a name it is not checking",
+                        ))
+                    )
+                    continue
+                if str(kind_table.block_of(symbol)) == SIGNAL_BLOCK:
+                    if attr not in workflow_held:
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                line,
+                                "TB085",
+                                f"{where} hands {attr} to {handed_name} and to no workflow; a signal "
+                                "registers on the container its workflow's main is registered on, "
+                                "because a durable promise is resolved only from inside its own workflow",
+                            ))
+                        )
+                    continue
+                reached = registration_rows.far_side(symbol)
+                if reached is not None and str(reached.name()) != literal:
+                    far = str(reached.name())
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            line,
+                            "TB085",
+                            f"{where} names {attr} {literal} and hands it to {handed_name}, whose far "
+                            f"side is {far}; an engine container is named for the far side of what "
+                            "registers into it, because one far side keeps one name across the engine",
+                        ))
+                    )
         return tuple(found)
 
     def _engine_registration_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[str, ...]:
@@ -13414,12 +14517,12 @@ class Codebase(ts.AggregateRoot):
         yields: dict[tuple[str, str], tuple[str, str]] = {}
         for module in self._modules:
             for cls in module.class_defs():
-                if blocks.get((module.name(), cls.name)) != WORKFLOW_BLOCK:
+                if blocks.get((module.name(), cls.name)) != DEPRECATED_WORKFLOW_BLOCK:
                     continue
                 for item in cls.body:
                     if (
                         isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                        and item.name == WORKFLOW_OPERATION
+                        and item.name == DEPRECATED_WORKFLOW_OPERATION
                         and isinstance(item.returns, ast.Subscript)
                     ):
                         yielded = module._resolve(item.returns.slice)
@@ -13447,6 +14550,34 @@ class Codebase(ts.AggregateRoot):
         for module in self._modules:
             for context_name, operation_name, far_module, far_name in module._far_side_rows(blocks, yields, paired):
                 far_side_seen.setdefault((context_name, operation_name), set()).add((far_module, far_name))
+        container_rows = tuple(sorted(row for module in self._modules for row in module._container_rows(blocks)))
+        registration_seen: dict[tuple[str, str], tuple[str, str, str, str, str, str]] = {
+            (row[0], row[1]): row for module in self._modules for row in module._registration_rows(blocks, paired)
+        }
+        workflow_sides: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        for component_name, attr, target_module, target_name in container_rows:
+            row = registration_seen.get((target_module, target_name))
+            if row is not None and row[2] == WORKFLOW_BLOCK and row[4]:
+                workflow_sides.setdefault((component_name, attr), set()).add((row[3], row[4]))
+        signal_sides: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        for component_name, attr, target_module, target_name in container_rows:
+            if blocks.get((target_module, target_name)) == SIGNAL_BLOCK:
+                signal_sides.setdefault((target_module, target_name), set()).update(
+                    workflow_sides.get((component_name, attr), set())
+                )
+        for key, sides in signal_sides.items():
+            row = registration_seen.get(key)
+            if row is not None and len(sides) == 1:
+                side = sorted(sides)[0]
+                registration_seen[key] = (row[0], row[1], row[2], side[0], side[1], row[5])
+        registration_rows = tuple(sorted(registration_seen.values()))
+        dispatch_rows = tuple(sorted(row for module in self._modules for row in module._dispatch_rows(blocks)))
+        for dispatcher_module, _, operation_name, target_module, target_name in dispatch_rows:
+            row = registration_seen.get((target_module, target_name))
+            if operation_name and row is not None and row[4]:
+                far_side_seen.setdefault((dispatcher_module.split(".")[0], operation_name), set()).add((row[3], row[4]))
+        dispatched_rows = tuple(sorted({f"{row[3]}|{row[4]}" for row in dispatch_rows}))
+        relay_constant_rows = tuple(sorted(row for module in self._modules for row in module._relay_constant_rows()))
         far_side_rows = tuple(sorted(
             (context_name, operation_name, side[0], side[1])
             for (context_name, operation_name), sides in far_side_seen.items()
@@ -13517,6 +14648,9 @@ class Codebase(ts.AggregateRoot):
             far_sides=far_side_rows,
             engine_targets=engine_target_rows,
             engine_registrations=engine_registration_rows,
+            registrations=registration_rows,
+            dispatched=dispatched_rows,
+            relay_constants=relay_constant_rows,
         )
 
         def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
@@ -13599,6 +14733,9 @@ class Codebase(ts.AggregateRoot):
             far_sides=far_side_rows,
             engine_targets=engine_target_rows,
             engine_registrations=engine_registration_rows,
+            registrations=registration_rows,
+            dispatched=dispatched_rows,
+            relay_constants=relay_constant_rows,
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())
@@ -13959,7 +15096,11 @@ class Codebase(ts.AggregateRoot):
         for module in scoped:
             found.extend(module.pairing_violations(registry))
             found.extend(module.relay_name_violations(registry))
+            found.extend(module.relay_constant_violations())
             found.extend(module.runner_violations(registry))
+            found.extend(module.dispatcher_violations(registry))
+            found.extend(module.registration_violations(registry))
+            found.extend(module.container_violations(registry))
             found.extend(module.runtime_handler_violations(registry))
             found.extend(module.runtime_obligation_violations(registry))
             found.extend(module.actions_mirror_violations(registry))

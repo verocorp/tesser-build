@@ -14,7 +14,7 @@ class OrderOrchestratorApplicationClient(ts.Client, typing.Protocol):
     ) -> relays.ConfirmOrderResponse: ...
 
 
-class OrderWorkflow[C](ts.Workflow, typing.Protocol):
+class OrderWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):
     def invocation(
         self, context: C, /
     ) -> typing.AsyncContextManager[OrderOrchestratorApplicationClient]: ...

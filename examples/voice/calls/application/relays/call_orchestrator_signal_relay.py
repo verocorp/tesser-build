@@ -7,6 +7,9 @@ import tesser.application as ts
 
 import tesser.errors as errors
 
+PERSON_JOINED_PROMISE: typing.Final[str] = "person_joined"
+PERSON_TURN_COMPLETED_PROMISE: typing.Final[str] = "person_turn_completed"
+
 
 class AwaitPersonJoinedRequest(ts.Request):
     def __init__(self, call_id: str) -> None:

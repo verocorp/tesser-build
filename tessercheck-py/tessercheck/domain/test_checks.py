@@ -2599,7 +2599,9 @@ def test_only_a_handler_imports_its_own_client() -> None:
         and "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, and none of them another adapters package" in f
+        "client and the relays it registers, an activity what a runtime reaches, a workflow the relays, "
+        "the orchestrators and activities, a dispatcher the relays and workflows, and none of them another adapters "
+        "package" in f
         for f in findings
     )
 
@@ -4980,14 +4982,14 @@ def test_a_test_that_resolves_to_no_tier_is_itself_a_finding() -> None:
     assert any(
         "shop.adapters.test_flat resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
         "orchestrators package" in f
         for f in findings
     )
     assert any(
         "shop.adapters.blobs.test_blob resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
         "orchestrators package" in f
         for f in findings
     )
@@ -5225,7 +5227,7 @@ def test_an_unplaced_test_module_is_still_governed() -> None:
     assert any(
         "weird.test_nested resolves to no test tier; "
         "a sibling test lives in a role package, an adapter kind package "
-        "(handlers, gateways, repositories, runners, or runtimes), or the "
+        "(handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers), or the "
         "orchestrators package" in f
         for f in findings
     )
@@ -7402,7 +7404,9 @@ def test_an_adapter_reaches_application_only_through_ports() -> None:
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, and none of them another adapters package" in f
+        "client and the relays it registers, an activity what a runtime reaches, a workflow the relays, "
+        "the orchestrators and activities, a dispatcher the relays and workflows, and none of them another adapters "
+        "package" in f
         for f in findings
     )
     assert not any("imports shop.application.ports.sink;" in f for f in findings)
@@ -12450,7 +12454,7 @@ def _kinds_spec(
             "class FlowApplicationClient(ts.Client, typing.Protocol):\n"
             "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
             " -> relays.IssueQuoteResponse: ...\n"
-            "class FlowWorkflow[C](ts.Workflow, typing.Protocol):\n"
+            "class FlowWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
             "    def invocation(self, context: C, /) -> typing.AsyncContextManager[FlowApplicationClient]: ...\n",
             False,
         ),
@@ -13288,7 +13292,7 @@ def test_an_adapters_module_lives_in_the_kind_package_it_names() -> None:
     )
     assert any(
         "shop.adapters.loose is not in an adapter kind package; an adapters "
-        "module lives in handlers, gateways, repositories, runners, or runtimes, "
+        "module lives in handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers, "
         "because placement is what carries an adapter's reach" in f
         for f in findings
     )
@@ -13575,25 +13579,25 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
         ))).violations()
     )
     assert any(
-        "shop.application.peeker imports shop.application.client.quotes; only a runtime imports "
+        "shop.application.peeker imports shop.application.client.quotes; only a runtime or an activity imports "
         "the application client, because an action is reachable only through the engine" in f
         for f in findings
     ), findings
     assert any(
-        "shop.application.peeker imports shop.application.orchestrators; only a runner imports "
+        "shop.application.peeker imports shop.application.orchestrators; only a runner or a workflow imports "
         "the orchestrators, because an orchestrator is built per invocation by the workflow that "
         "runs beside that invocation's runners" in f
         for f in findings
     ), findings
     assert any(
-        "shop.component.peek imports shop.application.orchestrators; only a runner imports the "
+        "shop.component.peek imports shop.application.orchestrators; only a runner or a workflow imports the "
         "orchestrators" in f
         for f in findings
     ), findings
     assert not any("shop.adapters.runners.peek imports shop.application.orchestrators" in f for f in findings), findings
     assert any(
         "shop.adapters.handlers.peek imports shop.application.client.quotes; only "
-        "a runtime imports the application client" in f
+        "a runtime or an activity imports the application client" in f
         for f in findings
     ), findings
     for importer, imported in (
@@ -13609,7 +13613,7 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
         ), (importer, findings)
     assert any(
         "shop.adapters.runtimes.peek imports shop.application.orchestrators; only a runner "
-        "imports the orchestrators" in f
+        "or a workflow imports the orchestrators" in f
         for f in findings
     ), findings
     assert any(
@@ -13619,13 +13623,13 @@ def test_only_a_runtime_reaches_the_application_client_and_only_a_runner_the_orc
     ), findings
     assert any(
         "shop.application.test_peek imports shop.application.client.quotes, but only a test "
-        "placed in runtimes reaches the application client; a test reaches only what its "
+        "placed in runtimes, activities, workflows, or dispatchers reaches the application client; a test reaches only what its "
         "placement allows" in f
         for f in findings
     ), findings
     assert any(
         "shop.tests.test_peek imports shop.application.orchestrators, but only a test placed in "
-        "runners reaches the orchestrators; a test reaches only what its placement allows" in f
+        "runners or workflows reaches the orchestrators; a test reaches only what its placement allows" in f
         for f in findings
     ), findings
     assert not any(
@@ -14031,14 +14035,16 @@ def test_a_component_publishes_only_its_client_and_its_runtimes() -> None:
     )
     assert any(
         "shop.component.bad.Bad publishes extra; "
-        "a component publishes only its client, typed as its ts.Client, and its "
-        "runtimes, each typed as a ts.Runtime" in f
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a signal to register into" in f
         for f in findings
     )
     assert any(
         "shop.component.bad.Bad publishes client; "
-        "a component publishes only its client, typed as its ts.Client, and its "
-        "runtimes, each typed as a ts.Runtime" in f
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a signal to register into" in f
         for f in findings
     )
 
@@ -14481,8 +14487,9 @@ def test_a_component_publishes_its_runtimes_as_one_or_a_tuple_of_them() -> None:
     )
     assert any(
         "shop.component.mixed.Mixed publishes engine_runtimes; "
-        "a component publishes only its client, typed as its ts.Client, and its "
-        "runtimes, each typed as a ts.Runtime" in f
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a signal to register into" in f
         for f in findings
     )
     assert not any("shop.component.component.Shop publishes engine_runtimes" in f for f in findings)
@@ -18284,7 +18291,7 @@ def test_a_relay_dto_field_is_a_primitive_a_relay_dto_or_a_domain_object() -> No
     ), findings
 
 
-def test_a_gateway_a_repository_and_a_runner_inline_their_logic() -> None:
+def test_a_gateway_a_repository_a_runner_and_a_dispatcher_inline_their_logic() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
         for v in domain.Codebase(_kinds_spec(sources=(
@@ -18330,18 +18337,43 @@ def test_a_gateway_a_repository_and_a_runner_inline_their_logic() -> None:
                 "    assert True\n",
                 False,
             ),
+            (
+                "shop/adapters/dispatchers/split.py",
+                "shop.adapters.dispatchers.split",
+                "import tesser.adapters as ts\n"
+                "import shop.application.relays as relays\n"
+                "class SplitHttpQuoteActionsRelay(ts.Dispatcher):\n"
+                "    def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
+                " -> relays.QuotePriceResponse:\n"
+                "        return relays.QuotePriceResponse(text=self._answer(quote_price_request))\n"
+                "    def _answer(self, quote_price_request: relays.QuotePriceRequest) -> str:\n"
+                "        return quote_price_request.text\n",
+                False,
+            ),
+            (
+                "shop/adapters/dispatchers/test_split.py",
+                "shop.adapters.dispatchers.test_split",
+                "def test_split_dispatcher_exists() -> None:\n"
+                "    assert True\n",
+                False,
+            ),
         ))).violations()
     )
     assert any(
         "shop.adapters.gateways.split.SplitGateway.find_item delegates to self._answer; "
-        "a gateway, a repository, and a runner inline their logic, as a service does "
+        "a gateway, a repository, a runner, and a dispatcher inline their logic, as a service does "
         "— one call on the backend and the mapping of what it answered, read on the "
         "page" in f
         for f in findings
     ), findings
     assert any(
         "shop.adapters.runners.split.SplitQuoteActionsRelay.run_quote_price delegates to self._answer; "
-        "a gateway, a repository, and a runner inline their logic" in f
+        "a gateway, a repository, a runner, and a dispatcher inline their logic" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.adapters.dispatchers.split.SplitHttpQuoteActionsRelay.run_quote_price delegates to self._answer; "
+        "a gateway, a repository, a runner, and a dispatcher inline their logic" in f
         for f in findings
     ), findings
     assert not any(
@@ -18635,7 +18667,9 @@ def test_a_runner_reaches_its_relays_and_a_runtime_what_it_registers() -> None:
         "an adapters kind package reaches only what its kind reaches — a handler "
         "the context client, a gateway or a repository the ports, a runner its "
         "relays and the orchestrators its workflow builds, a runtime the application "
-        "client and the relays it registers, and none of them another adapters package" in f
+        "client and the relays it registers, an activity what a runtime reaches, a workflow the relays, "
+        "the orchestrators and activities, a dispatcher the relays and workflows, and none of them another adapters "
+        "package" in f
         for f in findings
     ), findings
     assert not any("imports shop.application.relays;" in f for f in findings), findings
@@ -19064,7 +19098,7 @@ def test_a_far_side_is_read_through_a_workflow_a_decorated_handler_opens_from_it
                 "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
                 " -> wrong.CountItemsResponse: ...\n"
-                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class TallyWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
                 False,
             ),
@@ -19077,7 +19111,7 @@ def test_a_far_side_is_read_through_a_workflow_a_decorated_handler_opens_from_it
                 "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
                 " -> wrong.ShelveItemsResponse: ...\n"
-                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class ShelfWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
                 False,
             ),
@@ -19186,7 +19220,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_or_a_client() ->
                 "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
                 " -> wrong.CountItemsResponse: ...\n"
-                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class TallyWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
                 False,
             ),
@@ -19199,7 +19233,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_or_a_client() ->
                 "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
                 " -> wrong.ShelveItemsResponse: ...\n"
-                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class ShelfWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
                 False,
             ),
@@ -19310,7 +19344,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_held_on_self() -
                 "class TallyApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def count_items(self, count_items_request: wrong.CountItemsRequest)"
                 " -> wrong.CountItemsResponse: ...\n"
-                "class TallyWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class TallyWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[TallyApplicationClient]: ...\n",
                 False,
             ),
@@ -19323,7 +19357,7 @@ def test_a_far_side_is_read_through_a_local_alias_of_a_workflow_held_on_self() -
                 "class ShelfApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def shelve_items(self, shelve_items_request: wrong.ShelveItemsRequest)"
                 " -> wrong.ShelveItemsResponse: ...\n"
-                "class ShelfWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class ShelfWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[ShelfApplicationClient]: ...\n",
                 False,
             ),
@@ -19779,15 +19813,15 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
                 "class LoneApplicationClient(ts.Client, typing.Protocol):\n"
                 "    async def issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
                 " -> relays.IssueQuoteResponse: ...\n"
-                "class LoneWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class LoneWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[relays.IssueQuoteResponse]: ...\n"
-                "class SecondWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class SecondWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n"
-                "class SiblingWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class SiblingWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[SecondWorkflow]: ...\n"
-                "class RenamedWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class RenamedWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    def open(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n"
-                "class LoadedWorkflow[C](ts.Workflow, typing.Protocol):\n"
+                "class LoadedWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):\n"
                 "    token: str = input('runs at import')\n"
                 "    def invocation(self, context: C, /) -> typing.AsyncContextManager[LoneApplicationClient]: ...\n",
                 False,
@@ -19796,7 +19830,7 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
     )
     where = "shop.application.client.lone"
     assert any(
-        f"{where}.LoneWorkflow does not yield the client beside it from one invocation; a workflow in "
+        f"{where}.LoneWorkflow does not yield the client beside it from one invocation; a deprecated workflow in "
         "an application client module declares only invocation, and what it yields is the client that "
         "module declares" in f
         for f in findings
@@ -19806,8 +19840,8 @@ def test_a_workflow_beside_an_application_client_yields_that_client() -> None:
     assert any(f"{where}.RenamedWorkflow does not yield the client beside it" in f for f in findings), findings
     assert any(f"{where}.LoadedWorkflow" in f and "TB051" in f for f in findings), findings
     assert any(
-        f"{where} declares 5 workflows; an application client module declares at most one "
-        "ts.Workflow, the one that yields its client" in f
+        f"{where} declares 5 deprecated workflows; an application client module declares at most one "
+        "ts.DeprecatedWorkflow, the one that yields its client" in f
         for f in findings
     ), findings
 
@@ -19852,7 +19886,7 @@ def test_a_fake_of_a_subscripted_workflow_implements_that_workflow() -> None:
     assert not any(f"{where}.FakeFlowWorkflow implements no" in f for f in findings), findings
     assert any(
         f"{where}.FakeCounts implements no application port, store, relay, protocol port, client, "
-        "workflow, or config repository; a fake implements the contract it doubles" in f
+        "deprecated workflow, or config repository; a fake implements the contract it doubles" in f
         for f in findings
     ), findings
 
@@ -20398,5 +20432,1222 @@ def test_a_context_error_is_named_for_its_situation_and_never_for_a_status_categ
     assert not any("QuoteRejected is named for a status category" in f for f in findings), findings
     assert any(
         "shop.application.ports.quote_store.QuoteStoreUnavailable declares no ts.* base" in f
+        for f in findings
+    ), findings
+
+
+def test_activities_workflows_and_dispatchers_reach_one_way_from_dispatchers_to_workflows_to_activities() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/activities/record.py",
+                "shop.adapters.activities.record",
+                "import tesser.adapters as ts\n"
+                "import shop.application.client as client\n"
+                "import shop.application.orchestrators as orchestrators\n"
+                "import shop.adapters.workflows.conduct as conduct\n"
+                "class Record(ts.Activity):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/workflows/conduct.py",
+                "shop.adapters.workflows.conduct",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.activities.record as record\n"
+                "import shop.application.orchestrators as orchestrators\n"
+                "import shop.application.client as client\n"
+                "import shop.adapters.dispatchers.ingress as ingress\n"
+                "class Conduct(ts.Workflow):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/dispatchers/ingress.py",
+                "shop.adapters.dispatchers.ingress",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.workflows.conduct as conduct\n"
+                "import shop.adapters.activities.record as record\n"
+                "class Ingress(ts.Dispatcher):\n"
+                "    pass\n",
+                False,
+            ),
+            (
+                "shop/adapters/runners/leg.py",
+                "shop.adapters.runners.leg",
+                "import tesser.adapters as ts\n"
+                "import shop.adapters.activities.record as record\n",
+                False,
+            ),
+            (
+                "shop/adapters/workflows/test_conduct.py",
+                "shop.adapters.workflows.test_conduct",
+                "import shop.application.client as client\n"
+                "import shop.adapters.activities.record as record\n"
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+            (
+                "shop/adapters/activities/test_record.py",
+                "shop.adapters.activities.test_record",
+                "import shop.application.orchestrators as orchestrators\n"
+                "def test_x() -> None:\n    assert True\n",
+                False,
+            ),
+        ))).violations()
+    )
+    for importer, imported in (
+        ("activities.record", "application.client"),
+        ("workflows.conduct", "adapters.activities.record"),
+        ("workflows.conduct", "application.orchestrators"),
+        ("dispatchers.ingress", "adapters.workflows.conduct"),
+    ):
+        assert not any(
+            f"shop.adapters.{importer} imports shop.{imported};" in f and "TB060" in f for f in findings
+        ), (importer, imported, findings)
+    assert any(
+        "shop.adapters.activities.record imports shop.application.orchestrators; only a runner or a workflow imports "
+        "the orchestrators" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.adapters.workflows.conduct imports shop.application.client; only a runtime or an activity imports "
+        "the application client" in f
+        for f in findings
+    ), findings
+    for importer, imported in (
+        ("activities.record", "adapters.workflows.conduct"),
+        ("workflows.conduct", "adapters.dispatchers.ingress"),
+        ("dispatchers.ingress", "adapters.activities.record"),
+        ("runners.leg", "adapters.activities.record"),
+    ):
+        assert any(
+            f"shop.adapters.{importer} imports shop.{imported}; an adapters kind package reaches "
+            "only what its kind reaches" in f
+            for f in findings
+        ), (importer, imported, findings)
+    assert not any("shop.adapters.workflows.test_conduct" in f and "TB070" in f for f in findings), findings
+    assert any(
+        "shop.adapters.activities.test_record imports shop.application.orchestrators, but a test placed in activities "
+        "reaches only" in f
+        for f in findings
+    ), findings
+
+
+def test_a_component_publishes_the_engine_containers_it_hands_an_activity_workflow_or_signal() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/activities/record.py",
+                "shop.adapters.activities.record",
+                "import tesser.adapters as ts\n"
+                "class Record(ts.Activity):\n"
+                "    def __init__(self, service: object) -> None:\n"
+                "        self.handler = service\n",
+                False,
+            ),
+            (
+                "shop/component/registered.py",
+                "shop.component.registered",
+                "import tesser.component as ts\n"
+                "import restate\n"
+                "import shop.adapters.activities.record as record\n"
+                "class Registered(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.actions_service: restate.Service = restate.Service('Actions')\n"
+                "        self.loose_service: restate.Service = restate.Service('Loose')\n"
+                "        record.Record(self.actions_service)\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("shop.component.registered.Registered publishes actions_service" in f for f in findings), findings
+    assert any(
+        "shop.component.registered.Registered publishes loose_service; "
+        "a component publishes only its client, typed as its ts.Client, its "
+        "runtimes, each typed as a ts.Runtime, and the engine containers it hands an activity, "
+        "a workflow, or a signal to register into" in f
+        for f in findings
+    ), findings
+
+
+def test_only_an_engine_container_handed_to_an_activity_workflow_or_signal_is_published_without_its_kind() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/adapters/activities/record.py",
+                "shop.adapters.activities.record",
+                "import tesser.adapters as ts\n"
+                "class Record(ts.Activity):\n"
+                "    def __init__(self, service: object, actions: object) -> None:\n"
+                "        self.handler = service\n",
+                False,
+            ),
+            (
+                "shop/component/registered.py",
+                "shop.component.registered",
+                "import tesser.component as ts\n"
+                "import restate\n"
+                "import shop.adapters.activities.record as record\n"
+                "class Registered(ts.Component):\n"
+                "    def __init__(self) -> None:\n"
+                "        self.actions_service: restate.Service = restate.Service('Actions')\n"
+                "        self.dialing_actions = object()\n"
+                "        self.client = 2\n"
+                "        record.Record(self.actions_service, self.dialing_actions)\n"
+                "        record.Record(self.client, self.dialing_actions)\n"
+                "    def close(self) -> None:\n"
+                "        return None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("shop.component.registered.Registered publishes actions_service" in f for f in findings), findings
+    assert any("shop.component.registered.Registered publishes dialing_actions; " in f for f in findings), findings
+    assert any("shop.component.registered.Registered publishes client; " in f for f in findings), findings
+
+
+@ts.helper
+def _engine_kinds_spec(
+    old: str = "",
+    new: str = "",
+    old_also: str = "",
+    new_also: str = "",
+    extra: tuple[tuple[str, str, str | None, bool], ...] = (),
+) -> domain.CodebaseSpec:
+    replaced = {
+        "shop/application/relays/__init__.py": (
+            "shop.application.relays",
+            "from shop.application.relays.flow_relay import IssueQuoteRequest as IssueQuoteRequest\n"
+            "from shop.application.relays.flow_relay import IssueQuoteResponse as IssueQuoteResponse\n"
+            "from shop.application.relays.flow_relay import QuoteAcceptedRequest as QuoteAcceptedRequest\n"
+            "from shop.application.relays.flow_relay import QuoteAcceptedResponse as QuoteAcceptedResponse\n"
+            "from shop.application.relays.flow_signal_relay import "
+            "AwaitQuoteAcceptedRequest as AwaitQuoteAcceptedRequest\n"
+            "from shop.application.relays.flow_signal_relay import "
+            "AwaitQuoteAcceptedResponse as AwaitQuoteAcceptedResponse\n"
+            "from shop.application.relays.flow_signal_relay import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n"
+            "from shop.application.relays.quote_actions_relay import QuoteActionsRelay as QuoteActionsRelay\n"
+            "from shop.application.relays.quote_actions_relay import QuotePriceRequest as QuotePriceRequest\n"
+            "from shop.application.relays.quote_actions_relay import QuotePriceResponse as QuotePriceResponse\n",
+            True,
+        ),
+        "shop/application/relays/flow_relay.py": (
+            "shop.application.relays.flow_relay",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "class IssueQuoteRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class IssueQuoteResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class QuoteAcceptedRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class QuoteAcceptedResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class FlowRelay(ts.Relay, typing.Protocol):\n"
+            "    async def run_issue_quote(self, issue_quote_request: IssueQuoteRequest)"
+            " -> IssueQuoteResponse: ...\n"
+            "    async def run_quote_accepted(self, quote_accepted_request: QuoteAcceptedRequest)"
+            " -> QuoteAcceptedResponse: ...\n",
+            False,
+        ),
+    }
+    files: dict[str, tuple[str, str, bool]] = {
+        "shop/application/relays/flow_signal_relay.py": (
+            "shop.application.relays.flow_signal_relay",
+            "import typing\n"
+            "import tesser.application as ts\n"
+            "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n"
+            "class AwaitQuoteAcceptedRequest(ts.Request):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class AwaitQuoteAcceptedResponse(ts.Response):\n"
+            "    def __init__(self, text: str) -> None:\n"
+            "        self.text = text\n"
+            "class FlowSignalRelay(ts.Relay, typing.Protocol):\n"
+            "    async def await_quote_accepted(self, await_quote_accepted_request: AwaitQuoteAcceptedRequest)"
+            " -> AwaitQuoteAcceptedResponse: ...\n",
+            False,
+        ),
+        "shop/application/relays/test_flow_signal_relay.py": (
+            "shop.application.relays.test_flow_signal_relay",
+            "def test_flow_signal_relay_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        "shop/adapters/activities/__init__.py": (
+            "shop.adapters.activities",
+            "from shop.adapters.activities.engine_activities import EngineQuotePrice as EngineQuotePrice\n",
+            True,
+        ),
+        "shop/adapters/activities/engine_activities.py": (
+            "shop.adapters.activities.engine_activities",
+            "import tesser.adapters as ts\n"
+            "import restate\n"
+            "import shop.application.client as client\n"
+            "import shop.application.relays as relays\n"
+            "class EngineQuotePrice(ts.Activity):\n"
+            "    def __init__(\n"
+            "        self, quote_actions_service: restate.Service, shop_application_client: client.ShopApplicationClient\n"
+            "    ) -> None:\n"
+            "        @quote_actions_service.handler()\n"
+            "        async def quote_price(\n"
+            "            engine_context: restate.Context, quote_price_request: relays.QuotePriceRequest\n"
+            "        ) -> relays.QuotePriceResponse:\n"
+            "            return shop_application_client.quote_price(quote_price_request)\n"
+            "        self.handler = quote_price\n",
+            False,
+        ),
+        "shop/adapters/activities/test_engine_activities.py": (
+            "shop.adapters.activities.test_engine_activities",
+            "def test_engine_activities_exist() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        "shop/adapters/workflows/__init__.py": (
+            "shop.adapters.workflows",
+            "from shop.adapters.workflows.engine_issue_quote import EngineIssueQuote as EngineIssueQuote\n",
+            True,
+        ),
+        "shop/adapters/workflows/engine_issue_quote.py": (
+            "shop.adapters.workflows.engine_issue_quote",
+            "import tesser.adapters as ts\n"
+            "import restate\n"
+            "import shop.adapters.activities as activities\n"
+            "import shop.application.orchestrators as orchestrators\n"
+            "import shop.application.relays as relays\n"
+            "class EngineInvocationQuoteActionsRelay(ts.Dispatcher):\n"
+            "    def __init__(\n"
+            "        self, engine_workflow_context: restate.WorkflowContext, engine_quote_price: activities.EngineQuotePrice\n"
+            "    ) -> None:\n"
+            "        self._engine_workflow_context = engine_workflow_context\n"
+            "        self._engine_quote_price = engine_quote_price\n"
+            "    async def run_quote_price(self, quote_price_request: relays.QuotePriceRequest)"
+            " -> relays.QuotePriceResponse:\n"
+            "        return await self._engine_workflow_context.service_call(\n"
+            "            self._engine_quote_price.handler, quote_price_request\n"
+            "        )\n"
+            "class EngineInvocationFlowSignalRelay(ts.Dispatcher):\n"
+            "    def __init__(self, engine_workflow_context: restate.WorkflowContext) -> None:\n"
+            "        self._engine_workflow_context = engine_workflow_context\n"
+            "    async def await_quote_accepted(self, await_quote_accepted_request: relays.AwaitQuoteAcceptedRequest)"
+            " -> relays.AwaitQuoteAcceptedResponse:\n"
+            "        return await self._engine_workflow_context.promise(relays.QUOTE_ACCEPTED_PROMISE).value()\n"
+            "class EngineIssueQuote(ts.Workflow):\n"
+            "    def __init__(self, flow_workflow: restate.Workflow, engine_quote_price: activities.EngineQuotePrice) -> None:\n"
+            "        @flow_workflow.main()\n"
+            "        async def issue_quote(\n"
+            "            engine_workflow_context: restate.WorkflowContext, issue_quote_request: relays.IssueQuoteRequest\n"
+            "        ) -> relays.IssueQuoteResponse:\n"
+            "            return await orchestrators.Flow(\n"
+            "                EngineInvocationQuoteActionsRelay(engine_workflow_context, engine_quote_price),\n"
+            "                EngineInvocationFlowSignalRelay(engine_workflow_context),\n"
+            "            ).issue_quote(issue_quote_request)\n"
+            "        self.handler = issue_quote\n",
+            False,
+        ),
+        "shop/adapters/workflows/test_engine_issue_quote.py": (
+            "shop.adapters.workflows.test_engine_issue_quote",
+            "def test_engine_issue_quote_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        "shop/adapters/dispatchers/__init__.py": (
+            "shop.adapters.dispatchers",
+            "from shop.adapters.dispatchers.engine_http_flow_relay import EngineHttpFlowRelay as EngineHttpFlowRelay\n"
+            "from shop.adapters.dispatchers.engine_http_flow_relay import EngineQuoteAccepted as EngineQuoteAccepted\n",
+            True,
+        ),
+        "shop/adapters/dispatchers/engine_http_flow_relay.py": (
+            "shop.adapters.dispatchers.engine_http_flow_relay",
+            "import tesser.adapters as ts\n"
+            "import restate\n"
+            "import shop.adapters.workflows as workflows\n"
+            "import shop.application.relays as relays\n"
+            "class EngineQuoteAccepted(ts.Signal):\n"
+            "    def __init__(self, flow_workflow: restate.Workflow) -> None:\n"
+            "        @flow_workflow.handler()\n"
+            "        async def quote_accepted(\n"
+            "            engine_workflow_shared_context: restate.WorkflowSharedContext,\n"
+            "            quote_accepted_request: relays.QuoteAcceptedRequest,\n"
+            "        ) -> relays.QuoteAcceptedResponse:\n"
+            "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n"
+            "            return relays.QuoteAcceptedResponse(text=quote_accepted_request.text)\n"
+            "        self.handler = quote_accepted\n"
+            "class EngineHttpFlowRelay(ts.Dispatcher):\n"
+            "    def __init__(\n"
+            "        self,\n"
+            "        engine_client: restate.Client,\n"
+            "        engine_issue_quote: workflows.EngineIssueQuote,\n"
+            "        engine_quote_accepted: EngineQuoteAccepted,\n"
+            "    ) -> None:\n"
+            "        self._engine_client = engine_client\n"
+            "        self._engine_issue_quote = engine_issue_quote\n"
+            "        self._engine_quote_accepted = engine_quote_accepted\n"
+            "    async def run_issue_quote(self, issue_quote_request: relays.IssueQuoteRequest)"
+            " -> relays.IssueQuoteResponse:\n"
+            "        return await self._engine_client.workflow_call(\n"
+            "            self._engine_issue_quote.handler, key=issue_quote_request.text, arg=issue_quote_request\n"
+            "        )\n"
+            "    async def run_quote_accepted(self, quote_accepted_request: relays.QuoteAcceptedRequest)"
+            " -> relays.QuoteAcceptedResponse:\n"
+            "        return await self._engine_client.workflow_call(\n"
+            "            self._engine_quote_accepted.handler, key=quote_accepted_request.text, arg=quote_accepted_request\n"
+            "        )\n",
+            False,
+        ),
+        "shop/adapters/dispatchers/test_engine_http_flow_relay.py": (
+            "shop.adapters.dispatchers.test_engine_http_flow_relay",
+            "def test_engine_http_flow_relay_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+        "shop/component/engine.py": (
+            "shop.component.engine",
+            "import tesser.component as ts\n"
+            "import restate\n"
+            "import shop.adapters.activities as activities\n"
+            "import shop.adapters.dispatchers as dispatchers\n"
+            "import shop.adapters.gateways as gateways\n"
+            "import shop.adapters.workflows as workflows\n"
+            "import shop.application.quotes as quotes\n"
+            "import shop.application.service as service\n"
+            "import shop.client.client as client\n"
+            "class EngineShop(ts.Component):\n"
+            "    def __init__(self, engine_client: restate.Client) -> None:\n"
+            "        self.quote_actions_service: restate.Service = restate.Service('QuoteActions')\n"
+            "        self.flow_workflow: restate.Workflow = restate.Workflow('Flow')\n"
+            "        engine_quote_price = activities.EngineQuotePrice(\n"
+            "            self.quote_actions_service, quotes.QuoteActions(gateways.CatalogGateway())\n"
+            "        )\n"
+            "        engine_issue_quote = workflows.EngineIssueQuote(self.flow_workflow, engine_quote_price)\n"
+            "        engine_quote_accepted = dispatchers.EngineQuoteAccepted(self.flow_workflow)\n"
+            "        self._engine_http_flow_relay = dispatchers.EngineHttpFlowRelay(\n"
+            "            engine_client, engine_issue_quote, engine_quote_accepted\n"
+            "        )\n"
+            "        self.client: client.Client = service.AskService()\n"
+            "    def close(self) -> None:\n"
+            "        return None\n",
+            False,
+        ),
+        "shop/component/test_engine.py": (
+            "shop.component.test_engine",
+            "def test_engine_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+    }
+    base = tuple(
+        (path, *replaced[path]) if path in replaced else (path, module, source, package)
+        for path, module, source, package in inspect.signature(_kinds_spec).parameters["base"].default
+    )
+    sources = tuple((path, module, source, package) for path, (module, source, package) in files.items())
+    assert not old or any(old in source for _, _, source, _ in base + sources), old
+    assert not old_also or any(old_also in source for _, _, source, _ in base + sources), old_also
+    changed = tuple(
+        (path, module, source.replace(old, new) if old else source, package)
+        for path, module, source, package in base + sources
+    )
+    return _kinds_spec(sources=extra, base=tuple(
+        (path, module, source.replace(old_also, new_also) if old_also else source, package)
+        for path, module, source, package in changed
+    ))
+
+
+def test_activities_workflows_signals_and_dispatchers_stand_clean_together() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec()).violations()
+    )
+    assert findings == (), findings
+
+
+def test_a_relay_is_named_for_the_far_side_a_dispatcher_reaches_through_a_typed_handler() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='FlowSignalRelay',
+            new='QuoteSignalRelay',
+        )).violations()
+    )
+    assert any(
+        "shop.application.relays.flow_signal_relay.QuoteSignalRelay reaches Flow and is not "
+        "FlowSignalRelay; a relay is named for the far side its operations reach" in f
+        for f in findings
+    ), findings
+
+
+def test_a_dispatcher_implements_the_relay_its_name_ends_in_and_nothing_else() -> None:
+    unnamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='EngineHttpFlowRelay',
+            new='EngineHttpFlowSender',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineHttpFlowSender ends in no relay's name; "
+        "a dispatcher is its engine's word followed by the name of the relay it implements, because "
+        "its name is how that protocol is found" in f
+        for f in unnamed
+    ), unnamed
+    renamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='async def run_quote_accepted(self, quote_accepted_request: relays.',
+            new='async def run_quote_taken(self, quote_accepted_request: relays.',
+        )).violations()
+    )
+    assert any(
+        "TB081 shop.adapters.dispatchers.engine_http_flow_relay.EngineHttpFlowRelay.run_quote_taken is not on "
+        "FlowRelay; a dispatcher's public methods are exactly its relay's, because it implements that "
+        "relay and nothing else" in f
+        for f in renamed
+    ), renamed
+    assert any(
+        "TB081 shop.adapters.dispatchers.engine_http_flow_relay.EngineHttpFlowRelay lacks run_quote_accepted; "
+        "a dispatcher's public methods are exactly its relay's" in f
+        for f in renamed
+    ), renamed
+
+
+def test_a_dispatcher_passes_the_handler_named_for_the_operation_it_carries() -> None:
+    renamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='@quote_actions_service.handler()\n        async def quote_price(',
+            new='@quote_actions_service.handler()\n        async def price_quote(',
+            old_also='self.handler = quote_price\n',
+            new_also='self.handler = price_quote\n',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationQuoteActionsRelay.run_quote_price passes "
+        "EngineQuotePrice.price_quote; a dispatcher method passes the handler named for the operation it "
+        "carries, because one operation keeps one name across a relay" in f
+        for f in renamed
+    ), renamed
+    registered = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='@quote_actions_service.handler()',
+            new="@quote_actions_service.handler(name='price_quote')",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice.quote_price registers as price_quote; "
+        "a handler registers under the operation it is named for, because the engine's name and the "
+        "dispatcher's are one name" in f
+        for f in registered
+    ), registered
+    unpassed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='self._engine_quote_price.handler, quote_price_request',
+            new='quote_price_request',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationQuoteActionsRelay.run_quote_price passes no "
+        "handler to the engine; a dispatcher method passes the handler of the activity, workflow, or "
+        "signal its operation reaches, because that handler is the typed reference that holds the two "
+        "ends together" in f
+        for f in unpassed
+    ), unpassed
+
+
+def test_a_dispatcher_run_operation_calls_and_waits_and_a_start_operation_sends() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='return await self._engine_workflow_context.service_call(',
+            new='return await self._engine_workflow_context.service_send(',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationQuoteActionsRelay.run_quote_price reaches "
+        "its far side through service_send; a run_ operation calls and waits and a start_ operation sends "
+        "and does not, because the mode on the method is the mode on the engine" in f
+        for f in findings
+    ), findings
+    started = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='run_quote_price',
+            new='start_quote_price',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationQuoteActionsRelay.start_quote_price reaches "
+        "its far side through service_call; a run_ operation calls and waits and a start_ operation sends "
+        "and does not, because the mode on the method is the mode on the engine" in f
+        for f in started
+    ), started
+    sent = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='run_quote_price',
+            new='start_quote_price',
+            old_also='return await self._engine_workflow_context.service_call(',
+            new_also='return await self._engine_workflow_context.service_send(',
+        )).violations()
+    )
+    assert not any("EngineInvocationQuoteActionsRelay.start_quote_price reaches its far side" in f for f in sent), sent
+
+
+def test_a_registration_class_registers_exactly_the_one_handler_it_keeps() -> None:
+    stray = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        self.handler = quote_price\n",
+            new=(
+                "        @quote_actions_service.handler(name='wipe_quotes')\n"
+                "        async def wipe_quotes(\n"
+                "            engine_context: restate.Context, quote_price_request: relays.QuotePriceRequest\n"
+                "        ) -> relays.QuotePriceResponse:\n"
+                "            return shop_application_client.quote_price(quote_price_request)\n"
+                "        self.handler = quote_price\n"
+            ),
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice registers wipe_quotes beside its handler; a "
+        "registration class registers exactly one handler, the one it keeps as self.handler, because a handler "
+        "no dispatcher reaches is a name nobody checks" in f
+        for f in stray
+    ), stray
+    assert not any("registers quote_price beside its handler" in f for f in stray), stray
+    kept = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        self.handler = quote_price\n",
+            new="        self.handler: restate.Handler = quote_price\n",
+            old_also="@quote_actions_service.handler()",
+            new_also="@quote_actions_service.handler(name='price_quote')",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice.quote_price registers as price_quote; a "
+        "handler registers under the operation it is named for" in f
+        for f in kept
+    ), kept
+    assert not any("keeps no handler" in f for f in kept), kept
+    unkept = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        self.handler = quote_price\n",
+            new="        self.registered = quote_price\n",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice keeps no handler as self.handler; an "
+        "activity, a workflow, or a signal keeps the one handler it registers as self.handler, because a "
+        "dispatcher reaches the handler through that attribute" in f
+        for f in unkept
+    ), unkept
+
+
+def test_a_handler_registers_under_a_name_the_analyzer_can_read() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="@quote_actions_service.handler()",
+            new="@quote_actions_service.handler(name=QUOTE_PRICE)",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice.quote_price registers under a name that is "
+        "not a string literal; a handler registers under the operation it is named for, because a name the "
+        "analyzer cannot read is a name it is not checking" in f
+        for f in findings
+    ), findings
+
+
+def test_a_handler_name_is_unique_in_its_engine_container() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="from shop.adapters.activities.engine_activities import EngineQuotePrice as EngineQuotePrice\n",
+            new=(
+                "from shop.adapters.activities.engine_activities import EngineQuotePrice as EngineQuotePrice\n"
+                "from shop.adapters.activities.engine_more_activities import "
+                "EngineQuotePriceAgain as EngineQuotePriceAgain\n"
+            ),
+            old_also="        engine_issue_quote = workflows.EngineIssueQuote(",
+            new_also=(
+                "        activities.EngineQuotePriceAgain(\n"
+                "            self.quote_actions_service, quotes.QuoteActions(gateways.CatalogGateway())\n"
+                "        )\n"
+                "        engine_issue_quote = workflows.EngineIssueQuote("
+            ),
+            extra=(
+                (
+                    "shop/adapters/activities/engine_more_activities.py",
+                    "shop.adapters.activities.engine_more_activities",
+                    "import tesser.adapters as ts\n"
+                    "import restate\n"
+                    "import shop.application.client as client\n"
+                    "import shop.application.relays as relays\n"
+                    "class EngineQuotePriceAgain(ts.Activity):\n"
+                    "    def __init__(\n"
+                    "        self, quote_actions_service: restate.Service, shop_application_client: client.ShopApplicationClient\n"
+                    "    ) -> None:\n"
+                    "        @quote_actions_service.handler()\n"
+                    "        async def quote_price(\n"
+                    "            engine_context: restate.Context, quote_price_request: relays.QuotePriceRequest\n"
+                    "        ) -> relays.QuotePriceResponse:\n"
+                    "            return shop_application_client.quote_price(quote_price_request)\n"
+                    "        self.handler = quote_price\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "shop.component.engine.EngineShop hands quote_actions_service to EngineQuotePrice and "
+        "EngineQuotePriceAgain, which both register quote_price; a handler name is unique in its engine "
+        "container, because the engine keeps one handler per name and a second registration silently replaces "
+        "the first" in f
+        for f in findings
+    ), findings
+
+
+def test_a_dispatcher_never_calls_the_engine_by_name() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        return await self._engine_workflow_context.service_call(\n",
+            new=(
+                "        await self._engine_workflow_context.generic_send('QuoteActions', 'quote_price', b'')\n"
+                "        return await self._engine_workflow_context.service_call(\n"
+            ),
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationQuoteActionsRelay.run_quote_price calls "
+        "generic_send; a dispatcher reaches the engine only through the typed handler of an activity, a "
+        "workflow, or a signal, or through promise in an await_ method, because a name the analyzer cannot "
+        "read is a name it is not checking" in f
+        for f in findings
+    ), findings
+
+
+def test_a_workflows_module_calls_across_the_engine_only_through_its_invocation_context() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="import restate\nimport shop.adapters.activities as activities\nimport shop.application.orchestrators",
+            new=(
+                "import restate\nimport httpx\nimport restate.client as restate_client\n"
+                "import shop.adapters.activities as activities\nimport shop.application.orchestrators"
+            ),
+            old_also="def test_engine_issue_quote_exists() -> None:\n",
+            new_also="import httpx\ndef test_engine_issue_quote_exists() -> None:\n",
+        )).violations()
+    )
+    for banned in ("httpx", "restate.client"):
+        assert any(
+            f"shop.adapters.workflows.engine_issue_quote imports {banned}; a workflows module calls across the "
+            "engine only through its invocation's context, because the engine journals a call made through the "
+            "context and a call made over HTTP runs again on every replay" in f
+            for f in findings
+        ), findings
+    assert not any("test_engine_issue_quote imports httpx; a workflows module" in f for f in findings), findings
+
+
+def test_a_dispatcher_awaits_and_a_signal_resolves_the_promise_named_for_its_operation() -> None:
+    renamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'",
+            new="QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'accepted'",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationFlowSignalRelay.await_quote_accepted reads "
+        "the promise accepted; an await_ method reads the durable promise named for the operation it "
+        "waits on, because one operation keeps one name across a relay" in f
+        for f in renamed
+    ), renamed
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineQuoteAccepted resolves the promise accepted; "
+        "a signal resolves the durable promise named for the operation its handler is named for, because "
+        "one operation keeps one name across a relay" in f
+        for f in renamed
+    ), renamed
+    literal = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='promise(relays.QUOTE_ACCEPTED_PROMISE).value()',
+            new="promise('quote_accepted').value()",
+            old_also='promise(relays.QUOTE_ACCEPTED_PROMISE).resolve',
+            new_also="promise('quote_accepted').resolve",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationFlowSignalRelay.await_quote_accepted names "
+        "its promise with something other than a constant in application/relays; a dispatcher names the "
+        "promise it reads by a relays constant, because a name the analyzer cannot read is a name it is "
+        "not checking" in f
+        for f in literal
+    ), literal
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineQuoteAccepted names its promise with something "
+        "other than a constant in application/relays; a signal names the promise it resolves by a relays "
+        "constant, because a name the analyzer cannot read is a name it is not checking" in f
+        for f in literal
+    ), literal
+    unread = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='self._engine_workflow_context.promise(relays.QUOTE_ACCEPTED_PROMISE).value()',
+            new='self._engine_workflow_context.sleep()',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineInvocationFlowSignalRelay.await_quote_accepted reads no "
+        "promise; an await_ method reads the durable promise named for the operation it waits on" in f
+        for f in unread
+    ), unread
+
+
+def test_an_engine_container_is_named_for_the_far_side_of_what_registers_into_it() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="restate.Service = restate.Service('QuoteActions')",
+            new="restate.Service = restate.Service('Quotes')",
+            old_also="restate.Workflow('Flow')",
+            new_also="restate.Workflow('Flows')",
+        )).violations()
+    )
+    assert any(
+        "shop.component.engine.EngineShop names quote_actions_service Quotes and hands it to EngineQuotePrice, "
+        "whose far side is QuoteActions; an engine container is named for the far side of what registers "
+        "into it, because one far side keeps one name across the engine" in f
+        for f in findings
+    ), findings
+    assert any(
+        "shop.component.engine.EngineShop names flow_workflow Flows and hands it to EngineIssueQuote, whose far "
+        "side is Flow; an engine container is named for the far side of what registers into it" in f
+        for f in findings
+    ), findings
+    assert not any("hands flow_workflow to EngineQuoteAccepted" in f for f in findings), findings
+    loose = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        self.flow_workflow: restate.Workflow = restate.Workflow('Flow')\n",
+            new=(
+                "        self.flow_workflow: restate.Workflow = restate.Workflow('Flow')\n"
+                "        self.loose_workflow: restate.Workflow = restate.Workflow('Loose')\n"
+            ),
+            old_also='dispatchers.EngineQuoteAccepted(self.flow_workflow)',
+            new_also='dispatchers.EngineQuoteAccepted(self.loose_workflow)',
+        )).violations()
+    )
+    assert any(
+        "shop.component.engine.EngineShop hands loose_workflow to EngineQuoteAccepted and to no workflow; a "
+        "signal registers on the container its workflow's main is registered on, because a durable promise "
+        "is resolved only from inside its own workflow" in f
+        for f in loose
+    ), loose
+    unnamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="restate.Workflow('Flow')",
+            new='restate.Workflow(FLOW)',
+        )).violations()
+    )
+    assert any(
+        "shop.component.engine.EngineShop names flow_workflow with something other than a string literal; a "
+        "component names each engine container as a literal, because a name the analyzer cannot read is a "
+        "name it is not checking" in f
+        for f in unnamed
+    ), unnamed
+
+
+def test_every_registration_is_reached_by_a_dispatcher_and_a_dispatcher_reaches_only_registrations() -> None:
+    unreached = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='self._engine_quote_accepted.handler, key',
+            new='self._engine_issue_quote.handler, key',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineQuoteAccepted registers a handler no dispatcher "
+        "in shop reads; an activity, a workflow, or a signal registers only what a dispatcher of its context "
+        "reaches, because a registration nothing reaches is a name the engine holds for no one" in f
+        for f in unreached
+    ), unreached
+    assert not any("EngineIssueQuote registers a handler no dispatcher" in f for f in unreached), unreached
+    foreign = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old='self._engine_quote_accepted.handler, key',
+            new='self._engine_client.handler, key',
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineHttpFlowRelay.run_quote_accepted reads the "
+        "handler of self._engine_client, which is not an activity, a workflow, or a signal; a dispatcher "
+        "reaches only a handler an activity, a workflow, or a signal of its context registers, because "
+        "nothing else registers a handler with the engine" in f
+        for f in foreign
+    ), foreign
+
+
+def test_a_handler_named_positionally_registers_under_that_name() -> None:
+    renamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="@quote_actions_service.handler()",
+            new="@quote_actions_service.handler('price_quote')",
+            old_also="@flow_workflow.main()",
+            new_also="@flow_workflow.main('begin_quote')",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice.quote_price registers as price_quote; a "
+        "handler registers under the operation it is named for" in f
+        for f in renamed
+    ), renamed
+    assert any(
+        "shop.adapters.workflows.engine_issue_quote.EngineIssueQuote.issue_quote registers as begin_quote; a "
+        "handler registers under the operation it is named for" in f
+        for f in renamed
+    ), renamed
+    assert any(
+        "EngineInvocationQuoteActionsRelay.run_quote_price passes EngineQuotePrice.price_quote; a dispatcher "
+        "method passes the handler named for the operation it carries" in f
+        for f in renamed
+    ), renamed
+    unread = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="@quote_actions_service.handler()",
+            new="@quote_actions_service.handler(QUOTE_PRICE)",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice.quote_price registers under a name that is "
+        "not a string literal" in f
+        for f in unread
+    ), unread
+    collided = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="from shop.adapters.activities.engine_activities import EngineQuotePrice as EngineQuotePrice\n",
+            new=(
+                "from shop.adapters.activities.engine_activities import EngineQuotePrice as EngineQuotePrice\n"
+                "from shop.adapters.activities.engine_more_activities import "
+                "EngineRequotePrice as EngineRequotePrice\n"
+            ),
+            old_also="        engine_issue_quote = workflows.EngineIssueQuote(",
+            new_also=(
+                "        activities.EngineRequotePrice(\n"
+                "            self.quote_actions_service, quotes.QuoteActions(gateways.CatalogGateway())\n"
+                "        )\n"
+                "        engine_issue_quote = workflows.EngineIssueQuote("
+            ),
+            extra=(
+                (
+                    "shop/adapters/activities/engine_more_activities.py",
+                    "shop.adapters.activities.engine_more_activities",
+                    "import tesser.adapters as ts\n"
+                    "import restate\n"
+                    "import shop.application.client as client\n"
+                    "import shop.application.relays as relays\n"
+                    "class EngineRequotePrice(ts.Activity):\n"
+                    "    def __init__(\n"
+                    "        self, quote_actions_service: restate.Service, shop_application_client: client.ShopApplicationClient\n"
+                    "    ) -> None:\n"
+                    "        @quote_actions_service.handler('quote_price')\n"
+                    "        async def requote_price(\n"
+                    "            engine_context: restate.Context, quote_price_request: relays.QuotePriceRequest\n"
+                    "        ) -> relays.QuotePriceResponse:\n"
+                    "            return shop_application_client.requote_price(quote_price_request)\n"
+                    "        self.handler = requote_price\n",
+                    False,
+                ),
+            ),
+        )).violations()
+    )
+    assert any(
+        "shop.component.engine.EngineShop hands quote_actions_service to EngineQuotePrice and "
+        "EngineRequotePrice, which both register quote_price; a handler name is unique in its engine "
+        "container" in f
+        for f in collided
+    ), collided
+
+
+def test_a_workflows_module_reaches_no_http_client_through_the_engine_package_or_a_common_library() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="import restate\nimport shop.adapters.activities as activities\nimport shop.application.orchestrators",
+            new=(
+                "import restate\nimport aiohttp\nimport requests\nimport urllib.request as urllib_request\n"
+                "import urllib3\nimport shop.adapters.activities as activities\nimport shop.application.orchestrators"
+            ),
+            old_also="    def __init__(self, flow_workflow: restate.Workflow, engine_quote_price: activities.EngineQuotePrice) -> None:\n",
+            new_also=(
+                "    def __init__(self, flow_workflow: restate.Workflow, engine_quote_price: activities.EngineQuotePrice) -> None:\n"
+                "        self._made = restate.create_client('http://engine')\n"
+                "        self._kind = restate.RestateClient\n"
+            ),
+        )).violations()
+    )
+    for banned in ("aiohttp", "requests", "urllib.request", "urllib3"):
+        assert any(
+            f"shop.adapters.workflows.engine_issue_quote imports {banned}; a workflows module calls across the "
+            "engine only through its invocation's context" in f
+            for f in findings
+        ), (banned, findings)
+    for read in ("create_client", "RestateClient"):
+        assert any(
+            f"shop.adapters.workflows.engine_issue_quote reads restate.{read}; a workflows module calls across "
+            "the engine only through its invocation's context, because the engine journals a call made through "
+            "the context and a call made over HTTP runs again on every replay" in f
+            for f in findings
+        ), (read, findings)
+    assert not any("engine_activities reads restate." in f for f in findings), findings
+
+
+def test_a_registration_is_read_in_every_form_restate_accepts_and_only_on_an_engine_container() -> None:
+    stray = (
+        "        async def wipe_quotes(\n"
+        "            engine_context: restate.Context, quote_price_request: relays.QuotePriceRequest\n"
+        "        ) -> relays.QuotePriceResponse:\n"
+        "            return shop_application_client.quote_price(quote_price_request)\n"
+    )
+    message = (
+        "shop.adapters.activities.engine_activities.EngineQuotePrice registers wipe_quotes beside its handler; a "
+        "registration class registers exactly one handler"
+    )
+    for label, registered in (
+        (
+            "nested",
+            "        if quote_actions_service is not None:\n"
+            "            @quote_actions_service.handler(name='wipe_quotes')\n"
+            + "".join("    " + line + "\n" for line in stray.splitlines()),
+        ),
+        (
+            "held",
+            "        self._quote_actions_service = quote_actions_service\n"
+            "        @self._quote_actions_service.handler(name='wipe_quotes')\n" + stray,
+        ),
+        (
+            "called",
+            stray + "        quote_actions_service.handler(name='wipe_quotes')(wipe_quotes)\n",
+        ),
+    ):
+        findings = tuple(
+            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+            for v in domain.Codebase(_engine_kinds_spec(
+                old="        self.handler = quote_price\n",
+                new=registered + "        self.handler = quote_price\n",
+            )).violations()
+        )
+        assert any(message in f for f in findings), (label, findings)
+    unrelated = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        self.handler = quote_price\n",
+            new="        @peer.handler(name='wipe_quotes')\n" + stray + "        self.handler = quote_price\n",
+            old_also="shop_application_client: client.ShopApplicationClient\n    ) -> None:\n        @quote_actions_service",
+            new_also=(
+                "shop_application_client: client.ShopApplicationClient, peer: ts.Workflow\n"
+                "    ) -> None:\n        @quote_actions_service"
+            ),
+        )).violations()
+    )
+    assert not any(message in f for f in unrelated), unrelated
+    bare = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="self, quote_actions_service: restate.Service, shop_application_client: client.ShopApplicationClient\n",
+            new="self, quote_actions_service, shop_application_client: client.ShopApplicationClient\n",
+        )).violations()
+    )
+    assert not any("does not register it" in f for f in bare), bare
+
+
+def test_the_handler_a_registration_class_keeps_is_the_one_it_registers() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        @quote_actions_service.handler()\n        async def quote_price(",
+            new="        async def quote_price(",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.activities.engine_activities.EngineQuotePrice keeps quote_price as self.handler but does "
+        "not register it; an activity, a workflow, or a signal keeps the handler it registers, because a "
+        "dispatcher that passes an unregistered handler names nothing the engine holds" in f
+        for f in findings
+    ), findings
+
+
+def test_one_class_handed_one_container_twice_collides_with_itself() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        engine_issue_quote = workflows.EngineIssueQuote(",
+            new=(
+                "        activities.EngineQuotePrice(\n"
+                "            self.quote_actions_service, quotes.QuoteActions(gateways.CatalogGateway())\n"
+                "        )\n"
+                "        engine_issue_quote = workflows.EngineIssueQuote("
+            ),
+        )).violations()
+    )
+    assert any(
+        "shop.component.engine.EngineShop hands quote_actions_service to EngineQuotePrice and EngineQuotePrice, "
+        "which both register quote_price; a handler name is unique in its engine container" in f
+        for f in findings
+    ), findings
+
+
+def test_an_activity_handler_calls_the_application_client_method_named_for_its_operation() -> None:
+    for replacement in (
+        "return relays.QuotePriceResponse(text=quote_price_request.text)",
+        "return shop_application_client.price_other(quote_price_request)",
+    ):
+        findings = tuple(
+            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+            for v in domain.Codebase(_engine_kinds_spec(
+                old="return shop_application_client.quote_price(quote_price_request)",
+                new=replacement,
+            )).violations()
+        )
+        assert any(
+            "shop.adapters.activities.engine_activities.EngineQuotePrice.quote_price calls no application client "
+            "method named quote_price; an activity's handler performs its operation by calling the method of "
+            "that name on the application client it takes, because a handler that answers without it reports "
+            "work nothing did" in f
+            for f in findings
+        ), (replacement, findings)
+
+
+def test_a_signal_handler_resolves_its_promise() -> None:
+    for replacement in (
+        "",
+        "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).peek()\n",
+    ):
+        findings = tuple(
+            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+            for v in domain.Codebase(_engine_kinds_spec(
+                old="            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n",
+                new=replacement,
+            )).violations()
+        )
+        assert any(
+            "shop.adapters.dispatchers.engine_http_flow_relay.EngineQuoteAccepted.quote_accepted resolves no "
+            "promise; a signal's handler resolves the durable promise named for its operation, because a signal "
+            "that does not resolve its promise leaves its workflow waiting" in f
+            for f in findings
+        ), (replacement, findings)
+
+
+def test_a_dispatcher_field_kept_with_an_annotation_is_read_like_one_kept_without() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        self._engine_quote_price = engine_quote_price\n",
+            new="        self._engine_quote_price: activities.EngineQuotePrice = engine_quote_price\n",
+            old_also="        self._engine_quote_accepted = engine_quote_accepted\n",
+            new_also="        self._engine_quote_accepted: EngineQuoteAccepted = engine_quote_accepted\n",
+        )).violations()
+    )
+    assert findings == (), findings
+
+
+def test_a_dispatcher_calls_each_handler_with_the_engine_call_for_its_kind() -> None:
+    workflow = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        return await self._engine_client.workflow_call(\n            self._engine_issue_quote.handler",
+            new="        return await self._engine_client.service_call(\n            self._engine_issue_quote.handler",
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.dispatchers.engine_http_flow_relay.EngineHttpFlowRelay.run_issue_quote reaches the workflow "
+        "EngineIssueQuote through service_call; a dispatcher calls an activity's handler with service_call or "
+        "service_send and a workflow's or a signal's with workflow_call or workflow_send, because the engine "
+        "routes a call by the kind of container its handler is registered on" in f
+        for f in workflow
+    ), workflow
+    activity = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="return await self._engine_workflow_context.service_call(",
+            new="return await self._engine_workflow_context.workflow_call(",
+        )).violations()
+    )
+    assert any(
+        "EngineInvocationQuoteActionsRelay.run_quote_price reaches the activity EngineQuotePrice through "
+        "workflow_call; a dispatcher calls an activity's handler with service_call" in f
+        for f in activity
+    ), activity
+    signal = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="        return await self._engine_client.workflow_call(\n            self._engine_quote_accepted.handler",
+            new="        return await self._engine_client.object_call(\n            self._engine_quote_accepted.handler",
+        )).violations()
+    )
+    assert any(
+        "EngineHttpFlowRelay.run_quote_accepted reaches the signal EngineQuoteAccepted through object_call;" in f
+        for f in signal
+    ), signal
+
+
+def test_an_engine_container_named_by_keyword_is_read_like_one_named_positionally() -> None:
+    named = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="restate.Workflow('Flow')",
+            new="restate.Workflow(name='Flow')",
+        )).violations()
+    )
+    assert named == (), named
+    misnamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="restate.Workflow('Flow')",
+            new="restate.Workflow(name='Flows')",
+        )).violations()
+    )
+    assert any(
+        "shop.component.engine.EngineShop names flow_workflow Flows and hands it to EngineIssueQuote, whose far "
+        "side is Flow" in f
+        for f in misnamed
+    ), misnamed
+
+
+def test_a_relays_constant_is_assigned_once() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_engine_kinds_spec(
+            old="QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n",
+            new=(
+                "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n"
+                "QUOTE_ACCEPTED_PROMISE = 'accepted'\n"
+            ),
+        )).violations()
+    )
+    assert any(
+        "shop.application.relays.flow_signal_relay.QUOTE_ACCEPTED_PROMISE is assigned 2 times; a relays constant "
+        "is assigned once, because the analyzer reads one value and Python keeps the last" in f
         for f in findings
     ), findings

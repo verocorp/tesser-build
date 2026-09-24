@@ -14,7 +14,7 @@ class PurchaseOrchestratorApplicationClient(ts.Client, typing.Protocol):
     ) -> relays.PayForOrderResponse: ...
 
 
-class PurchaseWorkflow[C](ts.Workflow, typing.Protocol):
+class PurchaseWorkflow[C](ts.DeprecatedWorkflow, typing.Protocol):
     def invocation(
         self, context: C, /
     ) -> typing.AsyncContextManager[PurchaseOrchestratorApplicationClient]: ...

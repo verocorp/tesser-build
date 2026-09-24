@@ -1,0 +1,4 @@
+from calls.adapters.activities.restate_activities import RestateRecordCall as RestateRecordCall
+from calls.adapters.activities.restate_activities import RestateDialPerson as RestateDialPerson
+from calls.adapters.activities.restate_activities import RestateHangUp as RestateHangUp
+from calls.adapters.activities.restate_activities import RestateSayUtterance as RestateSayUtterance

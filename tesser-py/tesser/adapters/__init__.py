@@ -1,8 +1,12 @@
+from tesser.adapters.activity import Activity as Activity
+from tesser.adapters.dispatcher import Dispatcher as Dispatcher
 from tesser.adapters.gateway import Gateway as Gateway
 from tesser.adapters.handler import Handler as Handler
 from tesser.adapters.mapper import Mapper as Mapper
 from tesser.adapters.repository import Repository as Repository
 from tesser.adapters.runner import Runner as Runner
 from tesser.adapters.runtime import Runtime as Runtime
+from tesser.adapters.signal import Signal as Signal
+from tesser.adapters.workflow import Workflow as Workflow
 from tesser.application.relay import Relay as Relay
 from tesser.application.serde import Serde as Serde

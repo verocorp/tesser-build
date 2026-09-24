@@ -11,7 +11,7 @@ import tesser.errors as errors
 
 _REQUIRED: typing.Final[tuple[str, ...]] = (
     "CALLS_STORAGE",
-    "RESTATE_INGRESS",
+    "RESTATE_URL",
     "LIVEKIT_URL",
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
@@ -64,7 +64,7 @@ class EnvConfigRepository(AppConfigRepository):
                 calls=calls_component.Config(
                     calls_component.Spec(
                         storage=settings["CALLS_STORAGE"],
-                        ingress=settings["RESTATE_INGRESS"],
+                        restate_url=settings["RESTATE_URL"],
                         livekit_url=settings["LIVEKIT_URL"],
                         livekit_api_key=settings["LIVEKIT_API_KEY"],
                         livekit_api_secret=settings["LIVEKIT_API_SECRET"],

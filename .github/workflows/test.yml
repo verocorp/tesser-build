@@ -262,7 +262,7 @@ jobs:
       - name: examples/voice — tessercheck + mypy --strict + pytest
         env:
           CALLS_STORAGE: postgres://tesser@localhost:5432/tesser
-          RESTATE_INGRESS: http://localhost:8080
+          RESTATE_URL: http://localhost:8080
           RESTATE_ADMIN: http://localhost:9070
           LIVEKIT_URL: ws://livekit.invalid
           LIVEKIT_API_KEY: unused
