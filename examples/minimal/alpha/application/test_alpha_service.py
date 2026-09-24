@@ -72,8 +72,8 @@ class FakeWidgetOrchestratorRelay(relays.WidgetOrchestratorRelay):
     async def start_register_widget(
         self, register_widget_request: relays.RegisterWidgetRequest
     ) -> relays.StartRegisterWidgetResponse:
-        self.registered.append(register_widget_request.name)
-        return relays.StartRegisterWidgetResponse(name=register_widget_request.name)
+        self.registered.append(str(register_widget_request.name))
+        return relays.StartRegisterWidgetResponse(name=str(register_widget_request.name))
 
     async def run_approve_widget(self, approve_widget_request: relays.ApproveWidgetRequest) -> relays.ApproveWidgetResponse:
         self.approved.append(approve_widget_request.name)

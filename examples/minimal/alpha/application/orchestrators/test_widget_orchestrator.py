@@ -4,6 +4,7 @@ import tesser.testing as ts
 
 import alpha.application.orchestrators as orchestrators
 import alpha.application.relays as relays
+import alpha.domain as domain
 
 
 @ts.fake
@@ -36,6 +37,6 @@ class TestWidgetOrchestrator:
         steps: list[str] = []
         register_widget_response = await orchestrators.WidgetOrchestrator(
             FakeWidgetOrchestratorSignalRelay(steps), FakeWidgetActionsRelay(steps)
-        ).register_widget(relays.RegisterWidgetRequest(name="a"))
+        ).register_widget(relays.RegisterWidgetRequest(name=domain.Name("a")))
         assert register_widget_response.name == "a"
         assert steps == ["approved a", "kept a"]

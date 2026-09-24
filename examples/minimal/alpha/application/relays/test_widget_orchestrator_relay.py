@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import alpha.application.relays as relays
+import alpha.domain as domain
 
 
 class TestWidgetOrchestratorSnapshots:
 
     def test_each_message_is_its_name_and_comes_back_equal(self) -> None:
-        register_widget_request = relays.RegisterWidgetRequest(name="a")
+        register_widget_request = relays.RegisterWidgetRequest(name=domain.Name("a"))
         register_widget_response = relays.RegisterWidgetResponse(name="a")
         approve_widget_request = relays.ApproveWidgetRequest(name="a")
         approve_widget_response = relays.ApproveWidgetResponse(name="a")

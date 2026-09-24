@@ -50,7 +50,7 @@ class MapToAddPartResponse(ts.Mapper, client.AddPartResponse):
 class MapToRegisterWidgetRequest(ts.Mapper, relays.RegisterWidgetRequest):
 
     def __init__(self, name: domain.Name) -> None:
-        super().__init__(name=str(name))
+        super().__init__(name=name)
 
 
 class MapToCreateWidgetResponse(ts.Mapper, client.CreateWidgetResponse):

@@ -12,13 +12,16 @@ import httpx
 import hypercorn.asyncio as hypercorn_asyncio
 import hypercorn.config as hypercorn_config
 import hypercorn.typing as hypercorn_typing
+import pytest
 import restate
+import restate.client as restate_client
 
 import alpha.adapters.activities as activities
 import alpha.adapters.dispatchers as dispatchers
 import alpha.adapters.workflows as workflows
 import alpha.application.client as client
 import alpha.application.relays as relays
+import alpha.domain as domain
 
 
 @ts.fake
@@ -37,7 +40,7 @@ class TestRestateHttpWidgetOrchestratorRelay:
     async def test_a_started_registration_waits_until_its_name_is_approved_and_keeps_the_widget_once(
         self,
     ) -> None:
-        name = str(uuid.uuid4())
+        name = ".."
         suffix = uuid.uuid4().hex
         widget_actions_service = restate.Service(f"WidgetActions{suffix}")
         widget_orchestrator_workflow = restate.Workflow(f"WidgetOrchestrator{suffix}")
@@ -46,10 +49,9 @@ class TestRestateHttpWidgetOrchestratorRelay:
             widget_orchestrator_workflow,
             activities.RestateKeepWidget(widget_actions_service, fake_widget_application_client),
         )
+        restate_approve_widget = dispatchers.RestateApproveWidget(widget_orchestrator_workflow)
         restate_http_widget_orchestrator_relay = dispatchers.RestateHttpWidgetOrchestratorRelay(
-            os.environ["RESTATE_INGRESS"],
-            restate_register_widget,
-            dispatchers.RestateApproveWidget(widget_orchestrator_workflow),
+            os.environ["RESTATE_INGRESS"], restate_register_widget, restate_approve_widget
         )
         with socket.socket() as probe:
             probe.bind(("0.0.0.0", 0))
@@ -78,7 +80,7 @@ class TestRestateHttpWidgetOrchestratorRelay:
             assert registered.is_success, registered.text
 
             start_register_widget_response = await restate_http_widget_orchestrator_relay.start_register_widget(
-                relays.RegisterWidgetRequest(name=name)
+                relays.RegisterWidgetRequest(name=domain.Name(name))
             )
             awaited: list[str] = []
             for _ in range(100):
@@ -106,12 +108,18 @@ class TestRestateHttpWidgetOrchestratorRelay:
                 if fake_widget_application_client.kept:
                     break
                 await asyncio.sleep(0.05)
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+                with pytest.raises(restate.HttpError) as foreign:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_approve_widget.handler, key="%2E%2E", arg=relays.ApproveWidgetRequest(name="other")
+                    )
 
             assert start_register_widget_response == relays.StartRegisterWidgetResponse(name=name)
             assert awaited == [relays.APPROVE_WIDGET_PROMISE]
             assert kept_before_approval == []
             assert approvals == [relays.ApproveWidgetResponse(name=name)] * 2
             assert fake_widget_application_client.kept == [name]
+            assert foreign.value.status_code == 400
         finally:
             if registered.is_success:
                 await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})

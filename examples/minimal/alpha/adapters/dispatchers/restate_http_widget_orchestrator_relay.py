@@ -14,6 +14,7 @@ import alpha.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
 _TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=30.0)
+_FOREIGN_NAME: typing.Final[str] = "an approval names the widget its workflow is keyed by"
 _ALREADY_COMPLETED: typing.Final[int] = 409
 _ALREADY_COMPLETED_MESSAGE: typing.Final[str] = "promise was already completed"
 
@@ -56,6 +57,8 @@ class RestateApproveWidget(ts.Signal):
             approve_widget_request: relays.ApproveWidgetRequest,
         ) -> relays.ApproveWidgetResponse:
             name = restate_workflow_shared_context.key()
+            if approve_widget_request.name != name:
+                raise restate.TerminalError(_FOREIGN_NAME, status_code=400)
             try:
                 await restate_workflow_shared_context.promise(
                     relays.APPROVE_WIDGET_PROMISE, serde=restate_serde.BytesSerde()
@@ -91,15 +94,15 @@ class RestateHttpWidgetOrchestratorRelay(ts.Dispatcher):
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_TIMEOUT) as async_client:
             await restate_client.Client(async_client).workflow_send(
                 self._restate_register_widget.handler,
-                key=urllib_parse.quote(register_widget_request.name, safe=""),
+                key=urllib_parse.quote(str(register_widget_request.name), safe="").replace(".", "%2E"),
                 arg=register_widget_request,
             )
-        return relays.StartRegisterWidgetResponse(name=register_widget_request.name)
+        return relays.StartRegisterWidgetResponse(name=str(register_widget_request.name))
 
     async def run_approve_widget(self, approve_widget_request: relays.ApproveWidgetRequest) -> relays.ApproveWidgetResponse:
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_TIMEOUT) as async_client:
             return await restate_client.Client(async_client).workflow_call(
                 self._restate_approve_widget.handler,
-                key=urllib_parse.quote(approve_widget_request.name, safe=""),
+                key=urllib_parse.quote(approve_widget_request.name, safe="").replace(".", "%2E"),
                 arg=approve_widget_request,
             )

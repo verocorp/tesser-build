@@ -35,7 +35,7 @@ class WidgetOrchestrator(ts.Orchestrator):
         self._widget_actions_relay = widget_actions_relay
 
     async def register_widget(self, register_widget_request: relays.RegisterWidgetRequest) -> relays.RegisterWidgetResponse:
-        name = domain.Name(register_widget_request.name)
+        name = register_widget_request.name
         await self._widget_orchestrator_signal_relay.await_approve_widget(MapToAwaitApproveWidgetRequest(name))
         keep_widget_response = await self._widget_actions_relay.run_keep_widget(MapToKeepWidgetRequest(name))
         return MapToRegisterWidgetResponse(keep_widget_response)

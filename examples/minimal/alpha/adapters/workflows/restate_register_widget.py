@@ -11,6 +11,7 @@ import alpha.application.orchestrators as orchestrators
 import alpha.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
+_FOREIGN_NAME: typing.Final[str] = "a registration names the widget its workflow is keyed by"
 
 
 class RestateRegisterWidgetRequestSerde(ts.Serde, restate_serde.Serde[relays.RegisterWidgetRequest]):
@@ -78,6 +79,8 @@ class RestateRegisterWidget(ts.Workflow):
         async def register_widget(
             restate_workflow_context: restate.WorkflowContext, register_widget_request: relays.RegisterWidgetRequest
         ) -> relays.RegisterWidgetResponse:
+            if str(register_widget_request.name) != restate_workflow_context.key():
+                raise restate.TerminalError(_FOREIGN_NAME, status_code=400)
             return await orchestrators.WidgetOrchestrator(
                 RestateInvocationWidgetOrchestratorSignalRelay(restate_workflow_context),
                 RestateInvocationWidgetActionsRelay(restate_workflow_context, restate_keep_widget),

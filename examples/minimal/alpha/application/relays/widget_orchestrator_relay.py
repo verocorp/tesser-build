@@ -5,21 +5,23 @@ import typing
 
 import tesser.application as ts
 
+import alpha.domain as domain
+
 
 class RegisterWidgetRequest(ts.Request):
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: domain.Name) -> None:
         self.name = name
 
 
 class RegisterWidgetRequestSnapshot(ts.Serde):
 
     def serialize(self, register_widget_request: RegisterWidgetRequest) -> bytes:
-        return json.dumps({"name": register_widget_request.name}).encode()
+        return json.dumps({"name": str(register_widget_request.name)}).encode()
 
     def deserialize(self, buf: bytes) -> RegisterWidgetRequest:
         snapshot = json.loads(buf)
-        return RegisterWidgetRequest(name=snapshot["name"])
+        return RegisterWidgetRequest(name=domain.Name(snapshot["name"]))
 
 
 class RegisterWidgetResponse(ts.Response):
