@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.adapters as ts
+import restate
+import restate.serde as restate_serde
+
+import {{context}}.application.client as client
+import {{context}}.application.relays as relays
+
+_EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
+
+
+class Restate{{Record}}RequestSerde(ts.Serde, restate_serde.Serde[relays.{{Record}}Request]):
+
+    def serialize(self, {{record}}_request: relays.{{Record}}Request | None) -> bytes:
+        if {{record}}_request is None:
+            return b""
+        return relays.{{Record}}RequestSnapshot().serialize({{record}}_request)
+
+    def deserialize(self, buf: bytes) -> relays.{{Record}}Request | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Record}}RequestSnapshot().deserialize(buf)
+
+
+class Restate{{Record}}ResponseSerde(ts.Serde, restate_serde.Serde[relays.{{Record}}Response]):
+
+    def serialize(self, {{record}}_response: relays.{{Record}}Response | None) -> bytes:
+        if {{record}}_response is None:
+            return b""
+        return relays.{{Record}}ResponseSnapshot().serialize({{record}}_response)
+
+    def deserialize(self, buf: bytes) -> relays.{{Record}}Response | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Record}}ResponseSnapshot().deserialize(buf)
+
+
+class Restate{{Record}}(ts.Activity):
+
+    def __init__(
+        self,
+        {{aggregate}}_actions_service: restate.Service,
+        {{aggregate}}_application_client: client.{{Aggregate}}ApplicationClient,
+    ) -> None:
+        @{{aggregate}}_actions_service.handler(
+            input_serde=Restate{{Record}}RequestSerde(),
+            output_serde=Restate{{Record}}ResponseSerde(),
+        )
+        async def {{record}}(
+            restate_context: restate.Context, {{record}}_request: relays.{{Record}}Request
+        ) -> relays.{{Record}}Response:
+            return await {{aggregate}}_application_client.{{record}}({{record}}_request)
+
+        self.handler = {{record}}

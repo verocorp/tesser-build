@@ -399,7 +399,8 @@ run_generated_tree() {
   local ingress="${RESTATE_INGRESS:-http://localhost:48080}"
   local admin="${RESTATE_ADMIN:-http://localhost:49070}"
   local port="${GENERATED_DEPLOYMENT_PORT:-9081}"
-  local deployment="${GENERATED_DEPLOYMENT:-http://host.docker.internal:$port}"
+  local callback_host="${GENERATED_CALLBACK_HOST:-host.docker.internal}"
+  local deployment="${GENERATED_DEPLOYMENT:-http://$callback_host:$port}"
   local names context storage_env ingress_env
   names=$(python3 -c 'import sys, tomllib; s = tomllib.load(open(sys.argv[1], "rb")); print(s["bounded_context_name"], s["environment_variables"]["storage_url"], s["environment_variables"]["restate_ingress_url"])' "$spec") || return 1
   read -r context storage_env ingress_env <<<"$names"
@@ -430,7 +431,7 @@ run_generated_tree() {
   fi
   step "$spec: pytest (against Postgres at $storage_env and Restate at $ingress_env)"
   (cd "$out" && env "$storage_env=$storage" "$ingress_env=$ingress" "RESTATE_ADMIN=$admin" \
-    PYTHONPATH=".:$ROOT/tesser-py" pytest -q -p no:cacheprovider)
+    "RESTATE_CALLBACK_HOST=$callback_host" PYTHONPATH=".:$ROOT/tesser-py" pytest -q -p no:cacheprovider)
   local status=$?
   kill -INT "$host" 2>/dev/null
   wait "$host" 2>/dev/null

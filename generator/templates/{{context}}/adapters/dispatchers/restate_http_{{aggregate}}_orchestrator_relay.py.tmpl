@@ -7,25 +7,23 @@ import tesser.adapters as ts
 import httpx
 import restate.client as restate_client
 
+import {{context}}.adapters.workflows as workflows
 import {{context}}.application.relays as relays
 
 _READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
 _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOUT_SECONDS)
 
 
-class RestateIngress{{Aggregate}}OrchestratorRelay(ts.Runner):
+class RestateHttp{{Aggregate}}OrchestratorRelay(ts.Dispatcher):
 
-    def __init__(self, ingress: str) -> None:
+    def __init__(self, ingress: str, restate_{{conduct}}: workflows.Restate{{Conduct}}) -> None:
         self._ingress = ingress
+        self._restate_{{conduct}} = restate_{{conduct}}
 
     async def run_{{conduct}}(self, {{conduct}}_request: relays.{{Conduct}}Request) -> relays.{{Conduct}}Response:
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_RUN_TIMEOUT) as async_client:
-            return relays.{{Conduct}}ResponseSnapshot().deserialize(
-                await restate_client.Client(async_client).generic_call(
-                    "{{Aggregate}}Orchestrator",
-                    "{{conduct}}",
-                    relays.{{Conduct}}RequestSnapshot().serialize({{conduct}}_request),
-                    key=urllib_parse.quote({{conduct}}_request.{{identity}}, safe=""),
-                    headers={"content-type": "application/json"},
-                )
+            return await restate_client.Client(async_client).workflow_call(
+                self._restate_{{conduct}}.handler,
+                key=urllib_parse.quote({{conduct}}_request.{{identity}}, safe=""),
+                arg={{conduct}}_request,
             )

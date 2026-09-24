@@ -30,20 +30,40 @@ class TestConfig:
 
 class Test{{Context}}:
 
-    async def test_the_component_publishes_the_restate_runtime_it_wired(self) -> None:
+    async def test_the_component_publishes_the_engine_containers_it_registered_into(self) -> None:
         config = component.Config(
             component.Spec(storage="postgres://nobody@nowhere/none", ingress="http://localhost:8080", identity_seed=7)
         )
 
         {{context}} = component.{{Context}}(config, pgdatabase_database.Database(config.database))
         registered = {
-            {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_actions_service.name: sorted(
-                {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_actions_service.handlers
-            ),
-            {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow.name: sorted(
-                {{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow.handlers
+            {{context}}.{{aggregate}}_actions_service.name: sorted({{context}}.{{aggregate}}_actions_service.handlers),
+            {{context}}.{{aggregate}}_orchestrator_workflow.name: sorted(
+                {{context}}.{{aggregate}}_orchestrator_workflow.handlers
             ),
         }
         await {{context}}.close()
 
         assert registered == {"{{Aggregate}}Actions": ["{{record}}"], "{{Aggregate}}Orchestrator": ["{{conduct}}"]}
+
+    async def test_every_container_bounds_its_retries_and_only_the_workflow_faces_the_ingress(self) -> None:
+        config = component.Config(
+            component.Spec(storage="postgres://nobody@nowhere/none", ingress="http://localhost:8080", identity_seed=7)
+        )
+
+        {{context}} = component.{{Context}}(config, pgdatabase_database.Database(config.database))
+        declared = [
+            (
+                registered.name,
+                registered.ingress_private,
+                registered.invocation_retry_policy.max_attempts if registered.invocation_retry_policy else None,
+                registered.invocation_retry_policy.on_max_attempts if registered.invocation_retry_policy else None,
+            )
+            for registered in ({{context}}.{{aggregate}}_actions_service, {{context}}.{{aggregate}}_orchestrator_workflow)
+        ]
+        await {{context}}.close()
+
+        assert declared == [
+            ("{{Aggregate}}Actions", True, 5, "pause"),
+            ("{{Aggregate}}Orchestrator", None, 5, "pause"),
+        ]
