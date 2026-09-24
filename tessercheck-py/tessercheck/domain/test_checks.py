@@ -5620,7 +5620,7 @@ def test_helper_rules_are_flagged() -> None:
         ))).violations()
                )
     assert any(
-        "bad_builder" in f and "parameter 'count' has no default; every helper parameter but an entity or aggregate has a default" in f
+        "bad_builder" in f and "parameter 'count' has no default; every helper parameter has a default" in f
         for f in findings
     )
     assert any(
@@ -5735,7 +5735,7 @@ def test_a_helper_names_a_record_parameter_for_the_field_it_feeds() -> None:
     ]
 
 
-def test_a_helper_takes_an_aggregate_without_a_default_and_never_shares_one() -> None:
+def test_a_relay_record_has_no_helper_and_a_default_never_builds_a_domain_object() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
                    for v in domain.Codebase(_spec(sources=(
@@ -5776,10 +5776,17 @@ def test_a_helper_takes_an_aggregate_without_a_default_and_never_shares_one() ->
         ))).violations()
                )
     helper = [f for f in findings if "test_thing_relay_helpers" in f and "TB073" in f]
-    assert not any("keep_thing_request" in f for f in helper), helper
+    assert any(
+        "keep_thing_request returns a relay record; a relay record carries domain objects, "
+        "and a test builds its domain objects itself" in f
+        for f in helper
+    ), helper
+    assert any("shared_thing_request returns a relay record" in f for f in helper), helper
+    assert any("keep_thing_request parameter 'thing' has no default" in f for f in helper), helper
     assert any(
         "shared_thing_request parameter 'thing' defaults to something other than" in f for f in helper
     ), helper
+    assert not any("thing_spec" in f for f in helper), helper
 
 
 def test_an_assembly_puts_a_test_input_together_without_branching_or_running_the_code() -> None:

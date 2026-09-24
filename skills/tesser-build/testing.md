@@ -105,10 +105,10 @@ file says *how*, and it is the cross-cutting layer they assume.
    feeds.** A helper's entire job is to hold the values a test does not care
    about, so the test can state only the one or two that make it *that* test.
    It takes exactly the constructor's parameters — the same names, the types
-   spelled as the constructor spells them — each with a default (an entity or
-   aggregate excepted), and its body passes every one of them straight
-   through. It never returns a constructed domain object, and it never calls
-   anything but another helper.
+   spelled as the constructor spells them — each with a default, and its body
+   passes every one of them straight through. It never returns a constructed
+   domain object or a relay record, and it never calls anything but another
+   helper.
 
    ```python
    @ts.helper
@@ -143,16 +143,17 @@ file says *how*, and it is the cross-cutting layer they assume.
      record defaults to that record's helper, and a test that cares about the
      child passes one: `_order_spec(lines=(_line_spec(quantity=3),))`. A
      default holds values — a literal, an enum member, another helper's or an
-     assembly's result, a value object or config built from those
-     (`payment_method: PaymentMethod = PaymentMethod("card-4242")`), or a tuple
-     of those — never a record built in place, never a service or adapter, and
-     never a module constant. A parameter that holds an entity or aggregate
-     takes no default: a default is one instance every call shares, and an
-     entity changes, so each test passes its own
-     (`_conduct_call_request(call=Call(_call_spec()))`). Write a helper only where a test needs one, above the helper
-     whose default calls it: a default runs once, when the function is
-     defined, and every call shares that instance, which is safe because a
-     record or value object is never changed after construction.
+     assembly's result, a config built from those, or a tuple of those — never
+     a domain object, never a record built in place, never a service or
+     adapter, and never a module constant. Write a helper only where a test
+     needs one, above the helper whose default calls it: a default runs once,
+     when the function is defined, and every call shares that instance, which
+     is safe because a record is never changed after construction.
+   - **No helper for a relay record.** A relay request or response carries
+     domain objects, and a domain object is built in the test, so a relay
+     record has no value a helper could hold. The test writes it out:
+     `relays.ConfirmOrderRequest(order=domain.Order(_order_spec(quantity=3)))`
+     — the spec helper still holds the order's defaults.
    - **Never call.** A helper that invokes a service, a builder, or a
      composition root is not holding defaults, it is performing the arrangement
      — and the arrangement is what the test needs to show. `_campaign_with_link(svc)`

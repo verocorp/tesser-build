@@ -20,10 +20,10 @@ their own declared kind, `@ts.assembly`.
   module that defines it). Its body is one construction call that passes
   each parameter through by keyword, with no literal, conversion or nested
   construction. A default is a literal, an enum member, a same-module
-  helper's or assembly's result, a value object or config built from those,
-  or a tuple of those. A record in a default comes only from its helper. A
-  parameter that holds an entity or aggregate takes no default, because a
-  default is one instance that every call shares. The rule it replaces,
+  helper's or assembly's result, a config built from those, or a tuple of
+  those; never a domain object. A record in a default comes only from its
+  helper. A relay record has no helper: it carries domain objects, and a
+  test builds its domain objects itself. The rule it replaces,
   "a helper takes only defaulted primitives", forced helpers to make up an
   enum or child records, or to take the child's fields.
 - **TB085 no longer names a helper's record parameters after their class,**

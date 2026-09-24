@@ -846,9 +846,7 @@ OUTCOME_BASE: typing.Final[tuple[str, str]] = ("tesser.domain", "Outcome")
 
 DOMAIN_OBJECT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({OUTCOME_BLOCK})
 
-DEFAULT_BUILT_BLOCKS: typing.Final[frozenset[str]] = frozenset({"valueobject", "component_config", "app_config"})
-
-UNDEFAULTED_BLOCKS: typing.Final[frozenset[str]] = frozenset({"entity", "aggregate"})
+DEFAULT_BUILT_BLOCKS: typing.Final[frozenset[str]] = frozenset({"component_config", "app_config"})
 
 DOMAIN_METHOD_PARAMETER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
     {"spec"}
@@ -4268,11 +4266,6 @@ class Helper(ts.ValueObject):
             defaults[arg.arg] = kw_default
         for arg in args:
             given = defaults[arg.arg]
-            held_ref = Annotation(arg.annotation).primary() if arg.annotation is not None else None
-            held = scope.resolve(held_ref) if held_ref is not None else None
-            held_block = kind_table.block_of(held) if held is not None else None
-            if given is None and held_block is not None and str(held_block) in UNDEFAULTED_BLOCKS:
-                continue
             if given is None:
                 rows.append((line, "default", arg.arg, ()))
                 continue
@@ -4336,6 +4329,8 @@ class Helper(ts.ValueObject):
             block = kind_table.block_of(symbol) if symbol is not None else None
         if block is None or str(block) not in DATA_BLOCKS:
             rows.append((line, "data", "", ()))
+        elif str(block) in RELAY_DTO_BLOCKS and not spec.assembly:
+            rows.append((line, "relay", "", ()))
         constructor = (
             constructor_rows.constructor(constructed) if constructed is not None and not spec.assembly else None
         )
@@ -4428,8 +4423,7 @@ class Helper(ts.ValueObject):
                     path,
                     line,
                     "TB073",
-                    f"{where} parameter {param!r} has no default; every helper parameter but an entity "
-                    "or aggregate has a default",
+                    f"{where} parameter {param!r} has no default; every helper parameter has a default",
                 )))
             elif kind == "composed":
                 found.append(Violation(ViolationSpec(
@@ -4437,7 +4431,7 @@ class Helper(ts.ValueObject):
                     line,
                     "TB073",
                     f"{where} parameter {param!r} defaults to something other than a literal, an enum member, "
-                    "a helper's result, a domain object or config built from those, or a tuple of those; "
+                    "a helper's result, a config built from those, or a tuple of those; "
                     "a default holds values and builds a record only through its helper",
                 )))
             elif kind == "stray":
@@ -4484,6 +4478,14 @@ class Helper(ts.ValueObject):
                     "TB073",
                     f"{where} returns {target_name}, whose constructor the analyzer cannot read; "
                     "a helper mirrors a constructor declared in the tree",
+                )))
+            elif kind == "relay":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} returns a relay record; a relay record carries domain objects, "
+                    "and a test builds its domain objects itself",
                 )))
             elif kind == "data":
                 found.append(Violation(ViolationSpec(

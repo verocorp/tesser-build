@@ -30,6 +30,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   an assembly may take a record's parts at all, how it composes with
   helpers, and whether the other shapes with no home (an async context
   manager that serves an engine, a wired object graph) belong to it.
+- [ ] **A relay record carries domain objects — no check enforces it.**
+  Chris's ruling (relay spike, PR #164; restated 2026-09-24 in the #213
+  review) is that a relay request or response carries domain objects, not
+  primitives. The relay record constructor policy (`checks.py`, the
+  `RELAY_DTO_BLOCKS | DOMAIN_BLOCKS` AnnotationPolicy) still accepts
+  `str`/`int`/`float`/`bytes`, and about 25 relay records take primitives:
+  durable-execution's `TakePaymentRequest(order_id: str, cents: int,
+  payment_method: str)`, the charge/price/total messages; voice's
+  `…Response(call_id: str)` and `SayRequest(call_id, text)`; minimal's
+  widget messages other than the request carrying `domain.Name`. Needs the
+  scope ruled (requests only, or requests and responses), then the policy
+  tightened and those records migrated.
 - [ ] **A `Mapping` field has no legal helper default.** A dict literal is
   not a legal default (one mutable instance shared by every call), so a
   record with a `Mapping` field gets no helper: llmport's `protocol.Tool`
