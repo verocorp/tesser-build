@@ -277,7 +277,7 @@ WORKFLOWS_PACKAGE: typing.Final[str] = "workflows"
 
 DISPATCHERS_PACKAGE: typing.Final[str] = "dispatchers"
 
-REGISTRATION_PACKAGES: typing.Final[tuple[str, ...]] = (ACTIVITIES_PACKAGE, WORKFLOWS_PACKAGE, DISPATCHERS_PACKAGE)
+ENGINE_ADAPTER_PACKAGES: typing.Final[tuple[str, ...]] = (ACTIVITIES_PACKAGE, WORKFLOWS_PACKAGE, DISPATCHERS_PACKAGE)
 
 ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     "handlers": frozenset({"handler"}),
@@ -290,13 +290,13 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     DISPATCHERS_PACKAGE: frozenset({DISPATCHER_BLOCK, SIGNAL_BLOCK, "serde"}),
 }
 
+OUT_OF_INVOCATION_IMPORTS: typing.Final[tuple[str, ...]] = ("restate.client", "httpx")
+
 RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, ACTIVITIES_PACKAGE})
 
 RUNNER_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNNERS_PACKAGE, WORKFLOWS_PACKAGE})
 
 ENGINE_TEST_TIERS: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, ACTIVITIES_PACKAGE, WORKFLOWS_PACKAGE, DISPATCHERS_PACKAGE})
-
-ADAPTER_KIND_NAMES: typing.Final[str] = "handlers, gateways, repositories, runners, runtimes, activities, workflows, or dispatchers"
 
 SERDE_BLOCK: typing.Final[str] = "serde"
 
@@ -732,7 +732,7 @@ TEST_TIER_FOREIGN: typing.Final[dict[str, tuple[str, ...]]] = {
 
 ADAPTER_TEST_TIERS: typing.Final[frozenset[str]] = frozenset(
     {"handlers", "gateways", "repositories", RUNNERS_PACKAGE, RUNTIMES_PACKAGE}
-    | frozenset(REGISTRATION_PACKAGES)
+    | frozenset(ENGINE_ADAPTER_PACKAGES)
 )
 
 SRV_TIER: typing.Final[str] = "srv"
@@ -5105,7 +5105,7 @@ class ClassDecl(ts.Entity):
             ):
                 engine_containers.add(container_target.attr)
         registered_containers: set[str] = set()
-        for inner in ast.walk(node):
+        for inner in ast.walk(node) if engine_containers else ():
             if not isinstance(inner, ast.Call):
                 continue
             called = scope.resolve(Text(ast.unparse(inner.func)))
@@ -7724,6 +7724,66 @@ class Module(ts.Entity):
         self._broken_relatives: tuple[tuple[str, int], ...] = tuple(broken_relatives)
         self._functions: frozenset[str] = frozenset(functions)
         self._class_defs: tuple[ast.ClassDef, ...] = tuple(self._classes.values())
+        registration_handlers: dict[
+            str, tuple[ast.FunctionDef | ast.AsyncFunctionDef | None, tuple[ast.FunctionDef | ast.AsyncFunctionDef, ...]]
+        ] = {}
+        for registering in self._class_defs if self._adapter_side else ():
+            kept_handler: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+            registered_fns: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+            for init in registering.body:
+                if not isinstance(init, (ast.FunctionDef, ast.AsyncFunctionDef)) or init.name != "__init__":
+                    continue
+                typed = [
+                    (param.arg, param.annotation)
+                    for param in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
+                    if param.annotation is not None
+                ] + [
+                    (local.target.id, local.annotation)
+                    for local in init.body
+                    if isinstance(local, ast.AnnAssign) and isinstance(local.target, ast.Name)
+                ]
+                engine_names = {
+                    typed_name
+                    for typed_name, typed_as in typed
+                    if (
+                        typed_as.attr if isinstance(typed_as, ast.Attribute)
+                        else typed_as.id if isinstance(typed_as, ast.Name) else ""
+                    ) in ENGINE_REGISTRATIONS
+                }
+                defined = {
+                    local.name: local for local in init.body if isinstance(local, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                for local in init.body:
+                    stored = (
+                        local.targets[0] if isinstance(local, ast.Assign) and len(local.targets) == 1
+                        else local.target if isinstance(local, ast.AnnAssign)
+                        else None
+                    )
+                    if (
+                        isinstance(local, (ast.Assign, ast.AnnAssign))
+                        and isinstance(stored, ast.Attribute)
+                        and isinstance(stored.value, ast.Name)
+                        and stored.value.id == "self"
+                        and stored.attr == REGISTERED_HANDLER
+                        and isinstance(local.value, ast.Name)
+                        and local.value.id in defined
+                    ):
+                        kept_handler = defined[local.value.id]
+                for defined_fn in defined.values():
+                    for decorator in defined_fn.decorator_list:
+                        decorated_on: ast.expr = decorator
+                        while isinstance(decorated_on, (ast.Attribute, ast.Call)):
+                            decorated_on = (
+                                decorated_on.value if isinstance(decorated_on, ast.Attribute) else decorated_on.func
+                            )
+                        if (
+                            isinstance(decorated_on, ast.Name)
+                            and decorated_on.id in engine_names
+                            and defined_fn not in registered_fns
+                        ):
+                            registered_fns.append(defined_fn)
+            registration_handlers[registering.name] = (kept_handler, tuple(registered_fns))
+        self._registration_handlers = registration_handlers
         self._bound_names: tuple[tuple[str, str, str], ...] = tuple(
             (local, target, original) for local, (target, original) in self._imported.items()
         )
@@ -9500,26 +9560,11 @@ class Module(ts.Entity):
             block = blocks.get((self._name, cls.name))
             if block not in REGISTRATION_BLOCKS:
                 continue
-            handler: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+            handler = self._registration_handlers.get(cls.name, (None, ()))[0]
             sides: set[tuple[str, str]] = set()
             for item in cls.body:
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name != "__init__":
                     continue
-                nested = {
-                    stmt.name: stmt for stmt in item.body if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
-                }
-                for stmt in item.body:
-                    if (
-                        isinstance(stmt, ast.Assign)
-                        and len(stmt.targets) == 1
-                        and isinstance(stmt.targets[0], ast.Attribute)
-                        and isinstance(stmt.targets[0].value, ast.Name)
-                        and stmt.targets[0].value.id == "self"
-                        and stmt.targets[0].attr == REGISTERED_HANDLER
-                        and isinstance(stmt.value, ast.Name)
-                        and stmt.value.id in nested
-                    ):
-                        handler = nested[stmt.value.id]
                 if block != ACTIVITY_BLOCK:
                     continue
                 for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
@@ -10600,11 +10645,28 @@ class Module(ts.Entity):
             str(kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) or "") == "gateway"
             for cls in self._class_defs
         )
+        tested = own[-1].startswith(TEST_PREFIX) or own[-1] == "conftest"
         found: list[Violation] = []
         for edge in self._edges:
             target = str(edge._target)
             lineno = int(edge._lineno)
             pieces = target.split(".")
+            if (
+                kind_package == WORKFLOWS_PACKAGE
+                and not tested
+                and any(target == banned or target.startswith(banned + ".") for banned in OUT_OF_INVOCATION_IMPORTS)
+            ):
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        lineno,
+                        "TB060",
+                        f"{module_name} imports {target}; a workflows module calls across the engine "
+                        "only through its invocation's context, because the engine journals a call made "
+                        "through the context and a call made over HTTP runs again on every replay",
+                    ))
+                )
+                continue
             if pieces[0] == TESSER:
                 continue
             elif pieces[0] in contexts:
@@ -10994,7 +11056,7 @@ class Module(ts.Entity):
                     self._path,
                     workflows[1].lineno,
                     "TB052",
-                    f"{module_name} declares {len(workflows)} workflows; an application client "
+                    f"{module_name} declares {len(workflows)} deprecated workflows; an application client "
                     "module declares at most one ts.DeprecatedWorkflow, the one that yields its client",
                 ))
             )
@@ -12171,6 +12233,27 @@ class Module(ts.Entity):
                                 "its relay's, because it implements that relay and nothing else",
                             ))
                         )
+            for method in cls.body:
+                if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for node in ast.walk(method):
+                    if (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr in ENGINE_CALLS
+                    ):
+                        by_name = node.func.attr
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                node.lineno,
+                                "TB085",
+                                f"{where}.{method.name} calls {by_name}; a dispatcher reaches the engine "
+                                "only through the typed handler of an activity, a workflow, or a signal, "
+                                "or through promise in an await_ method, because a name the analyzer "
+                                "cannot read is a name it is not checking",
+                            ))
+                        )
             for member in members:
                 for node in ast.walk(member):
                     if not (
@@ -12336,32 +12419,51 @@ class Module(ts.Entity):
                         "for no one",
                     ))
                 )
-            handler: ast.FunctionDef | ast.AsyncFunctionDef | None = None
-            for item in cls.body:
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) or item.name != "__init__":
-                    continue
-                nested = {
-                    stmt.name: stmt for stmt in item.body if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
-                }
-                for stmt in item.body:
-                    if (
-                        isinstance(stmt, ast.Assign)
-                        and len(stmt.targets) == 1
-                        and isinstance(stmt.targets[0], ast.Attribute)
-                        and isinstance(stmt.targets[0].value, ast.Name)
-                        and stmt.targets[0].value.id == "self"
-                        and stmt.targets[0].attr == REGISTERED_HANDLER
-                        and isinstance(stmt.value, ast.Name)
-                        and stmt.value.id in nested
-                    ):
-                        handler = nested[stmt.value.id]
+            handler, registrants = self._registration_handlers.get(cls.name, (None, ()))
             if handler is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cls.lineno,
+                        "TB085",
+                        f"{where} keeps no handler as self.handler; an activity, a workflow, or a "
+                        "signal keeps the one handler it registers as self.handler, because a "
+                        "dispatcher reaches the handler through that attribute",
+                    ))
+                )
                 continue
+            for registrant in registrants:
+                if registrant is handler:
+                    continue
+                stray = registrant.name
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        registrant.lineno,
+                        "TB085",
+                        f"{where} registers {stray} beside its handler; a registration class "
+                        "registers exactly one handler, the one it keeps as self.handler, because "
+                        "a handler no dispatcher reaches is a name nobody checks",
+                    ))
+                )
             for decorator in handler.decorator_list:
                 if not isinstance(decorator, ast.Call):
                     continue
                 for keyword in decorator.keywords:
-                    if (
+                    if keyword.arg == "name" and not (
+                        isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str)
+                    ):
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                handler.lineno,
+                                "TB085",
+                                f"{where}.{handler.name} registers under a name that is not a string "
+                                "literal; a handler registers under the operation it is named for, "
+                                "because a name the analyzer cannot read is a name it is not checking",
+                            ))
+                        )
+                    elif (
                         keyword.arg == "name"
                         and isinstance(keyword.value, ast.Constant)
                         and isinstance(keyword.value.value, str)
@@ -12473,6 +12575,26 @@ class Module(ts.Entity):
                 for attr, handed_module, handed_name in handed
                 if str(kind_table.block_of(Symbol(SymbolSpec(handed_module, handed_name)))) == WORKFLOW_BLOCK
             }
+            registered_names: dict[tuple[str, str], list[str]] = {}
+            for attr, handed_module, handed_name in sorted(set(handed)):
+                registered_as = registration_rows.handler(Symbol(SymbolSpec(handed_module, handed_name)))
+                if registered_as is not None and str(registered_as):
+                    registered_names.setdefault((attr, str(registered_as)), []).append(handed_name)
+            for (attr, handler_name), registrants in sorted(registered_names.items()):
+                if len(registrants) < 2:
+                    continue
+                line = containers[attr][1]
+                shared = " and ".join(registrants)
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        line,
+                        "TB085",
+                        f"{where} hands {attr} to {shared}, which both register {handler_name}; a "
+                        "handler name is unique in its engine container, because the engine keeps one "
+                        "handler per name and a second registration silently replaces the first",
+                    ))
+                )
             for attr, handed_module, handed_name in sorted(set(handed)):
                 literal, line = containers[attr]
                 symbol = Symbol(SymbolSpec(handed_module, handed_name))
