@@ -114,6 +114,20 @@ class TestRestateHttpCallOrchestratorRelay:
             conducting = asyncio.create_task(
                 restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
             )
+            started: list[str] = []
+            for _ in range(100):
+                stated = await admin.post(
+                    "/query",
+                    headers={"accept": "application/json"},
+                    json={
+                        "query": "SELECT key FROM state "
+                        f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
+                    },
+                )
+                started = [row["key"] for row in stated.json()["rows"]]
+                if started:
+                    break
+                await asyncio.sleep(0.05)
             await restate_http_call_orchestrator_relay.run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
             await restate_http_call_orchestrator_relay.run_person_turn_completed(
                 relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
@@ -129,6 +143,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 },
             )
 
+            assert started == [relays.CONDUCT_CALL_STATE]
             assert conduct_call_response.call_id == call_id
             assert [str(recorded.call.person_name) for recorded in fake_call_application_client.recorded] == ["Grace"]
             assert fake_speech_application_client.said == [
@@ -153,13 +168,17 @@ class TestRestateHttpCallOrchestratorRelay:
 
     async def test_concurrent_joins_and_completed_turns_for_one_call_are_all_acknowledged(self) -> None:
         call_id = str(uuid.uuid4())
-        call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
+        suffix = uuid.uuid4().hex
+        call_actions_service = restate.Service(f"CallActions{suffix}")
+        dialing_actions_service = restate.Service(f"DialingActions{suffix}")
+        speech_actions_service = restate.Service(f"SpeechActions{suffix}")
+        call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{suffix}")
         restate_conduct_call = workflows.RestateConductCall(
             call_orchestrator_workflow,
-            activities.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
-            activities.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            activities.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            activities.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
+            activities.RestateRecordCall(call_actions_service, FakeCallApplicationClient()),
+            activities.RestateDialPerson(dialing_actions_service, FakeDialingApplicationClient()),
+            activities.RestateHangUp(dialing_actions_service, FakeDialingApplicationClient()),
+            activities.RestateSayUtterance(speech_actions_service, FakeSpeechApplicationClient()),
         )
         restate_person_joined = dispatchers.RestatePersonJoined(call_orchestrator_workflow)
         restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(call_orchestrator_workflow)
@@ -171,7 +190,7 @@ class TestRestateHttpCallOrchestratorRelay:
         shutdown = asyncio.Event()
         serving = asyncio.create_task(
             hypercorn_asyncio.serve(
-                typing.cast(hypercorn_typing.ASGIFramework, restate.app([call_orchestrator_workflow])),
+                typing.cast(hypercorn_typing.ASGIFramework, restate.app([call_actions_service, dialing_actions_service, speech_actions_service, call_orchestrator_workflow])),
                 hypercorn_config_config,
                 shutdown_trigger=shutdown.wait,
             )
@@ -195,6 +214,23 @@ class TestRestateHttpCallOrchestratorRelay:
                 restate_person_joined,
                 restate_person_turn_completed,
             )
+            conducting = asyncio.create_task(
+                restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+            )
+            started: list[str] = []
+            for _ in range(100):
+                stated = await admin.post(
+                    "/query",
+                    headers={"accept": "application/json"},
+                    json={
+                        "query": "SELECT key FROM state "
+                        f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
+                    },
+                )
+                started = [row["key"] for row in stated.json()["rows"]]
+                if started:
+                    break
+                await asyncio.sleep(0.05)
             person_joined_responses = await asyncio.gather(
                 *(
                     restate_http_call_orchestrator_relay.run_person_joined(
@@ -211,7 +247,9 @@ class TestRestateHttpCallOrchestratorRelay:
                     for turn in range(8)
                 )
             )
+            conduct_call_response = await conducting
 
+            assert started == [relays.CONDUCT_CALL_STATE]
             assert [person_joined_response.call_id for person_joined_response in person_joined_responses] == [
                 call_id
             ] * 8
@@ -219,6 +257,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 person_turn_completed_response.call_id
                 for person_turn_completed_response in person_turn_completed_responses
             ] == [call_id] * 8
+            assert conduct_call_response.call_id == call_id
         finally:
             if registered.is_success:
                 await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
@@ -230,13 +269,17 @@ class TestRestateHttpCallOrchestratorRelay:
 
     async def test_the_key_is_encoded_so_a_call_id_cannot_reshape_the_path(self) -> None:
         call_id = "../admin?x=1#f-" + str(uuid.uuid4())
-        call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
+        suffix = uuid.uuid4().hex
+        call_actions_service = restate.Service(f"CallActions{suffix}")
+        dialing_actions_service = restate.Service(f"DialingActions{suffix}")
+        speech_actions_service = restate.Service(f"SpeechActions{suffix}")
+        call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{suffix}")
         restate_conduct_call = workflows.RestateConductCall(
             call_orchestrator_workflow,
-            activities.RestateRecordCall(restate.Service("CallActions"), FakeCallApplicationClient()),
-            activities.RestateDialPerson(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            activities.RestateHangUp(restate.Service("DialingActions"), FakeDialingApplicationClient()),
-            activities.RestateSayUtterance(restate.Service("SpeechActions"), FakeSpeechApplicationClient()),
+            activities.RestateRecordCall(call_actions_service, FakeCallApplicationClient()),
+            activities.RestateDialPerson(dialing_actions_service, FakeDialingApplicationClient()),
+            activities.RestateHangUp(dialing_actions_service, FakeDialingApplicationClient()),
+            activities.RestateSayUtterance(speech_actions_service, FakeSpeechApplicationClient()),
         )
         restate_person_joined = dispatchers.RestatePersonJoined(call_orchestrator_workflow)
         restate_person_turn_completed = dispatchers.RestatePersonTurnCompleted(call_orchestrator_workflow)
@@ -248,7 +291,7 @@ class TestRestateHttpCallOrchestratorRelay:
         shutdown = asyncio.Event()
         serving = asyncio.create_task(
             hypercorn_asyncio.serve(
-                typing.cast(hypercorn_typing.ASGIFramework, restate.app([call_orchestrator_workflow])),
+                typing.cast(hypercorn_typing.ASGIFramework, restate.app([call_actions_service, dialing_actions_service, speech_actions_service, call_orchestrator_workflow])),
                 hypercorn_config_config,
                 shutdown_trigger=shutdown.wait,
             )
@@ -266,12 +309,32 @@ class TestRestateHttpCallOrchestratorRelay:
                 await asyncio.sleep(0.1)
             assert registered.is_success, registered.text
 
-            person_joined_response = await dispatchers.RestateHttpCallOrchestratorRelay(
+            restate_http_call_orchestrator_relay = dispatchers.RestateHttpCallOrchestratorRelay(
                 os.environ["RESTATE_URL"],
                 restate_conduct_call,
                 restate_person_joined,
                 restate_person_turn_completed,
-            ).run_person_joined(relays.PersonJoinedRequest(call_id=call_id))
+            )
+            conducting = asyncio.create_task(
+                restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+            )
+            started: list[str] = []
+            for _ in range(100):
+                stated = await admin.post(
+                    "/query",
+                    headers={"accept": "application/json"},
+                    json={
+                        "query": "SELECT key FROM state "
+                        f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
+                    },
+                )
+                started = [row["key"] for row in stated.json()["rows"]]
+                if started:
+                    break
+                await asyncio.sleep(0.05)
+            person_joined_response = await restate_http_call_orchestrator_relay.run_person_joined(
+                relays.PersonJoinedRequest(call_id=call_id)
+            )
             promised = await admin.post(
                 "/query",
                 headers={"accept": "application/json"},
@@ -280,8 +343,14 @@ class TestRestateHttpCallOrchestratorRelay:
                     f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
                 },
             )
+            await restate_http_call_orchestrator_relay.run_person_turn_completed(
+                relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
+            )
+            conduct_call_response = await conducting
 
+            assert started == [relays.CONDUCT_CALL_STATE]
             assert person_joined_response.call_id == call_id
+            assert conduct_call_response.call_id == call_id
             assert [row["key"] for row in promised.json()["rows"]] == [relays.PERSON_JOINED_PROMISE]
         finally:
             if registered.is_success:
@@ -294,7 +363,8 @@ class TestRestateHttpCallOrchestratorRelay:
 
 
 class TestRestatePersonJoined:
-    async def test_restate_refuses_a_person_joined_signal_whose_call_id_is_not_the_workflows_key(self) -> None:
+    async def test_restate_refuses_a_person_joined_signal_for_a_foreign_key_or_a_call_not_yet_started(self) -> None:
+        call_id = str(uuid.uuid4())
         call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
         workflows.RestateConductCall(
             call_orchestrator_workflow,
@@ -335,9 +405,24 @@ class TestRestatePersonJoined:
                     await restate_client.Client(async_client).workflow_call(
                         restate_person_joined.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonJoinedRequest(call_id="c7")
                     )
+                with pytest.raises(restate.HttpError) as early:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_person_joined.handler, key=call_id, arg=relays.PersonJoinedRequest(call_id=call_id)
+                    )
+            promised = await admin.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT key FROM sys_promise "
+                    f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
+                },
+            )
 
             assert refused.value.status_code == 400
             assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
+            assert early.value.status_code == 412
+            assert "no call has started under this key" in (early.value.body or "")
+            assert promised.json()["rows"] == []
         finally:
             if registered.is_success:
                 await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
@@ -349,7 +434,8 @@ class TestRestatePersonJoined:
 
 
 class TestRestatePersonTurnCompleted:
-    async def test_restate_refuses_a_person_turn_completed_signal_whose_call_id_is_not_the_workflows_key(self) -> None:
+    async def test_restate_refuses_a_person_turn_completed_signal_for_a_foreign_key_or_a_call_not_yet_started(self) -> None:
+        call_id = str(uuid.uuid4())
         call_orchestrator_workflow = restate.Workflow(f"CallOrchestrator{uuid.uuid4().hex}")
         workflows.RestateConductCall(
             call_orchestrator_workflow,
@@ -390,9 +476,24 @@ class TestRestatePersonTurnCompleted:
                     await restate_client.Client(async_client).workflow_call(
                         restate_person_turn_completed.handler, key=f"other-{uuid.uuid4()}", arg=relays.PersonTurnCompletedRequest(call_id="c7", text="Grace")
                     )
+                with pytest.raises(restate.HttpError) as early:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_person_turn_completed.handler, key=call_id, arg=relays.PersonTurnCompletedRequest(call_id=call_id, text="Grace")
+                    )
+            promised = await admin.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT key FROM sys_promise "
+                    f"WHERE service_name = '{call_orchestrator_workflow.name}' AND service_key = '{call_id}'"
+                },
+            )
 
             assert refused.value.status_code == 400
             assert "a message names the call its workflow is keyed by" in (refused.value.body or "")
+            assert early.value.status_code == 412
+            assert "no call has started under this key" in (early.value.body or "")
+            assert promised.json()["rows"] == []
         finally:
             if registered.is_success:
                 await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})

@@ -15,6 +15,8 @@ import calls.application.relays as relays
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
 _FOREIGN_CALL_ID: typing.Final[str] = "a message names the call its workflow is keyed by"
 _ALREADY_COMPLETED: typing.Final[int] = 409
+_NOT_CONDUCTING: typing.Final[int] = 412
+_NOT_CONDUCTING_MESSAGE: typing.Final[str] = "no call has started under this key, so there is nothing to deliver"
 _SHARED_READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
 _MAIN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=None)
 _SHARED_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_SHARED_READ_TIMEOUT_SECONDS)
@@ -57,6 +59,11 @@ class RestatePersonJoined(ts.Signal):
             call_id = restate_workflow_shared_context.key()
             if person_joined_request.call_id != call_id:
                 raise restate.TerminalError(_FOREIGN_CALL_ID, status_code=400)
+            if (
+                await restate_workflow_shared_context.get(relays.CONDUCT_CALL_STATE, serde=restate_serde.BytesSerde())
+                is None
+            ):
+                raise restate.TerminalError(_NOT_CONDUCTING_MESSAGE, status_code=_NOT_CONDUCTING)
             try:
                 await restate_workflow_shared_context.promise(
                     relays.PERSON_JOINED_PROMISE, serde=restate_serde.BytesSerde()
@@ -108,6 +115,11 @@ class RestatePersonTurnCompleted(ts.Signal):
             call_id = restate_workflow_shared_context.key()
             if person_turn_completed_request.call_id != call_id:
                 raise restate.TerminalError(_FOREIGN_CALL_ID, status_code=400)
+            if (
+                await restate_workflow_shared_context.get(relays.CONDUCT_CALL_STATE, serde=restate_serde.BytesSerde())
+                is None
+            ):
+                raise restate.TerminalError(_NOT_CONDUCTING_MESSAGE, status_code=_NOT_CONDUCTING)
             try:
                 await restate_workflow_shared_context.promise(
                     relays.PERSON_TURN_COMPLETED_PROMISE, serde=restate_serde.BytesSerde()

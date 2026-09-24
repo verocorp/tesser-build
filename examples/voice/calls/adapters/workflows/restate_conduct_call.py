@@ -120,6 +120,11 @@ class RestateConductCall(ts.Workflow):
         async def conduct_call(
             restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
         ) -> relays.ConductCallResponse:
+            restate_workflow_context.set(
+                relays.CONDUCT_CALL_STATE,
+                relays.ConductCallRequestSnapshot().serialize(conduct_call_request),
+                serde=restate_serde.BytesSerde(),
+            )
             return await orchestrators.CallOrchestrator(
                 RestateInvocationDialingActionsRelay(restate_workflow_context, restate_dial_person, restate_hang_up),
                 RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context),

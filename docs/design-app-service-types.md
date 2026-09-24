@@ -38,8 +38,9 @@ not extra steps.
 tesser.Service.operation            -> restate.Client.operation
 restate.Client.operation            ⇒  restate.Workflow.main | restate.Workflow.handler
 restate.Workflow.main(wf_ctx)       -> tesser.Orchestrator(wf_ctx) -> tesser.Orchestrator.operation
+restate.Workflow.main(wf_ctx)       -> wf_ctx.set(state)
 tesser.Orchestrator.operation       -> wf_ctx.promise(name).value
-restate.Workflow.handler(shared)    -> shared.promise(name).resolve
+restate.Workflow.handler(shared)    -> shared.get(state) -> shared.promise(name).resolve
 tesser.Orchestrator.operation       -> wf_ctx.operation
 wf_ctx.operation                    ⇒  restate.Service.handler | restate.Workflow.main
 restate.Service.handler(ctx)        -> tesser.Action.operation
@@ -47,16 +48,18 @@ tesser.Action.operation             -> tesser.Port.operation
 ```
 
 `->` is a Python call, held by imports, protocols, and constructors, so the
-type checker sees both ends. `⇒` crosses the engine, and so does the pair
-`promise(name).value` / `promise(name).resolve`, which meet only in the
-engine's journal. The engine addresses these three links by name; Python
-gets each name from the object that registered it:
+type checker sees both ends. `⇒` crosses the engine, and so do the pairs
+`promise(name).value` / `promise(name).resolve` and `set(state)` /
+`get(state)`, which meet only in the engine's journal and state store. The
+engine addresses these four links by name; Python gets each name from the
+object that registered it or from one relays constant:
 
 | link | addressed by | carried in the tree by |
 |---|---|---|
 | `restate.Client.operation ⇒ …` | service, key, handler | a dispatcher over HTTP: `restate.client.Client(httpx.AsyncClient(...)).workflow_call(self._restate_conduct_call.handler, key=..., arg=...)` |
 | `wf_ctx.operation ⇒ …` | service, handler | a dispatcher inside the invocation: `wf_ctx.service_call(self._restate_record_call.handler, request)` |
 | `.value` ↔ `.resolve` | promise name, within one workflow key | a relays constant (`PERSON_JOINED_PROMISE`), read by the dispatcher's `await_person_joined` and by the signal `person_joined` |
+| `.set` ↔ `.get` | state name, within one workflow key | a relays constant named for the `main`'s operation (`CONDUCT_CALL_STATE = "conduct_call"`), set by the workflow's `main` and got by each signal on its container |
 
 The SDK reads the service and handler name off the registered handler object
 it is passed, and the component writes each container's name once, as a
@@ -100,10 +103,15 @@ Notes on the lines, from the code and the Restate Python SDK (1.0.4):
 - Restate (1.7.9, SDK 1.0.4) runs a shared handler on a key whose `main` never
   ran: the call answers 200, the promise is stored resolved, and a `main`
   started later for that key reads it at once. So a signal gets the state its
-  workflow's `main` sets before it waits (`ctx.set(REGISTER_WIDGET_STATE,
-  ...)` in the `main`, `shared.get(REGISTER_WIDGET_STATE)` in the signal) and
-  raises `TerminalError(..., status_code=412)` when it is absent; the ingress
-  answers 412 to the caller. `promise(...).peek()` cannot stand in for it: it
+  workflow's `main` sets before it waits (`wf_ctx.set(CONDUCT_CALL_STATE,
+  ...)` in voice's `conduct_call`, `shared.get(CONDUCT_CALL_STATE)` in both
+  `person_joined` and `person_turn_completed`; `REGISTER_WIDGET_STATE` in
+  minimal) and raises `TerminalError(..., status_code=412)` when it is
+  absent; the ingress answers 412 to the caller. A signal checks the key
+  against the body first (400), then the state (412), then resolves and
+  swallows the 409 of a promise already resolved. A `main` that checks its
+  key against its body does so before it sets the state, so a refused body
+  records no start. `promise(...).peek()` cannot stand in for it: it
   answers `None` until the promise is resolved, whether or not `main` started.
 - A dispatcher over HTTP opens an `httpx.AsyncClient` per call, as Restate's
   documentation does. One long-lived client crossed event loops in the LiveKit

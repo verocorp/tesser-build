@@ -1188,10 +1188,13 @@ service or handler name.
   a signal registers on the container the workflow's `main` is registered on.
   Restate runs a shared handler on a key whose `main` never ran, and a
   resolved promise stays resolved, so a signal first gets the state its
-  workflow's `main` sets before it waits (`REGISTER_WIDGET_STATE =
-  "register_widget"`, a relays constant named for the main's operation) and
-  refuses with a terminal 412 when the state is absent: an approval sent
-  before its registration starts must not pass the gate once it does.
+  workflow's `main` sets before it waits (`CONDUCT_CALL_STATE =
+  "conduct_call"`, a relays constant named for the main's operation) and
+  refuses with a terminal 412 when the state is absent: an event sent
+  before its workflow starts must not pass the gate once it does. Every
+  signal on the workflow reads the same state. The order in a signal is the
+  key/body check (400), the state (412), then the resolve, swallowing the
+  409 of a promise already resolved.
 - **A dispatcher** (`ts.Dispatcher`, in `adapters/workflows/` or
   `adapters/dispatchers/`) implements a relay. From inside an invocation it
   calls through the workflow context,
@@ -1357,6 +1360,11 @@ class RestateConductCall(ts.Workflow):
         async def conduct_call(
             restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
         ) -> relays.ConductCallResponse:
+            restate_workflow_context.set(
+                relays.CONDUCT_CALL_STATE,
+                relays.ConductCallRequestSnapshot().serialize(conduct_call_request),
+                serde=restate_serde.BytesSerde(),
+            )
             return await orchestrators.CallOrchestrator(
                 RestateInvocationDialingActionsRelay(restate_workflow_context, restate_dial_person, restate_hang_up),
                 RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context),
@@ -1381,6 +1389,11 @@ class RestatePersonJoined(ts.Signal):
             call_id = restate_workflow_shared_context.key()
             if person_joined_request.call_id != call_id:
                 raise restate.TerminalError(_FOREIGN_CALL_ID, status_code=400)
+            if (
+                await restate_workflow_shared_context.get(relays.CONDUCT_CALL_STATE, serde=restate_serde.BytesSerde())
+                is None
+            ):
+                raise restate.TerminalError(_NOT_CONDUCTING_MESSAGE, status_code=_NOT_CONDUCTING)
             try:
                 await restate_workflow_shared_context.promise(
                     relays.PERSON_JOINED_PROMISE, serde=restate_serde.BytesSerde()
