@@ -102,8 +102,8 @@ entity or
 aggregate is built from one spec and a value object from one primitive or one
 spec, a spec initializes only its own object, a mapper *is* the spec or
 DTO it maps to, control flow comes back as a `ts.Outcome` a service
-matches exhaustively, exactly once per method, and a name is derived from the
-class it carries), and the
+matches exhaustively, exactly once per method, a name is derived from the
+class it carries, and a handler method calls the context client), and the
 tree-wide **norm checks** with no test exemption: zero comments (`TB020`),
 annotations written unquoted (`TB021`), a type that names what the value is
 (`TB022` — `Any`, `Callable`, and `Awaitable` are findings wherever a module

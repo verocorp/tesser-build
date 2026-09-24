@@ -1,4 +1,6 @@
 from calls.client.client import ERRORS as ERRORS
+from calls.client.client import AttendCallRequest as AttendCallRequest
+from calls.client.client import AttendCallResponse as AttendCallResponse
 from calls.client.client import Call as Call
 from calls.client.client import CallNotFound as CallNotFound
 from calls.client.client import CallsClient as CallsClient
@@ -10,3 +12,5 @@ from calls.client.client import PersonTurnCompletedRequest as PersonTurnComplete
 from calls.client.client import PersonTurnCompletedResponse as PersonTurnCompletedResponse
 from calls.client.client import PlaceCallRequest as PlaceCallRequest
 from calls.client.client import PlaceCallResponse as PlaceCallResponse
+from calls.client.client import SpeakUtteranceRequest as SpeakUtteranceRequest
+from calls.client.client import SpeakUtteranceResponse as SpeakUtteranceResponse

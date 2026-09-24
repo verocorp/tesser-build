@@ -5,6 +5,41 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.3.1.0] - 2026-09-24
+
+A handler routes a message to the application and does nothing else: every
+public handler method now calls its context client, and the analyzer says
+so.
+
+### Added
+- **TB082: a handler method calls the context client.** A public handler
+  method (and `__call__`) that never calls the client it holds is a finding,
+  because a handler decodes a message, calls the client, and encodes the
+  answer; anything else is application or host work sitting in an adapter.
+  The client is found by its `__init__` annotation, not its name. A call
+  counts whether made directly, as `self._client(...)`, or through a local
+  name bound to the client; a call inside a nested function or lambda, or a
+  `_`-prefixed method called on the client, does not.
+- **voice: `attend_call` and `speak_utterance` on the calls client,** served
+  by a new `AgentService`.
+
+### Changed
+- **voice `CallAgent.say` speaks what the client returns.** The `say` RPC
+  now asks `speak_utterance`, whose service builds the domain `Utterance`,
+  instead of passing the raw payload to the session.
+- **voice `LivekitHandler.accept_job` asks `attend_call` first,** because
+  whether to attend a call belongs to the application. The call is not saved
+  until the orchestrator finishes, so today the service can only build the
+  call id and always attends.
+- **llmport's booking prompt is a constant in the LiveKit host**
+  (`srv/voice/agent.py`); `ToolSurface` and the handler no longer carry it.
+- **Docs:** `handlers.md`, `python.md` and the coverage row state the
+  rule (skill version 86).
+
+### Fixed
+- **voice's component had no test of its client.** Each of the six client
+  operations is now checked to reach the service that owns it.
+
 ## [0.3.0.0] - 2026-09-23
 
 No Restate handler in the voice example is addressed by a hand-written

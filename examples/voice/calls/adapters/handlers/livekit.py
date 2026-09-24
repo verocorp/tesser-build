@@ -36,7 +36,10 @@ class CallAgent(livekit_agents.Agent, ts.Handler):  # tesser:debt TB052
     async def say(self, rpc_invocation_data: livekit_rtc.RpcInvocationData) -> str:
         if rpc_invocation_data.caller_identity != f"{_SPEECH_IDENTITY}-{self._call_id}":
             raise livekit_rtc.RpcError(livekit_rtc.RpcError.ErrorCode.APPLICATION_ERROR, _FOREIGN_CALLER)
-        await self.session.say(rpc_invocation_data.payload)
+        speak_utterance_response = await self._calls_client.speak_utterance(
+            client.SpeakUtteranceRequest(call_id=self._call_id, text=rpc_invocation_data.payload)
+        )
+        await self.session.say(speak_utterance_response.text)
         return ""
 
 
@@ -48,6 +51,7 @@ class LivekitHandler(ts.Handler):
         self._tts = tts
 
     async def accept_job(self, job_request: livekit_agents.JobRequest) -> None:
+        await self._calls_client.attend_call(client.AttendCallRequest(call_id=job_request.room.name))
         await job_request.accept(identity=self._agent_name)
 
     async def start_job(self, job_context: livekit_agents.JobContext) -> None:

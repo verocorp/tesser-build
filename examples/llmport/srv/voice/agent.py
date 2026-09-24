@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import collections.abc as collections_abc
+import typing
 
 import tesser.srv as ts
 import livekit.agents as livekit_agents
 
 import protocol
+
+_INSTRUCTIONS: typing.Final[str] = (
+    "Help the caller book an appointment. Use the tools to record what they say; never invent slots."
+)
 
 
 class ToolAgent(livekit_agents.Agent, ts.Host):
@@ -17,7 +22,7 @@ class ToolAgent(livekit_agents.Agent, ts.Host):
         routes: tuple[protocol.Route, ...],
         tool_halt: protocol.ToolHalt,
     ) -> None:
-        super().__init__(instructions=tool_surface.instructions())
+        super().__init__(instructions=_INSTRUCTIONS)
         self._tool_surface = tool_surface
         self._routes = routes
         self._tool_halt = tool_halt

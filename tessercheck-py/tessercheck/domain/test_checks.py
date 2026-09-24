@@ -13939,6 +13939,169 @@ def test_a_call_on_the_repository_a_store_yields_is_an_actions_one_port_call() -
     )
 
 
+@ts.helper
+def _handler_spec(methods: str = "") -> domain.CodebaseSpec:
+    return _kinds_spec(sources=(
+        (
+            "shop/adapters/handlers/cli.py",
+            "shop.adapters.handlers.cli",
+            "import tesser.adapters as ts\n"
+            "import shop.client.client as client\n"
+            "class CliHandler(ts.Handler):\n"
+            "    def __init__(self, shop_client: client.Client, prompt: str) -> None:\n"
+            "        self._shop_client = shop_client\n"
+            "        self._prompt = prompt\n"
+            + methods,
+            False,
+        ),
+        (
+            "shop/adapters/handlers/test_cli.py",
+            "shop.adapters.handlers.test_cli",
+            "def test_cli_exists() -> None:\n"
+            "    assert True\n",
+            False,
+        ),
+    ))
+
+
+def test_a_handler_method_that_calls_its_client_passes() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def ask(self, text: str) -> str:\n"
+            "        ask_question_response = self._shop_client.ask_question(client.AskQuestionRequest(text=text))\n"
+            "        return ask_question_response.text\n"
+        )).violations()
+    )
+    assert not any("never calls its client" in f for f in findings), findings
+
+
+def test_a_handler_method_that_calls_nothing_never_calls_its_client() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def greet(self) -> str:\n"
+            "        return 'hello'\n"
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.handlers.cli.CliHandler.greet never calls its client; a handler "
+        "method calls the context client, because a handler decodes a message, calls "
+        "the client, and encodes the answer, and a method that reaches no client is "
+        "doing application or host work in an adapter" in f
+        for f in findings
+    ), findings
+
+
+def test_a_handler_method_that_calls_only_another_attribute_never_calls_its_client() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def shout(self) -> str:\n"
+            "        return self._prompt.upper()\n"
+        )).violations()
+    )
+    assert any(
+        "shop.adapters.handlers.cli.CliHandler.shout never calls its client; a handler "
+        "method calls the context client" in f
+        for f in findings
+    ), findings
+
+
+def test_a_private_handler_method_is_not_read_for_a_client_call() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def _shout(self) -> str:\n"
+            "        return self._prompt.upper()\n"
+        )).violations()
+    )
+    assert not any("never calls its client" in f for f in findings), findings
+
+
+def test_a_handler_method_that_calls_its_client_directly_passes() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def ask(self, text: str) -> str:\n"
+            "        return self._shop_client(client.AskQuestionRequest(text=text)).text\n"
+        )).violations()
+    )
+    assert not any("never calls its client" in f for f in findings), findings
+
+
+def test_a_handler_method_that_calls_its_client_through_a_local_name_passes() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def ask(self, text: str) -> str:\n"
+            "        shop_client = self._shop_client\n"
+            "        return shop_client.ask_question(client.AskQuestionRequest(text=text)).text\n"
+        )).violations()
+    )
+    assert not any("never calls its client" in f for f in findings), findings
+
+
+def test_a_handler_method_that_calls_a_client_operation_held_in_a_local_name_passes() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def ask(self, text: str) -> str:\n"
+            "        ask_question = self._shop_client.ask_question\n"
+            "        return ask_question(client.AskQuestionRequest(text=text)).text\n"
+        )).violations()
+    )
+    assert not any("never calls its client" in f for f in findings), findings
+
+
+def test_a_client_call_inside_an_unused_lambda_is_not_a_client_call() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def ask(self, text: str) -> str:\n"
+            "        unused = lambda: self._shop_client.ask_question(client.AskQuestionRequest(text=text))\n"
+            "        return text\n"
+        )).violations()
+    )
+    assert any("shop.adapters.handlers.cli.CliHandler.ask never calls its client" in f for f in findings), findings
+
+
+def test_a_client_call_inside_a_nested_function_is_not_a_client_call() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def ask(self, text: str) -> str:\n"
+            "        def later() -> None:\n"
+            "            self._shop_client.ask_question(client.AskQuestionRequest(text=text))\n"
+            "        return text\n"
+        )).violations()
+    )
+    assert any("shop.adapters.handlers.cli.CliHandler.ask never calls its client" in f for f in findings), findings
+
+
+def test_a_dunder_called_on_the_client_is_not_a_client_operation() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def ask(self, text: str) -> str:\n"
+            "        self._shop_client.__str__()\n"
+            "        return text\n"
+        )).violations()
+    )
+    assert any("shop.adapters.handlers.cli.CliHandler.ask never calls its client" in f for f in findings), findings
+
+
+def test_a_handler_called_as_a_function_is_read_for_a_client_call() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_handler_spec(
+            "    def __call__(self, text: str) -> str:\n"
+            "        return text\n"
+        )).violations()
+    )
+    assert any("shop.adapters.handlers.cli.CliHandler.__call__ never calls its client" in f for f in findings), findings
+
+
 def test_an_orchestrator_takes_action_ports_and_stores_only_them() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
