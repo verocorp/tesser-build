@@ -7857,7 +7857,7 @@ class Module(ts.Entity):
                     engine_typed = self._resolve(typed_as) if typed_as is not None else None
                     if typed_as is None or (
                         engine_typed is not None
-                        and engine_typed[0].split(".")[0] == ENGINE_PACKAGE
+                        and engine_typed[0].split(".")[0] != TESSER
                         and engine_typed[1] in ENGINE_REGISTRATIONS
                     ):
                         roots.add(typed_name)
