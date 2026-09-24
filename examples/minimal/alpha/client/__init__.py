@@ -1,9 +1,11 @@
-from alpha.client.client import ApproveWidgetRequest as ApproveWidgetRequest
-from alpha.client.client import ApproveWidgetResponse as ApproveWidgetResponse
 from alpha.client.client import AddPartRequest as AddPartRequest
 from alpha.client.client import AddPartResponse as AddPartResponse
 from alpha.client.client import AlphaClient as AlphaClient
+from alpha.client.client import ApproveWidgetRequest as ApproveWidgetRequest
+from alpha.client.client import ApproveWidgetResponse as ApproveWidgetResponse
 from alpha.client.client import CreateWidgetRequest as CreateWidgetRequest
 from alpha.client.client import CreateWidgetResponse as CreateWidgetResponse
 from alpha.client.client import ERRORS as ERRORS
+from alpha.client.client import FindWidgetRequest as FindWidgetRequest
+from alpha.client.client import FindWidgetResponse as FindWidgetResponse
 from alpha.client.client import WidgetRejected as WidgetRejected

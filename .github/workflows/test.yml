@@ -180,7 +180,7 @@ jobs:
     # conformant, with the least business logic that shows how things work;
     # alpha's durable kinds run on the Restate service container, which dials
     # the endpoint the arm serves on the runner through host.docker.internal.
-    name: minimal example (tessercheck + mypy --strict + pytest against Restate)
+    name: minimal example (tessercheck + mypy --strict + pytest against Postgres and Restate)
     runs-on: ubuntu-latest
     services:
       restate:
@@ -190,6 +190,19 @@ jobs:
           - 9070:9070
         options: >-
           --add-host=host.docker.internal:host-gateway
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tesser
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: tesser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tesser"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
@@ -197,8 +210,9 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/minimal/requirements-dev.txt
-      - name: examples/minimal — tessercheck + mypy --strict + pytest against Restate
+      - name: examples/minimal — tessercheck + mypy --strict + pytest against Postgres and Restate
         env:
+          ALPHA_STORAGE: postgres://tesser@localhost:5432/tesser
           RESTATE_INGRESS: http://localhost:8080
           RESTATE_ADMIN: http://localhost:9070
         run: scripts/verify minimal

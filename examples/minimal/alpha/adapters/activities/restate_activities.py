@@ -50,6 +50,6 @@ class RestateKeepWidget(ts.Activity):
         async def keep_widget(
             restate_context: restate.Context, keep_widget_request: relays.KeepWidgetRequest
         ) -> relays.KeepWidgetResponse:
-            return widget_application_client.keep_widget(keep_widget_request)
+            return await widget_application_client.keep_widget(keep_widget_request)
 
         self.handler = keep_widget

@@ -36,9 +36,9 @@ class Config(ts.Config):
 class Alpha(ts.Component):
 
     def __init__(self, config: Config, beta_check: ports.BetaCheck) -> None:
-        if config.storage != "memory":
+        if not config.storage.startswith("postgres://"):
             raise errors.invalid("unknown_backend", f"alpha storage {config.storage!r} not supported")
-        self._widgets = repositories.MemoryWidgetRepository()
+        self._postgres_widget_store = repositories.PostgresWidgetStore(config.storage)
         self.widget_actions_service: restate.Service = restate.Service(
             "WidgetActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
         )
@@ -47,10 +47,10 @@ class Alpha(ts.Component):
         )
         restate_register_widget = workflows.RestateRegisterWidget(
             self.widget_orchestrator_workflow,
-            activities.RestateKeepWidget(self.widget_actions_service, application.WidgetActions(self._widgets)),
+            activities.RestateKeepWidget(self.widget_actions_service, application.WidgetActions(self._postgres_widget_store)),
         )
         self.client: client.AlphaClient = application.AlphaService(
-            self._widgets,
+            self._postgres_widget_store,
             beta_check,
             dispatchers.RestateHttpWidgetOrchestratorRelay(
                 config.ingress,
@@ -60,4 +60,4 @@ class Alpha(ts.Component):
         )
 
     def close(self) -> None:
-        self._widgets.close()
+        return None

@@ -21,11 +21,12 @@ class MapToKeepWidgetResponse(ts.Mapper, relays.KeepWidgetResponse):
 
 class WidgetActions(ts.Actions):
 
-    def __init__(self, widget_repository: ports.WidgetRepository) -> None:
-        self._widget_repository = widget_repository
+    def __init__(self, widget_store: ports.WidgetStore) -> None:
+        self._widget_store = widget_store
 
-    def keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
+    async def keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
         name = domain.Name(keep_widget_request.name)
         standing = domain.Standing("kept")
-        save_widget_response = self._widget_repository.save_widget(MapToSaveWidgetRequest(name, standing))
+        async with self._widget_store.transaction() as widget_repository:
+            save_widget_response = await widget_repository.save_widget(MapToSaveWidgetRequest(name, standing))
         return MapToKeepWidgetResponse(save_widget_response)

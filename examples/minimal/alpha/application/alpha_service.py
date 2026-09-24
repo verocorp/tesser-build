@@ -71,19 +71,31 @@ class MapToApproveWidgetResponse(ts.Mapper, client.ApproveWidgetResponse):
         super().__init__(name=approve_widget_response.name)
 
 
+class MapToFindWidgetRequest(ts.Mapper, ports.FindWidgetRequest):
+
+    def __init__(self, name: domain.Name) -> None:
+        super().__init__(name=str(name))
+
+
+class MapToFindWidgetResponse(ts.Mapper, client.FindWidgetResponse):
+
+    def __init__(self, find_widget_response: ports.FindWidgetResponse) -> None:
+        super().__init__(found=find_widget_response.outcome.value)
+
+
 class AlphaService(ts.ApplicationService):
 
     def __init__(
         self,
-        widget_repository: ports.WidgetRepository,
+        widget_store: ports.WidgetStore,
         beta_check: ports.BetaCheck,
         widget_orchestrator_relay: relays.WidgetOrchestratorRelay,
     ) -> None:
-        self._widget_repository = widget_repository
+        self._widget_store = widget_store
         self._beta_check = beta_check
         self._widget_orchestrator_relay = widget_orchestrator_relay
 
-    def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
+    async def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         try:
             widget = domain.Widget(MapToWidgetSpec(add_part_request))
             taken = widget.take(MapToPartSpec(add_part_request))
@@ -97,7 +109,8 @@ class AlphaService(ts.ApplicationService):
                 widget.clear(MapToClearanceSpec(check_name_response))
             case _ as never:
                 typing.assert_never(never)
-        self._widget_repository.save_widget(MapToSaveWidgetRequest(widget.identity, widget.standing))
+        async with self._widget_store.transaction() as widget_repository:
+            await widget_repository.save_widget(MapToSaveWidgetRequest(widget.identity, widget.standing))
         return MapToAddPartResponse(widget)
 
     async def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
@@ -117,3 +130,12 @@ class AlphaService(ts.ApplicationService):
             raise client.WidgetRejected(domain_error.code, domain_error.message) from domain_error
         approve_widget_response = await self._widget_orchestrator_relay.run_approve_widget(MapToApproveWidgetRequest(name))
         return MapToApproveWidgetResponse(approve_widget_response)
+
+    async def find_widget(self, find_widget_request: client.FindWidgetRequest) -> client.FindWidgetResponse:
+        try:
+            name = domain.Name(find_widget_request.name)
+        except errors.DomainError as domain_error:
+            raise client.WidgetRejected(domain_error.code, domain_error.message) from domain_error
+        async with self._widget_store.transaction() as widget_repository:
+            find_widget_response = await widget_repository.find_widget(MapToFindWidgetRequest(name))
+        return MapToFindWidgetResponse(find_widget_response)

@@ -43,6 +43,18 @@ class ApproveWidgetResponse(ts.Response):
         self.name = name
 
 
+class FindWidgetRequest(ts.Request):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class FindWidgetResponse(ts.Response):
+
+    def __init__(self, found: str) -> None:
+        self.found = found
+
+
 class WidgetRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
@@ -56,8 +68,10 @@ ERRORS: typing.Final[tuple[type[WidgetRejected]]] = (WidgetRejected,)
 
 class AlphaClient(ts.Client, typing.Protocol):
 
-    def add_part(self, add_part_request: AddPartRequest) -> AddPartResponse: ...
+    async def add_part(self, add_part_request: AddPartRequest) -> AddPartResponse: ...
 
     async def create_widget(self, create_widget_request: CreateWidgetRequest) -> CreateWidgetResponse: ...
 
     async def approve_widget(self, approve_widget_request: ApproveWidgetRequest) -> ApproveWidgetResponse: ...
+
+    async def find_widget(self, find_widget_request: FindWidgetRequest) -> FindWidgetResponse: ...

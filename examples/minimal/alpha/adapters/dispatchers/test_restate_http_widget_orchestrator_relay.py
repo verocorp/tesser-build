@@ -27,7 +27,7 @@ class FakeWidgetApplicationClient(client.WidgetApplicationClient):
     def __init__(self) -> None:
         self.kept: list[str] = []
 
-    def keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
+    async def keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
         self.kept.append(keep_widget_request.name)
         return relays.KeepWidgetResponse(name=keep_widget_request.name)
 

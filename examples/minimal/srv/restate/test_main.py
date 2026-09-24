@@ -18,7 +18,7 @@ class TestRestateHost:
             port = probe.getsockname()[1]
         env = dict(
             os.environ,
-            ALPHA_STORAGE="memory",
+            ALPHA_STORAGE="postgres://nobody@nowhere/none",
             BETA_KEY="a",
             RESTATE_INGRESS="http://ingress.invalid:8080",
             PYTHONPATH=os.pathsep.join(sys.path),
