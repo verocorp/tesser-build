@@ -127,9 +127,11 @@ run_minimal() {
 # One FastAPI host serves POST /submissions, /orders and /purchases and mounts
 # the Restate endpoint at /restate; the engine never touches the domain. The
 # adapter tests exercise the real engine (testing.md rule 10): the arm serves
-# the host here, registers it with the Restate admin API, and the tests drive
-# workflows through the ingress and read what the engine recorded in
-# sys_invocation. The app reads its own environment through the config
+# the host here and registers it with the Restate admin API for the root-tier
+# tests, and each activities, workflows, and dispatchers test serves its own
+# registrations under fresh service names at DURABLE_CALLBACK_HOST, registers
+# them, calls through the ingress with the objects' handlers, and reads what
+# the engine recorded in sys_invocation. The app reads its own environment through the config
 # repository, so the runner supplies it — the same job a deploy does. Tests
 # never inject it. CI provides a Restate service container; locally the
 # defaults are a server of its own on 18080/19070, so a local run never
@@ -142,7 +144,8 @@ run_durable_execution() {
   local ingress="${RESTATE_INGRESS:-http://localhost:18080}"
   local admin="${RESTATE_ADMIN:-http://localhost:19070}"
   local port="${DURABLE_DEPLOYMENT_PORT:-9084}"
-  local deployment="${DURABLE_DEPLOYMENT:-http://host.docker.internal:$port}"
+  local callback_host="${DURABLE_CALLBACK_HOST:-host.docker.internal}"
+  local deployment="${DURABLE_DEPLOYMENT:-http://$callback_host:$port}"
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
@@ -167,7 +170,7 @@ run_durable_execution() {
     return 1
   fi
   step "pytest (against Restate at $ingress)"
-  RESTATE_INGRESS="$ingress" RESTATE_ADMIN="$admin" pytest -q
+  RESTATE_INGRESS="$ingress" RESTATE_ADMIN="$admin" DURABLE_CALLBACK_HOST="$callback_host" pytest -q
   local status=$?
   kill -INT "$host" 2>/dev/null
   wait "$host" 2>/dev/null

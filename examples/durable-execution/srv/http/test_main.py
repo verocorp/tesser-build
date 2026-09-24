@@ -44,17 +44,17 @@ class TestHttpHost:
         durable_execution_app = app.load()
         try:
             declared = {
-                durable_execution_app.ordering.restate_order_runtime.order_actions_service.name: sorted(
-                    durable_execution_app.ordering.restate_order_runtime.order_actions_service.handlers
+                durable_execution_app.ordering.order_actions_service.name: sorted(
+                    durable_execution_app.ordering.order_actions_service.handlers
                 ),
-                durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.name: sorted(
-                    durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.handlers
+                durable_execution_app.ordering.order_orchestrator_workflow.name: sorted(
+                    durable_execution_app.ordering.order_orchestrator_workflow.handlers
                 ),
-                durable_execution_app.ordering.restate_order_runtime.purchase_actions_service.name: sorted(
-                    durable_execution_app.ordering.restate_order_runtime.purchase_actions_service.handlers
+                durable_execution_app.ordering.purchase_actions_service.name: sorted(
+                    durable_execution_app.ordering.purchase_actions_service.handlers
                 ),
-                durable_execution_app.ordering.restate_order_runtime.purchase_orchestrator_workflow.name: sorted(
-                    durable_execution_app.ordering.restate_order_runtime.purchase_orchestrator_workflow.handlers
+                durable_execution_app.ordering.purchase_orchestrator_workflow.name: sorted(
+                    durable_execution_app.ordering.purchase_orchestrator_workflow.handlers
                 ),
             }
         finally:

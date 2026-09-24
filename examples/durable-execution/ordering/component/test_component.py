@@ -92,21 +92,21 @@ class TestClient:
 
 class TestOrdering:
 
-    def test_the_component_publishes_the_restate_runtime_it_wired(self) -> None:
+    def test_the_component_publishes_the_engine_containers_it_registered_into(self) -> None:
         ordering = component.Ordering(component.Config(component.Spec(ingress="http://localhost:8080")))
         try:
             declared = {
-                ordering.restate_order_runtime.order_actions_service.name: sorted(
-                    ordering.restate_order_runtime.order_actions_service.handlers
+                ordering.order_actions_service.name: sorted(
+                    ordering.order_actions_service.handlers
                 ),
-                ordering.restate_order_runtime.order_orchestrator_workflow.name: sorted(
-                    ordering.restate_order_runtime.order_orchestrator_workflow.handlers
+                ordering.order_orchestrator_workflow.name: sorted(
+                    ordering.order_orchestrator_workflow.handlers
                 ),
-                ordering.restate_order_runtime.purchase_actions_service.name: sorted(
-                    ordering.restate_order_runtime.purchase_actions_service.handlers
+                ordering.purchase_actions_service.name: sorted(
+                    ordering.purchase_actions_service.handlers
                 ),
-                ordering.restate_order_runtime.purchase_orchestrator_workflow.name: sorted(
-                    ordering.restate_order_runtime.purchase_orchestrator_workflow.handlers
+                ordering.purchase_orchestrator_workflow.name: sorted(
+                    ordering.purchase_orchestrator_workflow.handlers
                 ),
             }
         finally:
@@ -116,6 +116,36 @@ class TestOrdering:
             "OrderOrchestrator": ["confirm_order"],
             "PurchaseActions": ["take_payment"],
             "PurchaseOrchestrator": ["pay_for_order"],
+        }
+
+
+    def test_every_container_bounds_its_retries_and_only_the_workflows_face_the_ingress(self) -> None:
+        ordering = component.Ordering(component.Config(component.Spec(ingress="http://localhost:8080")))
+        try:
+            declared = {
+                registered.name: (
+                    registered.ingress_private,
+                    registered.invocation_retry_policy.max_attempts
+                    if registered.invocation_retry_policy
+                    else None,
+                    registered.invocation_retry_policy.on_max_attempts
+                    if registered.invocation_retry_policy
+                    else None,
+                )
+                for registered in (
+                    ordering.order_actions_service,
+                    ordering.purchase_actions_service,
+                    ordering.order_orchestrator_workflow,
+                    ordering.purchase_orchestrator_workflow,
+                )
+            }
+        finally:
+            ordering.close()
+        assert declared == {
+            "OrderActions": (True, 5, "pause"),
+            "PurchaseActions": (True, 5, "pause"),
+            "OrderOrchestrator": (None, 5, "pause"),
+            "PurchaseOrchestrator": (None, 5, "pause"),
         }
 
 

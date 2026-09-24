@@ -43,8 +43,8 @@ class TestDurableExecutionApp:
         durable_execution_app = app.DurableExecutionApp(app.AppConfig(spec))
         try:
             declared = [
-                durable_execution_app.ordering.restate_order_runtime.order_actions_service.name,
-                durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.name,
+                durable_execution_app.ordering.order_actions_service.name,
+                durable_execution_app.ordering.order_orchestrator_workflow.name,
             ]
         finally:
             durable_execution_app.close()
@@ -57,8 +57,8 @@ class TestAppLoader:
         durable_execution_app = app.AppLoader(FakeConfigRepository()).load()
         try:
             declared = [
-                sorted(durable_execution_app.ordering.restate_order_runtime.order_actions_service.handlers),
-                sorted(durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.handlers),
+                sorted(durable_execution_app.ordering.order_actions_service.handlers),
+                sorted(durable_execution_app.ordering.order_orchestrator_workflow.handlers),
             ]
         finally:
             durable_execution_app.close()

@@ -11,12 +11,12 @@ import ordering.client as ordering_client
 
 class TestWiredApp:
 
-    def test_the_loaded_app_holds_the_restate_runtime_the_host_mounts(self) -> None:
+    def test_the_loaded_app_holds_the_engine_containers_the_host_mounts(self) -> None:
         durable_execution_app = app.load()
         try:
             declared = [
-                durable_execution_app.ordering.restate_order_runtime.order_actions_service.name,
-                durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow.name,
+                durable_execution_app.ordering.order_actions_service.name,
+                durable_execution_app.ordering.order_orchestrator_workflow.name,
             ]
         finally:
             durable_execution_app.close()

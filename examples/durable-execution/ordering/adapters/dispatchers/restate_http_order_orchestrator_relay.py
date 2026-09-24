@@ -9,6 +9,7 @@ import httpx
 import restate
 import restate.client as restate_client
 
+import ordering.adapters.workflows as workflows
 import ordering.application.relays as relays
 
 _READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
@@ -16,22 +17,21 @@ _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOU
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class RestateIngressOrderOrchestratorRelay(ts.Runner):
+class RestateHttpOrderOrchestratorRelay(ts.Dispatcher):
 
-    def __init__(self, ingress: str) -> None:
+    def __init__(self, ingress: str, restate_confirm_order: workflows.RestateConfirmOrder) -> None:
         self._ingress = ingress
+        self._restate_confirm_order = restate_confirm_order
 
     async def start_confirm_order(
         self, confirm_order_request: relays.ConfirmOrderRequest
     ) -> relays.StartConfirmOrderResponse:
         key = str(confirm_order_request.order.identity)
         async with httpx.AsyncClient(base_url=self._ingress) as async_client:
-            await restate_client.Client(async_client).generic_send(
-                "OrderOrchestrator",
-                "confirm_order",
-                relays.ConfirmOrderRequestSnapshot().serialize(confirm_order_request),
+            await restate_client.Client(async_client).workflow_send(
+                self._restate_confirm_order.handler,
                 key=urllib_parse.quote(key, safe=""),
-                headers={"content-type": "application/json"},
+                arg=confirm_order_request,
             )
         return relays.StartConfirmOrderResponse(
             outcome=relays.StartConfirmOrderOutcome.STARTED, order_id=key
@@ -45,14 +45,10 @@ class RestateIngressOrderOrchestratorRelay(ts.Runner):
             async with httpx.AsyncClient(
                 base_url=self._ingress, timeout=_RUN_TIMEOUT
             ) as async_client:
-                return relays.ConfirmOrderResponseSnapshot().deserialize(
-                    await restate_client.Client(async_client).generic_call(
-                        "OrderOrchestrator",
-                        "confirm_order",
-                        relays.ConfirmOrderRequestSnapshot().serialize(confirm_order_request),
-                        key=urllib_parse.quote(key, safe=""),
-                        headers={"content-type": "application/json"},
-                    )
+                return await restate_client.Client(async_client).workflow_call(
+                    self._restate_confirm_order.handler,
+                    key=urllib_parse.quote(key, safe=""),
+                    arg=confirm_order_request,
                 )
         except restate.HttpError as http_error:
             if http_error.status_code != 409:

@@ -9,6 +9,7 @@ import httpx
 import restate
 import restate.client as restate_client
 
+import ordering.adapters.workflows as workflows
 import ordering.application.relays as relays
 
 _READ_TIMEOUT_SECONDS: typing.Final[float] = 30.0
@@ -16,10 +17,11 @@ _RUN_TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=_READ_TIMEOU
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
 
 
-class RestateIngressPurchaseOrchestratorRelay(ts.Runner):
+class RestateHttpPurchaseOrchestratorRelay(ts.Dispatcher):
 
-    def __init__(self, ingress: str) -> None:
+    def __init__(self, ingress: str, restate_pay_for_order: workflows.RestatePayForOrder) -> None:
         self._ingress = ingress
+        self._restate_pay_for_order = restate_pay_for_order
 
     async def run_pay_for_order(
         self, pay_for_order_request: relays.PayForOrderRequest
@@ -29,14 +31,10 @@ class RestateIngressPurchaseOrchestratorRelay(ts.Runner):
             async with httpx.AsyncClient(
                 base_url=self._ingress, timeout=_RUN_TIMEOUT
             ) as async_client:
-                return relays.PayForOrderResponseSnapshot().deserialize(
-                    await restate_client.Client(async_client).generic_call(
-                        "PurchaseOrchestrator",
-                        "pay_for_order",
-                        relays.PayForOrderRequestSnapshot().serialize(pay_for_order_request),
-                        key=urllib_parse.quote(key, safe=""),
-                        headers={"content-type": "application/json"},
-                    )
+                return await restate_client.Client(async_client).workflow_call(
+                    self._restate_pay_for_order.handler,
+                    key=urllib_parse.quote(key, safe=""),
+                    arg=pay_for_order_request,
                 )
         except restate.HttpError as http_error:
             if http_error.status_code != 409:

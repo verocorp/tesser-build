@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-import tesser.component as ts
+import typing
 
+import tesser.component as ts
+import restate
+
+import ordering.adapters.activities as activities
+import ordering.adapters.dispatchers as dispatchers
 import ordering.adapters.gateways as gateways
 import ordering.adapters.repositories as repositories
-import ordering.adapters.runners as runners
-import ordering.adapters.runtimes as runtimes
+import ordering.adapters.workflows as workflows
 import ordering.application as application
 import ordering.client as client
+
+_RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
+    max_attempts=5, on_max_attempts="pause"
+)
 
 
 class Spec(ts.Spec):
@@ -51,19 +59,39 @@ class Ordering(ts.Component):
 
     def __init__(self, config: Config) -> None:
         self._memory_product_catalog_repository = repositories.MemoryProductCatalogRepository()
-        self._order_actions = application.OrderActions(self._memory_product_catalog_repository)
         self._memory_payment_processor = gateways.MemoryPaymentProcessor()
-        self._purchase_actions = application.PurchaseActions(self._memory_payment_processor)
-        self.restate_order_runtime: runtimes.RestateOrderRuntime = runtimes.RestateOrderRuntime(
-            self._order_actions,
-            self._purchase_actions,
-            runners.RestateOrderWorkflow(),
-            runners.RestatePurchaseWorkflow(),
+        self.order_actions_service: restate.Service = restate.Service(
+            "OrderActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
+        )
+        self.purchase_actions_service: restate.Service = restate.Service(
+            "PurchaseActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
+        )
+        self.order_orchestrator_workflow: restate.Workflow = restate.Workflow(
+            "OrderOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
+        self.purchase_orchestrator_workflow: restate.Workflow = restate.Workflow(
+            "PurchaseOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
+        restate_price_product = activities.RestatePriceProduct(
+            self.order_actions_service,
+            application.OrderActions(self._memory_product_catalog_repository),
+        )
+        restate_take_payment = activities.RestateTakePayment(
+            self.purchase_actions_service,
+            application.PurchaseActions(self._memory_payment_processor),
+        )
+        restate_confirm_order = workflows.RestateConfirmOrder(
+            self.order_orchestrator_workflow, restate_price_product
+        )
+        restate_pay_for_order = workflows.RestatePayForOrder(
+            self.purchase_orchestrator_workflow, restate_take_payment, restate_confirm_order
         )
         self.client: client.OrderingClient = Ordering.Client(
-            application.OrderService(runners.RestateIngressOrderOrchestratorRelay(config.ingress)),
+            application.OrderService(
+                dispatchers.RestateHttpOrderOrchestratorRelay(config.ingress, restate_confirm_order)
+            ),
             application.PurchaseService(
-                runners.RestateIngressPurchaseOrchestratorRelay(config.ingress)
+                dispatchers.RestateHttpPurchaseOrchestratorRelay(config.ingress, restate_pay_for_order)
             ),
         )
 

@@ -196,8 +196,10 @@ jobs:
     # workflows run on Restate: one FastAPI host serves POST /submissions,
     # /orders and /purchases and mounts the Restate endpoint. The arm serves
     # that host on the runner and registers it with the service container
-    # through host.docker.internal; the adapter tests drive workflows through
-    # the ingress and read what the engine recorded in sys_invocation.
+    # through host.docker.internal for the root-tier tests; each activities,
+    # workflows, and dispatchers test serves its own registrations there under
+    # fresh names, calls through the ingress, and reads what the engine
+    # recorded in sys_invocation.
     name: durable-execution example (tessercheck + mypy --strict + pytest against Restate)
     runs-on: ubuntu-latest
     services:
