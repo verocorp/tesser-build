@@ -1211,9 +1211,8 @@ positional or `name=`; (f) every
 activity, workflow, and signal is reached by a dispatcher; (g) an activity,
 workflow, or signal registers exactly one handler, the one it keeps as
 `self.handler` (a function in `__init__`, at any depth, decorated from or
-passed to `.handler(...)`/`.main(...)` on an engine container parameter —
-typed as a `Service`, `Workflow`, or `VirtualObject` of any package but tesser
-— or the attribute holding one); (h) a handler name is unique in its engine container; (i) a
+passed to `.handler(...)`/`.main(...)` on a `restate` container parameter or
+the attribute holding one); (h) a handler name is unique in its engine container; (i) a
 dispatcher never calls `generic_call`/`generic_send`; (j) a `workflows/` module
 imports no HTTP client (`restate.client`, `httpx`, `aiohttp`, `requests`,
 `urllib.request`, `urllib3`) and reads neither `restate.create_client` nor
@@ -1465,10 +1464,14 @@ class Calls(ts.Component):
   2026-08-30). It declares exactly `serialize` and `deserialize` over **one
   type** — a type parameter, or the one shape its base is subscripted with —
   may hold at most the target type it was built with, and branches on nothing
-  but the empty payload before delegating to the snapshot. A payload the
-  snapshot cannot parse raises from the snapshot, and the engine retries it
-  and then pauses the invocation under the registration's retry policy; the
-  serde turns only the empty body into a terminal 400. It is the **one adapter
+  but the empty payload before delegating to the snapshot, where it raises a
+  terminal 400. What the engine does with a payload that does not parse
+  depends on where it is read: on a handler's input the SDK re-raises
+  anything the input serde raises, that 400 included, as a terminal 500 that
+  is not retried (`invoke_handler`, `restate/handler.py`); anywhere else — a
+  response a caller reads, a promise a workflow reads — a snapshot's
+  exception is retried and then pauses the invocation under the
+  registration's retry policy. It is the **one adapter
   class allowed a base from outside the tree** (TB052): the engine is the
   caller and the SDK's ABC is the shape it calls, so the class reads
   `class RestateXSerde(ts.Serde, restate.serde.Serde[relays.X])`.

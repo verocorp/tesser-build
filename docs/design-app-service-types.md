@@ -165,8 +165,7 @@ to `"X"`. (e) Each engine container is named for its far side, as a literal, pos
 engine holds no registration nobody calls. (g) An activity, workflow, or signal
 registers exactly one handler, the one it keeps as `self.handler`: any function
 in `__init__`, at any depth, decorated from or passed to `.handler(...)`/`.main(...)`
-on an engine container parameter (typed as a `Service`, `Workflow`, or
-`VirtualObject` of any package but tesser) or the attribute holding one. (h) A handler
+on a `restate` container parameter or the attribute holding one. (h) A handler
 name is unique in its engine container, because the SDK keeps one handler per
 name. (i) A dispatcher never calls `generic_call`/`generic_send`. (j) A
 `workflows/` module imports no HTTP client (`restate.client`, `httpx`,
@@ -201,9 +200,17 @@ which is the only way anything outside the application reaches it.
 
 **No adapter translates a `DomainError`** into the engine's terminal error
 today; one is retried under the registration's retry policy. A payload the
-snapshot cannot parse is treated the same way: the engine-side serde turns
-only an empty body into a terminal 400, and anything else the snapshot raises
-is retried and then pauses the invocation under the retry policy.
+snapshot cannot parse depends on where it is read (Restate Python SDK 1.0.5).
+On a handler's input, `invoke_handler` in `restate/handler.py` catches
+whatever the input serde raises and re-raises it as `TerminalError("Unable to
+parse an input argument. ...")` with the default status 500, so the
+invocation fails at once and is not retried; the engine-side serde's own
+terminal 400 for an empty body is re-wrapped the same way and reaches the
+caller as a 500. Anywhere else — a caller reading a response through the
+handler's output serde, a workflow reading a promise through its snapshot — a
+snapshot's exception is an ordinary exception inside the handler, which
+`server_context.py` reports as retryable, so it is retried and then pauses the
+invocation under the retry policy.
 
 **Open, 2026-09-23.** The workflow names the orchestrator implementation
 directly (`orchestrators.CallOrchestrator(...)`); that is accepted for now and
