@@ -2,6 +2,41 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the migrate-new-kinds ship review (2026-09-24)
+
+- [ ] **minimal's in-memory widget store is per process.** `keep_widget`
+  runs in the served Restate host (`srv/restate`), so the app that called
+  `create_widget` never sees the kept widget, and a restart of the host
+  loses it although Restate recorded `keep_widget` as done. The root-tier
+  test reads the child `keep_widget` invocation from `sys_invocation`
+  instead of reading the widget back.
+- [ ] **A caller has no bounded, typed way to learn that a started workflow
+  finished (ruling D1 gap).** minimal's `create_widget` now starts the
+  workflow (`start_register_widget`) and `approve_widget` signals it, but
+  the caller cannot learn that the widget was kept without an unbounded
+  wait: the SDK's `restate.client.Client` offers only `*_call`/`*_send` (a
+  second `workflow_call` on a started key is a 409 "already invoked"), and
+  the ingress's non-blocking `GET /restate/workflow/<service>/<key>/output`
+  (470 until done, then 200 with the result, measured on restate-server
+  1.7.9) has no typed call, so reaching it means building the route by
+  string. A shared handler that reads workflow state is no tesser kind (a
+  signal must resolve a promise), and a promise the workflow resolves for the
+  signal to await needs a relay mode that writes a promise. Rule on one:
+  a typed read of a workflow's result (a new relay mode, or `await_` outside
+  an invocation), a shared store with a read operation (voice reads
+  Postgres), or the output route read off the handler object.
+- [ ] **minimal's `srv/restate` host binds `0.0.0.0` with no
+  `identity_keys`.** Anyone who can reach the port can invoke the
+  ingress-private `WidgetActions` directly, the same exposure
+  durable-execution's README records for its `/restate` mount. The adapter
+  tests of minimal, durable-execution and the generated trees also bind
+  `0.0.0.0` while they run.
+- [ ] **Generated trees read variables their spec does not name.** The
+  generated adapter tests read `RESTATE_CALLBACK_HOST` and `RESTATE_ADMIN`,
+  but the spec's `[environment_variables]` names only the storage URL and
+  the ingress; only `scripts/verify` sets the other two, so running pytest by
+  hand on a generated tree fails with `KeyError`.
+
 ## Left open by the typed-handler ship review (2026-09-23, PR #210)
 
 - [ ] **An activity's engine container is ingress-private, checked.** voice's
@@ -29,8 +64,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   request's call id is its workflow key, as the signals do; the new checks
   each rebuild the kind table per module, as about 24 older checks already
   do (cache it on the registry); the adapter tests probe a free port and bind
-  it later (a race; durable-execution's and the generated trees' adapter
-  tests now share it); the hostile-key test covers only `run_person_joined`;
+  it later (a race; durable-execution's, minimal's and the generated trees'
+  adapter tests now share it). Fix it together with the harness duplication
+  (Chris ruling D3, 2026-09-24): the serve/register/teardown block is
+  repeated about 15 times across the adapter tests and the register loop 4
+  times in `scripts/verify`. One follow-up: a `@ts.helper` async context
+  manager per test file (TB074 keeps it beside the tests that use it), which
+  binds the port it serves on instead of probing one, emitted by the
+  generator's templates as well, and a `register_deployment` shell function
+  used by all four verify arms (durable-execution, minimal, voice, generated
+  trees). TB073 today requires a helper to take defaulted primitives and
+  build a spec or DTO, so the helper needs that rule widened or a kind of its
+  own; the hostile-key test covers only `run_person_joined`;
   the concurrency test does not assert which turn the promise kept; an
   activity or workflow whose far side the analyzer cannot read gets no
   container-name check and no finding.
