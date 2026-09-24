@@ -290,7 +290,23 @@ ADAPTER_KIND_PACKAGES: typing.Final[dict[str, frozenset[str]]] = {
     DISPATCHERS_PACKAGE: frozenset({DISPATCHER_BLOCK, SIGNAL_BLOCK, "serde"}),
 }
 
-OUT_OF_INVOCATION_IMPORTS: typing.Final[tuple[str, ...]] = ("restate.client", "httpx")
+OUT_OF_INVOCATION_IMPORTS: typing.Final[tuple[str, ...]] = (
+    "restate.client", "httpx", "aiohttp", "requests", "urllib.request", "urllib3"
+)
+
+ENGINE_PACKAGE: typing.Final[str] = "restate"
+
+OUT_OF_INVOCATION_READS: typing.Final[frozenset[str]] = frozenset({"create_client", "RestateClient"})
+
+REGISTRATION_CALLS: typing.Final[frozenset[str]] = frozenset({"handler", "main"})
+
+RESOLVE_CALL: typing.Final[str] = "resolve"
+
+DISPATCH_PREFIXES: typing.Final[dict[str, str]] = {
+    ACTIVITY_BLOCK: "service_",
+    WORKFLOW_BLOCK: "workflow_",
+    SIGNAL_BLOCK: "workflow_",
+}
 
 RUNTIME_KIND_PACKAGES: typing.Final[frozenset[str]] = frozenset({RUNTIMES_PACKAGE, ACTIVITIES_PACKAGE})
 
@@ -7725,64 +7741,123 @@ class Module(ts.Entity):
         self._functions: frozenset[str] = frozenset(functions)
         self._class_defs: tuple[ast.ClassDef, ...] = tuple(self._classes.values())
         registration_handlers: dict[
-            str, tuple[ast.FunctionDef | ast.AsyncFunctionDef | None, tuple[ast.FunctionDef | ast.AsyncFunctionDef, ...]]
+            str,
+            tuple[
+                ast.FunctionDef | ast.AsyncFunctionDef | None,
+                tuple[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.Call | None], ...],
+            ],
         ] = {}
+        kept_registrations: dict[str, tuple[bool, str | None]] = {}
         for registering in self._class_defs if self._adapter_side else ():
             kept_handler: ast.FunctionDef | ast.AsyncFunctionDef | None = None
-            registered_fns: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+            registered_fns: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.Call | None]] = []
             for init in registering.body:
                 if not isinstance(init, (ast.FunctionDef, ast.AsyncFunctionDef)) or init.name != "__init__":
                     continue
-                typed = [
+                statements: list[ast.stmt] = []
+                pending: list[ast.stmt] = list(init.body)
+                while pending:
+                    stmt = pending.pop(0)
+                    statements.append(stmt)
+                    if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While)):
+                        pending.extend(stmt.body + stmt.orelse)
+                    elif isinstance(stmt, (ast.With, ast.AsyncWith)):
+                        pending.extend(stmt.body)
+                    elif isinstance(stmt, (ast.Try, ast.TryStar)):
+                        pending.extend(stmt.body)
+                        for caught in stmt.handlers:
+                            pending.extend(caught.body)
+                        pending.extend(stmt.orelse + stmt.finalbody)
+                    elif isinstance(stmt, ast.Match):
+                        for case in stmt.cases:
+                            pending.extend(case.body)
+                typed: list[tuple[str, ast.expr | None]] = [
                     (param.arg, param.annotation)
                     for param in init.args.posonlyargs + init.args.args + init.args.kwonlyargs
-                    if param.annotation is not None
+                    if param.arg != "self"
                 ] + [
                     (local.target.id, local.annotation)
-                    for local in init.body
+                    for local in statements
                     if isinstance(local, ast.AnnAssign) and isinstance(local.target, ast.Name)
                 ]
-                engine_names = {
-                    typed_name
-                    for typed_name, typed_as in typed
-                    if (
-                        typed_as.attr if isinstance(typed_as, ast.Attribute)
-                        else typed_as.id if isinstance(typed_as, ast.Name) else ""
-                    ) in ENGINE_REGISTRATIONS
+                roots: set[str] = set()
+                for typed_name, typed_as in typed:
+                    engine_typed = self._resolve(typed_as) if typed_as is not None else None
+                    if typed_as is None or (
+                        engine_typed is not None
+                        and engine_typed[0].split(".")[0] == ENGINE_PACKAGE
+                        and engine_typed[1] in ENGINE_REGISTRATIONS
+                    ):
+                        roots.add(typed_name)
+                held_roots: set[str] = set()
+                defined: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {
+                    local.name: local for local in statements if isinstance(local, (ast.FunctionDef, ast.AsyncFunctionDef))
                 }
-                defined = {
-                    local.name: local for local in init.body if isinstance(local, (ast.FunctionDef, ast.AsyncFunctionDef))
-                }
-                for local in init.body:
+                for local in statements:
                     stored = (
                         local.targets[0] if isinstance(local, ast.Assign) and len(local.targets) == 1
                         else local.target if isinstance(local, ast.AnnAssign)
                         else None
                     )
-                    if (
+                    if not (
                         isinstance(local, (ast.Assign, ast.AnnAssign))
                         and isinstance(stored, ast.Attribute)
                         and isinstance(stored.value, ast.Name)
                         and stored.value.id == "self"
-                        and stored.attr == REGISTERED_HANDLER
                         and isinstance(local.value, ast.Name)
-                        and local.value.id in defined
                     ):
+                        continue
+                    if local.value.id in roots:
+                        held_roots.add(stored.attr)
+                    if stored.attr == REGISTERED_HANDLER and local.value.id in defined:
                         kept_handler = defined[local.value.id]
-                for defined_fn in defined.values():
-                    for decorator in defined_fn.decorator_list:
-                        decorated_on: ast.expr = decorator
-                        while isinstance(decorated_on, (ast.Attribute, ast.Call)):
-                            decorated_on = (
-                                decorated_on.value if isinstance(decorated_on, ast.Attribute) else decorated_on.func
-                            )
-                        if (
-                            isinstance(decorated_on, ast.Name)
-                            and decorated_on.id in engine_names
-                            and defined_fn not in registered_fns
-                        ):
-                            registered_fns.append(defined_fn)
+                candidates: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.expr]] = [
+                    (defined_fn, decorator) for defined_fn in defined.values() for decorator in defined_fn.decorator_list
+                ]
+                for local in statements:
+                    if isinstance(local, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        continue
+                    candidates.extend(
+                        (defined[passed_fn.id], call.func)
+                        for call in ast.walk(local)
+                        if isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Call)
+                        and isinstance(call.func.func, ast.Attribute)
+                        and call.func.func.attr in REGISTRATION_CALLS
+                        for passed_fn in call.args
+                        if isinstance(passed_fn, ast.Name) and passed_fn.id in defined
+                    )
+                for candidate_fn, chain in candidates:
+                    link: ast.expr = chain
+                    on_engine: bool | None = None
+                    while isinstance(link, (ast.Attribute, ast.Call)) and on_engine is None:
+                        if isinstance(link, ast.Attribute) and isinstance(link.value, ast.Name) and link.value.id == "self":
+                            on_engine = link.attr in held_roots
+                        else:
+                            link = link.value if isinstance(link, ast.Attribute) else link.func
+                    if on_engine is None:
+                        on_engine = isinstance(link, ast.Name) and link.id in roots
+                    if on_engine and all(candidate_fn is not registered_fn for registered_fn, _ in registered_fns):
+                        registered_fns.append((candidate_fn, chain if isinstance(chain, ast.Call) else None))
             registration_handlers[registering.name] = (kept_handler, tuple(registered_fns))
+            kept_registration = next(
+                (registration for registrant, registration in registered_fns if registrant is kept_handler), None
+            )
+            kept_registered = kept_handler is not None and any(
+                registrant is kept_handler for registrant, _ in registered_fns
+            )
+            registered_as: str | None = kept_handler.name if kept_handler is not None else None
+            if kept_registration is not None:
+                named = kept_registration.args[0] if kept_registration.args else None
+                for keyword in kept_registration.keywords:
+                    if keyword.arg == "name" and named is None:
+                        named = keyword.value
+                if named is not None:
+                    registered_as = (
+                        named.value if isinstance(named, ast.Constant) and isinstance(named.value, str) else None
+                    )
+            kept_registrations[registering.name] = (kept_registered, registered_as)
+        self._kept_registrations = kept_registrations
         self._registration_handlers = registration_handlers
         self._bound_names: tuple[tuple[str, str, str], ...] = tuple(
             (local, target, original) for local, (target, original) in self._imported.items()
@@ -9582,7 +9657,8 @@ class Module(ts.Entity):
                     if made is not None and blocks.get(made) == ORCHESTRATOR_BLOCK:
                         sides.add(made)
             side = sorted(sides)[0] if len(sides) == 1 else ("", "")
-            rows.append((self._name, cls.name, block, side[0], side[1], handler.name if handler is not None else ""))
+            registered_as = self._kept_registrations.get(cls.name, (False, None))[1]
+            rows.append((self._name, cls.name, block, side[0], side[1], registered_as or ""))
         return tuple(rows)
 
     def _container_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, str, str], ...]:
@@ -9642,16 +9718,20 @@ class Module(ts.Entity):
                     if named is not None:
                         taken[arg.arg] = named
                 for stmt in ast.walk(item):
+                    kept_as = (
+                        stmt.targets[0] if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
+                        else stmt.target if isinstance(stmt, ast.AnnAssign)
+                        else None
+                    )
                     if (
-                        isinstance(stmt, ast.Assign)
-                        and len(stmt.targets) == 1
-                        and isinstance(stmt.targets[0], ast.Attribute)
-                        and isinstance(stmt.targets[0].value, ast.Name)
-                        and stmt.targets[0].value.id == "self"
+                        isinstance(stmt, (ast.Assign, ast.AnnAssign))
+                        and isinstance(kept_as, ast.Attribute)
+                        and isinstance(kept_as.value, ast.Name)
+                        and kept_as.value.id == "self"
                         and isinstance(stmt.value, ast.Name)
                         and stmt.value.id in taken
                     ):
-                        held[stmt.targets[0].attr] = taken[stmt.value.id]
+                        held[kept_as.attr] = taken[stmt.value.id]
             for member in cls.body:
                 if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) or member.name.startswith("_"):
                     continue
@@ -10647,6 +10727,45 @@ class Module(ts.Entity):
         )
         tested = own[-1].startswith(TEST_PREFIX) or own[-1] == "conftest"
         found: list[Violation] = []
+        if kind_package == WORKFLOWS_PACKAGE and not tested:
+            for imported_from, imported_name, _, imported_line in self._members:
+                target = f"{imported_from}.{imported_name}"
+                if any(
+                    imported_from == banned or imported_from.startswith(banned + ".")
+                    for banned in OUT_OF_INVOCATION_IMPORTS
+                ):
+                    continue
+                if target in OUT_OF_INVOCATION_IMPORTS or (
+                    imported_from == ENGINE_PACKAGE and imported_name in OUT_OF_INVOCATION_READS
+                ):
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            imported_line,
+                            "TB060",
+                            f"{module_name} imports {target}; a workflows module calls across the engine "
+                            "only through its invocation's context, because the engine journals a call made "
+                            "through the context and a call made over HTTP runs again on every replay",
+                        ))
+                    )
+            for read in self._attributes:
+                if not (
+                    read.attr in OUT_OF_INVOCATION_READS
+                    and isinstance(read.value, ast.Name)
+                    and self._package_aliases.get(read.value.id) == ENGINE_PACKAGE
+                ):
+                    continue
+                target = f"{ENGINE_PACKAGE}.{read.attr}"
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        read.lineno,
+                        "TB060",
+                        f"{module_name} reads {target}; a workflows module calls across the engine only "
+                        "through its invocation's context, because the engine journals a call made through "
+                        "the context and a call made over HTTP runs again on every replay",
+                    ))
+                )
         for edge in self._edges:
             target = str(edge._target)
             lineno = int(edge._lineno)
@@ -11864,6 +11983,42 @@ class Module(ts.Entity):
             )
         return tuple(found)
 
+    def relay_constant_violations(self) -> tuple[Violation, ...]:
+        if str(self._placement) not in ("relays", "relays-file"):
+            return ()
+        module_name = self._name
+        assigned: dict[str, list[ast.stmt]] = {}
+        constants: set[str] = set()
+        for stmt in self._body:
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                names, value = [stmt.target.id], stmt.value
+            elif isinstance(stmt, ast.Assign):
+                names = [target.id for target in stmt.targets if isinstance(target, ast.Name)]
+                value = stmt.value
+            elif isinstance(stmt, ast.AugAssign) and isinstance(stmt.target, ast.Name):
+                names, value = [stmt.target.id], None
+            else:
+                continue
+            for name in names:
+                assigned.setdefault(name, []).append(stmt)
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    constants.add(name)
+        found: list[Violation] = []
+        for constant in sorted(constants):
+            count = len(assigned[constant])
+            if count < 2:
+                continue
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    assigned[constant][1].lineno,
+                    "TB085",
+                    f"{module_name}.{constant} is assigned {count} times; a relays constant is assigned "
+                    "once, because the analyzer reads one value and Python keeps the last",
+                ))
+            )
+        return tuple(found)
+
     def relay_name_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         if str(self._placement) not in ("relays", "relays-file"):
             return ()
@@ -12170,16 +12325,20 @@ class Module(ts.Entity):
                     if named is not None:
                         taken[arg.arg] = named
                 for stmt in ast.walk(item):
+                    kept_as = (
+                        stmt.targets[0] if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
+                        else stmt.target if isinstance(stmt, ast.AnnAssign)
+                        else None
+                    )
                     if (
-                        isinstance(stmt, ast.Assign)
-                        and len(stmt.targets) == 1
-                        and isinstance(stmt.targets[0], ast.Attribute)
-                        and isinstance(stmt.targets[0].value, ast.Name)
-                        and stmt.targets[0].value.id == "self"
+                        isinstance(stmt, (ast.Assign, ast.AnnAssign))
+                        and isinstance(kept_as, ast.Attribute)
+                        and isinstance(kept_as.value, ast.Name)
+                        and kept_as.value.id == "self"
                         and isinstance(stmt.value, ast.Name)
                         and stmt.value.id in taken
                     ):
-                        held[stmt.targets[0].attr] = taken[stmt.value.id]
+                        held[kept_as.attr] = taken[stmt.value.id]
             members = tuple(
                 item
                 for item in cls.body
@@ -12374,6 +12533,25 @@ class Module(ts.Entity):
                             ))
                         )
                     reached = held.get(field)
+                    target_block = (
+                        kind_table.block_of(Symbol(SymbolSpec(reached[0], reached[1]))) if reached is not None else None
+                    )
+                    wanted_prefix = DISPATCH_PREFIXES.get(str(target_block)) if target_block is not None else None
+                    if reached is not None and wanted_prefix is not None and not engine_call.startswith(wanted_prefix):
+                        target_kind = str(target_block)
+                        target_class = reached[1]
+                        found.append(
+                            Violation(ViolationSpec(
+                                self._path,
+                                call.lineno,
+                                "TB085",
+                                f"{where}.{member.name} reaches the {target_kind} {target_class} through "
+                                f"{engine_call}; a dispatcher calls an activity's handler with service_call "
+                                "or service_send and a workflow's or a signal's with workflow_call or "
+                                "workflow_send, because the engine routes a call by the kind of container "
+                                "its handler is registered on",
+                            ))
+                        )
                     registered = (
                         registration_rows.handler(Symbol(SymbolSpec(reached[0], reached[1])))
                         if reached is not None
@@ -12432,7 +12610,7 @@ class Module(ts.Entity):
                     ))
                 )
                 continue
-            for registrant in registrants:
+            for registrant, _ in registrants:
                 if registrant is handler:
                     continue
                 stray = registrant.name
@@ -12446,42 +12624,96 @@ class Module(ts.Entity):
                         "a handler no dispatcher reaches is a name nobody checks",
                     ))
                 )
-            for decorator in handler.decorator_list:
-                if not isinstance(decorator, ast.Call):
-                    continue
-                for keyword in decorator.keywords:
-                    if keyword.arg == "name" and not (
-                        isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str)
-                    ):
-                        found.append(
-                            Violation(ViolationSpec(
-                                self._path,
-                                handler.lineno,
-                                "TB085",
-                                f"{where}.{handler.name} registers under a name that is not a string "
-                                "literal; a handler registers under the operation it is named for, "
-                                "because a name the analyzer cannot read is a name it is not checking",
-                            ))
+            kept_registered, registered = self._kept_registrations.get(cls.name, (False, None))
+            if not kept_registered:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where} keeps {handler.name} as self.handler but does not register it; an "
+                        "activity, a workflow, or a signal keeps the handler it registers, because a "
+                        "dispatcher that passes an unregistered handler names nothing the engine holds",
+                    ))
+                )
+            if registered is None:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} registers under a name that is not a string "
+                        "literal; a handler registers under the operation it is named for, "
+                        "because a name the analyzer cannot read is a name it is not checking",
+                    ))
+                )
+            elif registered != handler.name:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} registers as {registered}; a handler "
+                        "registers under the operation it is named for, because the "
+                        "engine's name and the dispatcher's are one name",
+                    ))
+                )
+            if str(block) == ACTIVITY_BLOCK:
+                clients: set[str] = set()
+                for init in cls.body:
+                    if not isinstance(init, (ast.FunctionDef, ast.AsyncFunctionDef)) or init.name != "__init__":
+                        continue
+                    for param in init.args.posonlyargs + init.args.args + init.args.kwonlyargs:
+                        typed_as = self._resolve(param.annotation) if param.annotation is not None else None
+                        typed_block = (
+                            kind_table.block_of(Symbol(SymbolSpec(typed_as[0], typed_as[1])))
+                            if typed_as is not None
+                            else None
                         )
-                    elif (
-                        keyword.arg == "name"
-                        and isinstance(keyword.value, ast.Constant)
-                        and isinstance(keyword.value.value, str)
-                        and keyword.value.value != handler.name
-                    ):
-                        registered = keyword.value.value
-                        found.append(
-                            Violation(ViolationSpec(
-                                self._path,
-                                handler.lineno,
-                                "TB085",
-                                f"{where}.{handler.name} registers as {registered}; a handler "
-                                "registers under the operation it is named for, because the "
-                                "engine's name and the dispatcher's are one name",
-                            ))
-                        )
+                        if typed_block is not None and str(typed_block) in INVOKED_OPERATION_BLOCKS:
+                            clients.add(param.arg)
+                performed = any(
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in clients
+                    and node.func.attr == handler.name
+                    for node in ast.walk(handler)
+                )
+                if not performed:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            handler.lineno,
+                            "TB085",
+                            f"{where}.{handler.name} calls no application client method named "
+                            f"{handler.name}; an activity's handler performs its operation by calling "
+                            "the method of that name on the application client it takes, because a "
+                            "handler that answers without it reports work nothing did",
+                        ))
+                    )
             if str(block) != SIGNAL_BLOCK:
                 continue
+            resolved = any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == RESOLVE_CALL
+                and isinstance(node.func.value, ast.Call)
+                and isinstance(node.func.value.func, ast.Attribute)
+                and node.func.value.func.attr == PROMISE_CALL
+                for node in ast.walk(handler)
+            )
+            if not resolved:
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        handler.lineno,
+                        "TB085",
+                        f"{where}.{handler.name} resolves no promise; a signal's handler resolves "
+                        "the durable promise named for its operation, because a signal that "
+                        "does not resolve its promise leaves its workflow waiting",
+                    ))
+                )
             for call in ast.walk(cls):
                 if not (
                     isinstance(call, ast.Call)
@@ -12552,6 +12784,9 @@ class Module(ts.Entity):
                 ):
                     continue
                 first = node.value.args[0] if node.value.args else None
+                for keyword in node.value.keywords:
+                    if keyword.arg == "name" and first is None:
+                        first = keyword.value
                 literal = first.value if isinstance(first, ast.Constant) and isinstance(first.value, str) else ""
                 containers[target.attr] = (literal, node.lineno)
             handed: list[tuple[str, str, str]] = []
@@ -12576,7 +12811,7 @@ class Module(ts.Entity):
                 if str(kind_table.block_of(Symbol(SymbolSpec(handed_module, handed_name)))) == WORKFLOW_BLOCK
             }
             registered_names: dict[tuple[str, str], list[str]] = {}
-            for attr, handed_module, handed_name in sorted(set(handed)):
+            for attr, handed_module, handed_name in sorted(handed):
                 registered_as = registration_rows.handler(Symbol(SymbolSpec(handed_module, handed_name)))
                 if registered_as is not None and str(registered_as):
                     registered_names.setdefault((attr, str(registered_as)), []).append(handed_name)
@@ -14861,6 +15096,7 @@ class Codebase(ts.AggregateRoot):
         for module in scoped:
             found.extend(module.pairing_violations(registry))
             found.extend(module.relay_name_violations(registry))
+            found.extend(module.relay_constant_violations())
             found.extend(module.runner_violations(registry))
             found.extend(module.dispatcher_violations(registry))
             found.extend(module.registration_violations(registry))

@@ -130,6 +130,9 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "called": "⟨operation⟩",
     "sides": "⟨classes⟩",
     "side": "⟨class⟩",
+    "target_kind": "⟨kind⟩",
+    "target_class": "⟨class⟩",
+    "constant": "⟨constant⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -237,6 +240,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Helper.violations": "@ts.helper function",
     "Module.pairing_violations": "implementation module and its sibling test file",
     "Module.relay_name_violations": "relay protocol",
+    "Module.relay_constant_violations": "relays module constant",
     "Module.runner_violations": "runner class",
     "Module.dispatcher_violations": "dispatcher class",
     "Module.registration_violations": "activity, workflow, or signal class",
