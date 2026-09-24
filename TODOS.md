@@ -10,7 +10,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   ingress, so nobody who reaches the ingress can place a call or write a
   record around `CallService`. Nothing checks it. Add a rule that a container
   an activity registers into is built with `ingress_private=True`, and that a
-  workflow's container is not.
+  workflow's container is not. durable-execution and the generator's
+  templates set it too now (2026-09-24), and their component tests assert it;
+  minimal's `in_process` engine has no ingress and no such flag, so the rule
+  has to name the engines that have one.
 - [ ] **`place_call` can wait forever on a paused workflow.** The HTTP
   dispatcher's `run_conduct_call` has no read limit (`read=None`), and an
   activity that exhausts its 5 attempts pauses the workflow
@@ -27,7 +30,8 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   request's call id is its workflow key, as the signals do; the new checks
   each rebuild the kind table per module, as about 24 older checks already
   do (cache it on the registry); the adapter tests probe a free port and bind
-  it later (a race); the hostile-key test covers only `run_person_joined`;
+  it later (a race; durable-execution's and the generated trees' adapter
+  tests now share it); the hostile-key test covers only `run_person_joined`;
   the concurrency test does not assert which turn the promise kept; an
   activity or workflow whose far side the analyzer cannot read gets no
   container-name check and no finding.
@@ -62,25 +66,41 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `@svc.handler(...)` is not covered by a test yet. All three shapes still
   pass on the runner/runtime kinds in durable-execution, minimal and the
   generator until they migrate.
-- [ ] **Migrate durable-execution, minimal and the generator to activities,
+- [x] **Migrate durable-execution, minimal and the generator to activities,
   workflows and dispatchers (Chris, 2026-09-23; follow-up to PR #210).**
-  Voice is the only tree on the new kinds. `examples/durable-execution/`
-  (two workflows, one orchestrator starting another, and the two
-  implementations of `OrderOrchestratorRelay`) and the generator's templates
-  (`generator/templates/{{context}}/adapters/runners/`, `runtimes/`, the
-  `ts.DeprecatedWorkflow` protocol in `application/client/`) still use
-  `ts.Runner`, `ts.Runtime` and `ts.DeprecatedWorkflow`, whose TB085 rules
-  still check string literals. `examples/minimal/` shows none of the durable
-  kinds: restore them over a small in-process engine that registers a
-  handler object and calls it by that object, the way the Restate SDK's typed
-  calls do, so minimal exercises `ts.Relay`, `ts.Orchestrator`, `ts.Actions`,
-  the application client, `ts.Activity`, `ts.Workflow`, `ts.Signal` and
-  `ts.Dispatcher` without Restate (this replaces the 2026-09-22 minimal item
-  below, which planned dispatch by name). When all three have moved, delete
-  `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`, the `runners`/`runtimes`
-  kind packages, and their TB041/TB052/TB060/TB070/TB081/TB082/TB085 rows,
-  and drop the "trees not yet migrated" notes from CLAUDE.md, the skill and
-  `docs/design-app-service-types.md`.
+  DONE on branch `migrate-new-kinds` (2026-09-24). No tree uses `ts.Runner`,
+  `ts.Runtime` or `ts.DeprecatedWorkflow` now:
+  - `examples/durable-execution/`: `RestatePriceProduct`/`RestateTakePayment`
+    (activities), `RestateConfirmOrder`/`RestatePayForOrder` in one workflows
+    module (the purchase workflow's child dispatcher holds the order
+    workflow's instance, and a module may not import a sibling), and
+    `RestateHttpOrderOrchestratorRelay`/`RestateHttpPurchaseOrchestratorRelay`.
+    The actions services are `ingress_private=True`. 79 -> 71 debt markers
+    (the eight engine-serde `try` markers went with the runtime).
+  - the generator's templates: `Restate<Record>`, `Restate<Conduct>`,
+    `RestateHttp<Aggregate>OrchestratorRelay`; every spec generates and
+    passes its gates.
+  - `examples/minimal/`: every durable kind again, over `in_process/`, a small
+    synchronous engine at the tree's root that `.tesser-root` skips. TB085's
+    registration rows now accept a container of any engine package but
+    tesser (they accepted only `restate`).
+- [ ] **Delete the deprecated durable kinds (follow-up to the migration
+  above).** Delete `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`, the
+  `runners`/`runtimes` kind packages, and their
+  TB041/TB052/TB060/TB070/TB081/TB082/TB085 rows, with the analyzer and
+  tesser-py tests for them, and drop the deprecated-kinds notes from
+  CLAUDE.md, the skill (`python.md`, `map.md`, `SKILL.md`),
+  `docs/design-app-service-types.md` and `rationale/coverage.md`.
+  `docs/design-operation-naming.md` still names runners and runtimes
+  throughout (`RestateIngressOrderOrchestratorRelay`); it is a record of
+  rulings, so decide whether it is rewritten or marked historical.
+- [ ] **minimal's in-process engine does not suspend.** `in_process` reads a
+  promise only if a signal resolved it first and raises
+  `PromiseNotResolved` otherwise, so minimal's story is "approve a widget's
+  name, then create it". A workflow that waits for an event that arrives
+  later needs the engine to suspend and resume, by a journal and replay
+  (synchronous) or by asyncio (which would make minimal async). Decide
+  whether minimal should show that.
 - [ ] **TB085 does not derive the name of a signal relay reached only by
   `await_` (PR #210 gap).** A relay's far side is derived from the handlers
   its dispatchers pass; an `await_` operation passes no handler, it reads a
@@ -160,11 +180,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     context and ingress, TB085 on their locals).~~ Retired on branch
     `name-strings`: the workflows and dispatchers tests serve their own endpoint under
     fresh service names and drive it through the real Restate.
-- [ ] **durable-execution: an invocation runner's `start_` path is never
+- [ ] **durable-execution: an invocation dispatcher's `start_` path is never
   run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`
-  exists because the runner implements the whole relay, but
-  `PurchaseOrchestrator` only runs `run_confirm_order`, and the runner is
-  reachable only through `RestatePurchaseWorkflow`. Decide whether a relay
+  exists because the dispatcher implements the whole relay, but
+  `PurchaseOrchestrator` only runs `run_confirm_order`, and the dispatcher is
+  reachable only through `RestatePayForOrder`. Decide whether a relay
   operation an invocation never uses belongs on that relay, or test the
   path directly.
 

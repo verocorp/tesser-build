@@ -132,7 +132,8 @@ to one assignment; a `workflows/` module imports no HTTP client and reads no
 `restate` client factory (TB060), because a call from inside an invocation
 goes through its context, where the engine journals it.
 `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`,
-`adapters/runners/` and `adapters/runtimes/` remain in trees not yet migrated
+`adapters/runners/` and `adapters/runtimes/` are deprecated: their rules still
+run, but no tree uses them, and their removal is queued in `TODOS.md`
 — `TB041`/`TB052`/`TB060`/`TB070`/`TB081`/`TB082`/`TB085`;
 `docs/design-app-service-types.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which

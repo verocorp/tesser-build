@@ -9,9 +9,10 @@ findings and which were taken, the survey of seven orchestrators in
 `~/workspace/flow`, the package names considered and rejected, and the two
 options the job-context ruling chose between. Read it for *why*, never for
 *what*. Where the two disagree, this section wins; `examples/voice/` and
-`skills/tesser-build/python.md#orchestrators-actions-relays` are the spec.
-`examples/durable-execution/`, `examples/minimal/` and the generator's
-templates have not migrated yet; see **Trees not yet migrated** below.
+`skills/tesser-build/python.md#orchestrators-actions-relays` are the spec,
+and `examples/durable-execution/`, `examples/minimal/` and the generator's
+templates follow it. The older kinds remain only as deprecated rules; see
+**The deprecated kinds** below.
 
 ## The convention, 2026-09-23
 
@@ -104,9 +105,11 @@ Notes on the lines, from the code and the Restate Python SDK (1.0.4):
 **One relay kind; lifetime is not a property of the protocol.** A relay
 implemented over HTTP from outside the engine and one implemented inside an
 invocation are the same `ts.Relay`, and the code holding one cannot tell which
-it has. `examples/durable-execution/` still shows it with two implementations
-of `OrderOrchestratorRelay` (one built once at wiring, one built per
-invocation that runs the workflow as a child), in the older runner shape.
+it has. `examples/durable-execution/` shows it with two implementations of
+`OrderOrchestratorRelay`: `RestateHttpOrderOrchestratorRelay`, built once by
+the component, and `RestateInvocationOrderOrchestratorRelay`, built per
+invocation of the purchase workflow to run the order workflow as a child.
+Both hold the one `RestateConfirmOrder` instance and pass its `.handler`.
 
 **A relay is named for its far side and carries any number of operations**
 (Chris, 2026-09-22). A relay method is `<mode>_<operation>` and the mode is
@@ -162,7 +165,8 @@ to `"X"`. (e) Each engine container is named for its far side, as a literal, pos
 engine holds no registration nobody calls. (g) An activity, workflow, or signal
 registers exactly one handler, the one it keeps as `self.handler`: any function
 in `__init__`, at any depth, decorated from or passed to `.handler(...)`/`.main(...)`
-on a `restate` container parameter or the attribute holding one. (h) A handler
+on an engine container parameter (typed as a `Service`, `Workflow`, or
+`VirtualObject` of any package but tesser) or the attribute holding one. (h) A handler
 name is unique in its engine container, because the SDK keeps one handler per
 name. (i) A dispatcher never calls `generic_call`/`generic_send`. (j) A
 `workflows/` module imports no HTTP client (`restate.client`, `httpx`,
@@ -280,17 +284,25 @@ trees and are not implemented: "name what you compute" would take 79 sites,
 repositories), and "one call on the backend per method" 1. "An adapter raises
 no domain kind" was rejected outright. The numbers are in `TODOS.md`.
 
-**Trees not yet migrated.** `examples/durable-execution/` and the generator's
-templates still use the older kinds, and `examples/minimal/` shows none of the
-durable kinds until an in-process engine restores them. The older kinds' rules
-still run: a runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its far side by literal
+**A second engine.** `examples/minimal/` runs every kind above on a small
+synchronous in-process engine, `in_process/` at the tree's root, which
+`.tesser-root` skips as it skips `memoryclient/`: a library the adapters
+import, not a tesser kind. Its `Service` and `Workflow` register a `Handler`
+object through `.handler()`/`.main()`, a caller passes that object to
+`WorkflowContext.service_call` or to the module's `workflow_call`, and a
+workflow keeps its promises per key, so the same TB085 rows hold. It does not
+journal or suspend: a signal must resolve a promise before the workflow reads
+it, and reading one nobody resolved raises.
+
+**The deprecated kinds.** No tree uses them. Their rules still run until the
+removal in `TODOS.md`: a runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its far side by literal
 service and handler name (`generic_call`/`generic_send`, `promise("X")`), and a
 workflow runner implements `ts.DeprecatedWorkflow` (the application-side
 protocol formerly called `ts.Workflow`, declared beside an orchestrator's
 application client and yielding it per invocation); a runtime (`ts.Runtime`,
 `adapters/runtimes/`) registers the engine's handlers under literals and may
 register only what a runner of its context reaches. TB085 checks those
-literals against the relay. The migration is in `TODOS.md`.
+literals against the relay.
 
 ---
 

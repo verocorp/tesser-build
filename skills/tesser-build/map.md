@@ -113,7 +113,7 @@ its own package, because the package is what carries the module's reach.
 Enforced layout (TB041/TB052): `adapters/handlers`, `adapters/gateways`,
 `adapters/repositories`, `adapters/activities`, `adapters/workflows`, and
 `adapters/dispatchers` are the adapter kind packages (`adapters/runners` and
-`adapters/runtimes` remain in trees not yet migrated);
+`adapters/runtimes` are deprecated, and no tree uses them);
 every adapters module lives in one and holds the kind its package names,
 because the package is what carries the module's reach (TB060). Each
 implementation module is named for its backing (`file_repository.py`,

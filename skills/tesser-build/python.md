@@ -1107,10 +1107,10 @@ union-free one that scores **zero** silent sites; a `found: bool` flag and a
 A workflow on a durable-execution engine (Restate, Temporal) adds three
 application kinds that are **not** application services, and four adapter
 kinds that carry the engine. The rules and the why are
-`docs/design-app-service-types.md`; the worked example is `examples/voice/`.
-`examples/durable-execution/`, `examples/minimal/` and the generator's
-templates still carry the older runner/runtime shape until they migrate
-(`TODOS.md`; see **Trees not yet migrated**, below).
+`docs/design-app-service-types.md`; the worked example is `examples/voice/`,
+`examples/durable-execution/` shows one workflow running another, and
+`examples/minimal/` runs the same kinds on a small in-process engine (see
+**A second engine**, below).
 All of them keep the service body rules above (one `ts.Request` in, one
 `ts.Response` out, `match` only, mappers for every translation) — what differs
 is scope, reach, and what each may depend on.
@@ -1211,8 +1211,9 @@ positional or `name=`; (f) every
 activity, workflow, and signal is reached by a dispatcher; (g) an activity,
 workflow, or signal registers exactly one handler, the one it keeps as
 `self.handler` (a function in `__init__`, at any depth, decorated from or
-passed to `.handler(...)`/`.main(...)` on a `restate` container parameter or
-the attribute holding one); (h) a handler name is unique in its engine container; (i) a
+passed to `.handler(...)`/`.main(...)` on an engine container parameter —
+typed as a `Service`, `Workflow`, or `VirtualObject` of any package but tesser
+— or the attribute holding one); (h) a handler name is unique in its engine container; (i) a
 dispatcher never calls `generic_call`/`generic_send`; (j) a `workflows/` module
 imports no HTTP client (`restate.client`, `httpx`, `aiohttp`, `requests`,
 `urllib.request`, `urllib3`) and reads neither `restate.create_client` nor
@@ -1523,17 +1524,22 @@ class Calls(ts.Component):
   serde at the client/worker rather than at a decorator, and the kinds are
   expected to survive it unchanged.
 
-**Trees not yet migrated.** `examples/durable-execution/` and the generator's
-templates still use the older kinds, and `examples/minimal/` shows none of the
-durable kinds until an in-process engine restores them (`TODOS.md`). There, a
-runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its
+**A second engine.** `examples/minimal/` runs every kind above without
+Restate, on `in_process/` at the tree's root: a small synchronous engine that
+`.tesser-root` skips, so it is a library the adapters import rather than a
+tesser kind. Its `Service` and `Workflow` register a `Handler` object through
+`.handler()`/`.main()`, a dispatcher passes that object to
+`WorkflowContext.service_call` or to `in_process.workflow_call`, and a
+workflow keeps its promises per key, so the same TB085 rows hold. It does not
+journal or suspend: a signal must resolve a promise before the workflow reads
+it, and reading one nobody resolved raises `in_process.PromiseNotResolved`.
+
+**The deprecated kinds.** `ts.Runner` (`adapters/runners/`), `ts.Runtime`
+(`adapters/runtimes/`) and `ts.DeprecatedWorkflow` remain, with their rules,
+until the removal in `TODOS.md`, but no tree uses them. A runner reached its
 far side by literal service and handler name (`generic_call`/`generic_send`,
-`promise("X")`), and a workflow runner implements the application-side
-`ts.DeprecatedWorkflow` protocol, which yields the orchestrator's application
-client per invocation; a runtime (`ts.Runtime`, `adapters/runtimes/`)
-registers the engine's handlers under literals and registers only what a
-runner of its context reaches. TB085 checks those literals against the relay.
-Write new durable code in the shape above, not this one.
+`promise("X")`); a runtime registered the engine's handlers under literals.
+Write durable code in the shape above.
 
 ## Repositories
 
