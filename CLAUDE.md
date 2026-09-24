@@ -85,9 +85,12 @@ test lives fixes what it may import; `TB074` — every implementation module
 carries exactly one sibling test file named for it, and every sibling test
 file names the module beside it; `TB071`/`TB072`/`TB073` — the totality check over
 test modules: every module-level function is a test, a declared `@ts.helper`,
-or a declared `@ts.fake` (`TB071`), a class is a `Test`-prefixed test class
-holding only test methods or a declared `@ts.fake` (`TB072`), and what does
-not classify is a finding;
+a declared `@ts.assembly`, or a declared `@ts.fake` (`TB071`), a class is a
+`Test`-prefixed test class holding only test methods or a declared `@ts.fake`
+(`TB072`), and what does not classify is a finding; a helper mirrors the
+constructor it feeds — the same parameters, each defaulted, passed straight
+through — and an assembly puts a test input together from parts without
+control flow (`TB073`);
 `skills/tesser-build/testing.md`), and the construction norm (`TB080` — a
 value object takes one primitive or exactly one `ts.Spec`; `TB083` — a
 spec initializes its own object and does nothing else — read anywhere but

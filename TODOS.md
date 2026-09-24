@@ -2,6 +2,31 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the TB073 helper-mirror change (#213, 2026-09-24)
+
+- [ ] **Design `@ts.assembly` properly (Chris, 2026-09-24).** It was added
+  minimal, to unblock #213: the analyzer's own tests assemble codebases from
+  a fixed base plus the test's parts, and a helper may no longer do that.
+  Today's rule is only: returns construction data, every parameter
+  defaulted, no control flow, no call into the code under test. Open: whether
+  an assembly may take a record's parts at all, how it composes with
+  helpers, and whether the other shapes with no home (an async context
+  manager that serves an engine, a wired object graph) belong to it.
+- [ ] **A `Mapping` field has no legal helper default.** A dict literal is
+  not a legal default (one mutable instance shared by every call), so a
+  record with a `Mapping` field gets no helper: llmport's `protocol.Tool`
+  (`parameters`) and specs-app's `protocol.HttpRequest` are built inline in
+  their tests, spelling values the tests do not depend on. Needs a ruling:
+  an immutable mapping type on the record, a mapping default the analyzer
+  accepts, or the inline form stays.
+- [ ] **Generated trees skip `pgdatabase`.** Every generated tree's
+  `.tesser-root` carries `skip pgdatabase`, which hides
+  `generator/templates/pgdatabase/test_database.py.tmpl`'s two `@ts.helper`s
+  (`backends`, `backends_settling_to`): async database probes with
+  try/finally and a loop, which TB073 would report. The skip predates #213
+  and is the shape Chris ruled out on 2026-09-24 (never skip code from the
+  rules).
+
 ## Left open by the migrate-new-kinds ship review (2026-09-24)
 
 - [ ] **A started workflow's result is learned only through the store (ruling
@@ -104,9 +129,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   binds the port it serves on instead of probing one, emitted by the
   generator's templates as well, and a `register_deployment` shell function
   used by all four verify arms (durable-execution, minimal, voice, generated
-  trees). TB073 today requires a helper to take defaulted primitives and
-  build a spec or DTO, so the helper needs that rule widened or a kind of its
-  own; the hostile-key test covers only `run_person_joined`;
+  trees). TB073 requires a helper to mirror the spec or DTO it builds and an
+  assembly to have no control flow, so the context manager needs a kind of
+  its own; the hostile-key test covers only `run_person_joined`;
   the concurrency test does not assert which turn the promise kept; an
   activity or workflow whose far side the analyzer cannot read gets no
   container-name check and no finding.

@@ -304,8 +304,8 @@ construction time leaves no relocation to make. The mechanical reason for the
 rule is placement: every rule about a
 function keys on where it sits — `TB040` on which module it belongs to,
 `TB070` on which tier its test lives in, `TB071` on every *module-level*
-function in a test module being a test, a `@ts.helper` or a `@ts.fake`. A
-function nested inside another function has no placement, so none of those
+function in a test module being a test, a `@ts.helper`, an `@ts.assembly` or
+a `@ts.fake`. A function nested inside another function has no placement, so none of those
 rules can read it; it is the one shape that is invisible to the totality
 checks by construction.
 
@@ -2020,5 +2020,6 @@ def test_campaign_links_are_defensive() -> None:
   the role it exercises (`campaign/domain/test_labels.py`), imports what its
   subject may import plus the subject itself; a test double is a hand-written
   `@ts.fake` implementing the port or client it doubles (TB072), never a
-  mocking library (TB030); a builder is a `@ts.helper` that takes defaulted
-  primitives and returns a spec.
+  mocking library (TB030); a builder is a `@ts.helper` that mirrors the
+  constructor of the spec or DTO it returns, defaults every parameter, and
+  passes each one straight through (TB073).

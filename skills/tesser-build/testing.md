@@ -101,14 +101,20 @@ file says *how*, and it is the cross-cutting layer they assume.
    not `test_duplicate` or `test_1`. The name is what a failure report shows;
    it should say what broke without opening the file.
 
-9. **A test helper builds a spec or a DTO. Nothing else.** A helper's entire job
-   is to hold the values a test does not care about, so the test can state only
-   the one or two that make it *that* test. It never returns a constructed
-   domain object, and it never calls anything.
+9. **A test helper builds a spec or a DTO, and mirrors the constructor it
+   feeds.** A helper's entire job is to hold the values a test does not care
+   about, so the test can state only the one or two that make it *that* test.
+   It takes exactly the constructor's parameters — the same names, the same
+   types — each with a default, and its body passes every one of them straight
+   through. It never returns a constructed domain object, and it never calls
+   anything but another helper.
 
    ```python
-   def _spec(slug: str = "spring-sale", active: bool = True) -> ShortLinkSpec:
-       return ShortLinkSpec(slug=slug, target_url="https://a.example", active=active)
+   @ts.helper
+   def _spec(
+       slug: str = "spring-sale", target_url: str = "https://a.example", active: bool = True
+   ) -> ShortLinkSpec:
+       return ShortLinkSpec(slug=slug, target_url=target_url, active=active)
 
 
    def test_deactivate_is_guarded() -> None:
@@ -119,18 +125,36 @@ file says *how*, and it is the cross-cutting layer they assume.
    The construction stays in the test, where the reader can see it. `active=False`
    is the whole reason this test exists, and it is the only argument written.
 
-   Four consequences, each of which is the rule doing its work:
+   The consequences, each of which is the rule doing its work:
 
    - **Never return a constructed domain object.** `_money(...) -> Money` hides
      the construction the test is about; `_spec(...) -> MoneySpec` and
      `Money(_spec(...))` at the call site does not. If a helper returns an
      aggregate, the test that "sets up a campaign" no longer shows what a
      campaign is.
+   - **Mirror the constructor; invent nothing.** Every constructor parameter is
+     a helper parameter with the same name and type, and the body is
+     `return Target(field=field, ...)`. A value written into the body is a value
+     no test can reach — the same defect as a functional option nobody wrote —
+     and a helper that takes a child's attributes (`_order_spec(line_quantity=3)`)
+     has hidden a construction the test needs to show.
+   - **Compose, one helper per object.** A field that holds another spec or
+     record defaults to that record's helper, and a test that cares about the
+     child passes one: `_order_spec(lines=(_line_spec(quantity=3),))`. A
+     default holds values — a literal, an enum member, another helper's result,
+     a domain object or config built from those (`call: Call = Call(_call_spec())`),
+     or a tuple of those — never a record built in place and never a module
+     constant. Write a helper only where a test needs one, above the helper
+     whose default calls it: a default runs once, when the function is
+     defined, and every call shares that instance, which is safe because a
+     record is never changed after construction.
    - **Never call.** A helper that invokes a service, a builder, or a
      composition root is not holding defaults, it is performing the arrangement
      — and the arrangement is what the test needs to show. `_campaign_with_link(svc)`
      reads as one line and hides two service calls; write them out. This is the
-     same defect as a helper that is a pure rename of the thing it wraps.
+     same defect as a helper that is a pure rename of the thing it wraps. A
+     helper's result in a default is not a call of this kind: a helper is pure
+     construction, so it arranges nothing.
    - **Defaults go in keyword arguments, not functional options.** Functional
      options exist to work around Go's lack of keyword arguments; Python has
      them. The ported form declares every field three times (draft class,
@@ -151,6 +175,15 @@ file says *how*, and it is the cross-cutting layer they assume.
    **Assertion helpers are out of scope**, deliberately. A helper that asserts
    is a different tool with different trade-offs; a library can provide those.
    This rule is about construction.
+
+   **An assembly puts a test input together from parts.** When a test needs
+   an input that is not one record — a tree of source files, a codebase handed
+   to an analyzer — built by joining a fixed base with the test's own parts,
+   it is an `@ts.assembly`, not a helper. An assembly returns construction
+   data and defaults every parameter, like a helper, but it may concatenate,
+   format and replace. It has no control flow (no branch, loop, comprehension
+   or assert) and calls nothing in the code under test. The kind is minimal on
+   purpose; its full design is open (`TODOS.md`).
 
 10. **An adapter's dependency is exercised, not doubled.** An adapter exists to
     talk to something the context does not own — a database, an execution
@@ -239,8 +272,9 @@ file says *how*, and it is the cross-cutting layer they assume.
   not is reported. Read the output as a worklist, not an accusation.
 
   Classification is declared, never inferred: a test module holds tests,
-  **`@ts.helper`** builders, and **`@ts.fake`** doubles, and a module-level
-  function that is none of those is a `TB071` finding. Tests come in two
+  **`@ts.helper`** builders, **`@ts.assembly`** inputs, and **`@ts.fake`**
+  doubles, and a module-level function that is none of those is a `TB071`
+  finding. Tests come in two
   shapes: a module-level `test_*` function, or a `test_*` method on a
   **`Test`-prefixed test class** — grouping a subject's scenarios under a
   test class is allowed, and a test class holds *only* test methods (any
@@ -276,13 +310,14 @@ file says *how*, and it is the cross-cutting layer they assume.
   `ts.Port` in `application/ports/`, then fake it. Do not reach for a
   one-method class to satisfy the letter of this rule; reach for the port the
   one-method class is standing in for. `TB073` is the shape
-  half: a declared helper takes only defaulted primitives, has no control
-  flow, and builds a spec. A helper that legitimately builds something else —
-  a wired object graph for an end-to-end test, a JSON payload — declares
-  itself with `@ts.helper` and opts out of the shape rule with a per-instance
-  `# tesser:debt TB073` at each line a finding lands on (the `def`
-  line for parameter/return shape; a control-flow finding reports at the
-  offending statement); the declaration half is never optional.
+  half: a declared helper mirrors the constructor of the spec or DTO it
+  builds, defaults every parameter, and passes each one straight through
+  (rule 9); a declared assembly returns construction data, defaults every
+  parameter, has no control flow, and calls nothing in the code under test.
+  A function that fits neither — a wired object graph for an end-to-end test,
+  an async context manager that serves an engine — has no sanctioned shape
+  yet and is an open question in `TODOS.md`; the declaration half is never
+  optional.
 
   Two scope facts worth knowing before you argue with a finding:
   **a fake's methods are not judged** — every method on a `@ts.fake` class
@@ -367,6 +402,8 @@ is ruled.
 - **The rename in helper's clothing.** `def json_body(resp): return decode_body(resp.body)`
   supplies no default and saves no reader anything — it just adds a name they
   have to learn. If a helper has no default in it, it is not a helper.
-- **The over-supplied call.** `_spec(slug="spring-sale")` when `"spring-sale"`
-  is already the default. The argument reads as significant and is not; it
-  buries the one that is.
+- **The over-supplied call.** `_spec(slug="spring-sale")` in a test that does
+  not depend on the slug. The argument reads as significant and is not; it
+  buries the one that is. The converse holds too: a test that depends on a
+  value passes it, even where it equals the default — otherwise the claim
+  rests on a default the test never stated (*asserting the fixture*, above).
