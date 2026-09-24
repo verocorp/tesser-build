@@ -13,10 +13,10 @@ class FakeClient(client.AlphaClient):
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         return client.AddPartResponse(name=add_part_request.name, standing="kept")
 
-    def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
+    async def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
         return client.CreateWidgetResponse(name=create_widget_request.name)
 
-    def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
+    async def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
         return client.ApproveWidgetResponse(name=approve_widget_request.name)
 
 
@@ -26,10 +26,10 @@ class FakeRejectingClient(client.AlphaClient):
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         raise client.WidgetRejected("empty_name", "a name is never empty")
 
-    def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
+    async def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
         raise client.WidgetRejected("empty_name", "a name is never empty")
 
-    def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
+    async def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
         raise client.WidgetRejected("empty_name", "a name is never empty")
 
 

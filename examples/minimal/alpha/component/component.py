@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import typing
+
 import tesser.component as ts
-import in_process
+import restate
 
 import alpha.adapters.activities as activities
 import alpha.adapters.dispatchers as dispatchers
@@ -12,17 +14,23 @@ import alpha.application.ports as ports
 import alpha.client as client
 import tesser.errors as errors
 
+_RETRY_POLICY: typing.Final[restate.InvocationRetryPolicy] = restate.InvocationRetryPolicy(
+    max_attempts=5, on_max_attempts="pause"
+)
+
 
 class Spec(ts.Spec):
 
-    def __init__(self, storage: str) -> None:
+    def __init__(self, storage: str, ingress: str) -> None:
         self.storage = storage
+        self.ingress = ingress
 
 
 class Config(ts.Config):
 
     def __init__(self, spec: Spec) -> None:
         self.storage = spec.storage
+        self.ingress = spec.ingress
 
 
 class Alpha(ts.Component):
@@ -31,17 +39,23 @@ class Alpha(ts.Component):
         if config.storage != "memory":
             raise errors.invalid("unknown_backend", f"alpha storage {config.storage!r} not supported")
         self._widgets = repositories.MemoryWidgetRepository()
-        self._widget_actions_service = in_process.Service("WidgetActions")
-        self._widget_orchestrator_workflow = in_process.Workflow("WidgetOrchestrator")
-        in_process_register_widget = workflows.InProcessRegisterWidget(
-            self._widget_orchestrator_workflow,
-            activities.InProcessKeepWidget(self._widget_actions_service, application.WidgetActions(self._widgets)),
+        self.widget_actions_service: restate.Service = restate.Service(
+            "WidgetActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
+        )
+        self.widget_orchestrator_workflow: restate.Workflow = restate.Workflow(
+            "WidgetOrchestrator", invocation_retry_policy=_RETRY_POLICY
+        )
+        restate_register_widget = workflows.RestateRegisterWidget(
+            self.widget_orchestrator_workflow,
+            activities.RestateKeepWidget(self.widget_actions_service, application.WidgetActions(self._widgets)),
         )
         self.client: client.AlphaClient = application.AlphaService(
             self._widgets,
             beta_check,
-            dispatchers.InProcessWidgetOrchestratorRelay(
-                in_process_register_widget, dispatchers.InProcessApproveWidget(self._widget_orchestrator_workflow)
+            dispatchers.RestateHttpWidgetOrchestratorRelay(
+                config.ingress,
+                restate_register_widget,
+                dispatchers.RestateApproveWidget(self.widget_orchestrator_workflow),
             ),
         )
 

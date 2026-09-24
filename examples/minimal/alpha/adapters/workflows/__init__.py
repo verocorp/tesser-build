@@ -1,1 +1,1 @@
-from alpha.adapters.workflows.in_process_register_widget import InProcessRegisterWidget as InProcessRegisterWidget
+from alpha.adapters.workflows.restate_register_widget import RestateRegisterWidget as RestateRegisterWidget

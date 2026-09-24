@@ -12,7 +12,7 @@ class FakeWidgetOrchestratorSignalRelay(relays.WidgetOrchestratorSignalRelay):
     def __init__(self, steps: list[str]) -> None:
         self._steps = steps
 
-    def await_approve_widget(
+    async def await_approve_widget(
         self, await_approve_widget_request: relays.AwaitApproveWidgetRequest
     ) -> relays.AwaitApproveWidgetResponse:
         self._steps.append("approved " + await_approve_widget_request.name)
@@ -25,23 +25,17 @@ class FakeWidgetActionsRelay(relays.WidgetActionsRelay):
     def __init__(self, steps: list[str]) -> None:
         self._steps = steps
 
-    def run_keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
+    async def run_keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
         self._steps.append("kept " + keep_widget_request.name)
         return relays.KeepWidgetResponse(name=keep_widget_request.name)
 
 
 class TestWidgetOrchestrator:
 
-    def test_registering_answers_the_widget_the_action_kept(self) -> None:
+    async def test_registering_waits_for_the_approval_then_keeps_the_widget_and_answers_its_name(self) -> None:
         steps: list[str] = []
-        register_widget_response = orchestrators.WidgetOrchestrator(
+        register_widget_response = await orchestrators.WidgetOrchestrator(
             FakeWidgetOrchestratorSignalRelay(steps), FakeWidgetActionsRelay(steps)
         ).register_widget(relays.RegisterWidgetRequest(name="a"))
         assert register_widget_response.name == "a"
-
-    def test_registering_waits_for_the_approval_before_it_keeps_the_widget(self) -> None:
-        steps: list[str] = []
-        orchestrators.WidgetOrchestrator(
-            FakeWidgetOrchestratorSignalRelay(steps), FakeWidgetActionsRelay(steps)
-        ).register_widget(relays.RegisterWidgetRequest(name="a"))
         assert steps == ["approved a", "kept a"]

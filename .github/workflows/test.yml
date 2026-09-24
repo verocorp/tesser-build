@@ -175,11 +175,21 @@ jobs:
         run: scripts/verify ports
 
   minimal-example:
-    # Gates the minimally conforming tree at the same bar: tessercheck zero
-    # findings + mypy --strict + pytest. Every placement, every allowed import,
-    # every ts.* block, the smallest body that passes.
-    name: minimal example (tessercheck + mypy --strict + pytest)
+    # Gates the minimal tree at the same bar: tessercheck zero findings +
+    # mypy --strict + pytest against Restate. Every tesser role and object,
+    # conformant, with the least business logic that shows how things work;
+    # alpha's durable kinds run on the Restate service container, which dials
+    # the endpoint the arm serves on the runner through host.docker.internal.
+    name: minimal example (tessercheck + mypy --strict + pytest against Restate)
     runs-on: ubuntu-latest
+    services:
+      restate:
+        image: restatedev/restate:1.7
+        ports:
+          - 8080:8080
+          - 9070:9070
+        options: >-
+          --add-host=host.docker.internal:host-gateway
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
@@ -187,7 +197,10 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/minimal/requirements-dev.txt
-      - name: examples/minimal — tessercheck + mypy --strict + pytest
+      - name: examples/minimal — tessercheck + mypy --strict + pytest against Restate
+        env:
+          RESTATE_INGRESS: http://localhost:8080
+          RESTATE_ADMIN: http://localhost:9070
         run: scripts/verify minimal
 
   durable-execution-example:

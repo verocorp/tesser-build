@@ -1,1 +1,1 @@
-from alpha.adapters.activities.in_process_activities import InProcessKeepWidget as InProcessKeepWidget
+from alpha.adapters.activities.restate_activities import RestateKeepWidget as RestateKeepWidget

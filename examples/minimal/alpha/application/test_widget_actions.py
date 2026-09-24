@@ -20,13 +20,10 @@ class FakeWidgetRepository(ports.WidgetRepository):
 
 class TestWidgetActions:
 
-    def test_keeping_answers_the_named_widget(self) -> None:
-        keep_widget_response = application.WidgetActions(FakeWidgetRepository()).keep_widget(
+    def test_keeping_saves_the_widget_once_standing_kept_and_answers_its_name(self) -> None:
+        fake_widget_repository = FakeWidgetRepository()
+        keep_widget_response = application.WidgetActions(fake_widget_repository).keep_widget(
             relays.KeepWidgetRequest(name="a")
         )
         assert keep_widget_response.name == "a"
-
-    def test_a_kept_widget_is_saved_once_standing_kept(self) -> None:
-        fake_widget_repository = FakeWidgetRepository()
-        application.WidgetActions(fake_widget_repository).keep_widget(relays.KeepWidgetRequest(name="a"))
         assert fake_widget_repository.saved == [("a", "kept")]

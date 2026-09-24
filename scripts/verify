@@ -109,18 +109,54 @@ run_ports() {
   pytest -q || return 1
 }
 
-# The minimally conforming tree: two contexts, a kernel, an exported kernel,
-# protocol, srv, and app, each module importing everything its placement
-# allows and declaring every ts.* block, with the smallest body that passes.
-# It does nothing useful on purpose — it is the rulebook rendered as code.
+# The minimal tree: a small app that uses every tesser role and object in a
+# conformant way, with about one test per sibling test file and the least
+# business logic that shows how things work. Two contexts, a kernel, an
+# exported kernel, protocol, srv, and app; alpha's durable kinds run on
+# Restate. The arm serves srv/restate and registers it with the Restate admin
+# API for the root-tier test, and each activities, workflows, and dispatchers
+# test serves its own registrations under fresh names at MINIMAL_CALLBACK_HOST.
+# CI provides a Restate service container; locally the defaults are a server
+# of its own on 58080/59070:
+#
+#   docker run -d --name tesser-minimal-restate -p 58080:8080 -p 59070:9070 \
+#     --add-host=host.docker.internal:host-gateway restatedev/restate:1.7
 run_minimal() {
   cd "$ROOT/examples/minimal" || return 1
+  local ingress="${RESTATE_INGRESS:-http://localhost:58080}"
+  local admin="${RESTATE_ADMIN:-http://localhost:59070}"
+  local port="${MINIMAL_DEPLOYMENT_PORT:-9085}"
+  local callback_host="${MINIMAL_CALLBACK_HOST:-host.docker.internal}"
+  local deployment="${MINIMAL_DEPLOYMENT:-http://$callback_host:$port}"
   step "tessercheck (zero findings over the whole tree)"
   tessercheck_tree "$PWD" || return 1
   step "mypy --strict"
   MYPYPATH=.:../../tesser-py mypy --strict kernel shared protocol alpha beta app srv tests conftest.py || return 1
-  step "pytest"
-  pytest -q || return 1
+  step "serve the Restate endpoint on :$port and register it at $admin"
+  (exec env ALPHA_STORAGE=memory BETA_KEY=k RESTATE_INGRESS="$ingress" PYTHONPATH=.:../../tesser-py \
+    python3 -m srv.restate.main "0.0.0.0:$port") &
+  local host=$!
+  local registered=1
+  for _ in $(seq 1 50); do
+    if curl -sf -X POST "$admin/deployments" -H 'content-type: application/json' \
+      -d "{\"uri\": \"$deployment\", \"force\": true}" >/dev/null; then
+      registered=0
+      break
+    fi
+    sleep 0.2
+  done
+  if [ "$registered" -ne 0 ]; then
+    echo "minimal: could not register $deployment with $admin" >&2
+    kill "$host" 2>/dev/null
+    wait "$host" 2>/dev/null
+    return 1
+  fi
+  step "pytest (against Restate at $ingress)"
+  RESTATE_INGRESS="$ingress" RESTATE_ADMIN="$admin" MINIMAL_CALLBACK_HOST="$callback_host" pytest -q
+  local status=$?
+  kill -INT "$host" 2>/dev/null
+  wait "$host" 2>/dev/null
+  return "$status"
 }
 
 # The durable-execution example: one context whose workflows run on Restate.

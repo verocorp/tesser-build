@@ -52,13 +52,13 @@ class FakeWidgetOrchestratorRelay(relays.WidgetOrchestratorRelay):
         self.registered: list[str] = []
         self.approved: list[str] = []
 
-    def run_register_widget(
+    async def run_register_widget(
         self, register_widget_request: relays.RegisterWidgetRequest
     ) -> relays.RegisterWidgetResponse:
         self.registered.append(register_widget_request.name)
         return relays.RegisterWidgetResponse(name=register_widget_request.name)
 
-    def run_approve_widget(self, approve_widget_request: relays.ApproveWidgetRequest) -> relays.ApproveWidgetResponse:
+    async def run_approve_widget(self, approve_widget_request: relays.ApproveWidgetRequest) -> relays.ApproveWidgetResponse:
         self.approved.append(approve_widget_request.name)
         return relays.ApproveWidgetResponse(name=approve_widget_request.name)
 
@@ -115,19 +115,10 @@ class TestAlphaService:
         assert raised.value.code == "empty_identity"
         assert fake_widget_repository.saved == []
 
-    def test_create_registers_the_widget_through_its_relay_once_and_answers_its_name(self) -> None:
-        fake_widget_repository = FakeWidgetRepository()
-        fake_widget_orchestrator_relay = FakeWidgetOrchestratorRelay()
-        alpha_service = application.AlphaService(fake_widget_repository, FakeOkBetaCheck(), fake_widget_orchestrator_relay)
-        create_widget_response = alpha_service.create_widget(client.CreateWidgetRequest(name="a"))
-        assert create_widget_response.name == "a"
-        assert fake_widget_orchestrator_relay.registered == ["a"]
-        assert fake_widget_repository.saved == []
-
-    def test_approve_signals_the_widget_s_registration_once_and_answers_its_name(self) -> None:
+    async def test_approve_then_create_each_reach_the_widget_s_orchestrator_once(self) -> None:
         fake_widget_orchestrator_relay = FakeWidgetOrchestratorRelay()
         alpha_service = application.AlphaService(FakeWidgetRepository(), FakeOkBetaCheck(), fake_widget_orchestrator_relay)
-        approve_widget_response = alpha_service.approve_widget(client.ApproveWidgetRequest(name="a"))
-        assert approve_widget_response.name == "a"
-        assert fake_widget_orchestrator_relay.approved == ["a"]
-        assert fake_widget_orchestrator_relay.registered == []
+        approve_widget_response = await alpha_service.approve_widget(client.ApproveWidgetRequest(name="a"))
+        create_widget_response = await alpha_service.create_widget(client.CreateWidgetRequest(name="a"))
+        assert (approve_widget_response.name, create_widget_response.name) == ("a", "a")
+        assert (fake_widget_orchestrator_relay.approved, fake_widget_orchestrator_relay.registered) == (["a"], ["a"])

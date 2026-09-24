@@ -17,7 +17,7 @@ class FakeBetaCheck(ports.BetaCheck):
 class TestConfig:
 
     def test_a_config_carries_its_spec(self) -> None:
-        spec = component.Spec(storage="memory")
+        spec = component.Spec(storage="memory", ingress="http://localhost:8080")
         config = component.Config(spec)
         assert config.storage == spec.storage
 
@@ -25,13 +25,17 @@ class TestConfig:
 class TestAlpha:
 
     def test_the_wired_client_adds_a_widget(self) -> None:
-        alpha = component.Alpha(component.Config(component.Spec(storage="memory")), FakeBetaCheck())
+        alpha = component.Alpha(component.Config(component.Spec(storage="memory", ingress="http://localhost:8080")), FakeBetaCheck())
         add_part_response = alpha.client.add_part(client.AddPartRequest(name="a", part="p"))
         assert add_part_response.name == "a"
 
-    def test_the_wired_client_creates_a_widget_its_name_was_approved_for(self) -> None:
-        alpha = component.Alpha(component.Config(component.Spec(storage="memory")), FakeBetaCheck())
-        approve_widget_response = alpha.client.approve_widget(client.ApproveWidgetRequest(name="a"))
-        create_widget_response = alpha.client.create_widget(client.CreateWidgetRequest(name="a"))
-        assert approve_widget_response.name == "a"
-        assert create_widget_response.name == "a"
+    def test_only_the_workflow_faces_the_ingress_and_each_container_holds_its_handlers(self) -> None:
+        alpha = component.Alpha(component.Config(component.Spec(storage="memory", ingress="http://localhost:8080")), FakeBetaCheck())
+        declared = [
+            (registered.name, registered.ingress_private, sorted(registered.handlers))
+            for registered in (alpha.widget_actions_service, alpha.widget_orchestrator_workflow)
+        ]
+        assert declared == [
+            ("WidgetActions", True, ["keep_widget"]),
+            ("WidgetOrchestrator", None, ["approve_widget", "register_widget"]),
+        ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import typing
 
 import tesser.application as ts
@@ -19,8 +20,18 @@ class AwaitApproveWidgetResponse(ts.Response):
         self.name = name
 
 
+class AwaitApproveWidgetResponseSnapshot(ts.Serde):
+
+    def serialize(self, await_approve_widget_response: AwaitApproveWidgetResponse) -> bytes:
+        return json.dumps({"name": await_approve_widget_response.name}).encode()
+
+    def deserialize(self, buf: bytes) -> AwaitApproveWidgetResponse:
+        snapshot = json.loads(buf)
+        return AwaitApproveWidgetResponse(name=snapshot["name"])
+
+
 class WidgetOrchestratorSignalRelay(ts.Relay, typing.Protocol):
 
-    def await_approve_widget(
+    async def await_approve_widget(
         self, await_approve_widget_request: AwaitApproveWidgetRequest
     ) -> AwaitApproveWidgetResponse: ...

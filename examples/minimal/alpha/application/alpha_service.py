@@ -100,14 +100,14 @@ class AlphaService(ts.ApplicationService):
         self._widget_repository.save_widget(MapToSaveWidgetRequest(widget.identity, widget.standing))
         return MapToAddPartResponse(widget)
 
-    def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
+    async def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
         name = domain.Name(create_widget_request.name)
-        register_widget_response = self._widget_orchestrator_relay.run_register_widget(
+        register_widget_response = await self._widget_orchestrator_relay.run_register_widget(
             MapToRegisterWidgetRequest(name)
         )
         return MapToCreateWidgetResponse(register_widget_response)
 
-    def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
+    async def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
         name = domain.Name(approve_widget_request.name)
-        approve_widget_response = self._widget_orchestrator_relay.run_approve_widget(MapToApproveWidgetRequest(name))
+        approve_widget_response = await self._widget_orchestrator_relay.run_approve_widget(MapToApproveWidgetRequest(name))
         return MapToApproveWidgetResponse(approve_widget_response)

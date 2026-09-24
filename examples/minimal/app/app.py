@@ -53,12 +53,15 @@ class EnvConfigRepository(AppConfigRepository):
         storage = os.environ.get("ALPHA_STORAGE")
         if storage is None:
             raise errors.invalid("missing_env", "ALPHA_STORAGE is required")
+        ingress = os.environ.get("RESTATE_INGRESS")
+        if ingress is None:
+            raise errors.invalid("missing_env", "RESTATE_INGRESS is required")
         key = os.environ.get("BETA_KEY")
         if key is None:
             raise errors.invalid("missing_env", "BETA_KEY is required")
         return AppConfig(
             Spec(
-                alpha=alpha_component.Config(alpha_component.Spec(storage=storage)),
+                alpha=alpha_component.Config(alpha_component.Spec(storage=storage, ingress=ingress)),
                 beta=beta_component.Config(beta_component.Spec(key=key)),
             )
         )

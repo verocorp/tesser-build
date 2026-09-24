@@ -18,6 +18,6 @@ class FakeBetaCheck(ports.BetaCheck):
 class TestAlphaContext:
 
     def test_a_cli_add_reaches_the_wired_service(self) -> None:
-        alpha = component.Alpha(component.Config(component.Spec(storage="memory")), FakeBetaCheck())
+        alpha = component.Alpha(component.Config(component.Spec(storage="memory", ingress="http://localhost:8080")), FakeBetaCheck())
         cli_response = handlers.Handler(alpha.client).add_part(protocol.CliRequest(args=("a", "p")))
         assert cli_response.line.text == "a"
