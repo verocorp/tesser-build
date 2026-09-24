@@ -154,17 +154,25 @@ relay's.
 **The analyzer derives every name from those references** (TB085). (a) A
 relay is named for the far side its dispatchers reach through
 `self._x.handler`. (b) `run_X`/`start_X` passes the handler `def X`, with no
-differing `name=`. (c) `run_` waits (`*_call`) and `start_` does not
-(`*_send`). (d) `await_X` and the signal named `X` use a relays constant equal
-to `"X"`. (e) Each engine container is named for its far side, as a literal.
+differing name, positional or `name=`. (c) `run_` waits (`*_call`) and `start_` does not
+(`*_send`); an activity's handler is reached with `service_*`, a workflow's or
+a signal's with `workflow_*`. (d) `await_X` and the signal named `X` use a relays constant equal
+to `"X"`. (e) Each engine container is named for its far side, as a literal, positional or `name=`.
 (f) Every activity, workflow, and signal is reached by a dispatcher, so the
 engine holds no registration nobody calls. (g) An activity, workflow, or signal
-registers exactly one handler, the one it keeps as `self.handler`. (h) A handler
+registers exactly one handler, the one it keeps as `self.handler`: any function
+in `__init__`, at any depth, decorated from or passed to `.handler(...)`/`.main(...)`
+on a `restate` container parameter or the attribute holding one. (h) A handler
 name is unique in its engine container, because the SDK keeps one handler per
 name. (i) A dispatcher never calls `generic_call`/`generic_send`. (j) A
-`workflows/` module imports neither `restate.client` nor `httpx` (TB060): a call
-from inside an invocation goes through its context, where the engine journals
-it, not over HTTP, where it runs again on every replay. A signal relay's name is derived
+`workflows/` module imports no HTTP client (`restate.client`, `httpx`,
+`aiohttp`, `requests`, `urllib.request`, `urllib3`) and reads neither
+`restate.create_client` nor `restate.RestateClient` (TB060): a call from inside
+an invocation goes through its context, where the engine journals it, not over
+HTTP, where it runs again on every replay. (k) An activity's handler calls its
+application client's method named for the operation. (l) A signal's handler
+calls `.promise(...).resolve(...)`. (m) A relays constant is assigned once,
+because the analyzer reads one value and Python keeps the last. A signal relay's name is derived
 today only through a `run_` operation that reaches its signal; an
 `await_`-only relay is not derived yet (`TODOS.md`).
 

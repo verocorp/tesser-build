@@ -1203,15 +1203,24 @@ service or handler name.
 (a) a relay is named for the far side its dispatchers reach through
 `self._x.handler` — an activity's actions class, a workflow's orchestrator, or
 a signal's workflow; (b) `run_X`/`start_X` passes the handler `def X`, with no
-differing `name=`; (c) `run_` waits (`*_call`) and `start_` does not
-(`*_send`); (d) `await_X` and the signal named `X` use a relays constant equal
-to `"X"`; (e) each engine container is named for its far side; (f) every
+differing name, positional or `name=`; (c) `run_` waits (`*_call`) and `start_` does not
+(`*_send`), and an activity's handler is reached with `service_*`, a
+workflow's or a signal's with `workflow_*`; (d) `await_X` and the signal named `X` use a relays constant equal
+to `"X"`; (e) each engine container is named for its far side, as a literal,
+positional or `name=`; (f) every
 activity, workflow, and signal is reached by a dispatcher; (g) an activity,
 workflow, or signal registers exactly one handler, the one it keeps as
-`self.handler`; (h) a handler name is unique in its engine container; (i) a
+`self.handler` (a function in `__init__`, at any depth, decorated from or
+passed to `.handler(...)`/`.main(...)` on a `restate` container parameter or
+the attribute holding one); (h) a handler name is unique in its engine container; (i) a
 dispatcher never calls `generic_call`/`generic_send`; (j) a `workflows/` module
-imports neither `restate.client` nor `httpx` (TB060), because a call from
-inside an invocation goes through its context, where the engine journals it. A signal relay's
+imports no HTTP client (`restate.client`, `httpx`, `aiohttp`, `requests`,
+`urllib.request`, `urllib3`) and reads neither `restate.create_client` nor
+`restate.RestateClient` (TB060), because a call from inside an invocation goes
+through its context, where the engine journals it; (k) an activity's handler
+calls its application client's method named for the operation; (l) a signal's
+handler calls `.promise(...).resolve(...)`; (m) a relays constant is assigned
+once. A signal relay's
 name is derived today only through a `run_` operation that reaches its signal;
 an `await_`-only relay is not derived yet (`TODOS.md`).
 
