@@ -1,3 +1,4 @@
 app
 export shared
 skip memoryclient
+skip in_process

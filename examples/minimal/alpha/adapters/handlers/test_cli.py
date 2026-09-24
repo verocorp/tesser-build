@@ -16,6 +16,9 @@ class FakeClient(client.AlphaClient):
     def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
         return client.CreateWidgetResponse(name=create_widget_request.name)
 
+    def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
+        return client.ApproveWidgetResponse(name=approve_widget_request.name)
+
 
 @ts.fake
 class FakeRejectingClient(client.AlphaClient):
@@ -24,6 +27,9 @@ class FakeRejectingClient(client.AlphaClient):
         raise client.WidgetRejected("empty_name", "a name is never empty")
 
     def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
+        raise client.WidgetRejected("empty_name", "a name is never empty")
+
+    def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
         raise client.WidgetRejected("empty_name", "a name is never empty")
 
 

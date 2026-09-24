@@ -1,3 +1,5 @@
+from alpha.client.client import ApproveWidgetRequest as ApproveWidgetRequest
+from alpha.client.client import ApproveWidgetResponse as ApproveWidgetResponse
 from alpha.client.client import AddPartRequest as AddPartRequest
 from alpha.client.client import AddPartResponse as AddPartResponse
 from alpha.client.client import AlphaClient as AlphaClient

@@ -5,6 +5,7 @@ import typing
 import tesser.application as ts
 
 import alpha.application.ports as ports
+import alpha.application.relays as relays
 import alpha.client as client
 import alpha.domain as domain
 import tesser.errors as errors
@@ -46,17 +47,41 @@ class MapToAddPartResponse(ts.Mapper, client.AddPartResponse):
         super().__init__(name=str(widget.identity), standing=str(widget.standing))
 
 
+class MapToRegisterWidgetRequest(ts.Mapper, relays.RegisterWidgetRequest):
+
+    def __init__(self, name: domain.Name) -> None:
+        super().__init__(name=str(name))
+
+
 class MapToCreateWidgetResponse(ts.Mapper, client.CreateWidgetResponse):
 
-    def __init__(self, save_widget_response: ports.SaveWidgetResponse) -> None:
-        super().__init__(name=save_widget_response.name)
+    def __init__(self, register_widget_response: relays.RegisterWidgetResponse) -> None:
+        super().__init__(name=register_widget_response.name)
+
+
+class MapToApproveWidgetRequest(ts.Mapper, relays.ApproveWidgetRequest):
+
+    def __init__(self, name: domain.Name) -> None:
+        super().__init__(name=str(name))
+
+
+class MapToApproveWidgetResponse(ts.Mapper, client.ApproveWidgetResponse):
+
+    def __init__(self, approve_widget_response: relays.ApproveWidgetResponse) -> None:
+        super().__init__(name=approve_widget_response.name)
 
 
 class AlphaService(ts.ApplicationService):
 
-    def __init__(self, widget_repository: ports.WidgetRepository, beta_check: ports.BetaCheck) -> None:
+    def __init__(
+        self,
+        widget_repository: ports.WidgetRepository,
+        beta_check: ports.BetaCheck,
+        widget_orchestrator_relay: relays.WidgetOrchestratorRelay,
+    ) -> None:
         self._widget_repository = widget_repository
         self._beta_check = beta_check
+        self._widget_orchestrator_relay = widget_orchestrator_relay
 
     def add_part(self, add_part_request: client.AddPartRequest) -> client.AddPartResponse:
         try:
@@ -77,6 +102,12 @@ class AlphaService(ts.ApplicationService):
 
     def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
         name = domain.Name(create_widget_request.name)
-        standing = domain.Standing("kept")
-        save_widget_response = self._widget_repository.save_widget(MapToSaveWidgetRequest(name, standing))
-        return MapToCreateWidgetResponse(save_widget_response)
+        register_widget_response = self._widget_orchestrator_relay.run_register_widget(
+            MapToRegisterWidgetRequest(name)
+        )
+        return MapToCreateWidgetResponse(register_widget_response)
+
+    def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
+        name = domain.Name(approve_widget_request.name)
+        approve_widget_response = self._widget_orchestrator_relay.run_approve_widget(MapToApproveWidgetRequest(name))
+        return MapToApproveWidgetResponse(approve_widget_response)

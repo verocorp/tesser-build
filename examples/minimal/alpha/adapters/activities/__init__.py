@@ -1,0 +1,1 @@
+from alpha.adapters.activities.in_process_activities import InProcessKeepWidget as InProcessKeepWidget

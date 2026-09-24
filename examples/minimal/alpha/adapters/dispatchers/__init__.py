@@ -1,0 +1,2 @@
+from alpha.adapters.dispatchers.in_process_widget_orchestrator_relay import InProcessApproveWidget as InProcessApproveWidget
+from alpha.adapters.dispatchers.in_process_widget_orchestrator_relay import InProcessWidgetOrchestratorRelay as InProcessWidgetOrchestratorRelay

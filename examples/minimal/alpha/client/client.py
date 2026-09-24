@@ -31,6 +31,18 @@ class CreateWidgetResponse(ts.Response):
         self.name = name
 
 
+class ApproveWidgetRequest(ts.Request):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class ApproveWidgetResponse(ts.Response):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class WidgetRejected(ts.Error):
 
     def __init__(self, code: str, message: str) -> None:
@@ -47,3 +59,5 @@ class AlphaClient(ts.Client, typing.Protocol):
     def add_part(self, add_part_request: AddPartRequest) -> AddPartResponse: ...
 
     def create_widget(self, create_widget_request: CreateWidgetRequest) -> CreateWidgetResponse: ...
+
+    def approve_widget(self, approve_widget_request: ApproveWidgetRequest) -> ApproveWidgetResponse: ...

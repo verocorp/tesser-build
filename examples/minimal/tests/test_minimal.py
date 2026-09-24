@@ -24,3 +24,9 @@ class TestWiredApp:
         minimal_app = app.MinimalApp(app.AppConfig(spec))
         add_part_response = minimal_app.alpha.client.add_part(alpha_client.AddPartRequest(name="z", part="z"))
         assert add_part_response.standing == "released"
+
+    def test_a_widget_whose_name_was_approved_is_created_through_the_engine(self) -> None:
+        spec = app.Spec(alpha_component.Config(alpha_component.Spec("memory")), beta_component.Config(beta_component.Spec("a")))
+        minimal_app = app.MinimalApp(app.AppConfig(spec))
+        minimal_app.alpha.client.approve_widget(alpha_client.ApproveWidgetRequest(name="w"))
+        assert minimal_app.alpha.client.create_widget(alpha_client.CreateWidgetRequest(name="w")).name == "w"
