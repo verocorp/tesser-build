@@ -291,16 +291,6 @@ trees and are not implemented: "name what you compute" would take 79 sites,
 repositories), and "one call on the backend per method" 1. "An adapter raises
 no domain kind" was rejected outright. The numbers are in `TODOS.md`.
 
-**A second engine.** `examples/minimal/` runs every kind above on a small
-synchronous in-process engine, `in_process/` at the tree's root, which
-`.tesser-root` skips as it skips `memoryclient/`: a library the adapters
-import, not a tesser kind. Its `Service` and `Workflow` register a `Handler`
-object through `.handler()`/`.main()`, a caller passes that object to
-`WorkflowContext.service_call` or to the module's `workflow_call`, and a
-workflow keeps its promises per key, so the same TB085 rows hold. It does not
-journal or suspend: a signal must resolve a promise before the workflow reads
-it, and reading one nobody resolved raises.
-
 **The deprecated kinds.** No tree uses them. Their rules still run until the
 removal in `TODOS.md`: a runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its far side by literal
 service and handler name (`generic_call`/`generic_send`, `promise("X")`), and a

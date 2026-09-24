@@ -1109,8 +1109,8 @@ application kinds that are **not** application services, and four adapter
 kinds that carry the engine. The rules and the why are
 `docs/design-app-service-types.md`; the worked example is `examples/voice/`,
 `examples/durable-execution/` shows one workflow running another, and
-`examples/minimal/` runs the same kinds on a small in-process engine (see
-**A second engine**, below).
+`examples/minimal/` shows each kind once, with a signal the workflow waits
+on.
 All of them keep the service body rules above (one `ts.Request` in, one
 `ts.Response` out, `match` only, mappers for every translation) — what differs
 is scope, reach, and what each may depend on.
@@ -1526,16 +1526,6 @@ class Calls(ts.Component):
   on a durable leg are append-only until it is); the Temporal mirror binds its
   serde at the client/worker rather than at a decorator, and the kinds are
   expected to survive it unchanged.
-
-**A second engine.** `examples/minimal/` runs every kind above without
-Restate, on `in_process/` at the tree's root: a small synchronous engine that
-`.tesser-root` skips, so it is a library the adapters import rather than a
-tesser kind. Its `Service` and `Workflow` register a `Handler` object through
-`.handler()`/`.main()`, a dispatcher passes that object to
-`WorkflowContext.service_call` or to `in_process.workflow_call`, and a
-workflow keeps its promises per key, so the same TB085 rows hold. It does not
-journal or suspend: a signal must resolve a promise before the workflow reads
-it, and reading one nobody resolved raises `in_process.PromiseNotResolved`.
 
 **The deprecated kinds.** `ts.Runner` (`adapters/runners/`), `ts.Runtime`
 (`adapters/runtimes/`) and `ts.DeprecatedWorkflow` remain, with their rules,

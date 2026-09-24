@@ -10,10 +10,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   ingress, so nobody who reaches the ingress can place a call or write a
   record around `CallService`. Nothing checks it. Add a rule that a container
   an activity registers into is built with `ingress_private=True`, and that a
-  workflow's container is not. durable-execution and the generator's
-  templates set it too now (2026-09-24), and their component tests assert it;
-  minimal's `in_process` engine has no ingress and no such flag, so the rule
-  has to name the engines that have one.
+  workflow's container is not. durable-execution, minimal and the
+  generator's templates set it too now (2026-09-24), and their component
+  tests assert it.
 - [ ] **`place_call` can wait forever on a paused workflow.** The HTTP
   dispatcher's `run_conduct_call` has no read limit (`read=None`), and an
   activity that exhausts its 5 attempts pauses the workflow
@@ -80,10 +79,12 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   - the generator's templates: `Restate<Record>`, `Restate<Conduct>`,
     `RestateHttp<Aggregate>OrchestratorRelay`; every spec generates and
     passes its gates.
-  - `examples/minimal/`: every durable kind again, over `in_process/`, a small
-    synchronous engine at the tree's root that `.tesser-root` skips. TB085's
-    registration rows now accept a container of any engine package but
-    tesser (they accepted only `restate`).
+  - `examples/minimal/`: every durable kind again, on Restate (Chris,
+    2026-09-24: an in-process engine under a `.tesser-root` `skip` was
+    rejected — no `skip` line for code, ever). `approve_widget` is a signal;
+    `create_widget` runs a workflow that waits on it, then keeps the widget.
+    `memoryclient/` and its `skip` went too: `MemoryKeyRepository` holds its
+    keys itself.
 - [ ] **Delete the deprecated durable kinds (follow-up to the migration
   above).** Delete `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`, the
   `runners`/`runtimes` kind packages, and their
@@ -94,13 +95,6 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `docs/design-operation-naming.md` still names runners and runtimes
   throughout (`RestateIngressOrderOrchestratorRelay`); it is a record of
   rulings, so decide whether it is rewritten or marked historical.
-- [ ] **minimal's in-process engine does not suspend.** `in_process` reads a
-  promise only if a signal resolved it first and raises
-  `PromiseNotResolved` otherwise, so minimal's story is "approve a widget's
-  name, then create it". A workflow that waits for an event that arrives
-  later needs the engine to suspend and resume, by a journal and replay
-  (synchronous) or by asyncio (which would make minimal async). Decide
-  whether minimal should show that.
 - [ ] **TB085 does not derive the name of a signal relay reached only by
   `await_` (PR #210 gap).** A relay's far side is derived from the handlers
   its dispatchers pass; an `await_` operation passes no handler, it reads a
