@@ -1411,7 +1411,7 @@ class Calls(ts.Component):
     def __init__(self, config: Config, database: pgdatabase_database.Database) -> None:
         self._postgres_call_store = repositories.PostgresCallStore(database)
         self.call_actions_service: restate.Service = restate.Service(
-            "CallActions", invocation_retry_policy=_RETRY_POLICY
+            "CallActions", ingress_private=True, invocation_retry_policy=_RETRY_POLICY
         )
         ...
         self.call_orchestrator_workflow: restate.Workflow = restate.Workflow(
