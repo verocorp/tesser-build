@@ -5,6 +5,51 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## [0.5.0.0] - 2026-09-24
+
+A test helper now mirrors the constructor it feeds (#213). A test states
+exactly the values it depends on, and everything else comes from a helper
+that takes the constructor's own parameters, so no helper makes up a value
+or takes a child's attributes. Test inputs put together from parts get
+their own declared kind, `@ts.assembly`.
+
+### Changed
+- **TB073: a helper mirrors the constructor it feeds.** A `@ts.helper`
+  takes exactly the parameters of the spec or DTO it returns, by the same
+  name and type (types are compared after resolving every name to the
+  module that defines it). Its body is one construction call that passes
+  each parameter through by keyword, with no literal, conversion or nested
+  construction. A default is a literal, an enum member, a same-module
+  helper's or assembly's result, a value object or config built from those,
+  or a tuple of those. A record in a default comes only from its helper. A
+  parameter that holds an entity or aggregate takes no default, because a
+  default is one instance that every call shares. The rule it replaces,
+  "a helper takes only defaulted primitives", forced helpers to make up an
+  enum or child records, or to take the child's fields.
+- **TB085 no longer names a helper's record parameters after their class,**
+  because TB073 now fixes those names to the constructor's fields.
+- **Every tree is migrated.** 47 helpers in layout, generator, specs-app,
+  tessercheck-py and six examples now mirror their targets. Helpers that
+  differed only in one value (`_found_`/`_missing_`, `_malformed`) merge
+  into one helper that the test overrides. Values a test asserts, which
+  used to hide in a helper's body, are now passed by the test.
+- **testing.md rule 9** teaches the new shape. Its example no longer hides
+  a field in the helper body. "The over-supplied call" now asks whether
+  the test depends on the value, not whether the value equals the default.
+
+### Added
+- **`tesser.testing.assembly` (`@ts.assembly`)** declares a test-module
+  function that puts a test input together from parts, such as the
+  codebases the analyzer's own tests build. An assembly returns
+  construction data, defaults every parameter, may concatenate and replace,
+  has no control flow, and calls nothing in the code under test. The
+  analyzer's fixtures (`_spec`, `_kinds_spec`, `_engine_kinds_spec` and
+  others) are now assemblies. `_engine_kinds_spec` applies its edits with
+  chained `.replace` instead of asserts and loops. A new test checks that
+  every text an engine-kinds test replaces is still in the tree it edits.
+- **The analyzer keeps a table of constructors,** so TB073 can read a
+  record's parameters across modules.
+
 ## [0.4.0.0] - 2026-09-24
 
 Every durable tree now runs on activities, workflows, signals and
