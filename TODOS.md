@@ -73,10 +73,10 @@ Deferred work with context. Each entry carries enough for a cold pickup.
 - [ ] **voice hardening and test debt.** (e) `dial_person` and `say` are
   at-least-once under the Restate retry policy but LiveKit's
   `create_dispatch` and the `say` RPC are not idempotent: a retried dispatch
-  sends a second agent job to the room, a retried say speaks twice. (f) The
-  voice runner and ingress tests still fake Restate (the carried TB072/TB085
-  markers) where durable-execution and the generator run the same shapes
-  against the real engine and assert `sys_invocation`; migrate them. (g)
+  sends a second agent job to the room, a retried say speaks twice. (f) ~~The
+  voice runner and ingress tests still fake Restate~~ Done in PR #210: the
+  activity, workflow and dispatcher tests serve their registrations on a real
+  endpoint, register it with Restate, and call through it. (g)
   `scripts/verify` starts the LiveKit agent server under `VOICE_EVALS=1` and
   runs pytest at once, with no readiness wait. (h) `LivekitHandler.start_job`
   and `CallAgent.say` run only in the gated eval. (i) A body the snapshots
