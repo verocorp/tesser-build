@@ -44,7 +44,7 @@ class RestatePersonJoinedResponseSerde(ts.Serde, restate_serde.Serde[relays.Pers
         return relays.PersonJoinedResponseSnapshot().deserialize(buf)
 
 
-class RestatePersonJoined(ts.Dispatcher):
+class RestatePersonJoined(ts.Signal):
     def __init__(self, call_orchestrator_workflow: restate.Workflow) -> None:
         @call_orchestrator_workflow.handler(
             input_serde=RestatePersonJoinedRequestSerde(),
@@ -95,7 +95,7 @@ class RestatePersonTurnCompletedResponseSerde(ts.Serde, restate_serde.Serde[rela
         return relays.PersonTurnCompletedResponseSnapshot().deserialize(buf)
 
 
-class RestatePersonTurnCompleted(ts.Dispatcher):
+class RestatePersonTurnCompleted(ts.Signal):
     def __init__(self, call_orchestrator_workflow: restate.Workflow) -> None:
         @call_orchestrator_workflow.handler(
             input_serde=RestatePersonTurnCompletedRequestSerde(),

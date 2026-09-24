@@ -71,8 +71,8 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   question that retires it:
   - ~~`examples/voice/calls/adapters/runtimes/restate_call_runtime.py` — the
     two shared handlers `person_joined`, `person_turn_completed` (TB085).~~
-    Retired on branch `name-strings`: the shared handlers are dispatchers
-    (`ts.Dispatcher`) now, outside the runtime name rules, and read the promise name from
+    Retired on branch `name-strings`: the shared handlers are signals
+    (`ts.Signal`) now, outside the runtime name rules, and read the promise name from
     `application/relays`.
   - `examples/voice/calls/adapters/handlers/livekit.py` `CallAgent` (TB052:
     the LiveKit SDK subclass has no ts.* kind of its own). Retired by ruling

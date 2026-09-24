@@ -37,7 +37,7 @@ class RestateConductCallResponseSerde(ts.Serde, restate_serde.Serde[relays.Condu
         return relays.ConductCallResponseSnapshot().deserialize(buf)
 
 
-class RestateInvocationCallActionsRelay(ts.Workflow):
+class RestateInvocationCallActionsRelay(ts.Dispatcher):
     def __init__(
         self, restate_workflow_context: restate.WorkflowContext, restate_record_call: activities.RestateRecordCall
     ) -> None:
@@ -48,7 +48,7 @@ class RestateInvocationCallActionsRelay(ts.Workflow):
         return await self._restate_workflow_context.service_call(self._restate_record_call.handler, record_call_request)
 
 
-class RestateInvocationDialingActionsRelay(ts.Workflow):
+class RestateInvocationDialingActionsRelay(ts.Dispatcher):
     def __init__(
         self,
         restate_workflow_context: restate.WorkflowContext,
@@ -66,7 +66,7 @@ class RestateInvocationDialingActionsRelay(ts.Workflow):
         return await self._restate_workflow_context.service_call(self._restate_hang_up.handler, hang_up_request)
 
 
-class RestateInvocationSpeechActionsRelay(ts.Workflow):
+class RestateInvocationSpeechActionsRelay(ts.Dispatcher):
     def __init__(
         self, restate_workflow_context: restate.WorkflowContext, restate_say_utterance: activities.RestateSayUtterance
     ) -> None:
@@ -81,7 +81,7 @@ class RestateInvocationSpeechActionsRelay(ts.Workflow):
         )
 
 
-class RestateInvocationCallOrchestratorSignalRelay(ts.Workflow):
+class RestateInvocationCallOrchestratorSignalRelay(ts.Dispatcher):
     def __init__(self, restate_workflow_context: restate.WorkflowContext) -> None:
         self._restate_workflow_context = restate_workflow_context
 
