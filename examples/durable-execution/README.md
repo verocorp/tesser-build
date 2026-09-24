@@ -870,7 +870,11 @@ protocols; nothing stands in for Restate.
 
 - The activities test calls each action's handler through Restate and
   asserts that the request reached the application client and the answer came
-  back through the serdes.
+  back through the serdes. Two more lock in what the engine refuses: a
+  non-empty body the snapshot cannot read comes back as a terminal `500
+  Unable to parse an input argument` (the SDK wraps the input serde's error),
+  and a call through the ingress to an `ingress_private=True` actions service
+  is refused with `400 the invoked service is not public`.
 - The workflows test runs whole invocations. `confirm_order` records one
   `OrderActions…/price_product` row invoked by the order workflow;
   `pay_for_order` records the child `OrderOrchestrator…/<id>/confirm_order`
