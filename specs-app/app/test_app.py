@@ -24,17 +24,22 @@ class FakeConfigRepository(app.AppConfigRepository):
 
 
 @ts.helper
-def app_spec(storage: str = "memory", host: str = "127.0.0.1", port: int = 0) -> app.Spec:
-    return app.Spec(
-        specification=specification_component.Config(specification_component.Spec(storage)),
-        http=app.HttpConfig(app.HttpSpec(host=host, port=port)),
-    )
+def specification_spec(storage: str = "memory") -> specification_component.Spec:
+    return specification_component.Spec(storage=storage)
+
+
+@ts.helper
+def http_spec(host: str = "127.0.0.1", port: int = 0) -> app.HttpSpec:
+    return app.HttpSpec(host=host, port=port)
 
 
 class TestAppConfig:
 
     def test_a_config_carries_each_part(self) -> None:
-        spec = app_spec(port=8080)
+        spec = app.Spec(
+            specification=specification_component.Config(specification_spec()),
+            http=app.HttpConfig(http_spec(port=8080)),
+        )
         app_config = app.AppConfig(spec)
         assert app_config.specification is spec.specification
         assert app_config.http.port == 8080
@@ -59,7 +64,14 @@ class TestEnvConfigRepository:
 class TestApp:
 
     def test_the_app_wires_the_specification_context(self) -> None:
-        specs_app = app.SpecsApp(app.AppConfig(app_spec()))
+        specs_app = app.SpecsApp(
+            app.AppConfig(
+                app.Spec(
+                    specification=specification_component.Config(specification_spec(storage="memory")),
+                    http=app.HttpConfig(http_spec()),
+                )
+            )
+        )
         add_story_response = specs_app.specification.client.add_story(
             specification_client.AddStoryRequest(jtbd_id="j-root", given="g", when="w", then="t")
         )

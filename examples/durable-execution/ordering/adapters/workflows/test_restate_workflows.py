@@ -87,25 +87,8 @@ class FakeDecliningPurchaseApplicationClient(client.PurchaseApplicationClient):
 
 
 @ts.helper
-def confirm_order_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 2
-) -> relays.ConfirmOrderRequest:
-    return relays.ConfirmOrderRequest(
-        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
-    )
-
-
-@ts.helper
-def pay_for_order_request(
-    order_id: str = "o1",
-    sku: str = "widget",
-    quantity: int = 2,
-    payment_method: str = "card-4242",
-) -> relays.PayForOrderRequest:
-    return relays.PayForOrderRequest(
-        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)),
-        payment_method=domain.PaymentMethod(payment_method),
-    )
+def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> domain.OrderSpec:
+    return domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)
 
 
 class TestRestateConfirmOrder:
@@ -172,12 +155,12 @@ class TestRestateConfirmOrder:
                     await restate_client.Client(async_client).workflow_call(
                         restate_confirm_order.handler,
                         key="other-" + order_id,
-                        arg=confirm_order_request(order_id=order_id),
+                        arg=relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id))),
                     )
                 confirm_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_confirm_order.handler,
                     key=order_id,
-                    arg=confirm_order_request(order_id=order_id),
+                    arg=relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id, quantity=2))),
                 )
             invoked = await admin.post(
                 "/query",
@@ -268,7 +251,7 @@ class TestRestateConfirmOrder:
                 confirm_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_confirm_order.handler,
                     key=order_id,
-                    arg=confirm_order_request(order_id=order_id, sku="nothing"),
+                    arg=relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id, sku="nothing"))),
                 )
 
             assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND
@@ -349,7 +332,10 @@ class TestRestatePayForOrder:
                 pay_for_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_pay_for_order.handler,
                     key=urllib_parse.quote(order_id, safe=""),
-                    arg=pay_for_order_request(order_id=order_id),
+                    arg=relays.PayForOrderRequest(
+                        order=domain.Order(order_spec(order_id=order_id, quantity=2)),
+                        payment_method=domain.PaymentMethod("card-4242"),
+                    ),
                 )
             invoked = await admin.post(
                 "/query",
@@ -458,12 +444,15 @@ class TestRestatePayForOrder:
                 confirm_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_confirm_order.handler,
                     key=order_id,
-                    arg=confirm_order_request(order_id=order_id),
+                    arg=relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id))),
                 )
                 pay_for_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_pay_for_order.handler,
                     key=order_id,
-                    arg=pay_for_order_request(order_id=order_id),
+                    arg=relays.PayForOrderRequest(
+                        order=domain.Order(order_spec(order_id=order_id)),
+                        payment_method=domain.PaymentMethod("card-4242"),
+                    ),
                 )
 
             assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
@@ -543,7 +532,10 @@ class TestRestatePayForOrder:
                 pay_for_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_pay_for_order.handler,
                     key=order_id,
-                    arg=pay_for_order_request(order_id=order_id, sku="nothing"),
+                    arg=relays.PayForOrderRequest(
+                        order=domain.Order(order_spec(order_id=order_id, sku="nothing")),
+                        payment_method=domain.PaymentMethod("card-4242"),
+                    ),
                 )
 
             assert pay_for_order_response.outcome is relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED
@@ -622,12 +614,18 @@ class TestRestatePayForOrder:
                     await restate_client.Client(async_client).workflow_call(
                         restate_pay_for_order.handler,
                         key="other-" + order_id,
-                        arg=pay_for_order_request(order_id=order_id),
+                        arg=relays.PayForOrderRequest(
+                            order=domain.Order(order_spec(order_id=order_id)),
+                            payment_method=domain.PaymentMethod("card-4242"),
+                        ),
                     )
                 pay_for_order_response = await restate_client.Client(async_client).workflow_call(
                     restate_pay_for_order.handler,
                     key=order_id,
-                    arg=pay_for_order_request(order_id=order_id),
+                    arg=relays.PayForOrderRequest(
+                        order=domain.Order(order_spec(order_id=order_id)),
+                        payment_method=domain.PaymentMethod("card-4242"),
+                    ),
                 )
 
             assert foreign.value.status_code == 400

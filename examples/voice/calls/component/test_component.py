@@ -76,14 +76,18 @@ class FakeCallStore(ports.CallStore):
 def _spec(
     storage: str = "postgres://a@b/c",
     restate_url: str = "http://localhost:8080",
+    livekit_url: str = "ws://livekit",
+    livekit_api_key: str = "key",
+    livekit_api_secret: str = "secret",
+    livekit_agent_name: str = "caller",
 ) -> component.Spec:
     return component.Spec(
         storage=storage,
         restate_url=restate_url,
-        livekit_url="ws://livekit",
-        livekit_api_key="key",
-        livekit_api_secret="secret",
-        livekit_agent_name="caller",
+        livekit_url=livekit_url,
+        livekit_api_key=livekit_api_key,
+        livekit_api_secret=livekit_api_secret,
+        livekit_agent_name=livekit_agent_name,
     )
 
 
@@ -99,7 +103,14 @@ class TestConfig:
         assert config.restate_url == "http://localhost:8080"
 
     def test_a_config_carries_the_livekit_settings(self) -> None:
-        config = component.Config(_spec())
+        config = component.Config(
+            _spec(
+                livekit_url="ws://livekit",
+                livekit_api_key="key",
+                livekit_api_secret="secret",
+                livekit_agent_name="caller",
+            )
+        )
 
         assert (
             config.livekit_url,

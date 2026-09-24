@@ -16,12 +16,31 @@ import tesser.errors as errors
 
 
 @ts.helper
-def campaign_spec(slug: str = "promo") -> domain.CampaignSpec:
-    return domain.CampaignSpec(
-        id="0123456789abcdef",
-        budget=domain.MoneySpec(amount="100.00", currency="USD"),
-        links=domain.ShortLinksSpec(links=(domain.ShortLinkSpec(slug=slug, target_url="https://ok.example/x", active=True),)),
-    )
+def money_spec(amount: str = "100.00", currency: str = "USD") -> domain.MoneySpec:
+    return domain.MoneySpec(amount=amount, currency=currency)
+
+
+@ts.helper
+def short_link_spec(
+    slug: str = "promo", target_url: str = "https://ok.example/x", active: bool = True
+) -> domain.ShortLinkSpec:
+    return domain.ShortLinkSpec(slug=slug, target_url=target_url, active=active)
+
+
+@ts.helper
+def short_links_spec(
+    links: tuple[domain.ShortLinkSpec, ...] = (short_link_spec(),),
+) -> domain.ShortLinksSpec:
+    return domain.ShortLinksSpec(links=links)
+
+
+@ts.helper
+def campaign_spec(
+    id: str = "0123456789abcdef",
+    budget: domain.MoneySpec = money_spec(),
+    links: domain.ShortLinksSpec = short_links_spec(),
+) -> domain.CampaignSpec:
+    return domain.CampaignSpec(id=id, budget=budget, links=links)
 
 
 @ts.fake
@@ -32,7 +51,15 @@ class FakeTargetPolicyAllowAll(ports.TargetPolicy):
 
 def test_row_golden_locks_the_storage_shape() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
-    campaign = domain.Campaign(campaign_spec())
+    campaign = domain.Campaign(
+        campaign_spec(
+            id="0123456789abcdef",
+            budget=money_spec(amount="100.00", currency="USD"),
+            links=short_links_spec(
+                links=(short_link_spec(slug="promo", target_url="https://ok.example/x", active=True),)
+            ),
+        )
+    )
     in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(
@@ -58,7 +85,15 @@ def test_row_golden_locks_the_storage_shape() -> None:
 
 def test_wire_golden_locks_the_campaign_payload() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
-    campaign = domain.Campaign(campaign_spec())
+    campaign = domain.Campaign(
+        campaign_spec(
+            id="0123456789abcdef",
+            budget=money_spec(amount="100.00", currency="USD"),
+            links=short_links_spec(
+                links=(short_link_spec(slug="promo", target_url="https://ok.example/x", active=True),)
+            ),
+        )
+    )
     in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(
@@ -83,7 +118,13 @@ def test_wire_golden_locks_the_campaign_payload() -> None:
 
 def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
-    campaign = domain.Campaign(campaign_spec())
+    campaign = domain.Campaign(
+        campaign_spec(
+            links=short_links_spec(
+                links=(short_link_spec(slug="promo", target_url="https://ok.example/x", active=True),)
+            ),
+        )
+    )
     in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(
@@ -105,7 +146,7 @@ def test_wire_golden_locks_resolve_as_a_real_redirect() -> None:
 
 def test_load_reconstructs_value_equal_non_identical() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
-    original = domain.Campaign(campaign_spec())
+    original = domain.Campaign(campaign_spec(id="0123456789abcdef"))
     in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(original.id),
         budget=ports.MoneyRecord(
@@ -164,7 +205,7 @@ def test_load_reconstructs_value_equal_non_identical() -> None:
 
 def test_store_holds_rows_not_live_objects() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
-    original = domain.Campaign(campaign_spec())
+    original = domain.Campaign(campaign_spec(id="0123456789abcdef"))
     in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(original.id),
         budget=ports.MoneyRecord(
@@ -241,7 +282,7 @@ def test_store_holds_rows_not_live_objects() -> None:
 
 def test_load_reruns_invariants_on_stale_rows() -> None:
     in_memory_campaign_repository = repositories.InMemoryCampaignRepository()
-    campaign = domain.Campaign(campaign_spec())
+    campaign = domain.Campaign(campaign_spec(id="0123456789abcdef"))
     in_memory_campaign_repository.save_campaign(ports.SaveCampaignRequest(
         id=str(campaign.id),
         budget=ports.MoneyRecord(

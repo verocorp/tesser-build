@@ -10106,7 +10106,13 @@ class Module(ts.Entity):
             typed: dict[str, Symbol] = {}
             foreign: set[str] = set()
             parameters = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-            fields_only = fn.name == "__init__" and block in FIELD_NAME_BLOCKS
+            declared_helper = owner is None and any(
+                (decorator_symbol := scope.resolve(decorator_ref)) is not None
+                and TESSER_DECORATORS.get((str(decorator_symbol.module()), str(decorator_symbol.name()))) == "helper"
+                for decorator in fn.decorator_list
+                if (decorator_ref := Annotation(decorator).primary()) is not None
+            )
+            fields_only = (fn.name == "__init__" and block in FIELD_NAME_BLOCKS) or declared_helper
             spec_taker = fn.name == "__init__" and block in SPEC_READER_BLOCKS
             for arg in parameters:
                 if arg.arg in UNNAMED_PARAMETERS or arg.annotation is None:

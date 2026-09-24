@@ -5689,6 +5689,52 @@ def test_a_helper_mirrors_the_constructor_it_feeds_and_composes_other_helpers() 
     assert not any("TB073" in f for f in findings), [f for f in findings if "TB073" in f]
 
 
+def test_a_helper_names_a_record_parameter_for_the_field_it_feeds() -> None:
+    findings = tuple(
+                   f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+                   for v in domain.Codebase(_spec(sources=(
+            (
+                "shipping/application/ports/carrier.py",
+                "shipping.application.ports.carrier",
+                "import typing\n"
+                "import tesser.application as ts\n"
+                "class AddressRecord(ts.Response):\n"
+                "    def __init__(self, city: str) -> None:\n"
+                "        self.city = city\n"
+                "class ShipmentRecord(ts.Response):\n"
+                "    def __init__(self, shipment_id: str, destination: AddressRecord) -> None:\n"
+                "        self.shipment_id = shipment_id\n"
+                "        self.destination = destination\n"
+                "class ReadShipmentRequest(ts.Request):\n"
+                "    def __init__(self, shipment_id: str) -> None:\n"
+                "        self.shipment_id = shipment_id\n"
+                "class Carrier(ts.Port, typing.Protocol):\n"
+                "    def read_shipment(self, read_shipment_request: ReadShipmentRequest) -> ShipmentRecord: ...\n",
+                False,
+            ),
+            (
+                "shipping/application/test_shipment_helpers.py",
+                "shipping.application.test_shipment_helpers",
+                "import tesser.testing as th\n"
+                "import shipping.application.ports.carrier as carrier\n"
+                "@th.helper\n"
+                "def address_record(city: str = 'Lisbon') -> carrier.AddressRecord:\n"
+                "    return carrier.AddressRecord(city=city)\n"
+                "@th.helper\n"
+                "def shipment_record(\n"
+                "    shipment_id: str = 'shipment-1',\n"
+                "    destination: carrier.AddressRecord = address_record(),\n"
+                ") -> carrier.ShipmentRecord:\n"
+                "    return carrier.ShipmentRecord(shipment_id=shipment_id, destination=destination)\n",
+                False,
+            ),
+        ))).violations()
+               )
+    assert not any("test_shipment_helpers" in f and ("TB085" in f or "TB073" in f) for f in findings), [
+        f for f in findings if "test_shipment_helpers" in f and ("TB085" in f or "TB073" in f)
+    ]
+
+
 def test_a_helper_that_invents_reshapes_or_drifts_from_its_constructor_is_flagged() -> None:
     findings = tuple(
                    f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"

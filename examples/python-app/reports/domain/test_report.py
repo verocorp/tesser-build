@@ -8,16 +8,25 @@ import tesser.errors as errors
 
 
 @ts.helper
-def _link_verdicts_spec(
-    slug: str = "spring-sale",
+def _link_spec(slug: str = "spring-sale", target_url: str = "https://a.example/s") -> domain.LinkSpec:
+    return domain.LinkSpec(slug=slug, target_url=target_url)
+
+
+@ts.helper
+def _recorded_verdict_spec(
     target_url: str = "https://a.example/s",
     decision: str = "denied",
     reason: str = "host blocked",
+) -> domain.RecordedVerdictSpec:
+    return domain.RecordedVerdictSpec(target_url=target_url, decision=decision, reason=reason)
+
+
+@ts.helper
+def _link_verdicts_spec(
+    links: tuple[domain.LinkSpec, ...] = (_link_spec(),),
+    verdicts: tuple[domain.RecordedVerdictSpec, ...] = (_recorded_verdict_spec(),),
 ) -> domain.LinkVerdictsSpec:
-    return domain.LinkVerdictsSpec(
-        links=(domain.LinkSpec(slug, target_url),),
-        verdicts=(domain.RecordedVerdictSpec(target_url, decision, reason),),
-    )
+    return domain.LinkVerdictsSpec(links=links, verdicts=verdicts)
 
 
 def test_a_link_carries_its_slug_and_target_as_value_objects() -> None:
@@ -170,16 +179,24 @@ def test_a_verdict_the_domain_would_not_accept_fails_the_whole_join() -> None:
 
 
 def test_two_joins_of_the_same_links_and_verdicts_are_equal() -> None:
-    link_verdicts = domain.LinkVerdicts(
-        domain.LinkVerdictsSpec(
-            links=(domain.LinkSpec("spring-sale", "https://a.example/s"),), verdicts=()
+    first = domain.LinkVerdicts(
+        _link_verdicts_spec(
+            links=(_link_spec(target_url="https://a.example/s"),),
+            verdicts=(_recorded_verdict_spec(target_url="https://a.example/s"),),
         )
     )
-
-    assert domain.LinkVerdicts(_link_verdicts_spec()) == domain.LinkVerdicts(
-        _link_verdicts_spec()
+    second = domain.LinkVerdicts(
+        _link_verdicts_spec(
+            links=(_link_spec(target_url="https://a.example/s"),),
+            verdicts=(_recorded_verdict_spec(target_url="https://a.example/s"),),
+        )
     )
-    assert domain.LinkVerdicts(_link_verdicts_spec()) != link_verdicts
+    unruled = domain.LinkVerdicts(
+        _link_verdicts_spec(links=(_link_spec(target_url="https://a.example/s"),), verdicts=())
+    )
+
+    assert first == second
+    assert first != unruled
 
 
 def test_a_target_url_accepts_an_http_and_an_https_target() -> None:

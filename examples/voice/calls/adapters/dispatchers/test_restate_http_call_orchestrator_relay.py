@@ -55,8 +55,8 @@ class FakeSpeechApplicationClient(client.SpeechApplicationClient):
 
 
 @ts.helper
-def conduct_call_request(call_id: str = "c7") -> relays.ConductCallRequest:
-    return relays.ConductCallRequest(call=domain.Call(domain.CallSpec(call_id=call_id, person_name="")))
+def call_spec(call_id: str = "c7", person_name: str = "") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestRestateHttpCallOrchestratorRelay:
@@ -112,7 +112,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 restate_person_turn_completed,
             )
             conducting = asyncio.create_task(
-                restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+                restate_http_call_orchestrator_relay.run_conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(call_id=call_id))))
             )
             started: list[str] = []
             for _ in range(100):
@@ -215,7 +215,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 restate_person_turn_completed,
             )
             conducting = asyncio.create_task(
-                restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+                restate_http_call_orchestrator_relay.run_conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(call_id=call_id))))
             )
             started: list[str] = []
             for _ in range(100):
@@ -316,7 +316,7 @@ class TestRestateHttpCallOrchestratorRelay:
                 restate_person_turn_completed,
             )
             conducting = asyncio.create_task(
-                restate_http_call_orchestrator_relay.run_conduct_call(conduct_call_request(call_id=call_id))
+                restate_http_call_orchestrator_relay.run_conduct_call(relays.ConductCallRequest(call=domain.Call(call_spec(call_id=call_id))))
             )
             started: list[str] = []
             for _ in range(100):
