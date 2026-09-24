@@ -1,0 +1,2 @@
+from ordering.adapters.activities.restate_activities import RestatePriceProduct as RestatePriceProduct
+from ordering.adapters.activities.restate_activities import RestateTakePayment as RestateTakePayment

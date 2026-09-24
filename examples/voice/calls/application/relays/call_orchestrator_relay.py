@@ -9,6 +9,8 @@ import calls.application.snapshots as snapshots
 import calls.domain as domain
 import tesser.errors as errors
 
+CONDUCT_CALL_STATE: typing.Final[str] = "conduct_call"
+
 
 class ConductCallRequest(ts.Request):
 

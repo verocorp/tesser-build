@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import typing
+
+import tesser.adapters as ts
+import restate
+import restate.serde as restate_serde
+
+import {{context}}.adapters.activities as activities
+import {{context}}.application.orchestrators as orchestrators
+import {{context}}.application.relays as relays
+
+_EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
+_FOREIGN_KEY: typing.Final[str] = "a request names the {{aggregate}} its workflow is keyed by"
+
+
+class Restate{{Conduct}}RequestSerde(ts.Serde, restate_serde.Serde[relays.{{Conduct}}Request]):
+
+    def serialize(self, {{conduct}}_request: relays.{{Conduct}}Request | None) -> bytes:
+        if {{conduct}}_request is None:
+            return b""
+        return relays.{{Conduct}}RequestSnapshot().serialize({{conduct}}_request)
+
+    def deserialize(self, buf: bytes) -> relays.{{Conduct}}Request | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Conduct}}RequestSnapshot().deserialize(buf)
+
+
+class Restate{{Conduct}}ResponseSerde(ts.Serde, restate_serde.Serde[relays.{{Conduct}}Response]):
+
+    def serialize(self, {{conduct}}_response: relays.{{Conduct}}Response | None) -> bytes:
+        if {{conduct}}_response is None:
+            return b""
+        return relays.{{Conduct}}ResponseSnapshot().serialize({{conduct}}_response)
+
+    def deserialize(self, buf: bytes) -> relays.{{Conduct}}Response | None:
+        if not buf:
+            raise restate.TerminalError(_EMPTY_BODY, status_code=400)
+        return relays.{{Conduct}}ResponseSnapshot().deserialize(buf)
+
+
+class RestateInvocation{{Aggregate}}ActionsRelay(ts.Dispatcher):
+
+    def __init__(
+        self, restate_workflow_context: restate.WorkflowContext, restate_{{record}}: activities.Restate{{Record}}
+    ) -> None:
+        self._restate_workflow_context = restate_workflow_context
+        self._restate_{{record}} = restate_{{record}}
+
+    async def run_{{record}}(self, {{record}}_request: relays.{{Record}}Request) -> relays.{{Record}}Response:
+        return await self._restate_workflow_context.service_call(self._restate_{{record}}.handler, {{record}}_request)
+
+
+class Restate{{Conduct}}(ts.Workflow):
+
+    def __init__(
+        self, {{aggregate}}_orchestrator_workflow: restate.Workflow, restate_{{record}}: activities.Restate{{Record}}
+    ) -> None:
+        @{{aggregate}}_orchestrator_workflow.main(
+            input_serde=Restate{{Conduct}}RequestSerde(),
+            output_serde=Restate{{Conduct}}ResponseSerde(),
+        )
+        async def {{conduct}}(
+            restate_workflow_context: restate.WorkflowContext, {{conduct}}_request: relays.{{Conduct}}Request
+        ) -> relays.{{Conduct}}Response:
+            if {{conduct}}_request.{{identity}} != restate_workflow_context.key():
+                raise restate.TerminalError(_FOREIGN_KEY, status_code=400)
+            return await orchestrators.{{Aggregate}}Orchestrator(
+                RestateInvocation{{Aggregate}}ActionsRelay(restate_workflow_context, restate_{{record}})
+            ).{{conduct}}({{conduct}}_request)
+
+        self.handler = {{conduct}}

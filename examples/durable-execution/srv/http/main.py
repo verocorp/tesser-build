@@ -80,10 +80,10 @@ class HttpHost(ts.Host):
                 _RESTATE_DEPLOYMENT_PATH,
                 restate.app(
                     [
-                        durable_execution_app.ordering.restate_order_runtime.order_actions_service,
-                        durable_execution_app.ordering.restate_order_runtime.order_orchestrator_workflow,
-                        durable_execution_app.ordering.restate_order_runtime.purchase_actions_service,
-                        durable_execution_app.ordering.restate_order_runtime.purchase_orchestrator_workflow,
+                        durable_execution_app.ordering.order_actions_service,
+                        durable_execution_app.ordering.order_orchestrator_workflow,
+                        durable_execution_app.ordering.purchase_actions_service,
+                        durable_execution_app.ordering.purchase_orchestrator_workflow,
                     ]
                 ),
             )

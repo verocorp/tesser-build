@@ -1,6 +1,2 @@
 from ordering.application.client.order_actions import OrderingApplicationClient as OrderingApplicationClient
-from ordering.application.client.order_orchestrator import OrderOrchestratorApplicationClient as OrderOrchestratorApplicationClient
-from ordering.application.client.order_orchestrator import OrderWorkflow as OrderWorkflow
 from ordering.application.client.purchase_actions import PurchaseApplicationClient as PurchaseApplicationClient
-from ordering.application.client.purchase_orchestrator import PurchaseOrchestratorApplicationClient as PurchaseOrchestratorApplicationClient
-from ordering.application.client.purchase_orchestrator import PurchaseWorkflow as PurchaseWorkflow

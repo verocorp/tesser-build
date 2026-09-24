@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import socket
+import typing
+import uuid
+
+import tesser.testing as ts
+import httpx
+import hypercorn.asyncio as hypercorn_asyncio
+import hypercorn.config as hypercorn_config
+import hypercorn.typing as hypercorn_typing
+import pytest
+import restate
+import restate.client as restate_client
+
+import alpha.adapters.activities as activities
+import alpha.adapters.dispatchers as dispatchers
+import alpha.adapters.workflows as workflows
+import alpha.application.client as client
+import alpha.application.relays as relays
+import alpha.domain as domain
+
+
+@ts.fake
+class FakeWidgetApplicationClient(client.WidgetApplicationClient):
+
+    def __init__(self) -> None:
+        self.kept: list[str] = []
+
+    async def keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
+        self.kept.append(keep_widget_request.name)
+        return relays.KeepWidgetResponse(name=keep_widget_request.name)
+
+
+class TestRestateHttpWidgetOrchestratorRelay:
+
+    async def test_an_approval_before_the_start_is_refused_and_the_registration_waits_until_approved_and_keeps_the_widget_once(
+        self,
+    ) -> None:
+        name = ".."
+        suffix = uuid.uuid4().hex
+        widget_actions_service = restate.Service(f"WidgetActions{suffix}")
+        widget_orchestrator_workflow = restate.Workflow(f"WidgetOrchestrator{suffix}")
+        fake_widget_application_client = FakeWidgetApplicationClient()
+        restate_register_widget = workflows.RestateRegisterWidget(
+            widget_orchestrator_workflow,
+            activities.RestateKeepWidget(widget_actions_service, fake_widget_application_client),
+        )
+        restate_approve_widget = dispatchers.RestateApproveWidget(widget_orchestrator_workflow)
+        restate_http_widget_orchestrator_relay = dispatchers.RestateHttpWidgetOrchestratorRelay(
+            os.environ["RESTATE_INGRESS"], restate_register_widget, restate_approve_widget
+        )
+        with socket.socket() as probe:
+            probe.bind(("0.0.0.0", 0))
+            port = probe.getsockname()[1]
+        hypercorn_config_config = hypercorn_config.Config()
+        hypercorn_config_config.bind = [f"0.0.0.0:{port}"]
+        shutdown = asyncio.Event()
+        serving = asyncio.create_task(
+            hypercorn_asyncio.serve(
+                typing.cast(hypercorn_typing.ASGIFramework, restate.app([widget_actions_service, widget_orchestrator_workflow])),
+                hypercorn_config_config,
+                shutdown_trigger=shutdown.wait,
+            )
+        )
+        admin = httpx.AsyncClient(base_url=os.environ["RESTATE_ADMIN"], timeout=10.0)
+        registered = httpx.Response(503)
+        try:
+            for _ in range(50):
+                registered = await admin.post(
+                    "/deployments",
+                    json={"uri": f"http://{os.environ['MINIMAL_CALLBACK_HOST']}:{port}", "force": True},
+                )
+                if registered.is_success:
+                    break
+                await asyncio.sleep(0.1)
+            assert registered.is_success, registered.text
+
+            with pytest.raises(restate.HttpError) as early:
+                await restate_http_widget_orchestrator_relay.run_approve_widget(relays.ApproveWidgetRequest(name=name))
+            promised = await admin.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT key FROM sys_promise "
+                    f"WHERE service_name = 'WidgetOrchestrator{suffix}' AND service_key = '{name}' AND completed"
+                },
+            )
+            start_register_widget_response = await restate_http_widget_orchestrator_relay.start_register_widget(
+                relays.RegisterWidgetRequest(name=domain.Name(name))
+            )
+            awaited: list[str] = []
+            for _ in range(100):
+                journaled = await admin.post(
+                    "/query",
+                    headers={"accept": "application/json"},
+                    json={
+                        "query": "SELECT j.entry_lite_json FROM sys_journal j JOIN sys_invocation i ON j.id = i.id "
+                        f"WHERE i.target = 'WidgetOrchestrator{suffix}/{name}/register_widget' "
+                        "AND j.entry_type = 'Command: GetPromise'"
+                    },
+                )
+                awaited = [
+                    json.loads(row["entry_lite_json"])["Command"]["GetPromise"]["key"] for row in journaled.json()["rows"]
+                ]
+                if awaited:
+                    break
+                await asyncio.sleep(0.05)
+            kept_before_approval = list(fake_widget_application_client.kept)
+            approvals = [
+                await restate_http_widget_orchestrator_relay.run_approve_widget(relays.ApproveWidgetRequest(name=name))
+                for _ in range(2)
+            ]
+            for _ in range(100):
+                if fake_widget_application_client.kept:
+                    break
+                await asyncio.sleep(0.05)
+            async with httpx.AsyncClient(base_url=os.environ["RESTATE_INGRESS"], timeout=30.0) as async_client:
+                with pytest.raises(restate.HttpError) as foreign:
+                    await restate_client.Client(async_client).workflow_call(
+                        restate_approve_widget.handler, key="%2E%2E", arg=relays.ApproveWidgetRequest(name="other")
+                    )
+
+            assert early.value.status_code == 412
+            assert promised.json()["rows"] == []
+            assert start_register_widget_response == relays.StartRegisterWidgetResponse(name=name)
+            assert awaited == [relays.APPROVE_WIDGET_PROMISE]
+            assert kept_before_approval == []
+            assert approvals == [relays.ApproveWidgetResponse(name=name)] * 2
+            assert fake_widget_application_client.kept == [name]
+            assert foreign.value.status_code == 400
+        finally:
+            if registered.is_success:
+                await admin.delete(f"/deployments/{registered.json()['id']}", params={"force": "true"})
+            await admin.aclose()
+            shutdown.set()
+            await asyncio.wait([serving], timeout=1.0)
+            serving.cancel()
+            await asyncio.gather(serving, return_exceptions=True)

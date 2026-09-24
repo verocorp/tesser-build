@@ -9,9 +9,10 @@ findings and which were taken, the survey of seven orchestrators in
 `~/workspace/flow`, the package names considered and rejected, and the two
 options the job-context ruling chose between. Read it for *why*, never for
 *what*. Where the two disagree, this section wins; `examples/voice/` and
-`skills/tesser-build/python.md#orchestrators-actions-relays` are the spec.
-`examples/durable-execution/`, `examples/minimal/` and the generator's
-templates have not migrated yet; see **Trees not yet migrated** below.
+`skills/tesser-build/python.md#orchestrators-actions-relays` are the spec,
+and `examples/durable-execution/`, `examples/minimal/` and the generator's
+templates follow it. The older kinds remain only as deprecated rules; see
+**The deprecated kinds** below.
 
 ## The convention, 2026-09-23
 
@@ -37,8 +38,9 @@ not extra steps.
 tesser.Service.operation            -> restate.Client.operation
 restate.Client.operation            ⇒  restate.Workflow.main | restate.Workflow.handler
 restate.Workflow.main(wf_ctx)       -> tesser.Orchestrator(wf_ctx) -> tesser.Orchestrator.operation
+restate.Workflow.main(wf_ctx)       -> wf_ctx.set(state)
 tesser.Orchestrator.operation       -> wf_ctx.promise(name).value
-restate.Workflow.handler(shared)    -> shared.promise(name).resolve
+restate.Workflow.handler(shared)    -> shared.get(state) -> shared.promise(name).resolve
 tesser.Orchestrator.operation       -> wf_ctx.operation
 wf_ctx.operation                    ⇒  restate.Service.handler | restate.Workflow.main
 restate.Service.handler(ctx)        -> tesser.Action.operation
@@ -46,16 +48,18 @@ tesser.Action.operation             -> tesser.Port.operation
 ```
 
 `->` is a Python call, held by imports, protocols, and constructors, so the
-type checker sees both ends. `⇒` crosses the engine, and so does the pair
-`promise(name).value` / `promise(name).resolve`, which meet only in the
-engine's journal. The engine addresses these three links by name; Python
-gets each name from the object that registered it:
+type checker sees both ends. `⇒` crosses the engine, and so do the pairs
+`promise(name).value` / `promise(name).resolve` and `set(state)` /
+`get(state)`, which meet only in the engine's journal and state store. The
+engine addresses these four links by name; Python gets each name from the
+object that registered it or from one relays constant:
 
 | link | addressed by | carried in the tree by |
 |---|---|---|
 | `restate.Client.operation ⇒ …` | service, key, handler | a dispatcher over HTTP: `restate.client.Client(httpx.AsyncClient(...)).workflow_call(self._restate_conduct_call.handler, key=..., arg=...)` |
 | `wf_ctx.operation ⇒ …` | service, handler | a dispatcher inside the invocation: `wf_ctx.service_call(self._restate_record_call.handler, request)` |
 | `.value` ↔ `.resolve` | promise name, within one workflow key | a relays constant (`PERSON_JOINED_PROMISE`), read by the dispatcher's `await_person_joined` and by the signal `person_joined` |
+| `.set` ↔ `.get` | state name, within one workflow key | a relays constant named for the `main`'s operation (`CONDUCT_CALL_STATE = "conduct_call"`), set by the workflow's `main` and got by each signal on its container |
 
 The SDK reads the service and handler name off the registered handler object
 it is passed, and the component writes each container's name once, as a
@@ -70,7 +74,7 @@ Each row holds the row above it; a row never holds a row below.
 | action handler | `ts.Activity` | `activities/` | `restate.Service`, application client | registers `record_call` on `CallActions`; calls the application client |
 | workflow `main` | `ts.Workflow` | `workflows/` | `restate.Workflow`, the activities | registers `conduct_call` on `CallOrchestrator`; builds the orchestrator per invocation |
 | invocation dispatcher | `ts.Dispatcher` | `workflows/` | `wf_ctx`, the activities it calls | `wf_ctx.service_call(activity.handler, ...)`, `wf_ctx.promise(CONSTANT).value()` |
-| shared handler | `ts.Signal` | `dispatchers/` | the workflow's `restate.Workflow` | registers `person_joined` on `CallOrchestrator`; resolves `promise(CONSTANT)` |
+| shared handler | `ts.Signal` | `dispatchers/` | the workflow's `restate.Workflow` | registers `person_joined` on `CallOrchestrator`; gets the state its `main` sets, refuses when absent, then resolves `promise(CONSTANT)` |
 | HTTP dispatcher | `ts.Dispatcher` | `dispatchers/` | `restate_url`, the workflow, the signals | `workflow_call(workflow.handler, ...)` or `workflow_call(signal.handler, ...)` |
 | service | `ts.ApplicationService` | `application/` | the relay the HTTP dispatcher implements | `relay.run_conduct_call(...)` |
 
@@ -96,6 +100,19 @@ Notes on the lines, from the code and the Restate Python SDK (1.0.4):
   restate.Workflow.handler -> .resolve` instead of resolving the promise
   directly, and why a signal registers on the container its workflow's `main`
   is registered on. A resolved promise cannot be resolved again.
+- Restate (1.7.9, SDK 1.0.4) runs a shared handler on a key whose `main` never
+  ran: the call answers 200, the promise is stored resolved, and a `main`
+  started later for that key reads it at once. So a signal gets the state its
+  workflow's `main` sets before it waits (`wf_ctx.set(CONDUCT_CALL_STATE,
+  ...)` in voice's `conduct_call`, `shared.get(CONDUCT_CALL_STATE)` in both
+  `person_joined` and `person_turn_completed`; `REGISTER_WIDGET_STATE` in
+  minimal) and raises `TerminalError(..., status_code=412)` when it is
+  absent; the ingress answers 412 to the caller. A signal checks the key
+  against the body first (400), then the state (412), then resolves and
+  swallows the 409 of a promise already resolved. A `main` that checks its
+  key against its body does so before it sets the state, so a refused body
+  records no start. `promise(...).peek()` cannot stand in for it: it
+  answers `None` until the promise is resolved, whether or not `main` started.
 - A dispatcher over HTTP opens an `httpx.AsyncClient` per call, as Restate's
   documentation does. One long-lived client crossed event loops in the LiveKit
   worker, and calls waiting on the workflow's `main` held every connection
@@ -104,9 +121,11 @@ Notes on the lines, from the code and the Restate Python SDK (1.0.4):
 **One relay kind; lifetime is not a property of the protocol.** A relay
 implemented over HTTP from outside the engine and one implemented inside an
 invocation are the same `ts.Relay`, and the code holding one cannot tell which
-it has. `examples/durable-execution/` still shows it with two implementations
-of `OrderOrchestratorRelay` (one built once at wiring, one built per
-invocation that runs the workflow as a child), in the older runner shape.
+it has. `examples/durable-execution/` shows it with two implementations of
+`OrderOrchestratorRelay`: `RestateHttpOrderOrchestratorRelay`, built once by
+the component, and `RestateInvocationOrderOrchestratorRelay`, built per
+invocation of the purchase workflow to run the order workflow as a child.
+Both hold the one `RestateConfirmOrder` instance and pass its `.handler`.
 
 **A relay is named for its far side and carries any number of operations**
 (Chris, 2026-09-22). A relay method is `<mode>_<operation>` and the mode is
@@ -172,7 +191,14 @@ an invocation goes through its context, where the engine journals it, not over
 HTTP, where it runs again on every replay. (k) An activity's handler calls its
 application client's method named for the operation. (l) A signal's handler
 calls `.promise(...).resolve(...)`. (m) A relays constant is assigned once,
-because the analyzer reads one value and Python keeps the last. A signal relay's name is derived
+because the analyzer reads one value and Python keeps the last. (n) A
+workflow's `main` sets, and a signal gets, workflow state only by a relays
+constant, and that constant equals the operation of the `main` registered on
+the signal's container, because the signal learns from that state that the
+`main` has started. The guard is required, not only checked when present:
+every signal gets that started state, and gets it before it resolves its
+promise (read in source order); a `main` whose container has a signal sets
+it; a `main` with no signal on its container is not asked to. A signal relay's name is derived
 today only through a `run_` operation that reaches its signal; an
 `await_`-only relay is not derived yet (`TODOS.md`).
 
@@ -197,9 +223,17 @@ which is the only way anything outside the application reaches it.
 
 **No adapter translates a `DomainError`** into the engine's terminal error
 today; one is retried under the registration's retry policy. A payload the
-snapshot cannot parse is treated the same way: the engine-side serde turns
-only an empty body into a terminal 400, and anything else the snapshot raises
-is retried and then pauses the invocation under the retry policy.
+snapshot cannot parse depends on where it is read (Restate Python SDK 1.0.5).
+On a handler's input, `invoke_handler` in `restate/handler.py` catches
+whatever the input serde raises and re-raises it as `TerminalError("Unable to
+parse an input argument. ...")` with the default status 500, so the
+invocation fails at once and is not retried; the engine-side serde's own
+terminal 400 for an empty body is re-wrapped the same way and reaches the
+caller as a 500. Anywhere else — a caller reading a response through the
+handler's output serde, a workflow reading a promise through its snapshot — a
+snapshot's exception is an ordinary exception inside the handler, which
+`server_context.py` reports as retryable, so it is retried and then pauses the
+invocation under the retry policy.
 
 **Open, 2026-09-23.** The workflow names the orchestrator implementation
 directly (`orchestrators.CallOrchestrator(...)`); that is accepted for now and
@@ -280,17 +314,15 @@ trees and are not implemented: "name what you compute" would take 79 sites,
 repositories), and "one call on the backend per method" 1. "An adapter raises
 no domain kind" was rejected outright. The numbers are in `TODOS.md`.
 
-**Trees not yet migrated.** `examples/durable-execution/` and the generator's
-templates still use the older kinds, and `examples/minimal/` shows none of the
-durable kinds until an in-process engine restores them. The older kinds' rules
-still run: a runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its far side by literal
+**The deprecated kinds.** No tree uses them. Their rules still run until the
+removal in `TODOS.md`: a runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its far side by literal
 service and handler name (`generic_call`/`generic_send`, `promise("X")`), and a
 workflow runner implements `ts.DeprecatedWorkflow` (the application-side
 protocol formerly called `ts.Workflow`, declared beside an orchestrator's
 application client and yielding it per invocation); a runtime (`ts.Runtime`,
 `adapters/runtimes/`) registers the engine's handlers under literals and may
 register only what a runner of its context reaches. TB085 checks those
-literals against the relay. The migration is in `TODOS.md`.
+literals against the relay.
 
 ---
 

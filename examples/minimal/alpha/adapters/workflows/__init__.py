@@ -1,0 +1,1 @@
+from alpha.adapters.workflows.restate_register_widget import RestateRegisterWidget as RestateRegisterWidget

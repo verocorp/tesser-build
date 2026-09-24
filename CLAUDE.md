@@ -115,7 +115,10 @@ handler into the engine container it is handed and keeps it as
 `self.handler`; a workflow, `ts.Workflow` in `adapters/workflows/`, registers
 the workflow's `main` and builds the orchestrator for each invocation; a
 signal, `ts.Signal` in `adapters/dispatchers/`, registers a shared handler
-that resolves the workflow's promise; a dispatcher, `ts.Dispatcher` in
+that resolves the workflow's promise, after getting the state the workflow's
+`main` sets (a relays constant named for the main's operation) and refusing
+with a terminal 412 when it is absent, because Restate runs a shared handler
+on a key whose `main` never ran; a dispatcher, `ts.Dispatcher` in
 `workflows/` or `dispatchers/`, implements a relay by holding the callee's
 instance and passing its `.handler` to the SDK's typed call
 (`wf_ctx.service_call(...)` inside an invocation, `workflow_call(...)` over
@@ -127,12 +130,16 @@ signals → dispatcher → services; TB085 derives every name from those typed
 references, and holds a registration class to one registered handler that
 performs its operation (an activity calls its application client, a signal
 resolves its promise), a container to unique handler names, a dispatcher to no
-engine call by name and to the call kind of its target, and a relays constant
-to one assignment; a `workflows/` module imports no HTTP client and reads no
+engine call by name and to the call kind of its target, a relays constant
+to one assignment, and a state a `main` sets or a signal gets to a relays
+constant equal to that `main`'s operation — a guard that is required: every
+signal gets that started state before it resolves its promise, and a `main`
+whose container has a signal sets it; a `workflows/` module imports no HTTP client and reads no
 `restate` client factory (TB060), because a call from inside an invocation
 goes through its context, where the engine journals it.
 `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`,
-`adapters/runners/` and `adapters/runtimes/` remain in trees not yet migrated
+`adapters/runners/` and `adapters/runtimes/` are deprecated: their rules still
+run, but no tree uses them, and their removal is queued in `TODOS.md`
 — `TB041`/`TB052`/`TB060`/`TB070`/`TB081`/`TB082`/`TB085`;
 `docs/design-app-service-types.md`, `skills/tesser-build/python.md`).
 The full check list with per-code rules is `tessercheck-py/RULES.md`; which

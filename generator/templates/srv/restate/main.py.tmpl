@@ -24,8 +24,8 @@ class RestateHost(ts.Host):
             hypercorn_typing.ASGIFramework,
             restate.app(
                 [
-                    {{app}}_app.{{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_actions_service,
-                    {{app}}_app.{{context}}.restate_{{aggregate}}_runtime.{{aggregate}}_orchestrator_workflow,
+                    {{app}}_app.{{context}}.{{aggregate}}_actions_service,
+                    {{app}}_app.{{context}}.{{aggregate}}_orchestrator_workflow,
                 ]
             ),
         )

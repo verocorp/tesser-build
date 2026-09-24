@@ -2,6 +2,72 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the migrate-new-kinds ship review (2026-09-24)
+
+- [ ] **A started workflow's result is learned only through the store (ruling
+  D1, narrowed by D5).** minimal's widgets are in Postgres now, so a caller
+  in any process learns that the workflow kept a widget from
+  `find_widget` (the CLI's `find <name>`), a bounded read; the root test
+  polls it. What is still missing is a way to read the workflow's own
+  answer: the SDK's `restate.client.Client` offers only `*_call`/`*_send` (a
+  second `workflow_call` on a started key is a 409 "already invoked"), and
+  the ingress's non-blocking `GET /restate/workflow/<service>/<key>/output`
+  (470 until done, then 200, measured on restate-server 1.7.9) has no typed
+  call. A workflow whose result is not written anywhere a read can reach
+  still needs one of: a typed read of a workflow's result (a new relay mode,
+  or `await_` outside an invocation), or the output route read off the
+  handler object.
+- [ ] **A repeated start cannot say "already started" (Chris ruling D4(2),
+  blocked).** A second `create` of a running name, and a second
+  `start_confirm_order` in durable-execution, get Restate's
+  `{"status": "PreviouslyAccepted"}`, but the SDK drops it: `object_send`,
+  `workflow_send` and `generic_send` all return
+  `RestateClientSendHandle(invocation_id, 200)  # TODO: verify`
+  (restate-sdk 1.0.5, `restate/client.py`), so no client call a dispatcher
+  may make can tell a new start from an existing one. Reading the status
+  needs a hand-built ingress request (the route by string this branch
+  removed) or an SDK fix. Separately, minimal cannot declare the outcome
+  either: an `enum.Enum` in a relay module is a TB052 finding (no block) and
+  `import enum` there a TB062 finding; the only markerless shape the
+  analyzer accepts is the enum declared in `alpha/domain` and carried on the
+  relay response, which puts an engine-crossing word
+  (`StartRegisterWidgetOutcome`) in the domain. durable-execution's
+  `StartConfirmOrderOutcome` already carries its TB052 marker. Decide the
+  SDK route and where a relay's own outcome enum lives.
+- [ ] **A call result the snapshot cannot read pauses; an input it cannot read
+  fails (fix 5, rule on it).** On a handler's input the SDK wraps a serde
+  error as a terminal 500 (`invoke_handler`, `restate/handler.py` lines
+  366-369), but on the call-result side inside a workflow it does not:
+  `_create_fetch_result_coroutine`'s `fetch_result` returns
+  `serde.deserialize(res)` unwrapped (`restate/server_context.py:737`), so a
+  response snapshot that raises there is an ordinary exception, retried under
+  the retry policy and then paused. Nothing in the trees changes it. Rule on
+  whether pausing is what a bad response from our own handler should do.
+- [ ] **minimal's app requires RESTATE_INGRESS for every command, `add`
+  included (recorded, not changed).** The component builds its HTTP
+  dispatcher once, at load, for every command the app serves; an app that
+  ran without an ingress would need a second composition, or an optional
+  (union) config field, which TB080 refuses.
+- [ ] **The deployment endpoints take unsigned calls (Chris ruling D6: a
+  follow-up PR).** Every Restate endpoint in the repo is served with no
+  `identity_keys` and bound on `0.0.0.0`: voice (`srv/restate`),
+  durable-execution (`/restate` on the public FastAPI bind, which its README
+  records), minimal (`srv/restate`), and the generator's `srv/restate`
+  template; the adapter tests of all four bind `0.0.0.0` while they run. So
+  anyone who can reach the port calls a handler directly, ingress-private
+  services included, with no workflow and no journal. Reproduced by the
+  Codex review pass: a call sent straight to minimal's deployment at `:9080`
+  (`POST /invoke/WidgetActions/keep_widget`) kept the widget with no
+  workflow. The follow-up: generate a request-identity key pair, give each
+  `restate.app(...)` its public key, configure the Restate server (locally and
+  the CI service containers) to sign with the private key, and bind test
+  endpoints to the address Restate reaches rather than every interface.
+- [ ] **Generated trees read variables their spec does not name.** The
+  generated adapter tests read `RESTATE_CALLBACK_HOST` and `RESTATE_ADMIN`,
+  but the spec's `[environment_variables]` names only the storage URL and
+  the ingress; only `scripts/verify` sets the other two, so running pytest by
+  hand on a generated tree fails with `KeyError`.
+
 ## Left open by the typed-handler ship review (2026-09-23, PR #210)
 
 - [ ] **An activity's engine container is ingress-private, checked.** voice's
@@ -10,7 +76,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   ingress, so nobody who reaches the ingress can place a call or write a
   record around `CallService`. Nothing checks it. Add a rule that a container
   an activity registers into is built with `ingress_private=True`, and that a
-  workflow's container is not.
+  workflow's container is not. durable-execution, minimal and the
+  generator's templates set it too now (2026-09-24), and their component
+  tests assert it.
 - [ ] **`place_call` can wait forever on a paused workflow.** The HTTP
   dispatcher's `run_conduct_call` has no read limit (`read=None`), and an
   activity that exhausts its 5 attempts pauses the workflow
@@ -27,7 +95,18 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   request's call id is its workflow key, as the signals do; the new checks
   each rebuild the kind table per module, as about 24 older checks already
   do (cache it on the registry); the adapter tests probe a free port and bind
-  it later (a race); the hostile-key test covers only `run_person_joined`;
+  it later (a race; durable-execution's, minimal's and the generated trees'
+  adapter tests now share it). Fix it together with the harness duplication
+  (Chris ruling D3, 2026-09-24): the serve/register/teardown block is
+  repeated about 15 times across the adapter tests and the register loop 4
+  times in `scripts/verify`. One follow-up: a `@ts.helper` async context
+  manager per test file (TB074 keeps it beside the tests that use it), which
+  binds the port it serves on instead of probing one, emitted by the
+  generator's templates as well, and a `register_deployment` shell function
+  used by all four verify arms (durable-execution, minimal, voice, generated
+  trees). TB073 today requires a helper to take defaulted primitives and
+  build a spec or DTO, so the helper needs that rule widened or a kind of its
+  own; the hostile-key test covers only `run_person_joined`;
   the concurrency test does not assert which turn the promise kept; an
   activity or workflow whose far side the analyzer cannot read gets no
   container-name check and no finding.
@@ -62,25 +141,36 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   `@svc.handler(...)` is not covered by a test yet. All three shapes still
   pass on the runner/runtime kinds in durable-execution, minimal and the
   generator until they migrate.
-- [ ] **Migrate durable-execution, minimal and the generator to activities,
+- [x] **Migrate durable-execution, minimal and the generator to activities,
   workflows and dispatchers (Chris, 2026-09-23; follow-up to PR #210).**
-  Voice is the only tree on the new kinds. `examples/durable-execution/`
-  (two workflows, one orchestrator starting another, and the two
-  implementations of `OrderOrchestratorRelay`) and the generator's templates
-  (`generator/templates/{{context}}/adapters/runners/`, `runtimes/`, the
-  `ts.DeprecatedWorkflow` protocol in `application/client/`) still use
-  `ts.Runner`, `ts.Runtime` and `ts.DeprecatedWorkflow`, whose TB085 rules
-  still check string literals. `examples/minimal/` shows none of the durable
-  kinds: restore them over a small in-process engine that registers a
-  handler object and calls it by that object, the way the Restate SDK's typed
-  calls do, so minimal exercises `ts.Relay`, `ts.Orchestrator`, `ts.Actions`,
-  the application client, `ts.Activity`, `ts.Workflow`, `ts.Signal` and
-  `ts.Dispatcher` without Restate (this replaces the 2026-09-22 minimal item
-  below, which planned dispatch by name). When all three have moved, delete
-  `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`, the `runners`/`runtimes`
-  kind packages, and their TB041/TB052/TB060/TB070/TB081/TB082/TB085 rows,
-  and drop the "trees not yet migrated" notes from CLAUDE.md, the skill and
-  `docs/design-app-service-types.md`.
+  DONE on branch `migrate-new-kinds` (2026-09-24). No tree uses `ts.Runner`,
+  `ts.Runtime` or `ts.DeprecatedWorkflow` now:
+  - `examples/durable-execution/`: `RestatePriceProduct`/`RestateTakePayment`
+    (activities), `RestateConfirmOrder`/`RestatePayForOrder` in one workflows
+    module (the purchase workflow's child dispatcher holds the order
+    workflow's instance, and a module may not import a sibling), and
+    `RestateHttpOrderOrchestratorRelay`/`RestateHttpPurchaseOrchestratorRelay`.
+    The actions services are `ingress_private=True`. 79 -> 71 debt markers
+    (the eight engine-serde `try` markers went with the runtime).
+  - the generator's templates: `Restate<Record>`, `Restate<Conduct>`,
+    `RestateHttp<Aggregate>OrchestratorRelay`; every spec generates and
+    passes its gates.
+  - `examples/minimal/`: every durable kind again, on Restate (Chris,
+    2026-09-24: an in-process engine under a `.tesser-root` `skip` was
+    rejected — no `skip` line for code, ever). `approve_widget` is a signal;
+    `create_widget` runs a workflow that waits on it, then keeps the widget.
+    `memoryclient/` and its `skip` went too: `MemoryKeyRepository` holds its
+    keys itself.
+- [ ] **Delete the deprecated durable kinds (follow-up to the migration
+  above).** Delete `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`, the
+  `runners`/`runtimes` kind packages, and their
+  TB041/TB052/TB060/TB070/TB081/TB082/TB085 rows, with the analyzer and
+  tesser-py tests for them, and drop the deprecated-kinds notes from
+  CLAUDE.md, the skill (`python.md`, `map.md`, `SKILL.md`),
+  `docs/design-app-service-types.md` and `rationale/coverage.md`.
+  `docs/design-operation-naming.md` still names runners and runtimes
+  throughout (`RestateIngressOrderOrchestratorRelay`); it is a record of
+  rulings, so decide whether it is rewritten or marked historical.
 - [ ] **TB085 does not derive the name of a signal relay reached only by
   `await_` (PR #210 gap).** A relay's far side is derived from the handlers
   its dispatchers pass; an `await_` operation passes no handler, it reads a
@@ -160,11 +250,11 @@ Deferred work with context. Each entry carries enough for a cold pickup.
     context and ingress, TB085 on their locals).~~ Retired on branch
     `name-strings`: the workflows and dispatchers tests serve their own endpoint under
     fresh service names and drive it through the real Restate.
-- [ ] **durable-execution: an invocation runner's `start_` path is never
+- [ ] **durable-execution: an invocation dispatcher's `start_` path is never
   run.** `RestateInvocationOrderOrchestratorRelay.start_confirm_order`
-  exists because the runner implements the whole relay, but
-  `PurchaseOrchestrator` only runs `run_confirm_order`, and the runner is
-  reachable only through `RestatePurchaseWorkflow`. Decide whether a relay
+  exists because the dispatcher implements the whole relay, but
+  `PurchaseOrchestrator` only runs `run_confirm_order`, and the dispatcher is
+  reachable only through `RestatePayForOrder`. Decide whether a relay
   operation an invocation never uses belongs on that relay, or test the
   path directly.
 

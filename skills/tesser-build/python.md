@@ -1107,10 +1107,10 @@ union-free one that scores **zero** silent sites; a `found: bool` flag and a
 A workflow on a durable-execution engine (Restate, Temporal) adds three
 application kinds that are **not** application services, and four adapter
 kinds that carry the engine. The rules and the why are
-`docs/design-app-service-types.md`; the worked example is `examples/voice/`.
-`examples/durable-execution/`, `examples/minimal/` and the generator's
-templates still carry the older runner/runtime shape until they migrate
-(`TODOS.md`; see **Trees not yet migrated**, below).
+`docs/design-app-service-types.md`; the worked example is `examples/voice/`,
+`examples/durable-execution/` shows one workflow running another, and
+`examples/minimal/` shows each kind once, with a signal the workflow waits
+on.
 All of them keep the service body rules above (one `ts.Request` in, one
 `ts.Response` out, `match` only, mappers for every translation) — what differs
 is scope, reach, and what each may depend on.
@@ -1186,6 +1186,15 @@ service or handler name.
   workflow by resolving its promise, named by the relays constant. A durable
   promise can be resolved only from inside a handler of its own workflow, so
   a signal registers on the container the workflow's `main` is registered on.
+  Restate runs a shared handler on a key whose `main` never ran, and a
+  resolved promise stays resolved, so a signal first gets the state its
+  workflow's `main` sets before it waits (`CONDUCT_CALL_STATE =
+  "conduct_call"`, a relays constant named for the main's operation) and
+  refuses with a terminal 412 when the state is absent: an event sent
+  before its workflow starts must not pass the gate once it does. Every
+  signal on the workflow reads the same state. The order in a signal is the
+  key/body check (400), the state (412), then the resolve, swallowing the
+  409 of a promise already resolved.
 - **A dispatcher** (`ts.Dispatcher`, in `adapters/workflows/` or
   `adapters/dispatchers/`) implements a relay. From inside an invocation it
   calls through the workflow context,
@@ -1220,7 +1229,13 @@ imports no HTTP client (`restate.client`, `httpx`, `aiohttp`, `requests`,
 through its context, where the engine journals it; (k) an activity's handler
 calls its application client's method named for the operation; (l) a signal's
 handler calls `.promise(...).resolve(...)`; (m) a relays constant is assigned
-once. A signal relay's
+once; (n) a workflow's `main` sets, and a signal gets, workflow state only by a
+relays constant, and that constant equals the operation of the `main` on the
+signal's container, so the one state a signal may read is the one its
+workflow's `main` writes; and the guard is required: every signal gets that
+started state before it resolves its promise, and a `main` whose container
+has a signal sets it (a `main` with no signal on its container is not asked
+to). A signal relay's
 name is derived today only through a `run_` operation that reaches its signal;
 an `await_`-only relay is not derived yet (`TODOS.md`).
 
@@ -1348,6 +1363,11 @@ class RestateConductCall(ts.Workflow):
         async def conduct_call(
             restate_workflow_context: restate.WorkflowContext, conduct_call_request: relays.ConductCallRequest
         ) -> relays.ConductCallResponse:
+            restate_workflow_context.set(
+                relays.CONDUCT_CALL_STATE,
+                relays.ConductCallRequestSnapshot().serialize(conduct_call_request),
+                serde=restate_serde.BytesSerde(),
+            )
             return await orchestrators.CallOrchestrator(
                 RestateInvocationDialingActionsRelay(restate_workflow_context, restate_dial_person, restate_hang_up),
                 RestateInvocationCallOrchestratorSignalRelay(restate_workflow_context),
@@ -1372,6 +1392,11 @@ class RestatePersonJoined(ts.Signal):
             call_id = restate_workflow_shared_context.key()
             if person_joined_request.call_id != call_id:
                 raise restate.TerminalError(_FOREIGN_CALL_ID, status_code=400)
+            if (
+                await restate_workflow_shared_context.get(relays.CONDUCT_CALL_STATE, serde=restate_serde.BytesSerde())
+                is None
+            ):
+                raise restate.TerminalError(_NOT_CONDUCTING_MESSAGE, status_code=_NOT_CONDUCTING)
             try:
                 await restate_workflow_shared_context.promise(
                     relays.PERSON_JOINED_PROMISE, serde=restate_serde.BytesSerde()
@@ -1464,10 +1489,14 @@ class Calls(ts.Component):
   2026-08-30). It declares exactly `serialize` and `deserialize` over **one
   type** — a type parameter, or the one shape its base is subscripted with —
   may hold at most the target type it was built with, and branches on nothing
-  but the empty payload before delegating to the snapshot. A payload the
-  snapshot cannot parse raises from the snapshot, and the engine retries it
-  and then pauses the invocation under the registration's retry policy; the
-  serde turns only the empty body into a terminal 400. It is the **one adapter
+  but the empty payload before delegating to the snapshot, where it raises a
+  terminal 400. What the engine does with a payload that does not parse
+  depends on where it is read: on a handler's input the SDK re-raises
+  anything the input serde raises, that 400 included, as a terminal 500 that
+  is not retried (`invoke_handler`, `restate/handler.py`); anywhere else — a
+  response a caller reads, a promise a workflow reads — a snapshot's
+  exception is retried and then pauses the invocation under the
+  registration's retry policy. It is the **one adapter
   class allowed a base from outside the tree** (TB052): the engine is the
   caller and the SDK's ABC is the shape it calls, so the class reads
   `class RestateXSerde(ts.Serde, restate.serde.Serde[relays.X])`.
@@ -1523,17 +1552,12 @@ class Calls(ts.Component):
   serde at the client/worker rather than at a decorator, and the kinds are
   expected to survive it unchanged.
 
-**Trees not yet migrated.** `examples/durable-execution/` and the generator's
-templates still use the older kinds, and `examples/minimal/` shows none of the
-durable kinds until an in-process engine restores them (`TODOS.md`). There, a
-runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its
+**The deprecated kinds.** `ts.Runner` (`adapters/runners/`), `ts.Runtime`
+(`adapters/runtimes/`) and `ts.DeprecatedWorkflow` remain, with their rules,
+until the removal in `TODOS.md`, but no tree uses them. A runner reached its
 far side by literal service and handler name (`generic_call`/`generic_send`,
-`promise("X")`), and a workflow runner implements the application-side
-`ts.DeprecatedWorkflow` protocol, which yields the orchestrator's application
-client per invocation; a runtime (`ts.Runtime`, `adapters/runtimes/`)
-registers the engine's handlers under literals and registers only what a
-runner of its context reaches. TB085 checks those literals against the relay.
-Write new durable code in the shape above, not this one.
+`promise("X")`); a runtime registered the engine's handlers under literals.
+Write durable code in the shape above.
 
 ## Repositories
 

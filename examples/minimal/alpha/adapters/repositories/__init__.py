@@ -1,1 +1,1 @@
-from alpha.adapters.repositories.memory import MemoryWidgetRepository as MemoryWidgetRepository
+from alpha.adapters.repositories.postgres import PostgresWidgetStore as PostgresWidgetStore
