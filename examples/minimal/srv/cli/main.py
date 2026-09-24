@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import traceback
 
@@ -18,7 +19,13 @@ class CliHost(ts.Host):
             try:
                 handler = alpha_handlers.Handler(minimal_app.alpha.client)
                 try:
-                    cli_response = handler.add_part(protocol.CliRequest(args=tuple(argv)))
+                    match argv[:1]:
+                        case ["create"]:
+                            cli_response = asyncio.run(handler.create_widget(protocol.CliRequest(args=tuple(argv[1:]))))
+                        case ["approve"]:
+                            cli_response = asyncio.run(handler.approve_widget(protocol.CliRequest(args=tuple(argv[1:]))))
+                        case _:
+                            cli_response = handler.add_part(protocol.CliRequest(args=tuple(argv)))
                 except protocol.UsageError as e:
                     cli_response = protocol.CliResponse(exit_code=2, line=protocol.Line(text=str(e)))
                 sys.stdout.write(cli_response.line.text + "\n")

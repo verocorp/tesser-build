@@ -44,3 +44,9 @@ class TestHandler:
         handler = handlers.Handler(FakeRejectingClient())
         cli_response = handler.add_part(protocol.CliRequest(args=("a", "p")))
         assert cli_response == protocol.CliResponse(exit_code=2, line=protocol.Line(text="a name is never empty"))
+
+    async def test_create_and_approve_print_the_widget_s_name(self) -> None:
+        handler = handlers.Handler(FakeClient())
+        create_cli_response = await handler.create_widget(protocol.CliRequest(args=("a",)))
+        approve_cli_response = await handler.approve_widget(protocol.CliRequest(args=("a",)))
+        assert (create_cli_response.line, approve_cli_response.line) == (protocol.Line(text="a"), protocol.Line(text="a"))

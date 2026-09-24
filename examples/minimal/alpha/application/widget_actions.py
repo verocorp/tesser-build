@@ -9,8 +9,8 @@ import alpha.domain as domain
 
 class MapToSaveWidgetRequest(ts.Mapper, ports.SaveWidgetRequest):
 
-    def __init__(self, name: domain.Name) -> None:
-        super().__init__(name=str(name), standing="kept")
+    def __init__(self, name: domain.Name, standing: domain.Standing) -> None:
+        super().__init__(name=str(name), standing=str(standing))
 
 
 class MapToKeepWidgetResponse(ts.Mapper, relays.KeepWidgetResponse):
@@ -26,5 +26,6 @@ class WidgetActions(ts.Actions):
 
     def keep_widget(self, keep_widget_request: relays.KeepWidgetRequest) -> relays.KeepWidgetResponse:
         name = domain.Name(keep_widget_request.name)
-        save_widget_response = self._widget_repository.save_widget(MapToSaveWidgetRequest(name))
+        standing = domain.Standing("kept")
+        save_widget_response = self._widget_repository.save_widget(MapToSaveWidgetRequest(name, standing))
         return MapToKeepWidgetResponse(save_widget_response)

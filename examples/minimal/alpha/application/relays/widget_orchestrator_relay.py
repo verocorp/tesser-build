@@ -38,6 +38,12 @@ class RegisterWidgetResponseSnapshot(ts.Serde):
         return RegisterWidgetResponse(name=snapshot["name"])
 
 
+class StartRegisterWidgetResponse(ts.Response):
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class ApproveWidgetRequest(ts.Request):
 
     def __init__(self, name: str) -> None:
@@ -72,8 +78,8 @@ class ApproveWidgetResponseSnapshot(ts.Serde):
 
 class WidgetOrchestratorRelay(ts.Relay, typing.Protocol):
 
-    async def run_register_widget(
+    async def start_register_widget(
         self, register_widget_request: RegisterWidgetRequest
-    ) -> RegisterWidgetResponse: ...
+    ) -> StartRegisterWidgetResponse: ...
 
     async def run_approve_widget(self, approve_widget_request: ApproveWidgetRequest) -> ApproveWidgetResponse: ...

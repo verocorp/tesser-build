@@ -14,6 +14,8 @@ import alpha.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
 _TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=30.0)
+_ALREADY_COMPLETED: typing.Final[int] = 409
+_ALREADY_COMPLETED_MESSAGE: typing.Final[str] = "promise was already completed"
 
 
 class RestateApproveWidgetRequestSerde(ts.Serde, restate_serde.Serde[relays.ApproveWidgetRequest]):
@@ -54,9 +56,18 @@ class RestateApproveWidget(ts.Signal):
             approve_widget_request: relays.ApproveWidgetRequest,
         ) -> relays.ApproveWidgetResponse:
             name = restate_workflow_shared_context.key()
-            await restate_workflow_shared_context.promise(
-                relays.APPROVE_WIDGET_PROMISE, serde=restate_serde.BytesSerde()
-            ).resolve(relays.AwaitApproveWidgetResponseSnapshot().serialize(relays.AwaitApproveWidgetResponse(name=name)))
+            try:
+                await restate_workflow_shared_context.promise(
+                    relays.APPROVE_WIDGET_PROMISE, serde=restate_serde.BytesSerde()
+                ).resolve(
+                    relays.AwaitApproveWidgetResponseSnapshot().serialize(relays.AwaitApproveWidgetResponse(name=name))
+                )
+            except restate.TerminalError as terminal_error:
+                if not (
+                    terminal_error.status_code == _ALREADY_COMPLETED
+                    and terminal_error.message == _ALREADY_COMPLETED_MESSAGE
+                ):
+                    raise
             return relays.ApproveWidgetResponse(name=name)
 
         self.handler = approve_widget
@@ -74,15 +85,16 @@ class RestateHttpWidgetOrchestratorRelay(ts.Dispatcher):
         self._restate_register_widget = restate_register_widget
         self._restate_approve_widget = restate_approve_widget
 
-    async def run_register_widget(
+    async def start_register_widget(
         self, register_widget_request: relays.RegisterWidgetRequest
-    ) -> relays.RegisterWidgetResponse:
+    ) -> relays.StartRegisterWidgetResponse:
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_TIMEOUT) as async_client:
-            return await restate_client.Client(async_client).workflow_call(
+            await restate_client.Client(async_client).workflow_send(
                 self._restate_register_widget.handler,
                 key=urllib_parse.quote(register_widget_request.name, safe=""),
                 arg=register_widget_request,
             )
+        return relays.StartRegisterWidgetResponse(name=register_widget_request.name)
 
     async def run_approve_widget(self, approve_widget_request: relays.ApproveWidgetRequest) -> relays.ApproveWidgetResponse:
         async with httpx.AsyncClient(base_url=self._ingress, timeout=_TIMEOUT) as async_client:

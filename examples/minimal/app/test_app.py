@@ -29,9 +29,14 @@ class TestAppConfig:
 class TestEnvConfigRepository:
 
     def test_the_environment_is_read_into_a_config(self) -> None:
-        os.environ.update(ALPHA_STORAGE="memory", BETA_KEY="k")
-        app_config = app.EnvConfigRepository().get()
+        ambient_ingress = os.environ.get("RESTATE_INGRESS", "")
+        os.environ.update(ALPHA_STORAGE="memory", BETA_KEY="k", RESTATE_INGRESS="http://ingress.invalid:8080")
+        try:
+            app_config = app.EnvConfigRepository().get()
+        finally:
+            os.environ.update(RESTATE_INGRESS=ambient_ingress)
         assert app_config.beta.key == "k"
+        assert app_config.alpha.ingress == "http://ingress.invalid:8080"
 
 
 class TestApp:

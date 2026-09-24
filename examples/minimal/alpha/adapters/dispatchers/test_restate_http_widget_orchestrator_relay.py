@@ -34,7 +34,7 @@ class FakeWidgetApplicationClient(client.WidgetApplicationClient):
 
 class TestRestateHttpWidgetOrchestratorRelay:
 
-    async def test_a_registration_waits_in_the_engine_until_its_name_is_approved_and_then_keeps_the_widget_once(
+    async def test_a_started_registration_waits_until_its_name_is_approved_and_keeps_the_widget_once(
         self,
     ) -> None:
         name = str(uuid.uuid4())
@@ -77,8 +77,8 @@ class TestRestateHttpWidgetOrchestratorRelay:
                 await asyncio.sleep(0.1)
             assert registered.is_success, registered.text
 
-            registering = asyncio.create_task(
-                restate_http_widget_orchestrator_relay.run_register_widget(relays.RegisterWidgetRequest(name=name))
+            start_register_widget_response = await restate_http_widget_orchestrator_relay.start_register_widget(
+                relays.RegisterWidgetRequest(name=name)
             )
             awaited: list[str] = []
             for _ in range(100):
@@ -97,16 +97,20 @@ class TestRestateHttpWidgetOrchestratorRelay:
                 if awaited:
                     break
                 await asyncio.sleep(0.05)
-            waiting = not registering.done()
-            approve_widget_response = await restate_http_widget_orchestrator_relay.run_approve_widget(
-                relays.ApproveWidgetRequest(name=name)
-            )
-            register_widget_response = await registering
+            kept_before_approval = list(fake_widget_application_client.kept)
+            approvals = [
+                await restate_http_widget_orchestrator_relay.run_approve_widget(relays.ApproveWidgetRequest(name=name))
+                for _ in range(2)
+            ]
+            for _ in range(100):
+                if fake_widget_application_client.kept:
+                    break
+                await asyncio.sleep(0.05)
 
+            assert start_register_widget_response == relays.StartRegisterWidgetResponse(name=name)
             assert awaited == [relays.APPROVE_WIDGET_PROMISE]
-            assert waiting
-            assert approve_widget_response == relays.ApproveWidgetResponse(name=name)
-            assert register_widget_response == relays.RegisterWidgetResponse(name=name)
+            assert kept_before_approval == []
+            assert approvals == [relays.ApproveWidgetResponse(name=name)] * 2
             assert fake_widget_application_client.kept == [name]
         finally:
             if registered.is_success:

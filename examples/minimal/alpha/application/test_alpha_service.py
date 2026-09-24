@@ -52,11 +52,11 @@ class FakeWidgetOrchestratorRelay(relays.WidgetOrchestratorRelay):
         self.registered: list[str] = []
         self.approved: list[str] = []
 
-    async def run_register_widget(
+    async def start_register_widget(
         self, register_widget_request: relays.RegisterWidgetRequest
-    ) -> relays.RegisterWidgetResponse:
+    ) -> relays.StartRegisterWidgetResponse:
         self.registered.append(register_widget_request.name)
-        return relays.RegisterWidgetResponse(name=register_widget_request.name)
+        return relays.StartRegisterWidgetResponse(name=register_widget_request.name)
 
     async def run_approve_widget(self, approve_widget_request: relays.ApproveWidgetRequest) -> relays.ApproveWidgetResponse:
         self.approved.append(approve_widget_request.name)

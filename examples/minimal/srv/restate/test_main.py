@@ -16,7 +16,13 @@ class TestRestateHost:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
-        env = dict(os.environ, ALPHA_STORAGE="memory", BETA_KEY="a", PYTHONPATH=os.pathsep.join(sys.path))
+        env = dict(
+            os.environ,
+            ALPHA_STORAGE="memory",
+            BETA_KEY="a",
+            RESTATE_INGRESS="http://ingress.invalid:8080",
+            PYTHONPATH=os.pathsep.join(sys.path),
+        )
         host = subprocess.Popen([sys.executable, "-m", "srv.restate.main", f"127.0.0.1:{port}"], env=env)
         discover = urllib_request.Request(
             f"http://127.0.0.1:{port}/discover",

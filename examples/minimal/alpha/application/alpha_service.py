@@ -55,8 +55,8 @@ class MapToRegisterWidgetRequest(ts.Mapper, relays.RegisterWidgetRequest):
 
 class MapToCreateWidgetResponse(ts.Mapper, client.CreateWidgetResponse):
 
-    def __init__(self, register_widget_response: relays.RegisterWidgetResponse) -> None:
-        super().__init__(name=register_widget_response.name)
+    def __init__(self, start_register_widget_response: relays.StartRegisterWidgetResponse) -> None:
+        super().__init__(name=start_register_widget_response.name)
 
 
 class MapToApproveWidgetRequest(ts.Mapper, relays.ApproveWidgetRequest):
@@ -101,13 +101,19 @@ class AlphaService(ts.ApplicationService):
         return MapToAddPartResponse(widget)
 
     async def create_widget(self, create_widget_request: client.CreateWidgetRequest) -> client.CreateWidgetResponse:
-        name = domain.Name(create_widget_request.name)
-        register_widget_response = await self._widget_orchestrator_relay.run_register_widget(
+        try:
+            name = domain.Name(create_widget_request.name)
+        except errors.DomainError as domain_error:
+            raise client.WidgetRejected(domain_error.code, domain_error.message) from domain_error
+        start_register_widget_response = await self._widget_orchestrator_relay.start_register_widget(
             MapToRegisterWidgetRequest(name)
         )
-        return MapToCreateWidgetResponse(register_widget_response)
+        return MapToCreateWidgetResponse(start_register_widget_response)
 
     async def approve_widget(self, approve_widget_request: client.ApproveWidgetRequest) -> client.ApproveWidgetResponse:
-        name = domain.Name(approve_widget_request.name)
+        try:
+            name = domain.Name(approve_widget_request.name)
+        except errors.DomainError as domain_error:
+            raise client.WidgetRejected(domain_error.code, domain_error.message) from domain_error
         approve_widget_response = await self._widget_orchestrator_relay.run_approve_widget(MapToApproveWidgetRequest(name))
         return MapToApproveWidgetResponse(approve_widget_response)
