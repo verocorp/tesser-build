@@ -20782,6 +20782,7 @@ def _engine_kinds_spec(
     old_also: str = "",
     new_also: str = "",
     extra: tuple[tuple[str, str, str | None, bool], ...] = (),
+    edits: tuple[tuple[str, str], ...] = (),
 ) -> domain.CodebaseSpec:
     replaced = {
         "shop/application/relays/__init__.py": (
@@ -21020,9 +21021,13 @@ def _engine_kinds_spec(
         (path, module, source.replace(old, new) if old else source, package)
         for path, module, source, package in base + sources
     )
-    return _kinds_spec(sources=extra, base=tuple(
+    edited = tuple(
         (path, module, source.replace(old_also, new_also) if old_also else source, package)
         for path, module, source, package in changed
+    )
+    return _kinds_spec(sources=extra, base=tuple(
+        (path, module, next((source.replace(edit_old, edit_new) for edit_old, edit_new in edits if edit_old in source), source), package)
+        for path, module, source, package in edited
     ))
 
 
@@ -21720,6 +21725,71 @@ def test_a_signal_handler_resolves_its_promise() -> None:
             "that does not resolve its promise leaves its workflow waiting" in f
             for f in findings
         ), (replacement, findings)
+
+
+@ts.helper
+def _gated_engine_kinds_spec(
+    state_constant: str = "issue_quote", written: str = "relays.ISSUE_QUOTE_STATE", read: str = "relays.ISSUE_QUOTE_STATE"
+) -> domain.CodebaseSpec:
+    return _engine_kinds_spec(edits=(
+            (
+                "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n",
+                "QUOTE_ACCEPTED_PROMISE: typing.Final[str] = 'quote_accepted'\n"
+                f"ISSUE_QUOTE_STATE: typing.Final[str] = {state_constant!r}\n",
+            ),
+            (
+                "import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n",
+                "import QUOTE_ACCEPTED_PROMISE as QUOTE_ACCEPTED_PROMISE\n"
+                "from shop.application.relays.flow_signal_relay import ISSUE_QUOTE_STATE as ISSUE_QUOTE_STATE\n",
+            ),
+            (
+                "            return await orchestrators.Flow(\n",
+                f"            engine_workflow_context.set({written}, b'')\n"
+                "            return await orchestrators.Flow(\n",
+            ),
+            (
+                "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n",
+                f"            if await engine_workflow_shared_context.get({read}) is None:\n"
+                "                raise restate.TerminalError('not started', status_code=412)\n"
+                "            await engine_workflow_shared_context.promise(relays.QUOTE_ACCEPTED_PROMISE).resolve(b'')\n",
+            ),
+        ))
+
+
+def test_a_signal_reads_only_the_state_its_workflows_main_writes_by_a_relays_constant() -> None:
+    gated, read_by_literal, written_by_literal, named_for_nothing = (
+        tuple(
+            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+            for v in domain.Codebase(_gated_engine_kinds_spec(state_constant, written, read)).violations()
+        )
+        for state_constant, written, read in (
+            ("issue_quote", "relays.ISSUE_QUOTE_STATE", "relays.ISSUE_QUOTE_STATE"),
+            ("issue_quote", "relays.ISSUE_QUOTE_STATE", "'issue_quote'"),
+            ("issue_quote", "'issue_quote'", "relays.ISSUE_QUOTE_STATE"),
+            ("quote_issued", "relays.ISSUE_QUOTE_STATE", "relays.ISSUE_QUOTE_STATE"),
+        )
+    )
+    assert gated == (), gated
+    assert any(
+        "EngineQuoteAccepted.quote_accepted names a state with something other than a constant in "
+        "application/relays; a workflow's main sets and its signal gets one state by a relays constant, because a "
+        "name the analyzer cannot read is a name it is not checking" in f
+        for f in read_by_literal
+    ), read_by_literal
+    assert any(
+        "EngineIssueQuote.issue_quote names a state with something other than a constant in "
+        "application/relays" in f
+        for f in written_by_literal
+    ), written_by_literal
+    assert any(
+        "EngineIssueQuote.issue_quote names the state quote_issued; a workflow's main sets the state named "
+        "for its own operation and a signal gets only that state, because the signal learns from it that the "
+        "main has started" in f
+        for f in named_for_nothing
+    ), named_for_nothing
+    assert any("EngineQuoteAccepted.quote_accepted names the state quote_issued;" in f for f in named_for_nothing), (
+        named_for_nothing
+    )
 
 
 def test_a_dispatcher_field_kept_with_an_annotation_is_read_like_one_kept_without() -> None:

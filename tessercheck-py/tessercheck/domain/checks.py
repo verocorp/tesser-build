@@ -302,6 +302,10 @@ REGISTRATION_CALLS: typing.Final[frozenset[str]] = frozenset({"handler", "main"}
 
 RESOLVE_CALL: typing.Final[str] = "resolve"
 
+STATE_READ_CALL: typing.Final[str] = "get"
+
+STATE_WRITE_CALL: typing.Final[str] = "set"
+
 DISPATCH_PREFIXES: typing.Final[dict[str, str]] = {
     ACTIVITY_BLOCK: "service_",
     WORKFLOW_BLOCK: "workflow_",
@@ -2151,6 +2155,14 @@ class RegistrationRows(ts.ValueObject):
             if (module_name, cls) == wanted and handler:
                 return Text(handler)
         return None
+
+    def main_handlers(self, symbol: Symbol) -> Names:
+        wanted = (str(symbol.module()), str(symbol.name()))
+        return Names(tuple(
+            handler
+            for _, _, block, far_module, far_name, handler in self._items
+            if block == WORKFLOW_BLOCK and (far_module, far_name) == wanted and handler
+        ))
 
 
 class ConstantRows(ts.ValueObject):
@@ -12649,6 +12661,7 @@ class Module(ts.Entity):
         registry = Registry(registry_spec)
         kind_table = registry.kinds()
         constant_rows = registry.relay_constants()
+        registration_rows = registry.registrations()
         names = registry.dispatched()
         context = self._name.split(".")[0]
         found: list[Violation] = []
@@ -12762,6 +12775,51 @@ class Module(ts.Entity):
                             f"{handler.name}; an activity's handler performs its operation by calling "
                             "the method of that name on the application client it takes, because a "
                             "handler that answers without it reports work nothing did",
+                        ))
+                    )
+            engine_context = handler.args.args[0].arg if handler.args.args else None
+            state_call = STATE_WRITE_CALL if str(block) == WORKFLOW_BLOCK else STATE_READ_CALL
+            far_side = registration_rows.far_side(Symbol(SymbolSpec(self._name, cls.name)))
+            wanted_states = registration_rows.main_handlers(far_side) if far_side is not None else None
+            if str(block) == WORKFLOW_BLOCK:
+                wanted_states = Names((handler.name,))
+            for call in ast.walk(handler):
+                if not (
+                    str(block) in (WORKFLOW_BLOCK, SIGNAL_BLOCK)
+                    and engine_context is not None
+                    and isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == state_call
+                    and isinstance(call.func.value, ast.Name)
+                    and call.func.value.id == engine_context
+                ):
+                    continue
+                first = call.args[0] if call.args else None
+                stated = self._resolve(first) if isinstance(first, (ast.Name, ast.Attribute)) else None
+                value = (
+                    constant_rows.value(Symbol(SymbolSpec(stated[0], stated[1]))) if stated is not None else None
+                )
+                if value is None:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            call.lineno,
+                            "TB085",
+                            f"{where}.{handler.name} names a state with something other than a constant "
+                            "in application/relays; a workflow's main sets and its signal gets one state "
+                            "by a relays constant, because a name the analyzer cannot read is a name it "
+                            "is not checking",
+                        ))
+                    )
+                elif wanted_states is not None and str(value) not in wanted_states:
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            call.lineno,
+                            "TB085",
+                            f"{where}.{handler.name} names the state {value}; a workflow's main sets the "
+                            "state named for its own operation and a signal gets only that state, because "
+                            "the signal learns from it that the main has started",
                         ))
                     )
             if str(block) != SIGNAL_BLOCK:

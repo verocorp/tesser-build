@@ -17,6 +17,8 @@ _TIMEOUT: typing.Final[httpx.Timeout] = httpx.Timeout(5.0, read=30.0)
 _FOREIGN_NAME: typing.Final[str] = "an approval names the widget its workflow is keyed by"
 _ALREADY_COMPLETED: typing.Final[int] = 409
 _ALREADY_COMPLETED_MESSAGE: typing.Final[str] = "promise was already completed"
+_NOT_REGISTERING: typing.Final[int] = 412
+_NOT_REGISTERING_MESSAGE: typing.Final[str] = "no registration of this widget has started, so there is nothing to approve"
 
 
 class RestateApproveWidgetRequestSerde(ts.Serde, restate_serde.Serde[relays.ApproveWidgetRequest]):
@@ -59,6 +61,11 @@ class RestateApproveWidget(ts.Signal):
             name = restate_workflow_shared_context.key()
             if approve_widget_request.name != name:
                 raise restate.TerminalError(_FOREIGN_NAME, status_code=400)
+            if (
+                await restate_workflow_shared_context.get(relays.REGISTER_WIDGET_STATE, serde=restate_serde.BytesSerde())
+                is None
+            ):
+                raise restate.TerminalError(_NOT_REGISTERING_MESSAGE, status_code=_NOT_REGISTERING)
             try:
                 await restate_workflow_shared_context.promise(
                     relays.APPROVE_WIDGET_PROMISE, serde=restate_serde.BytesSerde()

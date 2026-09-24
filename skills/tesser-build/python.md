@@ -1186,6 +1186,12 @@ service or handler name.
   workflow by resolving its promise, named by the relays constant. A durable
   promise can be resolved only from inside a handler of its own workflow, so
   a signal registers on the container the workflow's `main` is registered on.
+  Restate runs a shared handler on a key whose `main` never ran, and a
+  resolved promise stays resolved, so a signal first gets the state its
+  workflow's `main` sets before it waits (`REGISTER_WIDGET_STATE =
+  "register_widget"`, a relays constant named for the main's operation) and
+  refuses with a terminal 412 when the state is absent: an approval sent
+  before its registration starts must not pass the gate once it does.
 - **A dispatcher** (`ts.Dispatcher`, in `adapters/workflows/` or
   `adapters/dispatchers/`) implements a relay. From inside an invocation it
   calls through the workflow context,
@@ -1220,7 +1226,10 @@ imports no HTTP client (`restate.client`, `httpx`, `aiohttp`, `requests`,
 through its context, where the engine journals it; (k) an activity's handler
 calls its application client's method named for the operation; (l) a signal's
 handler calls `.promise(...).resolve(...)`; (m) a relays constant is assigned
-once. A signal relay's
+once; (n) a workflow's `main` sets, and a signal gets, workflow state only by a
+relays constant, and that constant equals the operation of the `main` on the
+signal's container, so the one state a signal may read is the one its
+workflow's `main` writes. A signal relay's
 name is derived today only through a `run_` operation that reaches its signal;
 an `await_`-only relay is not derived yet (`TODOS.md`).
 

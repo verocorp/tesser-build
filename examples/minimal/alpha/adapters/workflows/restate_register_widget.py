@@ -81,6 +81,11 @@ class RestateRegisterWidget(ts.Workflow):
         ) -> relays.RegisterWidgetResponse:
             if str(register_widget_request.name) != restate_workflow_context.key():
                 raise restate.TerminalError(_FOREIGN_NAME, status_code=400)
+            restate_workflow_context.set(
+                relays.REGISTER_WIDGET_STATE,
+                relays.RegisterWidgetRequestSnapshot().serialize(register_widget_request),
+                serde=restate_serde.BytesSerde(),
+            )
             return await orchestrators.WidgetOrchestrator(
                 RestateInvocationWidgetOrchestratorSignalRelay(restate_workflow_context),
                 RestateInvocationWidgetActionsRelay(restate_workflow_context, restate_keep_widget),

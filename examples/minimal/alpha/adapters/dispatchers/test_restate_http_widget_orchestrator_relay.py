@@ -37,7 +37,7 @@ class FakeWidgetApplicationClient(client.WidgetApplicationClient):
 
 class TestRestateHttpWidgetOrchestratorRelay:
 
-    async def test_a_started_registration_waits_until_its_name_is_approved_and_keeps_the_widget_once(
+    async def test_an_approval_before_the_start_is_refused_and_the_registration_waits_until_approved_and_keeps_the_widget_once(
         self,
     ) -> None:
         name = ".."
@@ -79,6 +79,16 @@ class TestRestateHttpWidgetOrchestratorRelay:
                 await asyncio.sleep(0.1)
             assert registered.is_success, registered.text
 
+            with pytest.raises(restate.HttpError) as early:
+                await restate_http_widget_orchestrator_relay.run_approve_widget(relays.ApproveWidgetRequest(name=name))
+            promised = await admin.post(
+                "/query",
+                headers={"accept": "application/json"},
+                json={
+                    "query": "SELECT key FROM sys_promise "
+                    f"WHERE service_name = 'WidgetOrchestrator{suffix}' AND service_key = '{name}' AND completed"
+                },
+            )
             start_register_widget_response = await restate_http_widget_orchestrator_relay.start_register_widget(
                 relays.RegisterWidgetRequest(name=domain.Name(name))
             )
@@ -114,6 +124,8 @@ class TestRestateHttpWidgetOrchestratorRelay:
                         restate_approve_widget.handler, key="%2E%2E", arg=relays.ApproveWidgetRequest(name="other")
                     )
 
+            assert early.value.status_code == 412
+            assert promised.json()["rows"] == []
             assert start_register_widget_response == relays.StartRegisterWidgetResponse(name=name)
             assert awaited == [relays.APPROVE_WIDGET_PROMISE]
             assert kept_before_approval == []

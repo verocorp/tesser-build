@@ -71,7 +71,7 @@ Each row holds the row above it; a row never holds a row below.
 | action handler | `ts.Activity` | `activities/` | `restate.Service`, application client | registers `record_call` on `CallActions`; calls the application client |
 | workflow `main` | `ts.Workflow` | `workflows/` | `restate.Workflow`, the activities | registers `conduct_call` on `CallOrchestrator`; builds the orchestrator per invocation |
 | invocation dispatcher | `ts.Dispatcher` | `workflows/` | `wf_ctx`, the activities it calls | `wf_ctx.service_call(activity.handler, ...)`, `wf_ctx.promise(CONSTANT).value()` |
-| shared handler | `ts.Signal` | `dispatchers/` | the workflow's `restate.Workflow` | registers `person_joined` on `CallOrchestrator`; resolves `promise(CONSTANT)` |
+| shared handler | `ts.Signal` | `dispatchers/` | the workflow's `restate.Workflow` | registers `person_joined` on `CallOrchestrator`; gets the state its `main` sets, refuses when absent, then resolves `promise(CONSTANT)` |
 | HTTP dispatcher | `ts.Dispatcher` | `dispatchers/` | `restate_url`, the workflow, the signals | `workflow_call(workflow.handler, ...)` or `workflow_call(signal.handler, ...)` |
 | service | `ts.ApplicationService` | `application/` | the relay the HTTP dispatcher implements | `relay.run_conduct_call(...)` |
 
@@ -97,6 +97,14 @@ Notes on the lines, from the code and the Restate Python SDK (1.0.4):
   restate.Workflow.handler -> .resolve` instead of resolving the promise
   directly, and why a signal registers on the container its workflow's `main`
   is registered on. A resolved promise cannot be resolved again.
+- Restate (1.7.9, SDK 1.0.4) runs a shared handler on a key whose `main` never
+  ran: the call answers 200, the promise is stored resolved, and a `main`
+  started later for that key reads it at once. So a signal gets the state its
+  workflow's `main` sets before it waits (`ctx.set(REGISTER_WIDGET_STATE,
+  ...)` in the `main`, `shared.get(REGISTER_WIDGET_STATE)` in the signal) and
+  raises `TerminalError(..., status_code=412)` when it is absent; the ingress
+  answers 412 to the caller. `promise(...).peek()` cannot stand in for it: it
+  answers `None` until the promise is resolved, whether or not `main` started.
 - A dispatcher over HTTP opens an `httpx.AsyncClient` per call, as Restate's
   documentation does. One long-lived client crossed event loops in the LiveKit
   worker, and calls waiting on the workflow's `main` held every connection
@@ -175,7 +183,11 @@ an invocation goes through its context, where the engine journals it, not over
 HTTP, where it runs again on every replay. (k) An activity's handler calls its
 application client's method named for the operation. (l) A signal's handler
 calls `.promise(...).resolve(...)`. (m) A relays constant is assigned once,
-because the analyzer reads one value and Python keeps the last. A signal relay's name is derived
+because the analyzer reads one value and Python keeps the last. (n) A
+workflow's `main` sets, and a signal gets, workflow state only by a relays
+constant, and that constant equals the operation of the `main` registered on
+the signal's container, because the signal learns from that state that the
+`main` has started. A signal relay's name is derived
 today only through a `run_` operation that reaches its signal; an
 `await_`-only relay is not derived yet (`TODOS.md`).
 

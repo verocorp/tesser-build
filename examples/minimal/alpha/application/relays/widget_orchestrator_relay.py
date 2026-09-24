@@ -7,6 +7,8 @@ import tesser.application as ts
 
 import alpha.domain as domain
 
+REGISTER_WIDGET_STATE: typing.Final[str] = "register_widget"
+
 
 class RegisterWidgetRequest(ts.Request):
 
