@@ -124,7 +124,11 @@ activities; only an activity imports the application client and only a
 workflow the orchestrators. The component builds the engine containers and
 publishes them beside its client, then builds activities → workflow →
 signals → dispatcher → services; TB085 derives every name from those typed
-references. `ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`,
+references, and holds a registration class to one handler, a container to
+unique handler names, and a dispatcher to no engine call by name; a
+`workflows/` module imports no HTTP client (TB060), because a call from inside
+an invocation goes through its context, where the engine journals it.
+`ts.Runner`, `ts.Runtime`, `ts.DeprecatedWorkflow`,
 `adapters/runners/` and `adapters/runtimes/` remain in trees not yet migrated
 — `TB041`/`TB052`/`TB060`/`TB070`/`TB081`/`TB082`/`TB085`;
 `docs/design-app-service-types.md`, `skills/tesser-build/python.md`).

@@ -158,7 +158,13 @@ differing `name=`. (c) `run_` waits (`*_call`) and `start_` does not
 (`*_send`). (d) `await_X` and the signal named `X` use a relays constant equal
 to `"X"`. (e) Each engine container is named for its far side, as a literal.
 (f) Every activity, workflow, and signal is reached by a dispatcher, so the
-engine holds no registration nobody calls. A signal relay's name is derived
+engine holds no registration nobody calls. (g) An activity, workflow, or signal
+registers exactly one handler, the one it keeps as `self.handler`. (h) A handler
+name is unique in its engine container, because the SDK keeps one handler per
+name. (i) A dispatcher never calls `generic_call`/`generic_send`. (j) A
+`workflows/` module imports neither `restate.client` nor `httpx` (TB060): a call
+from inside an invocation goes through its context, where the engine journals
+it, not over HTTP, where it runs again on every replay. A signal relay's name is derived
 today only through a `run_` operation that reaches its signal; an
 `await_`-only relay is not derived yet (`TODOS.md`).
 
@@ -266,19 +272,17 @@ trees and are not implemented: "name what you compute" would take 79 sites,
 repositories), and "one call on the backend per method" 1. "An adapter raises
 no domain kind" was rejected outright. The numbers are in `TODOS.md`.
 
-**Trees not yet migrated.** `examples/durable-execution/`, `examples/minimal/`
-and the generator's templates still use the kinds this convention replaces,
-and their rules still run on them: a runner (`ts.Runner`,
-`adapters/runners/`) implements a relay by calling its far side by literal
+**Trees not yet migrated.** `examples/durable-execution/` and the generator's
+templates still use the older kinds, and `examples/minimal/` shows none of the
+durable kinds until an in-process engine restores them. The older kinds' rules
+still run: a runner (`ts.Runner`, `adapters/runners/`) implements a relay by calling its far side by literal
 service and handler name (`generic_call`/`generic_send`, `promise("X")`), and a
 workflow runner implements `ts.DeprecatedWorkflow` (the application-side
 protocol formerly called `ts.Workflow`, declared beside an orchestrator's
 application client and yielding it per invocation); a runtime (`ts.Runtime`,
 `adapters/runtimes/`) registers the engine's handlers under literals and may
 register only what a runner of its context reaches. TB085 checks those
-literals against the relay. `examples/minimal/` shows none of the durable
-kinds until an in-process engine restores them. The migration is in
-`TODOS.md`.
+literals against the relay. The migration is in `TODOS.md`.
 
 ---
 

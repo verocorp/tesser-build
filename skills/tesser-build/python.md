@@ -1206,7 +1206,12 @@ a signal's workflow; (b) `run_X`/`start_X` passes the handler `def X`, with no
 differing `name=`; (c) `run_` waits (`*_call`) and `start_` does not
 (`*_send`); (d) `await_X` and the signal named `X` use a relays constant equal
 to `"X"`; (e) each engine container is named for its far side; (f) every
-activity, workflow, and signal is reached by a dispatcher. A signal relay's
+activity, workflow, and signal is reached by a dispatcher; (g) an activity,
+workflow, or signal registers exactly one handler, the one it keeps as
+`self.handler`; (h) a handler name is unique in its engine container; (i) a
+dispatcher never calls `generic_call`/`generic_send`; (j) a `workflows/` module
+imports neither `restate.client` nor `httpx` (TB060), because a call from
+inside an invocation goes through its context, where the engine journals it. A signal relay's
 name is derived today only through a `run_` operation that reaches its signal;
 an `await_`-only relay is not derived yet (`TODOS.md`).
 
