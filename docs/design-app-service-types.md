@@ -458,10 +458,12 @@ in the ports module, and both ends import it.
   ABC — until the 2026-08-30 ruling named the kind: `tesser.adapters.Serde`,
   admitted in `adapters/jobs/`, declaring exactly `serialize` and
   `deserialize` over one type parameter, holding at most the target type, and
-  branching on nothing but the empty payload. It is the one adapter class
+  branching on nothing but the empty payload. It was the first adapter class
   allowed a base from outside the tree, because the engine is the caller, so
   the class reads `class RecordSerde[T](ts.Serde, restate.serde.Serde[T])`
-  and the marker is gone.
+  and the marker is gone. A handler may also subclass a framework base when
+  that framework calls its hook; this is the same caller-owned shape, with
+  `ts.Handler` and the client-call rule still applying.
   What that serde has to be (codex #9): type-directed and recursive, not
   "JSON of `__init__` fields". Port DTO fields may be primitives, nested
   DTOs, tuples, and `enum.Enum` members (TB080); Optional and bool are
