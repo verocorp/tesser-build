@@ -2760,6 +2760,73 @@ class EnumShape(ts.ValueObject):
 
 class Annotation(ts.ValueObject):
 
+    def _head_of(self, inner: ast.expr) -> str | None:
+        if isinstance(inner, ast.Name):
+            return inner.id
+        if isinstance(inner, ast.Attribute):
+            return inner.attr
+        if isinstance(inner, ast.Subscript):
+            return self._head_of(inner.value)
+        return None
+
+    def _candidates(self, inner: ast.expr | None) -> list[tuple[str, str]]:
+        if inner is None:
+            return []
+        if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
+            return self._candidates(inner.left) + self._candidates(inner.right)
+        if isinstance(inner, ast.Subscript):
+            sub_head = self._head_of(inner)
+            elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
+            if sub_head in ("Optional", "Union"):
+                return [item for each in elements for item in self._candidates(each)]
+            if sub_head in ("tuple", "list", "set", "frozenset", "Sequence", "Iterable", "Collection"):
+                return [(ref, "many") for each in elements for ref, shape in self._candidates(each) if shape == "one"]
+            return []
+        if isinstance(inner, ast.Name):
+            return [(inner.id, "one")]
+        if isinstance(inner, ast.Attribute) and isinstance(inner.value, (ast.Name, ast.Attribute)):
+            return [(f"{ast.unparse(inner.value)}.{inner.attr}", "one")]
+        return []
+
+    def _names_bool(self, inner: ast.expr | None) -> bool:
+        if inner is None:
+            return False
+        probe = inner
+        if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+            return self._names_bool(probe.left) or self._names_bool(probe.right)
+        if isinstance(probe, ast.Subscript) and self._head_of(probe) in ("Optional", "Final", "Annotated"):
+            wrapped = probe.slice
+            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                wrapped = wrapped.elts[0]
+            return self._names_bool(wrapped)
+        return isinstance(probe, ast.Name) and probe.id == "bool"
+
+    def _is_union(self, inner: ast.expr | None) -> bool:
+        if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
+            return True
+        if isinstance(inner, ast.Subscript):
+            if isinstance(inner.value, ast.Name) and inner.value.id in ("Optional", "Union"):
+                return True
+            elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
+            return any(self._is_union(element) for element in elements)
+        if isinstance(inner, ast.Attribute):
+            return inner.attr in ("Optional", "Union")
+        return False
+
+    def _primitive_leaf(self, inner: ast.expr) -> bool:
+        probe = inner
+        if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+            return self._primitive_leaf(probe.left) or self._primitive_leaf(probe.right)
+        if isinstance(probe, ast.Subscript):
+            sub_head = self._head_of(probe)
+            elements = probe.slice.elts if isinstance(probe.slice, ast.Tuple) else [probe.slice]
+            if sub_head in ("Callable", "Literal", "type", "Type"):
+                return False
+            if sub_head in ("dict", "Dict", "Mapping", "MutableMapping"):
+                elements = elements[-1:]
+            return any(self._primitive_leaf(each) for each in elements)
+        return self._head_of(probe) in PRIMITIVES
+
     _source: Text
     _head: Text | None
     _container: Text | None
@@ -2775,87 +2842,16 @@ class Annotation(ts.ValueObject):
     _form: Names
 
     def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
-        def head_of(inner: ast.expr) -> str | None:  # tesser:debt TB023
-            cursor: ast.expr | None = inner
-            while cursor is not None:
-                if isinstance(cursor, ast.Name):
-                    return cursor.id
-                if isinstance(cursor, ast.Attribute):
-                    return cursor.attr
-                if isinstance(cursor, ast.Subscript):
-                    cursor = cursor.value
-                    continue
-                return None
-            return None
-
-        def candidates(inner: ast.expr | None) -> list[tuple[str, str]]:  # tesser:debt TB023
-            if inner is None:
-                return []
-            if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
-                return candidates(inner.left) + candidates(inner.right)
-            if isinstance(inner, ast.Subscript):
-                sub_head = head_of(inner)
-                elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
-                if sub_head in ("Optional", "Union"):
-                    return [item for each in elements for item in candidates(each)]
-                if sub_head in ("tuple", "list", "set", "frozenset", "Sequence", "Iterable", "Collection"):
-                    return [(ref, "many") for each in elements for ref, shape in candidates(each) if shape == "one"]
-                return []
-            if isinstance(inner, ast.Name):
-                return [(inner.id, "one")]
-            if isinstance(inner, ast.Attribute) and isinstance(inner.value, (ast.Name, ast.Attribute)):
-                return [(f"{ast.unparse(inner.value)}.{inner.attr}", "one")]
-            return []
-
-        def names_bool(inner: ast.expr | None) -> bool:  # tesser:debt TB023
-            if inner is None:
-                return False
-            probe = inner
-            if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
-                return names_bool(probe.left) or names_bool(probe.right)
-            if isinstance(probe, ast.Subscript) and head_of(probe) in ("Optional", "Final", "Annotated"):
-                wrapped = probe.slice
-                if isinstance(wrapped, ast.Tuple) and wrapped.elts:
-                    wrapped = wrapped.elts[0]
-                return names_bool(wrapped)
-            return isinstance(probe, ast.Name) and probe.id == "bool"
-
-        def is_union(inner: ast.expr | None) -> bool:  # tesser:debt TB023
-            if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
-                return True
-            if isinstance(inner, ast.Subscript):
-                if isinstance(inner.value, ast.Name) and inner.value.id in ("Optional", "Union"):
-                    return True
-                elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
-                return any(is_union(element) for element in elements)
-            if isinstance(inner, ast.Attribute):
-                return inner.attr in ("Optional", "Union")
-            return False
-
-        def primitive_leaf(inner: ast.expr) -> bool:  # tesser:debt TB023
-            probe = inner
-            if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
-                return primitive_leaf(probe.left) or primitive_leaf(probe.right)
-            if isinstance(probe, ast.Subscript):
-                sub_head = head_of(probe)
-                elements = probe.slice.elts if isinstance(probe.slice, ast.Tuple) else [probe.slice]
-                if sub_head in ("Callable", "Literal", "type", "Type"):
-                    return False
-                if sub_head in ("dict", "Dict", "Mapping", "MutableMapping"):
-                    elements = elements[-1:]
-                return any(primitive_leaf(each) for each in elements)
-            return head_of(probe) in PRIMITIVES
-
         form: list[str] = []
         if isinstance(node, (ast.Name, ast.Attribute)):
             form.append("bare")
-        if names_bool(node):
+        if self._names_bool(node):
             form.append("bool")
-        if is_union(node):
+        if self._is_union(node):
             form.append("union")
-        if primitive_leaf(node):
+        if self._primitive_leaf(node):
             form.append("primitive_leaf")
-        spec_candidates = tuple(Text(f"{ref}|{shape}") for ref, shape in candidates(node))
+        spec_candidates = tuple(Text(f"{ref}|{shape}") for ref, shape in self._candidates(node))
         slice_names: list[str] = []
         sliced = node
         if isinstance(sliced, ast.Subscript):
@@ -2875,7 +2871,7 @@ class Annotation(ts.ValueObject):
                 if isinstance(mark.value, str):
                     quoted_anywhere = True
                 continue
-            if isinstance(mark, ast.Subscript) and head_of(mark.value) == LITERAL:
+            if isinstance(mark, ast.Subscript) and self._head_of(mark.value) == LITERAL:
                 marks.append(mark.value)
                 continue
             marks.extend(
@@ -4969,6 +4965,16 @@ class MethodSpec(ts.Spec):
 
 class Method(ts.Entity):
 
+    def _own_returns(self, root: ast.AST) -> list[ast.Return]:
+        returned: list[ast.Return] = []
+        for child in ast.iter_child_nodes(root):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            if isinstance(child, ast.Return):
+                returned.append(child)
+            returned.extend(self._own_returns(child))
+        return returned
+
     _identity: Text
     _name: Text
     _lineno: Line
@@ -5018,17 +5024,7 @@ class Method(ts.Entity):
         if carrier:
             method_facts.append((node.lineno, "carrier", None, ()))
 
-        def own_returns(root: ast.AST) -> list[ast.Return]:  # tesser:debt TB023
-            returned: list[ast.Return] = []
-            for child in ast.iter_child_nodes(root):
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
-                    continue
-                if isinstance(child, ast.Return):
-                    returned.append(child)
-                returned.extend(own_returns(child))
-            return returned
-
-        for returned in own_returns(node):
+        for returned in self._own_returns(node):
             method_facts.append((returned.lineno, "return", None, ()))
         selves = {"self"}
         grew = True
@@ -8023,6 +8019,40 @@ class ModuleSpec(ts.Spec):
 
 class Module(ts.Entity):
 
+    def _readable(self, node: ast.expr) -> bool:
+        if isinstance(node, ast.Constant):
+            return node.value is None or node.value is Ellipsis
+        if isinstance(node, ast.Name):
+            return True
+        if isinstance(node, ast.Attribute):
+            return self._readable(node.value)
+        if isinstance(node, ast.Subscript):
+            inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+            return self._readable(node.value) and all(self._readable(element) for element in inner)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            return self._readable(node.left) and self._readable(node.right)
+        return False
+
+    def _returned(self, node: ast.expr) -> typing.Iterator[ast.expr]:
+        yield node
+        if isinstance(node, ast.IfExp):
+            yield from self._returned(node.body)
+            yield from self._returned(node.orelse)
+        elif isinstance(node, ast.Tuple):
+            for element in node.elts:
+                yield from self._returned(element)
+        elif isinstance(node, ast.BoolOp):
+            for value in node.values:
+                yield from self._returned(value)
+
+    def _nested_class_defs(self, body: list[ast.stmt]) -> list[ast.ClassDef]:
+        inner: list[ast.ClassDef] = []
+        for item in body:
+            if isinstance(item, ast.ClassDef):
+                inner.append(item)
+                inner.extend(self._nested_class_defs(item.body))
+        return inner
+
     def __init__(self, spec: ModuleSpec) -> None:
         if not spec.name:
             raise ValueError("module name must be non-empty")
@@ -8410,18 +8440,6 @@ class Module(ts.Entity):
                 return all(is_member_pattern(alternative) for alternative in pattern.patterns)
             return isinstance(pattern, ast.MatchValue) and outcome_key(pattern.value) is not None
 
-        def returned(node: ast.expr) -> typing.Iterator[ast.expr]:  # tesser:debt TB023
-            yield node
-            if isinstance(node, ast.IfExp):
-                yield from returned(node.body)
-                yield from returned(node.orelse)
-            elif isinstance(node, ast.Tuple):
-                for element in node.elts:
-                    yield from returned(element)
-            elif isinstance(node, ast.BoolOp):
-                for value in node.values:
-                    yield from returned(value)
-
         def closes_with_assert_never(node: ast.Match) -> bool:  # tesser:debt TB023
             last = node.cases[-1]
             pattern = last.pattern
@@ -8596,7 +8614,7 @@ class Module(ts.Entity):
             elif isinstance(node, ast.Name):
                 names.append(node)
             elif isinstance(node, ast.Return) and node.value is not None:
-                matched.update(id(sub) for sub in returned(node.value))
+                matched.update(id(sub) for sub in self._returned(node.value))
             elif isinstance(node, ast.Match):
                 outcome_match = False
                 for case in node.cases:
@@ -11501,14 +11519,6 @@ class Module(ts.Entity):
                 ))
             )
 
-        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:  # tesser:debt TB023
-            inner: list[ast.ClassDef] = []
-            for item in body:
-                if isinstance(item, ast.ClassDef):
-                    inner.append(item)
-                    inner.extend(nested_class_defs(item.body))
-            return inner
-
         protocols: list[ast.ClassDef] = []
         workflows: list[ast.ClassDef] = []
         for stmt in self._class_defs:
@@ -11544,7 +11554,7 @@ class Module(ts.Entity):
                             "and what it yields is the client that module declares",
                         ))
                     )
-                for inner in nested_class_defs(stmt.body):
+                for inner in self._nested_class_defs(stmt.body):
                     found.append(
                         Violation(ViolationSpec(
                             self._path,
@@ -11578,7 +11588,7 @@ class Module(ts.Entity):
                         "declares exactly one ts.Client protocol and nothing else",
                     ))
                 )
-            for inner in nested_class_defs(stmt.body):
+            for inner in self._nested_class_defs(stmt.body):
                 found.append(
                     Violation(ViolationSpec(
                         self._path,
@@ -11634,14 +11644,6 @@ class Module(ts.Entity):
             named = kind_table.block_of(Symbol(SymbolSpec(module_name, class_name)))
             return str(named) if named is not None else None
 
-        def nested_class_defs(body: list[ast.stmt]) -> list[ast.ClassDef]:  # tesser:debt TB023
-            inner: list[ast.ClassDef] = []
-            for item in body:
-                if isinstance(item, ast.ClassDef):
-                    inner.append(item)
-                    inner.extend(nested_class_defs(item.body))
-            return inner
-
         def computes(node: ast.expr | None) -> bool:  # tesser:debt TB023
             return node is not None and any(
                 isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
@@ -11661,20 +11663,6 @@ class Module(ts.Entity):
                 ))
                 for _ in node.decorator_list
             )
-
-        def readable(node: ast.expr) -> bool:  # tesser:debt TB023
-            if isinstance(node, ast.Constant):
-                return node.value is None or node.value is Ellipsis
-            if isinstance(node, ast.Name):
-                return True
-            if isinstance(node, ast.Attribute):
-                return readable(node.value)
-            if isinstance(node, ast.Subscript):
-                inner = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
-                return readable(node.value) and all(readable(element) for element in inner)
-            if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-                return readable(node.left) and readable(node.right)
-            return False
 
         def unreadable(where: str, node: ast.AST) -> tuple[Violation, ...]:  # tesser:debt TB023
             return (
@@ -11717,7 +11705,7 @@ class Module(ts.Entity):
         for stmt in self._body:
             if not isinstance(stmt, ast.ClassDef):
                 continue
-            for inner in nested_class_defs(stmt.body):
+            for inner in self._nested_class_defs(stmt.body):
                 found.append(
                     Violation(ViolationSpec(
                         path,
@@ -11728,7 +11716,7 @@ class Module(ts.Entity):
                         "where the one-port count can see them",
                     ))
                 )
-        for stmt in nested_class_defs(list(self._body)):
+        for stmt in self._nested_class_defs(list(self._body)):
             found.extend(decoration(stmt.name, stmt))
             for _ in stmt.keywords:
                 found.append(
@@ -11847,7 +11835,7 @@ class Module(ts.Entity):
                 )
         ports: list[ast.ClassDef] = []
         stores: list[ast.ClassDef] = []
-        for stmt in nested_class_defs(list(self._body)):
+        for stmt in self._nested_class_defs(list(self._body)):
             block = block_named(stmt.name)
             where = f"{module_name}.{stmt.name}"
             shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
@@ -11943,7 +11931,7 @@ class Module(ts.Entity):
                     "repository its transaction binds, declared in its own ports module",
                 ))
             )
-        if not ports and not stores and nested_class_defs(list(self._body)):
+        if not ports and not stores and self._nested_class_defs(list(self._body)):
             found.append(
                 Violation(ViolationSpec(
                     path,
@@ -11974,7 +11962,7 @@ class Module(ts.Entity):
             enum_member = shape.base() is not None
             enum_extras = frozenset(int(position) for position in shape.positions())
             for base in holder.bases:
-                if not readable(base):
+                if not self._readable(base):
                     found.extend(unreadable(f"{module_name}.{holder.name}", base))
             for position, item in enumerate(holder.body, start=1):
                 where = f"{module_name}.{holder.name}"
@@ -11993,7 +11981,7 @@ class Module(ts.Entity):
                     for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
                     if arg.arg != "self"
                 ] + [item.returns]:
-                    if node is not None and not readable(node):
+                    if node is not None and not self._readable(node):
                         found.extend(unreadable(shape_name, node))
                 for body_stmt in item.body:
                     if isinstance(
