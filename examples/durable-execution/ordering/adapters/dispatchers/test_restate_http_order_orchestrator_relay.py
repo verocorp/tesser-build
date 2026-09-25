@@ -59,12 +59,8 @@ class FakePurchaseApplicationClient(client.PurchaseApplicationClient):
 
 
 @ts.helper
-def confirm_order_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 2
-) -> relays.ConfirmOrderRequest:
-    return relays.ConfirmOrderRequest(
-        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
-    )
+def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 2) -> domain.OrderSpec:
+    return domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)
 
 
 class TestRestateHttpOrderOrchestratorRelay:
@@ -128,10 +124,10 @@ class TestRestateHttpOrderOrchestratorRelay:
                 os.environ["RESTATE_INGRESS"], restate_confirm_order
             )
             first = await restate_http_order_orchestrator_relay.start_confirm_order(
-                confirm_order_request(order_id=order_id)
+                relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id)))
             )
             second = await restate_http_order_orchestrator_relay.start_confirm_order(
-                confirm_order_request(order_id=order_id)
+                relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id)))
             )
             invoked = httpx.Response(503)
             for _ in range(100):
@@ -223,7 +219,7 @@ class TestRestateHttpOrderOrchestratorRelay:
             order_id = "../admin?x=1#f-" + str(uuid.uuid4())
             start_confirm_order_response = await dispatchers.RestateHttpOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"], restate_confirm_order
-            ).start_confirm_order(confirm_order_request(order_id=order_id))
+            ).start_confirm_order(relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id))))
             invoked = httpx.Response(503)
             for _ in range(100):
                 invoked = await admin.post(
@@ -310,7 +306,7 @@ class TestRestateHttpOrderOrchestratorRelay:
             order_id = str(uuid.uuid4())
             confirm_order_response = await dispatchers.RestateHttpOrderOrchestratorRelay(
                 os.environ["RESTATE_INGRESS"], restate_confirm_order
-            ).run_confirm_order(confirm_order_request(order_id=order_id))
+            ).run_confirm_order(relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id, quantity=2))))
             invoked = await admin.post(
                 "/query",
                 headers={"accept": "application/json"},
@@ -397,10 +393,10 @@ class TestRestateHttpOrderOrchestratorRelay:
                 os.environ["RESTATE_INGRESS"], restate_confirm_order
             )
             first = await restate_http_order_orchestrator_relay.run_confirm_order(
-                confirm_order_request(order_id=order_id)
+                relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id)))
             )
             second = await restate_http_order_orchestrator_relay.run_confirm_order(
-                confirm_order_request(order_id=order_id)
+                relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id=order_id)))
             )
 
             assert first.outcome is relays.ConfirmOrderOutcome.CONFIRMED
@@ -432,7 +428,7 @@ class TestRestateHttpOrderOrchestratorRelay:
         with pytest.raises(httpx.TransportError):
             await dispatchers.RestateHttpOrderOrchestratorRelay(
                 unreachable, restate_confirm_order
-            ).start_confirm_order(confirm_order_request())
+            ).start_confirm_order(relays.ConfirmOrderRequest(order=domain.Order(order_spec())))
 
     async def test_an_unreachable_ingress_is_a_fault_when_running(self) -> None:
         with socket.socket() as closed:
@@ -445,4 +441,4 @@ class TestRestateHttpOrderOrchestratorRelay:
         with pytest.raises(httpx.TransportError):
             await dispatchers.RestateHttpOrderOrchestratorRelay(
                 unreachable, restate_confirm_order
-            ).run_confirm_order(confirm_order_request())
+            ).run_confirm_order(relays.ConfirmOrderRequest(order=domain.Order(order_spec())))

@@ -464,32 +464,35 @@ def test_list_links_is_empty_before_anything_is_created() -> None:
 
 
 @ts.helper
-def _found_campaign_view(
+def _link(
+    slug: str = "promo",
+    target_url: str = "https://ok.example/x",
+    status: str = "active",
+) -> ports.Link:
+    return ports.Link(slug=slug, target_url=target_url, status=status)
+
+
+@ts.helper
+def _campaign(
     campaign_id: str = "0123456789abcdef",
     budget_amount: str = "10.00",
     budget_currency: str = "USD",
-    slug: str = "promo",
-    target_url: str = "https://ok.example/x",
-    status: str = "inactive",
-) -> ports.FindCampaignResponse:
-    return ports.FindCampaignResponse(
-        outcome=ports.FindCampaignOutcome.FOUND,
-        campaigns=(ports.Campaign(
-            campaign_id=campaign_id,
-            budget_amount=budget_amount,
-            budget_currency=budget_currency,
-            links=(ports.Link(
-                slug=slug, target_url=target_url, status=status
-            ),),
-        ),),
+    links: tuple[ports.Link, ...] = (_link(),),
+) -> ports.Campaign:
+    return ports.Campaign(
+        campaign_id=campaign_id,
+        budget_amount=budget_amount,
+        budget_currency=budget_currency,
+        links=links,
     )
 
 
 @ts.helper
-def _missing_campaign_view() -> ports.FindCampaignResponse:
-    return ports.FindCampaignResponse(
-        outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
-    )
+def _find_campaign_response(
+    outcome: ports.FindCampaignOutcome = ports.FindCampaignOutcome.FOUND,
+    campaigns: tuple[ports.Campaign, ...] = (_campaign(),),
+) -> ports.FindCampaignResponse:
+    return ports.FindCampaignResponse(outcome=outcome, campaigns=campaigns)
 
 
 def test_the_campaign_mapper_is_the_campaign_built_from_the_row() -> None:
@@ -497,7 +500,15 @@ def test_the_campaign_mapper_is_the_campaign_built_from_the_row() -> None:
         find_campaign_request=ports.FindCampaignRequest(
             campaign_id="0123456789abcdef"
         ),
-        find_campaign_response=_found_campaign_view(),
+        find_campaign_response=_find_campaign_response(
+            outcome=ports.FindCampaignOutcome.FOUND,
+            campaigns=(_campaign(
+                campaign_id="0123456789abcdef",
+                budget_amount="10.00",
+                budget_currency="USD",
+                links=(_link(slug="promo", status="inactive"),),
+            ),),
+        ),
     )
     assert isinstance(campaign, client.Campaign)
     assert campaign.campaign_id == "0123456789abcdef"
@@ -523,7 +534,9 @@ def test_the_campaign_view_mapper_refuses_a_missing_campaign() -> None:
             find_campaign_request=ports.FindCampaignRequest(
                 campaign_id="0123456789abcdef"
             ),
-            find_campaign_response=_missing_campaign_view(),
+            find_campaign_response=_find_campaign_response(
+                outcome=ports.FindCampaignOutcome.NOT_FOUND, campaigns=()
+            ),
         )
     assert caught.value.message == "no campaign with id '0123456789abcdef'"
 

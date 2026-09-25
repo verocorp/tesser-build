@@ -43,12 +43,8 @@ class FakeUnpricedOrderActionsRelay(relays.OrderActionsRelay):
 
 
 @ts.helper
-def confirm_order_request(
-    order_id: str = "o1", sku: str = "widget", quantity: int = 3
-) -> relays.ConfirmOrderRequest:
-    return relays.ConfirmOrderRequest(
-        order=domain.Order(domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity))
-    )
+def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 3) -> domain.OrderSpec:
+    return domain.OrderSpec(order_id=order_id, sku=sku, quantity=quantity)
 
 
 class TestOrderOrchestrator:
@@ -56,7 +52,7 @@ class TestOrderOrchestrator:
     def test_confirming_totals_the_product_price_over_the_quantity(self) -> None:
         confirm_order_response = asyncio.run(
             orchestrators.OrderOrchestrator(FakeOrderActionsRelay()).confirm_order(
-                confirm_order_request()
+                relays.ConfirmOrderRequest(order=domain.Order(order_spec(order_id="o1", quantity=3)))
             )
         )
         assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.CONFIRMED
@@ -67,7 +63,7 @@ class TestOrderOrchestrator:
         fake_order_actions_relay = FakeOrderActionsRelay()
         asyncio.run(
             orchestrators.OrderOrchestrator(fake_order_actions_relay).confirm_order(
-                confirm_order_request(sku="gadget")
+                relays.ConfirmOrderRequest(order=domain.Order(order_spec(sku="gadget")))
             )
         )
         assert fake_order_actions_relay.priced == ["gadget"]
@@ -75,7 +71,7 @@ class TestOrderOrchestrator:
     def test_a_price_that_was_not_found_is_that_outcome_carrying_the_reason(self) -> None:
         confirm_order_response = asyncio.run(
             orchestrators.OrderOrchestrator(FakeUnpricedOrderActionsRelay()).confirm_order(
-                confirm_order_request(sku="nothing")
+                relays.ConfirmOrderRequest(order=domain.Order(order_spec(sku="nothing")))
             )
         )
         assert (
@@ -90,6 +86,6 @@ class TestOrderOrchestrator:
             asyncio.run(
                 orchestrators.OrderOrchestrator(
                     FakeOrderActionsRelay(cents=10**12)
-                ).confirm_order(confirm_order_request())
+                ).confirm_order(relays.ConfirmOrderRequest(order=domain.Order(order_spec())))
             )
         assert "at most" in excinfo.value.message

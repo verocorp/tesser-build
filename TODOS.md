@@ -2,6 +2,74 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Left open by the TB073 helper-mirror change (#213, 2026-09-24)
+
+- [ ] **Design `@ts.assembly` properly (Chris, 2026-09-24).** It was added
+  minimal, to unblock #213: the analyzer's own tests assemble codebases from
+  a fixed base plus the test's parts, and a helper may no longer do that.
+  Today's rule is only: returns construction data, every parameter
+  defaulted, no control flow, no call into the code under test. Known holes
+  from the #213 ship review: a call on a local (`made.shout()`) is not
+  resolved, so it is not reported; calls outside the tree (a clock, a random
+  source, `open`) pass. TB073 also
+  does not yet model a constructor with positional-only parameters (a
+  conforming helper fails at run time), follow an `__init__` inherited from a
+  parent record (every parameter reads as stray), report an extra decorator
+  stacked on a helper (`functools.cache` shares one instance), or name an
+  Optional return annotation as the problem. From the adversarial pass:
+  types are compared as spelled, so `Optional[str]` and `str | None`
+  differ; a helper may return a mapper, whose `__init__` runs translation
+  code; any non-dunder
+  attribute of a tree enum passes as a member (a method too) while a
+  stdlib enum member does not; a zero-parameter helper passes although
+  testing.md calls a helper with no default a rename; and Helper rebuilds
+  the Registry per helper. Open: whether
+  an assembly may take a record's parts at all, how it composes with
+  helpers, and whether the other shapes with no home (an async context
+  manager that serves an engine, a wired object graph) belong to it.
+- [ ] **A relay record carries domain objects — no check enforces it.**
+  Chris's ruling (relay spike, PR #164; restated 2026-09-24 in the #213
+  review) is that a relay request or response carries domain objects, not
+  primitives. The relay record constructor policy (`checks.py`, the
+  `RELAY_DTO_BLOCKS | DOMAIN_BLOCKS` AnnotationPolicy) still accepts
+  `str`/`int`/`float`/`bytes`, and about 25 relay records take primitives:
+  durable-execution's `TakePaymentRequest(order_id: str, cents: int,
+  payment_method: str)`, the charge/price/total messages; voice's
+  `…Response(call_id: str)` and `SayRequest(call_id, text)`; minimal's
+  widget messages other than the request carrying `domain.Name`. Needs the
+  scope ruled (requests only, or requests and responses), then the policy
+  tightened and those records migrated.
+- [ ] **Freeze records at run time, as a backstop to TB083's write rule.**
+  #214 adds the static rule "a record is never changed after construction"
+  (a test helper's default is one shared instance, so a write leaks across
+  tests). The static rule misses aliasing and code outside a checked tree.
+  Once it has every tree at zero, `ts.Spec`/`ts.Request`/`ts.Response` can
+  refuse `__setattr__` after `__init__` returns, like `ts.ValueObject` —
+  then a raise means a real miss, not a rollout surprise (Chris,
+  2026-09-24: static first, never a runtime-first rollout).
+- [ ] **No record field is a union, optional included (Chris, 2026-09-24).**
+  TB080 already says "a port DTO field is never a union, optional included —
+  model the outcome as an enum", but only for port DTOs. Spec, context DTO
+  and relay DTO constructors still accept `X | None` (the annotation policy
+  allows exactly one `None` side). Widen the rule to every record. Found by
+  the #214 Codex challenge: TB073 compares types as spelled, so a helper
+  typed `None | str` for a `str | None` field is a false mismatch — a case
+  that disappears once no record takes a union.
+- [ ] **A `Mapping` field has no legal helper default.** A dict literal is
+  not a legal default (one mutable instance shared by every call), so a
+  record with a `Mapping` field gets no helper: llmport's `protocol.Tool`
+  (`parameters`) and specs-app's `protocol.HttpRequest` are built inline in
+  their tests, spelling values the tests do not depend on. Needs a ruling:
+  an immutable mapping type on the record, a mapping default the analyzer
+  accepts, or the inline form stays.
+- [ ] **Generated trees skip `pgdatabase`.** Every generated tree's
+  `.tesser-root` carries `skip pgdatabase`, which hides
+  `generator/templates/pgdatabase/test_database.py.tmpl`'s two `@ts.helper`s
+  (`backends`, `backends_settling_to`): async database probes with
+  try/finally and a loop, which TB073 would report. The skip predates #213
+  and is the shape Chris ruled out on 2026-09-24 (never skip code from the
+  rules).
+
 ## Left open by the migrate-new-kinds ship review (2026-09-24)
 
 - [ ] **A started workflow's result is learned only through the store (ruling
@@ -104,9 +172,9 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   binds the port it serves on instead of probing one, emitted by the
   generator's templates as well, and a `register_deployment` shell function
   used by all four verify arms (durable-execution, minimal, voice, generated
-  trees). TB073 today requires a helper to take defaulted primitives and
-  build a spec or DTO, so the helper needs that rule widened or a kind of its
-  own; the hostile-key test covers only `run_person_joined`;
+  trees). TB073 requires a helper to mirror the spec or DTO it builds and an
+  assembly to have no control flow, so the context manager needs a kind of
+  its own; the hostile-key test covers only `run_person_joined`;
   the concurrency test does not assert which turn the promise kept; an
   activity or workflow whose far side the analyzer cannot read gets no
   container-name check and no finding.

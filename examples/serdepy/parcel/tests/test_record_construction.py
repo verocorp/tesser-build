@@ -8,19 +8,35 @@ import parcel.application.ports as ports
 import parcel.domain as domain
 
 @ts.helper
-def _spec(items: int = 3, declared_value: str = "199.99") -> domain.ParcelSpec:
+def _spec(
+    code: str = "PKG-2026-0042",
+    items: int = 3,
+    weight_kg: float = 21.5,
+    label_digest: bytes = b"0123456789abcdef0123456789abcdef",
+    declared_value: str = "199.99",
+    scanned_at: str = "2026-07-20T10:16:15.123456-05:00",
+) -> domain.ParcelSpec:
     return domain.ParcelSpec(
-        code="PKG-2026-0042",
+        code=code,
         items=items,
-        weight_kg=21.5,
-        label_digest=bytes(range(32)),
+        weight_kg=weight_kg,
+        label_digest=label_digest,
         declared_value=declared_value,
-        scanned_at="2026-07-20T10:16:15.123456-05:00",
+        scanned_at=scanned_at,
     )
 
 
 def test_mapping_carries_typed_canonical_leaves_and_derived_fields() -> None:
-    parcel = domain.Parcel(_spec())
+    parcel = domain.Parcel(
+        _spec(
+            code="PKG-2026-0042",
+            items=3,
+            weight_kg=21.5,
+            label_digest=bytes(range(32)),
+            declared_value="199.99",
+            scanned_at="2026-07-20T10:16:15.123456-05:00",
+        )
+    )
     manifest_parcel_request = ports.ManifestParcelRequest(
         code=str(parcel.code),
         items=int(parcel.items),

@@ -69,6 +69,7 @@ TESSER_DECORATORS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.app", "load"): "load",
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",
+    ("tesser.testing", "assembly"): "assembly",
 }
 
 TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
@@ -844,6 +845,8 @@ OUTCOME_BLOCK: typing.Final[str] = "outcome"
 OUTCOME_BASE: typing.Final[tuple[str, str]] = ("tesser.domain", "Outcome")
 
 DOMAIN_OBJECT_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset({OUTCOME_BLOCK})
+
+DEFAULT_BUILT_BLOCKS: typing.Final[frozenset[str]] = frozenset({"component_config", "app_config"})
 
 DOMAIN_METHOD_PARAMETER_BLOCKS: typing.Final[frozenset[str]] = DOMAIN_BLOCKS | frozenset(
     {"spec"}
@@ -2278,7 +2281,9 @@ class RegistrySpec(ts.Spec):
         registrations: tuple[tuple[str, str, str, str, str, str], ...] = (),
         dispatched: tuple[str, ...] = (),
         relay_constants: tuple[tuple[str, str, str], ...] = (),
+        constructors: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (),
     ) -> None:
+        self.constructors = constructors
         self.registrations = registrations
         self.dispatched = dispatched
         self.relay_constants = relay_constants
@@ -2341,8 +2346,10 @@ class Registry(ts.ValueObject):
     _registrations: RegistrationRows
     _dispatched: NameRows
     _relay_constants: ConstantRows
+    _constructors: ConstructorRows
 
     def __init__(self, spec: RegistrySpec) -> None:
+        object.__setattr__(self, "_constructors", ConstructorRows(spec.constructors))
         object.__setattr__(self, "_registrations", RegistrationRows(spec.registrations))
         object.__setattr__(self, "_dispatched", NameRows(spec.dispatched))
         object.__setattr__(self, "_relay_constants", ConstantRows(spec.relay_constants))
@@ -2459,6 +2466,9 @@ class Registry(ts.ValueObject):
 
     def outcome_methods(self) -> Names:
         return self._outcome_methods.names()
+
+    def constructors(self) -> ConstructorRows:
+        return self._constructors
 
     def action_ports(self) -> Symbols:
         return self._action_ports.symbols()
@@ -4133,6 +4143,82 @@ class ClientClass(ts.ValueObject):
         return tuple(found)
 
 
+class TypeFormSpec(ts.Spec):
+
+    def __init__(self, source: str, scope: ScopeSpec) -> None:
+        self.source = source
+        self.scope = scope
+
+
+class TypeForm(ts.ValueObject):
+
+    _text: Text
+
+    def __init__(self, spec: TypeFormSpec) -> None:
+        scope = Scope(spec.scope)
+        refs: list[tuple[int, int, str]] = []
+        encoded = spec.source.encode()
+        stack: list[ast.AST] = [ast.parse(spec.source, mode="eval").body]
+        while stack:
+            node = stack.pop()
+            cursor: ast.AST = node
+            while isinstance(cursor, ast.Attribute):
+                cursor = cursor.value
+            if isinstance(cursor, ast.Name) and isinstance(node, ast.expr):
+                symbol = scope.resolve(Text(ast.unparse(node)))
+                if symbol is not None and node.end_col_offset is not None:
+                    refs.append((node.col_offset, node.end_col_offset, f"{symbol.module()}.{symbol.name()}"))
+                continue
+            stack.extend(ast.iter_child_nodes(node))
+        for start, end, resolved in sorted(refs, reverse=True):
+            encoded = encoded[:start] + resolved.encode() + encoded[end:]
+        object.__setattr__(self, "_text", Text(encoded.decode()))
+
+    def text(self) -> Text:
+        return self._text
+
+
+class ConstructorSpec(ts.Spec):
+
+    def __init__(self, params: tuple[str, ...], types: tuple[str, ...]) -> None:
+        self.params = params
+        self.types = types
+
+
+class Constructor(ts.ValueObject):
+
+    _typed: tuple[tuple[str, str], ...]
+
+    def __init__(self, spec: ConstructorSpec) -> None:
+        object.__setattr__(self, "_typed", tuple(zip(spec.params, spec.types)))
+
+    def params(self) -> Names:
+        return Names(tuple(param for param, _ in self._typed))
+
+    def type_of(self, text: Text) -> Text | None:
+        for param, typed in self._typed:
+            if param == str(text):
+                return Text(typed) if typed else None
+        return None
+
+
+class ConstructorRows(ts.ValueObject):
+
+    _items: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...]
+
+    def __init__(self, items: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...]) -> None:
+        object.__setattr__(self, "_items", tuple(sorted(items)))
+
+    def constructor(self, symbol: Symbol) -> Constructor | None:
+        module_name = str(symbol.module())
+        cls = str(symbol.name())
+        index = bisect.bisect_left(self._items, (module_name, cls, (), ()))
+        if index == len(self._items) or self._items[index][:2] != (module_name, cls):
+            return None
+        _, _, params, types = self._items[index]
+        return Constructor(ConstructorSpec(params, types))
+
+
 class HelperSpec(ts.Spec):
 
     def __init__(  # tesser:debt TB080
@@ -4142,103 +4228,308 @@ class HelperSpec(ts.Spec):
         path: str,
         scope: ScopeSpec,
         registry: RegistrySpec,
+        helpers: tuple[str, ...],
+        assembly: bool = False,
     ) -> None:
         self.node = node
         self.where = where
         self.path = path
         self.scope = scope
         self.registry = registry
+        self.helpers = helpers
+        self.assembly = assembly
 
 
 class Helper(ts.ValueObject):
 
-    _where: Text
-    _path: Path
-    _facts: tuple[Fact, ...]
+    _found: tuple[Violation, ...]
 
     def __init__(self, spec: HelperSpec) -> None:
         fn = spec.node
         registry = Registry(spec.registry)
         kind_table = registry.kinds()
+        constructor_rows = registry.constructors()
+        symbols = registry.enums()
         scope = Scope(spec.scope)
-        annotation_policy = AnnotationPolicy(
-            AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry)
-        )
         line = fn.lineno
-        rows: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        for arg in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
-            if arg.annotation is None or annotation_policy.disallowed(Annotation(arg.annotation)):
-                rows.append((line, "parameter", arg.arg, ()))
+        rows: list[tuple[int, str, str, tuple[str, ...]]] = []
+        args = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
         positional = fn.args.posonlyargs + fn.args.args
-        undefaulted = positional[: len(positional) - len(fn.args.defaults)]
-        missing = [arg for arg in undefaulted] + [
-            arg for arg, default in zip(fn.args.kwonlyargs, fn.args.kw_defaults) if default is None
-        ]
-        for arg in missing:
-            rows.append((line, "default", arg.arg, ()))
+        defaults: dict[str, ast.expr | None] = {arg.arg: None for arg in args}
+        for arg, default in zip(positional[len(positional) - len(fn.args.defaults):], fn.args.defaults):
+            defaults[arg.arg] = default
+        for arg, kw_default in zip(fn.args.kwonlyargs, fn.args.kw_defaults):
+            defaults[arg.arg] = kw_default
+        for arg in args:
+            given = defaults[arg.arg]
+            if given is None:
+                rows.append((line, "default", arg.arg, ()))
+                continue
+            pending: list[ast.expr] = [given]
+            composed = True
+            while pending and composed:
+                value = pending.pop()
+                if isinstance(value, ast.Constant) and value.value is not Ellipsis:
+                    continue
+                if (
+                    isinstance(value, ast.UnaryOp)
+                    and isinstance(value.op, ast.USub)
+                    and isinstance(value.operand, ast.Constant)
+                ):
+                    continue
+                if isinstance(value, ast.Tuple):
+                    pending.extend(value.elts)
+                    continue
+                if isinstance(value, ast.Attribute):
+                    member_of = scope.resolve(Text(ast.unparse(value.value)))
+                    composed = (
+                        member_of is not None
+                        and member_of in symbols
+                        and not value.attr.startswith("__")
+                        and not (value.attr.startswith("_") and value.attr.endswith("_"))
+                    )
+                    continue
+                if (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Name)
+                    and value.func.id in spec.helpers
+                    and not value.args
+                    and all(keyword.arg is not None for keyword in value.keywords)
+                ):
+                    pending.extend(keyword.value for keyword in value.keywords)
+                    continue
+                built = (
+                    scope.resolve(Text(ast.unparse(value.func)))
+                    if isinstance(value, ast.Call) and isinstance(value.func, (ast.Name, ast.Attribute))
+                    else None
+                )
+                built_block = kind_table.block_of(built) if built is not None else None
+                if (
+                    isinstance(value, ast.Call)
+                    and built_block is not None
+                    and str(built_block) in DEFAULT_BUILT_BLOCKS
+                    and all(keyword.arg is not None for keyword in value.keywords)
+                ):
+                    pending.extend(value.args)
+                    pending.extend(keyword.value for keyword in value.keywords)
+                    continue
+                composed = False
+            if not composed:
+                rows.append((line, "composed", arg.arg, ()))
         returned_ref = Annotation(fn.returns).primary() if fn.returns is not None else None
-        symbol = scope.resolve(returned_ref) if returned_ref is not None else None
+        constructed = scope.resolve(returned_ref) if returned_ref is not None else None
+        symbol = constructed
         block = kind_table.block_of(symbol) if symbol is not None else None
         if symbol is not None and block is not None and str(block) == "mapper":
             symbol = registry.mapper_target(symbol)
             block = kind_table.block_of(symbol) if symbol is not None else None
         if block is None or str(block) not in DATA_BLOCKS:
-            rows.append((line, "data", None, ()))
-        for node in ast.walk(fn):
-            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)):
-                rows.append((node.lineno, "control", None, ()))
-        object.__setattr__(self, "_where", Text(spec.where))
-        object.__setattr__(self, "_path", Path(spec.path))
-        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*row)) for row in rows))
+            rows.append((line, "data", "", ()))
+        elif str(block) in RELAY_DTO_BLOCKS and not spec.assembly:
+            rows.append((line, "relay", "", ()))
+        constructor = (
+            constructor_rows.constructor(constructed) if constructed is not None and not spec.assembly else None
+        )
+        if (
+            constructed is not None
+            and constructor is None
+            and not spec.assembly
+            and block is not None
+            and str(block) in DATA_BLOCKS
+        ):
+            rows.append((line, "unread", "", (str(constructed.name()),)))
+        if constructed is not None and constructor is not None:
+            target_name = str(constructed.name())
+            for arg in args:
+                wanted = constructor.type_of(Text(arg.arg))
+                if arg.arg not in constructor.params():
+                    rows.append((line, "stray", arg.arg, (target_name,)))
+                elif wanted is None:
+                    continue
+                elif arg.annotation is None:
+                    rows.append((line, "untyped", arg.arg, (target_name, str(wanted))))
+                else:
+                    written = str(TypeForm(TypeFormSpec(ast.unparse(arg.annotation), spec.scope)).text())
+                    if written != str(wanted):
+                        rows.append((line, "typed", arg.arg, (target_name, written, str(wanted))))
+            for name in constructor.params():
+                if name not in defaults:
+                    rows.append((line, "missing", name, (target_name,)))
+            for extra in (fn.args.vararg, fn.args.kwarg):
+                if extra is not None:
+                    rows.append((line, "stray", extra.arg, (target_name,)))
+        passed = False
+        returned = fn.body[0].value if len(fn.body) == 1 and isinstance(fn.body[0], ast.Return) else None
+        if isinstance(returned, ast.Call):
+            callee = scope.resolve(Text(ast.unparse(returned.func)))
+            passed_names = sorted(keyword.arg for keyword in returned.keywords if keyword.arg is not None)
+            passed = (
+                callee is not None
+                and callee == constructed
+                and not returned.args
+                and all(
+                    isinstance(keyword.value, ast.Name) and keyword.value.id == keyword.arg
+                    for keyword in returned.keywords
+                )
+                and passed_names == sorted(defaults)
+            )
+        if not passed and not spec.assembly:
+            rows.append((line, "through", "", ()))
+        if isinstance(fn, ast.AsyncFunctionDef):
+            rows.append((line, "async", "", ()))
+        names = registry.module_names()
+        for node in (walked for stmt in fn.body for walked in ast.walk(stmt)):
+            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)) and not spec.assembly:
+                rows.append((node.lineno, "control", "", ()))
+            if spec.assembly and isinstance(
+                node,
+                (
+                    ast.If, ast.Match, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.TryStar, ast.With,
+                    ast.AsyncWith, ast.Raise, ast.Assert, ast.IfExp, ast.BoolOp, ast.NamedExpr,
+                    ast.Yield, ast.YieldFrom, ast.Await,
+                    ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp,
+                ),
+            ):
+                rows.append((node.lineno, "assembly_control", "", ()))
+            if spec.assembly and isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
+                called = scope.resolve(Text(ast.unparse(node.func)))
+                called_block = kind_table.block_of(called) if called is not None else None
+                reached: ast.expr = node.func
+                while called is None and isinstance(reached, ast.Attribute) and isinstance(
+                    reached.value, (ast.Attribute, ast.Name)
+                ):
+                    reached = reached.value
+                    owner = scope.resolve(Text(ast.unparse(reached)))
+                    owner_block = kind_table.block_of(owner) if owner is not None else None
+                    if owner is not None and owner_block is not None:
+                        called = owner
+                        called_block = owner_block
+                if (
+                    called is not None
+                    and str(called.module()) in names
+                    and (called_block is None or str(called_block) not in DATA_BLOCKS)
+                ):
+                    rows.append((node.lineno, "assembly_call", ast.unparse(node.func), ()))
+        where = spec.where
+        path = spec.path
+        found: list[Violation] = []
+        for line, kind, param, traits in rows:
+            if kind == "default":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} parameter {param!r} has no default; every helper parameter has a default",
+                )))
+            elif kind == "composed":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} parameter {param!r} defaults to something other than a literal, an enum member, "
+                    "a helper's result, a config built from those, or a tuple of those; "
+                    "a default holds values and builds a record only through its helper",
+                )))
+            elif kind == "stray":
+                target_name = traits[0]
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} parameter {param!r} is not a parameter of {target_name}; "
+                    "a helper mirrors the constructor it feeds",
+                )))
+            elif kind == "missing":
+                target_name = traits[0]
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} takes no {param!r}, which {target_name} takes; "
+                    "a helper mirrors the constructor it feeds",
+                )))
+            elif kind == "untyped":
+                target_name, wanted_type = traits
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} parameter {param!r} has no annotation where {target_name} takes {wanted_type}; "
+                    "a helper mirrors the constructor it feeds",
+                )))
+            elif kind == "typed":
+                target_name, written_type, wanted_type = traits
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} parameter {param!r} is {written_type} where {target_name} takes {wanted_type}; "
+                    "a helper mirrors the constructor it feeds",
+                )))
+            elif kind == "unread":
+                target_name = traits[0]
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} returns {target_name}, whose constructor the analyzer cannot read; "
+                    "a helper mirrors a constructor declared in the tree",
+                )))
+            elif kind == "relay":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} returns a relay record; a relay record carries domain objects, "
+                    "and a test builds its domain objects itself",
+                )))
+            elif kind == "data":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} returns no construction data; a helper builds a spec or a DTO",
+                )))
+            elif kind == "through":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} does not pass each parameter through by name to one construction; "
+                    "a helper's body invents nothing",
+                )))
+            elif kind == "async":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} is async; a helper or assembly returns its construction, never a coroutine",
+                )))
+            elif kind == "assembly_control":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} has control flow; an assembly puts parts together without branching or looping",
+                )))
+            elif kind == "assembly_call":
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} calls {param} in the code under test; an assembly builds a test input and runs nothing",
+                )))
+            else:
+                found.append(Violation(ViolationSpec(
+                    path,
+                    line,
+                    "TB073",
+                    f"{where} has control flow; a helper only constructs",
+                )))
+        object.__setattr__(self, "_found", tuple(found))
 
     def violations(self) -> tuple[Violation, ...]:
-        where = str(self._where)
-        path = str(self._path)
-        found: list[Violation] = []
-        for fact in self._facts:
-            kind = str(fact.kind())
-            line = int(fact.lineno())
-            if kind == "parameter":
-                arg = str(fact.detail())
-                found.append(
-                    Violation(ViolationSpec(
-                        path,
-                        line,
-                        "TB073",
-                        f"{where} parameter {arg!r} is not a primitive; "
-                        "a helper takes only defaulted primitives",
-                    ))
-                )
-            elif kind == "default":
-                arg = str(fact.detail())
-                found.append(
-                    Violation(ViolationSpec(
-                        path,
-                        line,
-                        "TB073",
-                        f"{where} parameter {arg!r} has no default; "
-                        "a helper takes only defaulted primitives",
-                    ))
-                )
-            elif kind == "data":
-                found.append(
-                    Violation(ViolationSpec(
-                        path,
-                        line,
-                        "TB073",
-                        f"{where} returns no construction data; a helper builds a spec or a DTO",
-                    ))
-                )
-            else:
-                found.append(
-                    Violation(ViolationSpec(
-                        path,
-                        line,
-                        "TB073",
-                        f"{where} has control flow; a helper only constructs",
-                    ))
-                )
-        return tuple(found)
+        return self._found
 
 
 class DependencyPolicySpec(ts.Spec):
@@ -4322,6 +4613,48 @@ class SpecReader(ts.ValueObject):
                 block = kind_table.block_of(symbol) if symbol is not None else None
             if symbol is not None and block is not None and str(block) in SPEC_BLOCKS:
                 return SpecRef(SpecRefSpec(SymbolSpec(str(symbol.module()), str(symbol.name())), shape))
+        return None
+
+
+class RecordReaderSpec(ts.Spec):
+
+    def __init__(self, scope: ScopeSpec, registry: RegistrySpec) -> None:
+        self.scope = scope
+        self.registry = registry
+
+
+class RecordReader(ts.ValueObject):
+
+    _scope: Scope
+    _registry: Registry
+
+    def __init__(self, spec: RecordReaderSpec) -> None:
+        object.__setattr__(self, "_scope", Scope(spec.scope))
+        object.__setattr__(self, "_registry", Registry(spec.registry))
+
+    def ref(self, annotation: Annotation) -> SpecRef | None:
+        kind_table = self._registry.kinds()
+        for candidate in annotation.spec_candidates():
+            ref, shape = str(candidate).rsplit("|", 1)
+            symbol = self._scope.resolve(Text(ref))
+            block = kind_table.block_of(symbol) if symbol is not None else None
+            if symbol is not None and block is not None and str(block) == "mapper":
+                symbol = self._registry.mapper_target(symbol)
+                block = kind_table.block_of(symbol) if symbol is not None else None
+            if symbol is not None and block is not None and str(block) in DATA_BLOCKS:
+                return SpecRef(SpecRefSpec(SymbolSpec(str(symbol.module()), str(symbol.name())), shape))
+        return None
+
+    def made(self, symbol: Symbol) -> SpecRef | None:
+        kind_table = self._registry.kinds()
+        returned = self._registry.returns().returned(Text(f"{symbol.module()}||{symbol.name()}"))
+        for candidate in (symbol, returned):
+            block = kind_table.block_of(candidate) if candidate is not None else None
+            if candidate is not None and block is not None and str(block) == "mapper":
+                candidate = self._registry.mapper_target(candidate)
+                block = kind_table.block_of(candidate) if candidate is not None else None
+            if candidate is not None and block is not None and str(block) in DATA_BLOCKS:
+                return SpecRef(SpecRefSpec(SymbolSpec(str(candidate.module()), str(candidate.name())), "one"))
         return None
 
 
@@ -9941,7 +10274,13 @@ class Module(ts.Entity):
             typed: dict[str, Symbol] = {}
             foreign: set[str] = set()
             parameters = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-            fields_only = fn.name == "__init__" and block in FIELD_NAME_BLOCKS
+            declared_helper = owner is None and any(
+                (decorator_symbol := scope.resolve(decorator_ref)) is not None
+                and TESSER_DECORATORS.get((str(decorator_symbol.module()), str(decorator_symbol.name()))) == "helper"
+                for decorator in fn.decorator_list
+                if (decorator_ref := Annotation(decorator).primary()) is not None
+            )
+            fields_only = (fn.name == "__init__" and block in FIELD_NAME_BLOCKS) or declared_helper
             spec_taker = fn.name == "__init__" and block in SPEC_READER_BLOCKS
             for arg in parameters:
                 if arg.arg in UNNAMED_PARAMETERS or arg.annotation is None:
@@ -11690,6 +12029,12 @@ class Module(ts.Entity):
                     return True
             return False
 
+        helper_names = tuple(sorted(
+            stmt.name
+            for stmt in self._body
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and (decorated_as(stmt, "helper") or decorated_as(stmt, "assembly"))
+        ))
         for stmt in self._body:
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
@@ -11699,7 +12044,14 @@ class Module(ts.Entity):
                     continue
                 if decorated_as(stmt, "helper"):
                     found.extend(
-                        Helper(HelperSpec(stmt, where, self._path, scope_spec, registry_spec)).violations()
+                        Helper(HelperSpec(stmt, where, self._path, scope_spec, registry_spec, helper_names)).violations()
+                    )
+                    continue
+                if decorated_as(stmt, "assembly"):
+                    found.extend(
+                        Helper(HelperSpec(
+                            stmt, where, self._path, scope_spec, registry_spec, helper_names, assembly=True
+                        )).violations()
                     )
                     continue
                 found.append(
@@ -11708,7 +12060,7 @@ class Module(ts.Entity):
                         stmt.lineno,
                         "TB071",
                         f"{where} is neither a test nor a declared helper; a test module holds "
-                        "tests, @ts.helper builders, and @ts.fake doubles",
+                        "tests, @ts.helper builders, @ts.assembly inputs, and @ts.fake doubles",
                     ))
                 )
             elif isinstance(stmt, ast.ClassDef):
@@ -14075,6 +14427,257 @@ class Module(ts.Entity):
             )
         return tuple(sorted(found, key=lambda v: int(v.line())))  # tesser:debt TB023
 
+    def record_write_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
+        record_reader = RecordReader(RecordReaderSpec(
+            ScopeSpec(
+                self._name,
+                tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+                tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+                tuple(self._classes),
+                tuple(sorted(self._functions)),
+                self._spoken,
+                self._enums,
+                self._reexports,
+            ),
+            registry_spec,
+        ))
+        kind_table = Registry(registry_spec).kinds()
+        made: dict[str, str] = {}
+        for stmt in self._body:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.returns is not None:
+                returned = record_reader.ref(Annotation(stmt.returns))
+                if returned is not None:
+                    made[stmt.name] = str(returned.shape())
+        units: list[tuple[list[ast.stmt], str, ast.FunctionDef | ast.AsyncFunctionDef | None, ast.ClassDef | None]] = [
+            (list(self._body), self._name, None, None)
+        ]
+        module_held: dict[str, str] = {}
+        writes: set[tuple[int, str, str, str]] = set()
+        for body, where, fn, cls in units:
+            scoped: list[ast.AST] = []
+            walk: list[ast.AST] = list(body)
+            while walk:
+                cur = walk.pop()
+                scoped.append(cur)
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    units.append((list(cur.body), f"{where}.{cur.name}", cur, None))
+                    continue
+                if isinstance(cur, ast.ClassDef):
+                    classes: list[tuple[ast.ClassDef, str]] = [(cur, f"{where}.{cur.name}")]
+                    while classes:
+                        inner, prefix = classes.pop()
+                        for item in inner.body:
+                            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                units.append((list(item.body), f"{prefix}.{item.name}", item, inner))
+                            elif isinstance(item, ast.ClassDef):
+                                classes.append((item, f"{prefix}.{item.name}"))
+                    continue
+                if isinstance(cur, ast.Lambda):
+                    continue
+                walk.extend(ast.iter_child_nodes(cur))
+            bindings: list[tuple[str, ast.expr | None, bool, str | None]] = []
+            for node in scoped:
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        direct = isinstance(target, ast.Name)
+                        bindings.extend(
+                            (sub.id, node.value if direct else None, False, None)
+                            for sub in ast.walk(target)
+                            if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store)
+                        )
+                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                    annotated = record_reader.ref(Annotation(node.annotation))
+                    bindings.append((
+                        node.target.id,
+                        node.value,
+                        False,
+                        str(annotated.shape()) if annotated is not None else None,
+                    ))
+                elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
+                    bindings.append((node.target.id, node.value, False, None))
+                elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+                    direct = isinstance(node.target, ast.Name)
+                    bindings.extend(
+                        (sub.id, node.iter if direct else None, True, None)
+                        for sub in ast.walk(node.target)
+                        if isinstance(sub, ast.Name)
+                    )
+                elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+                    bindings.append((node.target.id, None, False, None))
+                elif isinstance(node, (ast.With, ast.AsyncWith)):
+                    bindings.extend(
+                        (sub.id, None, False, None)
+                        for item in node.items
+                        if item.optional_vars is not None
+                        for sub in ast.walk(item.optional_vars)
+                        if isinstance(sub, ast.Name)
+                    )
+                elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+                    bindings.append((node.name, None, False, None))
+                elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                    bindings.extend((alias.asname or alias.name.split(".")[0], None, False, None) for alias in node.names)
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    bindings.append((node.name, None, False, None))
+                elif isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name is not None:
+                    bindings.append((node.name, None, False, None))
+                elif isinstance(node, ast.MatchMapping) and node.rest is not None:
+                    bindings.append((node.rest, None, False, None))
+            held: dict[str, str] = {}
+            licensed = ""
+            if fn is not None:
+                decorators = {ast.unparse(decorator) for decorator in fn.decorator_list}
+                positional = fn.args.posonlyargs + fn.args.args
+                first = (
+                    positional[0].arg
+                    if cls is not None and positional and not decorators & {"staticmethod", "classmethod"}
+                    else None
+                )
+                named_block = kind_table.block_of(Symbol(SymbolSpec(self._name, cls.name))) if cls is not None else None
+                record_class = named_block is not None and str(named_block) in DATA_BLOCKS
+                params = positional + fn.args.kwonlyargs
+                shadowed = {arg.arg for arg in params} | {binding[0] for binding in bindings}
+                for extra in (fn.args.vararg, fn.args.kwarg):
+                    if extra is not None:
+                        shadowed.add(extra.arg)
+                held = {name: shape for name, shape in module_held.items() if name not in shadowed}
+                for arg in params:
+                    taken = record_reader.ref(Annotation(arg.annotation)) if arg.annotation is not None else None
+                    if taken is not None:
+                        held[arg.arg] = str(taken.shape())
+                if record_class and first is not None:
+                    if fn.name == "__init__":
+                        licensed = first
+                    else:
+                        held[first] = "one"
+            for growing in (True, False):
+                changed = True
+                while changed:
+                    changed = False
+                    for name, value, iterated, shape in bindings:
+                        if (name in held) == growing:
+                            continue
+                        found_shape = shape
+                        pending: list[tuple[ast.expr, bool]] = [(value, False)] if value is not None else []
+                        while pending and found_shape is None:
+                            probe, part = pending.pop()
+                            if isinstance(probe, (ast.Await, ast.NamedExpr)):
+                                pending.append((probe.value, part))
+                            elif isinstance(probe, (ast.Attribute, ast.Subscript)):
+                                pending.append((probe.value, True))
+                            elif isinstance(probe, ast.IfExp):
+                                pending.extend([(probe.body, part), (probe.orelse, part)])
+                            elif isinstance(probe, ast.BoolOp):
+                                pending.extend((each, part) for each in probe.values)
+                            elif isinstance(probe, ast.Name) and probe.id in held:
+                                found_shape = "one" if part else held[probe.id]
+                            elif isinstance(probe, ast.Call):
+                                called = made.get(probe.func.id) if isinstance(probe.func, ast.Name) else None
+                                if called is None:
+                                    ref = Annotation(probe.func).primary()
+                                    symbol = self._scope.resolve(ref) if ref is not None else None
+                                    built = record_reader.made(symbol) if symbol is not None else None
+                                    called = str(built.shape()) if built is not None else None
+                                if called is not None:
+                                    found_shape = "one" if part else called
+                        if iterated and value is not None:
+                            found_shape = "one" if found_shape == "many" else None
+                        if growing and found_shape is not None:
+                            held[name] = found_shape
+                            changed = True
+                        elif not growing and found_shape is None:
+                            del held[name]
+                            changed = True
+            if fn is None:
+                module_held = dict(held)
+            refused: set[int] = set()
+            for node in scoped:
+                if not isinstance(node, (ast.With, ast.AsyncWith)):
+                    continue
+                raising = False
+                for withitem in node.items:
+                    ref = (
+                        Annotation(withitem.context_expr.func).primary()
+                        if isinstance(withitem.context_expr, ast.Call)
+                        else None
+                    )
+                    symbol = self._scope.resolve(ref) if ref is not None else None
+                    if symbol is not None and (str(symbol.module()), str(symbol.name())) == ("pytest", "raises"):
+                        raising = True
+                if not raising:
+                    continue
+                inside: list[ast.AST] = list(node.body)
+                while inside:
+                    cur = inside.pop()
+                    refused.add(id(cur))
+                    if not isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                        inside.extend(ast.iter_child_nodes(cur))
+            candidates: list[tuple[int, ast.expr, ast.expr | None]] = []
+            for node in scoped:
+                if id(node) in refused:
+                    continue
+                if isinstance(node, ast.Assign):
+                    candidates.extend(
+                        (node.lineno, sub, None)
+                        for target in node.targets
+                        for sub in ast.walk(target)
+                        if isinstance(sub, (ast.Attribute, ast.Subscript)) and isinstance(sub.ctx, ast.Store)
+                    )
+                elif (
+                    isinstance(node, ast.AugAssign) or (isinstance(node, ast.AnnAssign) and node.value is not None)
+                ) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
+                    candidates.append((node.lineno, node.target, None))
+                elif isinstance(node, ast.Delete):
+                    candidates.extend(
+                        (node.lineno, target, None)
+                        for target in node.targets
+                        if isinstance(target, (ast.Attribute, ast.Subscript))
+                    )
+                elif isinstance(node, ast.Call):
+                    func = node.func
+                    if isinstance(func, ast.Name) and func.id in ("setattr", "delattr") and len(node.args) >= 2:
+                        candidates.append((node.lineno, node.args[0], node.args[1]))
+                    elif isinstance(func, ast.Attribute) and func.attr in ("__setattr__", "__delattr__"):
+                        candidates.append((node.lineno, func.value, node.args[0] if node.args else None))
+                        if len(node.args) >= 2:
+                            candidates.append((node.lineno, node.args[0], node.args[1]))
+            for line, subject, named in candidates:
+                field = ""
+                cursor = subject
+                while isinstance(cursor, (ast.Attribute, ast.Subscript)):
+                    field = cursor.attr if isinstance(cursor, ast.Attribute) else "[…]"
+                    cursor = cursor.value
+                if (
+                    isinstance(cursor, ast.Call)
+                    and isinstance(cursor.func, ast.Name)
+                    and cursor.func.id == "vars"
+                    and len(cursor.args) == 1
+                ):
+                    cursor = cursor.args[0]
+                    field = "__dict__"
+                if not isinstance(cursor, ast.Name) or cursor.id not in held or cursor.id == licensed:
+                    continue
+                if not field:
+                    field = (
+                        named.value
+                        if isinstance(named, ast.Constant) and isinstance(named.value, str)
+                        else ast.unparse(named)
+                        if named is not None
+                        else "?"
+                    )
+                writes.add((line, where, cursor.id, field))
+        found: list[Violation] = []
+        for line, where, root, field in sorted(writes):
+            found.append(
+                Violation(ViolationSpec(
+                    self._path,
+                    line,
+                    "TB083",
+                    f"{where} writes {field!r} of the record {root!r}; "
+                    "a record is never changed after construction",
+                ))
+            )
+        return tuple(found)
+
     def class_decls(self, registry_spec: RegistrySpec) -> tuple[ClassDecl, ...]:
         scope_spec = ScopeSpec(
             self._name,
@@ -14089,6 +14692,42 @@ class Module(ts.Entity):
         return tuple(
             ClassDecl(ClassDeclSpec(node, self._name, self._path, scope_spec, registry_spec)) for node in self._class_defs
         )
+
+    def _constructor_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...]:
+        scope_spec = ScopeSpec(
+            self._name,
+            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
+            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
+            tuple(self._classes),
+            tuple(sorted(self._functions)),
+            self._spoken,
+            self._enums,
+            self._reexports,
+        )
+        rows: list[tuple[str, str, tuple[str, ...], tuple[str, ...]]] = []
+        for cls in self._class_defs:
+            block = blocks.get((self._name, cls.name))
+            if block is None or (block not in DATA_BLOCKS and block != "mapper"):
+                continue
+            init = next(
+                (item for item in cls.body if isinstance(item, ast.FunctionDef) and item.name == "__init__"),
+                None,
+            )
+            params = (
+                (init.args.posonlyargs + init.args.args)[1:] + init.args.kwonlyargs if init is not None else []
+            )
+            rows.append((
+                self._name,
+                cls.name,
+                tuple(arg.arg for arg in params),
+                tuple(
+                    str(TypeForm(TypeFormSpec(ast.unparse(arg.annotation), scope_spec)).text())
+                    if arg.annotation is not None
+                    else ""
+                    for arg in params
+                ),
+            ))
+        return tuple(rows)
 
     def name(self) -> str:
         return self._name
@@ -14913,6 +15552,9 @@ class Codebase(ts.AggregateRoot):
             registrations=registration_rows,
             dispatched=dispatched_rows,
             relay_constants=relay_constant_rows,
+            constructors=tuple(sorted(
+                row for module in checked for row in module._constructor_rows(blocks)
+            )),
             spec_makers=tuple(
                 (module_name, fn_name, str(made.symbol().module()), str(made.symbol().name()), str(made.shape()))
                 for (module_name, fn_name), made in sorted(self._spec_makers.items())
@@ -15144,6 +15786,7 @@ class Codebase(ts.AggregateRoot):
                 found.extend(module.aggregate_root_violations(registry))
             else:
                 found.extend(module.stray_violations())
+            found.extend(module.record_write_violations(registry))
             if str(module.place()) not in TEST_TIER:
                 found.extend(module.spec_use_violations(registry))
                 found.extend(module.spec_shared_violations(registry))

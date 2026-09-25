@@ -14,17 +14,20 @@ import tesser.serialization as serialization
 
 @ts.helper
 def _spec(
-    weight_kg: float = 20.5,
+    code: str = "ABC-123",
     items: int = 2,
+    weight_kg: float = 20.5,
+    label_digest: bytes = b"0123456789abcdef0123456789abcdef",
     declared_value: str = "99.95",
+    scanned_at: str = "2026-07-20T12:00:00+00:00",
 ) -> domain.ParcelSpec:
     return domain.ParcelSpec(
-        code="ABC-123",
+        code=code,
         items=items,
         weight_kg=weight_kg,
-        label_digest=bytes(range(32)),
+        label_digest=label_digest,
         declared_value=declared_value,
-        scanned_at="2026-07-20T12:00:00+00:00",
+        scanned_at=scanned_at,
     )
 
 
@@ -154,7 +157,16 @@ def test_is_heavy_is_false_at_and_below_the_threshold() -> None:
 
 
 def test_the_compound_exposes_its_leaves_and_identity() -> None:
-    parcel = domain.Parcel(_spec())
+    parcel = domain.Parcel(
+        _spec(
+            code="ABC-123",
+            items=2,
+            weight_kg=20.5,
+            label_digest=bytes(range(32)),
+            declared_value="99.95",
+            scanned_at="2026-07-20T12:00:00+00:00",
+        )
+    )
     assert parcel.code == domain.ParcelCode("ABC-123")
     assert parcel.items == domain.ItemCount(2)
     assert parcel.weight == domain.WeightKg(20.5)

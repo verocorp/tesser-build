@@ -55,20 +55,11 @@ class FakeDecliningPaymentProcessor(ports.PaymentProcessor):
         )
 
 
-@ts.helper
-def take_payment_request(
-    order_id: str = "o1", cents: int = 750, payment_method: str = "card-4242"
-) -> relays.TakePaymentRequest:
-    return relays.TakePaymentRequest(
-        order_id=order_id, cents=cents, payment_method=payment_method
-    )
-
-
 class TestPurchaseActions:
 
     def test_taking_a_payment_answers_the_processors_reference_and_amount(self) -> None:
         take_payment_response = application.PurchaseActions(FakePaymentProcessor()).take_payment(
-            take_payment_request()
+            relays.TakePaymentRequest(order_id="o1", cents=750, payment_method="card-4242")
         )
         assert take_payment_response.outcome is relays.TakePaymentOutcome.TAKEN
         assert take_payment_response.order_id == "o1"
@@ -78,14 +69,16 @@ class TestPurchaseActions:
     def test_taking_a_payment_charges_the_named_method_once_for_the_amount(self) -> None:
         fake_payment_processor = FakePaymentProcessor()
         application.PurchaseActions(fake_payment_processor).take_payment(
-            take_payment_request(order_id="o2", cents=3000, payment_method="card-1234")
+            relays.TakePaymentRequest(order_id="o2", cents=3000, payment_method="card-1234")
         )
         assert fake_payment_processor.charged == [("o2", 3000, "card-1234")]
 
     def test_a_declined_charge_carries_the_processors_word_forward(self) -> None:
         take_payment_response = application.PurchaseActions(
             FakeDecliningPaymentProcessor()
-        ).take_payment(take_payment_request())
+        ).take_payment(
+            relays.TakePaymentRequest(order_id="o1", cents=750, payment_method="card-4242")
+        )
         assert take_payment_response.outcome is relays.TakePaymentOutcome.DECLINED
         assert take_payment_response.payments == ()
         assert "declined the charge" in take_payment_response.reasons[0]
@@ -94,7 +87,7 @@ class TestPurchaseActions:
         fake_payment_processor = FakePaymentProcessor()
         with pytest.raises(errors.DomainError):
             application.PurchaseActions(fake_payment_processor).take_payment(
-                take_payment_request(payment_method="")
+                relays.TakePaymentRequest(order_id="o1", cents=750, payment_method="")
             )
         assert fake_payment_processor.charged == []
 
@@ -102,6 +95,6 @@ class TestPurchaseActions:
         fake_payment_processor = FakePaymentProcessor()
         with pytest.raises(errors.DomainError):
             application.PurchaseActions(fake_payment_processor).take_payment(
-                take_payment_request(cents=-1)
+                relays.TakePaymentRequest(order_id="o1", cents=-1, payment_method="card-4242")
             )
         assert fake_payment_processor.charged == []

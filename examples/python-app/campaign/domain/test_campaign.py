@@ -384,19 +384,24 @@ def test_money_is_immutable_once_constructed() -> None:
 
 
 @ts.helper
+def _money_spec(amount: str = "100.00", currency: str = "USD") -> domain.MoneySpec:
+    return domain.MoneySpec(amount=amount, currency=currency)
+
+
+@ts.helper
+def _short_links_spec(
+    links: tuple[domain.ShortLinkSpec, ...] = (_short_link_spec(),),
+) -> domain.ShortLinksSpec:
+    return domain.ShortLinksSpec(links=links)
+
+
+@ts.helper
 def _campaign_spec(
     id: str = "0123456789abcdef",
-    amount: str = "100.00",
-    currency: str = "USD",
-    slug: str = "spring-sale",
-    target_url: str = "https://ok.example/x",
-    active: bool = True,
+    budget: domain.MoneySpec = _money_spec(),
+    links: domain.ShortLinksSpec = _short_links_spec(),
 ) -> domain.CampaignSpec:
-    return domain.CampaignSpec(
-        id=id,
-        budget=domain.MoneySpec(amount=amount, currency=currency),
-        links=domain.ShortLinksSpec(links=(domain.ShortLinkSpec(slug=slug, target_url=target_url, active=active),)),
-    )
+    return domain.CampaignSpec(id=id, budget=budget, links=links)
 
 
 def test_a_campaign_carries_every_field_of_its_spec() -> None:
@@ -410,19 +415,15 @@ def test_a_campaign_carries_every_field_of_its_spec() -> None:
 
 
 def test_a_campaign_may_start_with_no_links() -> None:
-    campaign = domain.Campaign(
-        domain.CampaignSpec(
-            id="0123456789abcdef",
-            budget=domain.MoneySpec(amount="100.00", currency="USD"),
-            links=domain.ShortLinksSpec(links=()),
-        )
-    )
+    campaign = domain.Campaign(_campaign_spec(links=_short_links_spec(links=())))
 
     assert campaign.links == ()
 
 
 def test_the_links_accessor_hands_back_copies_the_caller_cannot_mutate() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo", active=True))
+    campaign = domain.Campaign(
+        _campaign_spec(links=_short_links_spec(links=(_short_link_spec(active=True),)))
+    )
 
     campaign.links[0].deactivate()
 
@@ -430,7 +431,9 @@ def test_the_links_accessor_hands_back_copies_the_caller_cannot_mutate() -> None
 
 
 def test_add_short_link_admits_a_new_slug() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo"))
+    campaign = domain.Campaign(
+        _campaign_spec(links=_short_links_spec(links=(_short_link_spec(slug="promo"),)))
+    )
 
     campaign.add_short_link(
         domain.ShortLinkSpec(slug="sale", target_url="https://ok.example/y", active=True)
@@ -440,7 +443,9 @@ def test_add_short_link_admits_a_new_slug() -> None:
 
 
 def test_add_short_link_refuses_a_slug_the_campaign_already_carries() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo"))
+    campaign = domain.Campaign(
+        _campaign_spec(links=_short_links_spec(links=(_short_link_spec(slug="promo"),)))
+    )
 
     with pytest.raises(errors.DomainError) as caught:
         campaign.add_short_link(
@@ -453,7 +458,7 @@ def test_add_short_link_refuses_a_slug_the_campaign_already_carries() -> None:
 
 
 def test_add_short_link_refuses_a_malformed_link_and_keeps_the_campaign_intact() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo"))
+    campaign = domain.Campaign(_campaign_spec(links=_short_links_spec(links=(_short_link_spec(),))))
 
     with pytest.raises(errors.DomainError) as caught:
         campaign.add_short_link(
@@ -467,17 +472,13 @@ def test_add_short_link_refuses_a_malformed_link_and_keeps_the_campaign_intact()
 def test_construction_refuses_a_duplicate_slug_in_the_spec() -> None:
     with pytest.raises(errors.DomainError) as caught:
         domain.Campaign(
-            domain.CampaignSpec(
-                id="0123456789abcdef",
-                budget=domain.MoneySpec(amount="100.00", currency="USD"),
-                links=domain.ShortLinksSpec(links=(
-                    domain.ShortLinkSpec(
-                        slug="promo", target_url="https://ok.example/a", active=True
-                    ),
-                    domain.ShortLinkSpec(
-                        slug="promo", target_url="https://ok.example/b", active=True
-                    ),
-                )),
+            _campaign_spec(
+                links=_short_links_spec(
+                    links=(
+                        _short_link_spec(slug="promo", target_url="https://ok.example/a"),
+                        _short_link_spec(slug="promo", target_url="https://ok.example/b"),
+                    )
+                )
             )
         )
 
@@ -488,17 +489,13 @@ def test_construction_refuses_a_duplicate_slug_in_the_spec() -> None:
 def test_construction_names_the_index_of_the_link_it_refused() -> None:
     with pytest.raises(errors.DomainError) as caught:
         domain.Campaign(
-            domain.CampaignSpec(
-                id="0123456789abcdef",
-                budget=domain.MoneySpec(amount="100.00", currency="USD"),
-                links=domain.ShortLinksSpec(links=(
-                    domain.ShortLinkSpec(
-                        slug="promo", target_url="https://ok.example/a", active=True
-                    ),
-                    domain.ShortLinkSpec(
-                        slug="promo-two", target_url="ftp://bad.example", active=True
-                    ),
-                )),
+            _campaign_spec(
+                links=_short_links_spec(
+                    links=(
+                        _short_link_spec(slug="promo"),
+                        _short_link_spec(slug="promo-two", target_url="ftp://bad.example"),
+                    )
+                )
             )
         )
 
@@ -508,7 +505,7 @@ def test_construction_names_the_index_of_the_link_it_refused() -> None:
 
 def test_construction_propagates_a_budget_rejection() -> None:
     with pytest.raises(errors.DomainError) as caught:
-        domain.Campaign(_campaign_spec(currency="dollars"))
+        domain.Campaign(_campaign_spec(budget=_money_spec(currency="dollars")))
 
     assert caught.value.code == "invalid_budget_currency"
 
@@ -521,7 +518,9 @@ def test_construction_propagates_an_id_rejection() -> None:
 
 
 def test_deactivate_short_link_flips_only_the_named_link() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo"))
+    campaign = domain.Campaign(
+        _campaign_spec(links=_short_links_spec(links=(_short_link_spec(slug="promo"),)))
+    )
     campaign.add_short_link(
         domain.ShortLinkSpec(slug="sale", target_url="https://ok.example/y", active=True)
     )
@@ -535,7 +534,7 @@ def test_deactivate_short_link_flips_only_the_named_link() -> None:
 
 
 def test_deactivate_short_link_refuses_a_slug_the_campaign_does_not_carry() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo"))
+    campaign = domain.Campaign(_campaign_spec())
 
     with pytest.raises(errors.DomainError) as caught:
         campaign.deactivate_short_link(domain.Slug("nosuch"))
@@ -545,13 +544,21 @@ def test_deactivate_short_link_refuses_a_slug_the_campaign_does_not_carry() -> N
 
 
 def test_active_target_hands_back_the_url_of_the_named_active_link() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo"))
+    campaign = domain.Campaign(
+        _campaign_spec(
+            links=_short_links_spec(
+                links=(_short_link_spec(slug="promo", target_url="https://ok.example/x", active=True),)
+            )
+        )
+    )
 
     assert str(campaign.active_target(domain.Slug("promo"))) == "https://ok.example/x"
 
 
 def test_active_target_refuses_a_link_that_was_deactivated() -> None:
-    campaign = domain.Campaign(_campaign_spec(slug="promo"))
+    campaign = domain.Campaign(
+        _campaign_spec(links=_short_links_spec(links=(_short_link_spec(slug="promo"),)))
+    )
     campaign.deactivate_short_link(domain.Slug("promo"))
 
     with pytest.raises(errors.DomainError) as caught:

@@ -86,7 +86,7 @@ class FakeScriptedReader(ports.SourceReader):
         return self.responses[min(self.reads, len(self.responses)) - 1]
 
 
-@ts.helper
+@ts.assembly
 def _tree_of(text: str = "import os\n") -> ports.ReadSourcesResponse:
     return ports.ReadSourcesResponse(
         outcome=ports.ReadSourcesOutcome.APP,
@@ -109,7 +109,7 @@ def _tree_of(text: str = "import os\n") -> ports.ReadSourcesResponse:
     )
 
 
-@ts.helper
+@ts.assembly
 def _renameable_tree() -> ports.ReadSourcesResponse:
     return ports.ReadSourcesResponse(
         outcome=ports.ReadSourcesOutcome.APP,
@@ -573,10 +573,10 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
 
 
 
-@ts.helper
-def _loose_tree(root: str = "app") -> ports.ReadSourcesResponse:
+@ts.assembly
+def _loose_tree(outcome: ports.ReadSourcesOutcome = ports.ReadSourcesOutcome.APP) -> ports.ReadSourcesResponse:
     return ports.ReadSourcesResponse(
-        outcome=ports.ReadSourcesOutcome(root),
+        outcome=outcome,
         nested=(),
         symlinked=(),
         sources=(
@@ -628,7 +628,7 @@ def test_check_file_is_silent_about_a_skipped_or_outside_path() -> None:
 
 
 def test_check_file_names_an_undeclared_tree_whatever_the_path() -> None:
-    check_file_response = application.TessercheckService(FakePreparedReader(_loose_tree("missing")), FakeSourceWriter(), FakeRulebookSources("")).check_file(
+    check_file_response = application.TessercheckService(FakePreparedReader(_loose_tree(outcome=ports.ReadSourcesOutcome.MISSING)), FakeSourceWriter(), FakeRulebookSources("")).check_file(
         client.CheckFileRequest(tree="some/tree", path="loose_a.py")
     )
 
@@ -668,7 +668,7 @@ def test_hook_is_silent_off_the_governed_tree_and_disabled_when_told_to() -> Non
 
 
 def test_hook_advises_about_an_undeclared_tree_in_every_mode() -> None:
-    check_write_response = application.TessercheckService(FakePreparedReader(_loose_tree("missing")), FakeSourceWriter(), FakeRulebookSources("")).check_write(
+    check_write_response = application.TessercheckService(FakePreparedReader(_loose_tree(outcome=ports.ReadSourcesOutcome.MISSING)), FakeSourceWriter(), FakeRulebookSources("")).check_write(
         client.CheckWriteRequest(tree="some/tree", path="loose_a.py", conf="mode=feedback\n")
     )
 

@@ -11,22 +11,8 @@ import srv.voice as voice
 
 
 @ts.helper
-def tool_turn(reply: str = "spoken", tool: str = "provide_name") -> protocol.ToolTurn:
-    return protocol.ToolTurn(
-        reply=reply,
-        tools=(
-            protocol.Tool(
-                name=tool,
-                description="record what the caller said",
-                parameters={
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}},
-                    "required": ["name"],
-                    "additionalProperties": False,
-                },
-            ),
-        ),
-    )
+def tool_turn(reply: str = "spoken", tools: tuple[protocol.Tool, ...] = ()) -> protocol.ToolTurn:
+    return protocol.ToolTurn(reply=reply, tools=tools)
 
 
 @ts.fake
@@ -115,7 +101,10 @@ class TestToolAgent:
     def test_opening_the_session_mounts_the_tools_the_surface_handed_back(self) -> None:
         fake_tool_halt = FakeToolHalt()
 
-        fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
+        fake_tool_surface = FakeToolSurface(
+            tool_turn(tools=(protocol.Tool(name="provide_name", description="", parameters={}),)),
+            tool_turn(),
+        )
         tool_agent = voice.ToolAgent(fake_tool_surface, (), fake_tool_halt)
 
         asyncio.run(tool_agent.on_enter())
@@ -127,8 +116,16 @@ class TestToolAgent:
     def test_a_tool_call_reaches_the_route_of_that_name_and_rebinds_to_its_turn(self) -> None:
         fake_tool_halt = FakeToolHalt()
 
-        fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
-        fake_endpoint = FakeEndpoint(tool_turn(reply="recorded", tool="choose_slot"))
+        fake_tool_surface = FakeToolSurface(
+            tool_turn(tools=(protocol.Tool(name="provide_name", description="", parameters={}),)),
+            tool_turn(),
+        )
+        fake_endpoint = FakeEndpoint(
+            tool_turn(
+                reply="recorded",
+                tools=(protocol.Tool(name="choose_slot", description="", parameters={}),),
+            )
+        )
         tool_agent = voice.ToolAgent(
             fake_tool_surface,
             (protocol.Route(name="provide_name", endpoint=fake_endpoint),),
@@ -147,7 +144,10 @@ class TestToolAgent:
     def test_a_tool_the_routes_do_not_name_is_a_tool_error_and_never_halts(self) -> None:
         fake_tool_halt = FakeToolHalt()
 
-        fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
+        fake_tool_surface = FakeToolSurface(
+            tool_turn(tools=(protocol.Tool(name="provide_name", description="", parameters={}),)),
+            tool_turn(),
+        )
         tool_agent = voice.ToolAgent(fake_tool_surface, (), fake_tool_halt)
 
         with asyncio.Runner() as runner:
@@ -161,7 +161,8 @@ class TestToolAgent:
         fake_tool_halt = FakeToolHalt()
 
         fake_tool_surface = FakeToolSurface(
-            tool_turn(tool="provide_name"), tool_turn(reply="try again", tool="choose_slot")
+            tool_turn(tools=(protocol.Tool(name="provide_name", description="", parameters={}),)),
+            tool_turn(tools=(protocol.Tool(name="choose_slot", description="", parameters={}),)),
         )
         tool_agent = voice.ToolAgent(
             fake_tool_surface,
@@ -181,7 +182,10 @@ class TestToolAgent:
     def test_a_failure_the_model_cannot_correct_halts_the_session_and_propagates(self) -> None:
         fake_tool_halt = FakeToolHalt()
 
-        fake_tool_surface = FakeToolSurface(tool_turn(tool="provide_name"), tool_turn())
+        fake_tool_surface = FakeToolSurface(
+            tool_turn(tools=(protocol.Tool(name="provide_name", description="", parameters={}),)),
+            tool_turn(),
+        )
         tool_agent = voice.ToolAgent(
             fake_tool_surface,
             (protocol.Route(name="provide_name", endpoint=FakeBrokenEndpoint()),),

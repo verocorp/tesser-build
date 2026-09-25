@@ -14,16 +14,18 @@ def _window_spec(start: str = "2026-01-01", end: str = "2026-02-01") -> domain.D
 
 @ts.helper
 def _short_link_spec(
-    slug: str = "spring-sale", url: str = "https://x.com"
+    slug: str = "spring-sale", target_url: str = "https://x.com"
 ) -> domain.ShortLinkSpec:
-    return domain.ShortLinkSpec(slug=slug, target_url=url)
+    return domain.ShortLinkSpec(slug=slug, target_url=target_url)
 
 
 @ts.helper
-def _campaign_spec(slug: str = "spring-sale") -> domain.CampaignSpec:
-    return domain.CampaignSpec(
-        id="c1", window=_window_spec(), links=(_short_link_spec(slug),)
-    )
+def _campaign_spec(
+    id: str = "c1",
+    window: domain.DateWindowSpec = _window_spec(),
+    links: tuple[domain.ShortLinkSpec, ...] = (_short_link_spec(),),
+) -> domain.CampaignSpec:
+    return domain.CampaignSpec(id=id, window=window, links=links)
 
 
 def test_slug_valid() -> None:
@@ -85,7 +87,7 @@ def test_campaign_id_empty_raises_validation() -> None:
 
 
 def test_short_link_valid() -> None:
-    short_link = domain.ShortLink(_short_link_spec())
+    short_link = domain.ShortLink(_short_link_spec(slug="spring-sale"))
     assert str(short_link.slug) == "spring-sale"
     assert short_link.status == domain.LinkStatus("active")
 
@@ -110,14 +112,14 @@ def test_deactivate_then_deactivate_is_conflict() -> None:
 
 
 def test_identity_equality_by_slug() -> None:
-    first = domain.ShortLink(_short_link_spec())
-    second = domain.ShortLink(_short_link_spec(url="https://y.com"))
+    first = domain.ShortLink(_short_link_spec(target_url="https://x.com"))
+    second = domain.ShortLink(_short_link_spec(target_url="https://y.com"))
     assert first == second
     assert hash(first) == hash(second)
 
 
 def test_campaign_valid() -> None:
-    campaign = domain.Campaign(_campaign_spec())
+    campaign = domain.Campaign(_campaign_spec(id="c1", links=(_short_link_spec(),)))
     assert campaign.id == "c1"
     assert len(campaign.links) == 1
 
@@ -125,20 +127,16 @@ def test_campaign_valid() -> None:
 def test_duplicate_slug_is_conflict() -> None:
     with pytest.raises(errors.DomainError) as ei:
         domain.Campaign(
-            domain.CampaignSpec(
-                id="c1",
-                window=_window_spec(),
-                links=(_short_link_spec("dup-slug"), _short_link_spec("dup-slug")),
-            )
+            _campaign_spec(links=(_short_link_spec(slug="dup-slug"), _short_link_spec(slug="dup-slug")))
         )
     assert ei.value.kind is errors.Kind.CONFLICT
     assert ei.value.code == "duplicate_slug"
 
 
 def test_too_many_links_is_conflict() -> None:
-    links = tuple(_short_link_spec(f"link-{i}") for i in range(6))
+    links = tuple(_short_link_spec(slug=f"link-{i}") for i in range(6))
     with pytest.raises(errors.DomainError) as ei:
-        domain.Campaign(domain.CampaignSpec(id="c1", window=_window_spec(), links=links))
+        domain.Campaign(_campaign_spec(links=links))
     assert ei.value.kind is errors.Kind.CONFLICT
     assert ei.value.code == "too_many_links"
 
@@ -146,11 +144,7 @@ def test_too_many_links_is_conflict() -> None:
 def test_bad_child_wrapped_with_index_keeps_kind_and_code() -> None:
     with pytest.raises(errors.DomainError) as ei:
         domain.Campaign(
-            domain.CampaignSpec(
-                id="c1",
-                window=_window_spec(),
-                links=(_short_link_spec("ok-slug"), _short_link_spec("BAD")),
-            )
+            _campaign_spec(links=(_short_link_spec(slug="ok-slug"), _short_link_spec(slug="BAD")))
         )
     e = ei.value
     assert e.kind is errors.Kind.VALIDATION
@@ -168,9 +162,9 @@ def test_deactivate_missing_link_is_not_found() -> None:
 
 
 def test_links_accessor_returns_defensive_copy() -> None:
-    campaign = domain.Campaign(_campaign_spec())
+    campaign = domain.Campaign(_campaign_spec(links=(_short_link_spec(),)))
     snapshot = campaign.links
     assert isinstance(snapshot, tuple)
-    campaign.add_link(_short_link_spec("summer-sale"))
+    campaign.add_link(_short_link_spec(slug="summer-sale"))
     assert len(snapshot) == 1
     assert len(campaign.links) == 2

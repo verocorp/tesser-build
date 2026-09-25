@@ -12,17 +12,29 @@ import srv.http as srv_http
 
 
 @ts.helper
-def app_spec(storage: str = "memory") -> app.Spec:
-    return app.Spec(
-        specification=specification_component.Config(specification_component.Spec(storage)),
-        http=app.HttpConfig(app.HttpSpec(host="127.0.0.1", port=0)),
-    )
+def specification_spec(storage: str = "memory") -> specification_component.Spec:
+    return specification_component.Spec(storage=storage)
+
+
+@ts.helper
+def http_spec(host: str = "127.0.0.1", port: int = 0) -> app.HttpSpec:
+    return app.HttpSpec(host=host, port=port)
+
+
+@ts.helper
+def app_spec(
+    specification: specification_component.Config = specification_component.Config(specification_spec()),
+    http: app.HttpConfig = app.HttpConfig(http_spec()),
+) -> app.Spec:
+    return app.Spec(specification=specification, http=http)
 
 
 class TestAddStoryEndToEnd:
 
     def test_a_post_to_a_jtbds_stories_answers_the_storys_id_level_and_position(self) -> None:
-        specs_app = app.SpecsApp(app.AppConfig(app_spec()))
+        specs_app = app.SpecsApp(
+            app.AppConfig(app_spec())
+        )
         http_host = srv_http.HttpHost(("127.0.0.1", 0), specs_app)
         stop = threading.Event()
         thread = threading.Thread(target=http_host.run, args=(stop,))
@@ -50,7 +62,9 @@ class TestAddStoryEndToEnd:
             specs_app.close()
 
     def test_a_second_post_to_the_same_jtbd_takes_the_next_position(self) -> None:
-        specs_app = app.SpecsApp(app.AppConfig(app_spec()))
+        specs_app = app.SpecsApp(
+            app.AppConfig(app_spec())
+        )
         http_host = srv_http.HttpHost(("127.0.0.1", 0), specs_app)
         stop = threading.Event()
         thread = threading.Thread(target=http_host.run, args=(stop,))
@@ -74,7 +88,9 @@ class TestAddStoryEndToEnd:
             specs_app.close()
 
     def test_a_post_missing_a_line_is_a_malformed_request(self) -> None:
-        specs_app = app.SpecsApp(app.AppConfig(app_spec()))
+        specs_app = app.SpecsApp(
+            app.AppConfig(app_spec())
+        )
         http_host = srv_http.HttpHost(("127.0.0.1", 0), specs_app)
         stop = threading.Event()
         thread = threading.Thread(target=http_host.run, args=(stop,))

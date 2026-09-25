@@ -58,8 +58,8 @@ class FakeSpeechApplicationClient(client.SpeechApplicationClient):
 
 
 @ts.helper
-def conduct_call_request(call_id: str = "c7") -> relays.ConductCallRequest:
-    return relays.ConductCallRequest(call=domain.Call(domain.CallSpec(call_id=call_id, person_name="")))
+def call_spec(call_id: str = "c7", person_name: str = "") -> domain.CallSpec:
+    return domain.CallSpec(call_id=call_id, person_name=person_name)
 
 
 class TestRestateConductCall:
@@ -106,7 +106,9 @@ class TestRestateConductCall:
 
             async with httpx.AsyncClient(base_url=os.environ["RESTATE_URL"], timeout=30.0) as async_client:
                 sent = await restate_client.Client(async_client).workflow_send(
-                    restate_conduct_call.handler, key=call_id, arg=conduct_call_request(call_id=call_id)
+                    restate_conduct_call.handler,
+                    key=call_id,
+                    arg=relays.ConductCallRequest(call=domain.Call(call_spec(call_id=call_id))),
                 )
             called: list[tuple[str, str]] = []
             awaited: list[str] = []

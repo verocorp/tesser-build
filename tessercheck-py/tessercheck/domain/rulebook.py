@@ -100,6 +100,9 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "field.name()": "⟨field⟩",
     "method.name()": "⟨method⟩",
     "arg": "⟨name⟩",
+    "param": "⟨name⟩",
+    "written_type": "⟨type⟩",
+    "wanted_type": "⟨type⟩",
     "class_decl.module()": "⟨module⟩",
     "class_decl.name()": "⟨class⟩",
     "delegate": "⟨method⟩",
@@ -133,6 +136,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "target_kind": "⟨kind⟩",
     "target_class": "⟨class⟩",
     "constant": "⟨constant⟩",
+    "root": "⟨name⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -158,6 +162,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.package_read_violations": "every module, in every module kind",
     "Module.spec_use_violations": "every function that holds a spec, in every module",
     "Module.spec_shared_violations": "domain object `__init__`",
+    "Module.record_write_violations": "every module",
     "ClassDecl.vo_field_violations": "value object class",
     "ClassDecl.exposure_violations": "value object class",
     "ClassDecl.composition_violations": "value object class",
@@ -238,7 +243,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "test": "test module",
     "ImportEdge.member_form_violations": "every import in every governed module",
     "Module.stray_import_violations": "role, srv/app, or test module",
-    "Helper.violations": "@ts.helper function",
+    "Helper.__init__": "@ts.helper or @ts.assembly function",
     "Module.pairing_violations": "implementation module and its sibling test file",
     "Module.relay_name_violations": "relay protocol",
     "Module.relay_constant_violations": "relays module constant",
