@@ -39,6 +39,14 @@ Deferred work with context. Each entry carries enough for a cold pickup.
   widget messages other than the request carrying `domain.Name`. Needs the
   scope ruled (requests only, or requests and responses), then the policy
   tightened and those records migrated.
+- [ ] **Freeze records at run time, as a backstop to TB083's write rule.**
+  #214 adds the static rule "a record is never changed after construction"
+  (a test helper's default is one shared instance, so a write leaks across
+  tests). The static rule misses aliasing and code outside a checked tree.
+  Once it has every tree at zero, `ts.Spec`/`ts.Request`/`ts.Response` can
+  refuse `__setattr__` after `__init__` returns, like `ts.ValueObject` —
+  then a raise means a real miss, not a rollout surprise (Chris,
+  2026-09-24: static first, never a runtime-first rollout).
 - [ ] **No record field is a union, optional included (Chris, 2026-09-24).**
   TB080 already says "a port DTO field is never a union, optional included —
   model the outcome as an enum", but only for port DTOs. Spec, context DTO

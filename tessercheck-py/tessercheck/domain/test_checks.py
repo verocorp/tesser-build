@@ -11634,8 +11634,12 @@ def test_a_mapper_and_a_wider_spec_never_keep_a_spec() -> None:
         "a spec is never kept, it initializes its own object and is done",
         "shop/application/mapping.py:8: TB083 shop.application.mapping.Fold.unfold keeps the spec 'spec'; "
         "a spec is never kept, it initializes its own object and is done",
+        "shop/component/wiring.py:9: TB083 shop.component.wiring.OuterSpec.rewrap writes 'inner' of the record 'self'; "
+        "a record is never changed after construction",
         "shop/component/wiring.py:9: TB083 shop.component.wiring.OuterSpec.rewrap keeps the spec 'inner'; "
         "a spec is never kept, it initializes its own object and is done",
+        "app/plan.py:9: TB083 app.plan.RunSpec.relay writes 'leg' of the record 'self'; "
+        "a record is never changed after construction",
         "app/plan.py:9: TB083 app.plan.RunSpec.relay keeps the spec 'leg'; "
         "a spec is never kept, it initializes its own object and is done",
     )
@@ -11705,6 +11709,114 @@ def test_one_line_reaching_for_the_spec_twice_is_reported_once() -> None:
     )
 
 
+def test_a_record_is_never_changed_after_construction() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/domain/order.py",
+                "shop.domain.order",
+                "import tesser.domain as ts\n"
+                "class MoneySpec(ts.Spec):\n"
+                "    def __init__(self, currency: str) -> None:\n"
+                "        self.currency = currency\n"
+                "class OrderSpec(ts.Spec):\n"
+                "    def __init__(self, budget: MoneySpec) -> None:\n"
+                "        self.budget = budget\n"
+                "class Money(ts.ValueObject):\n"
+                "    def __init__(self, spec: MoneySpec) -> None:\n"
+                "        spec.currency = spec.currency.upper()\n"
+                "        object.__setattr__(self, '_currency', spec.currency)\n",
+                False,
+            ),
+            (
+                "shop/domain/test_order.py",
+                "shop.domain.test_order",
+                "import tesser.testing as ts\n"
+                "import shop.domain.order as order\n"
+                "@ts.helper\n"
+                "def money_spec() -> order.MoneySpec:\n"
+                "    return order.MoneySpec(currency='USD')\n"
+                "@ts.helper\n"
+                "def order_spec(budget: order.MoneySpec = money_spec()) -> order.OrderSpec:\n"
+                "    return order.OrderSpec(budget=budget)\n"
+                "def test_the_default_leaks() -> None:\n"
+                "    spec = order_spec()\n"
+                "    child = spec.budget\n"
+                "    spec.budget.currency = 'EUR'\n"
+                "    child.currency = 'GBP'\n"
+                "    setattr(spec, 'budget', None)\n"
+                "    object.__setattr__(child, 'currency', 'JPY')\n"
+                "    spec.budget.currency += '!'\n"
+                "    del spec.budget\n"
+                "    vars(child)['currency'] = 'CHF'\n"
+                "def test_a_value_object_and_a_dict_are_not_records() -> None:\n"
+                "    money = order.Money(order.MoneySpec(currency='USD'))\n"
+                "    object.__setattr__(money, '_currency', 'EUR')\n"
+                "    counts = {}\n"
+                "    counts['a'] = 1\n"
+                "    spec = order_spec()\n"
+                "    spec = counts\n"
+                "    spec['b'] = 2\n",
+                False,
+            ),
+        ))).violations()
+    )
+    writes = tuple(f for f in findings if " writes " in f)
+    assert writes == (
+        "shop/domain/order.py:10: TB083 shop.domain.order.Money.__init__ writes 'currency' of the record 'spec'; "
+        "a record is never changed after construction",
+        "shop/domain/test_order.py:12: TB083 shop.domain.test_order.test_the_default_leaks writes 'budget' of the "
+        "record 'spec'; a record is never changed after construction",
+        "shop/domain/test_order.py:13: TB083 shop.domain.test_order.test_the_default_leaks writes 'currency' of the "
+        "record 'child'; a record is never changed after construction",
+        "shop/domain/test_order.py:14: TB083 shop.domain.test_order.test_the_default_leaks writes 'budget' of the "
+        "record 'spec'; a record is never changed after construction",
+        "shop/domain/test_order.py:15: TB083 shop.domain.test_order.test_the_default_leaks writes 'currency' of the "
+        "record 'child'; a record is never changed after construction",
+        "shop/domain/test_order.py:16: TB083 shop.domain.test_order.test_the_default_leaks writes 'budget' of the "
+        "record 'spec'; a record is never changed after construction",
+        "shop/domain/test_order.py:17: TB083 shop.domain.test_order.test_the_default_leaks writes 'budget' of the "
+        "record 'spec'; a record is never changed after construction",
+        "shop/domain/test_order.py:18: TB083 shop.domain.test_order.test_the_default_leaks writes '__dict__' of the "
+        "record 'child'; a record is never changed after construction",
+    )
+
+
+def test_a_write_a_test_expects_pytest_raises_to_refuse_is_not_a_change() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "shop/domain/test_thing.py",
+                "shop.domain.test_thing",
+                "import contextlib\n"
+                "import pytest\n"
+                "from pytest import raises as refuses\n"
+                "import shop.domain.thing as thing\n"
+                "def test_a_frozen_spec_refuses_writes() -> None:\n"
+                "    spec = thing.ThingSpec(text='a')\n"
+                "    with pytest.raises(AttributeError):\n"
+                "        spec.text = 'b'\n"
+                "    with refuses(AttributeError):\n"
+                "        setattr(spec, 'text', 'c')\n"
+                "    with contextlib.suppress(AttributeError):\n"
+                "        spec.text = 'd'\n"
+                "    with open('x') as handle:\n"
+                "        spec.text = handle.read()\n",
+                False,
+            ),
+        ))).violations()
+    )
+    writes = tuple(f for f in findings if " writes " in f)
+    assert writes == (
+        "shop/domain/test_thing.py:12: TB083 shop.domain.test_thing.test_a_frozen_spec_refuses_writes writes 'text' "
+        "of the record 'spec'; a record is never changed after construction",
+        "shop/domain/test_thing.py:14: TB083 shop.domain.test_thing.test_a_frozen_spec_refuses_writes writes 'text' "
+        "of the record 'spec'; a record is never changed after construction",
+    )
+
+
 def test_writing_through_the_spec_is_not_reading_it() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -11731,6 +11843,8 @@ def test_writing_through_the_spec_is_not_reading_it() -> None:
     )
     tb083 = tuple(f for f in findings if " TB083 " in f)
     assert tb083 == (
+        "shop/adapters/hider.py:10: TB083 shop.adapters.hider.Hider.write writes 'text' of the record 'spec'; "
+        "a record is never changed after construction",
         "shop/adapters/hider.py:7: TB083 shop.adapters.hider.Hider.nest.Inner.peek reads 'text' of the spec 'spec'; "
         "a spec is only read where it initializes its own object",
         "shop/adapters/hider.py:13: TB083 shop.adapters.hider.Hider.deep reads 'inner' of the spec 'spec'; "

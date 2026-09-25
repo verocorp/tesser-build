@@ -136,6 +136,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "target_kind": "⟨kind⟩",
     "target_class": "⟨class⟩",
     "constant": "⟨constant⟩",
+    "root": "⟨name⟩",
 }
 
 APPLIES_TO: typing.Final[dict[str, str]] = {
@@ -161,6 +162,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.package_read_violations": "every module, in every module kind",
     "Module.spec_use_violations": "every function that holds a spec, in every module",
     "Module.spec_shared_violations": "domain object `__init__`",
+    "Module.record_write_violations": "every module",
     "ClassDecl.vo_field_violations": "value object class",
     "ClassDecl.exposure_violations": "value object class",
     "ClassDecl.composition_violations": "value object class",
