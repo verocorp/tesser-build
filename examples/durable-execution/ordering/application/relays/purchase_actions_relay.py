@@ -82,11 +82,11 @@ class TakePaymentResponseSnapshot(ts.Serde):
             {
                 "outcome": take_payment_response.outcome.value,
                 "order_id": take_payment_response.order_id,
-                "payments": [  # tesser:debt TB082
+                "payments": [
                     {"reference": payment.reference, "cents": payment.cents}
                     for payment in take_payment_response.payments
                 ],
-                "reasons": list(take_payment_response.reasons),  # tesser:debt TB082
+                "reasons": list(take_payment_response.reasons),
             }
         ).encode()
 
@@ -98,8 +98,8 @@ class TakePaymentResponseSnapshot(ts.Serde):
             and snapshot["order_id"]
             and isinstance(snapshot.get("payments"), list)
             and isinstance(snapshot.get("reasons"), list)
-            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])  # tesser:debt TB082
-            and all(  # tesser:debt TB082
+            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])
+            and all(
                 isinstance(payment, dict)
                 and isinstance(payment.get("reference"), str)
                 and payment["reference"]
@@ -120,11 +120,11 @@ class TakePaymentResponseSnapshot(ts.Serde):
         return TakePaymentResponse(
             outcome=take_payment_outcome,
             order_id=snapshot["order_id"],
-            payments=tuple(  # tesser:debt TB082
+            payments=tuple(
                 Payment(reference=payment["reference"], cents=payment["cents"])
                 for payment in snapshot["payments"]
             ),
-            reasons=tuple(snapshot["reasons"]),  # tesser:debt TB082
+            reasons=tuple(snapshot["reasons"]),
         )
 
 

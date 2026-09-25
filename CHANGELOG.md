@@ -5,6 +5,17 @@ Versions follow the 4-digit `MAJOR.MINOR.PATCH.MICRO` format. (This file
 versions the toolkit repo as a whole; `tessercheck-py/pyproject.toml`
 carries the analyzer package's own version — separate streams.)
 
+## Unreleased
+
+### Changed
+- **TB082 snapshots can carry collections without debt markers.** Primitive
+  tuples use structural `list`/`tuple` conversions; an unfiltered mapping
+  carries nested records, and the single deserialize guard may check element
+  shape with `all(isinstance(...) ...)`. Filtered or computed loops remain
+  findings. The durable-execution examples now use the sanctioned form, and
+  the snapshot rule in `python.md` and the design doc reflects it (skill
+  version 90; issue #215).
+
 ## [0.5.0.0] - 2026-09-24
 
 A test helper now mirrors the constructor it feeds (#213). A test states

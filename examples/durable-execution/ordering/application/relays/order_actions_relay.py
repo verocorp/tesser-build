@@ -59,8 +59,8 @@ class PriceProductResponseSnapshot(ts.Serde):
         return json.dumps(
             {
                 "outcome": price_product_response.outcome.value,
-                "prices": [{"cents": price.cents} for price in price_product_response.prices],  # tesser:debt TB082
-                "reasons": list(price_product_response.reasons),  # tesser:debt TB082
+                "prices": [{"cents": price.cents} for price in price_product_response.prices],
+                "reasons": list(price_product_response.reasons),
             }
         ).encode()
 
@@ -70,10 +70,10 @@ class PriceProductResponseSnapshot(ts.Serde):
             isinstance(snapshot, dict)
             and isinstance(snapshot.get("prices"), list)
             and isinstance(snapshot.get("reasons"), list)
-            and all(  # tesser:debt TB082
+            and all(
                 isinstance(reason, str) and reason for reason in snapshot["reasons"]
             )
-            and all(  # tesser:debt TB082
+            and all(
                 isinstance(price, dict)
                 and isinstance(price.get("cents"), int)
                 and not isinstance(price.get("cents"), bool)
@@ -90,8 +90,8 @@ class PriceProductResponseSnapshot(ts.Serde):
             raise ValueError("a price product response names a priced outcome") from value_error  # tesser:debt TB082
         return PriceProductResponse(
             outcome=price_product_outcome,
-            prices=tuple(Price(cents=price["cents"]) for price in snapshot["prices"]),  # tesser:debt TB082
-            reasons=tuple(snapshot["reasons"]),  # tesser:debt TB082
+            prices=tuple(Price(cents=price["cents"]) for price in snapshot["prices"]),
+            reasons=tuple(snapshot["reasons"]),
         )
 
 

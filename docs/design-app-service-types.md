@@ -267,13 +267,20 @@ relay.
 declares exactly `serialize` and `deserialize`. `serialize` is one return of
 `json.dumps` over a literal dict whose values are attribute reads or canonical
 exits (`str(...)`, `int(...)`) of the message, or one return of another
-snapshot's `serialize`. `deserialize` reads `json.loads`, carries at most one
+snapshot's `serialize`. A tuple of primitives exits through `list(message.values)`;
+a tuple of records through an unfiltered list comprehension that maps each
+record to a literal dict or through a child snapshot. `deserialize` reads
+`json.loads`, carries at most one
 guard — built only from `isinstance`, truthiness, and comparison to constants
-over the loaded value — that raises `errors.invalid`, and ends in one
-constructor call. The only calls a snapshot may name are `json.dumps`,
+over the loaded value, including `all(isinstance(...) ... for item in
+snapshot["values"])` for element shape — that raises `errors.invalid`, and ends
+in one constructor call. A collection enters through `tuple(snapshot["values"])`
+or one unfiltered generator mapping each record to its constructor or child
+snapshot. The only calls a snapshot may name are `json.dumps`,
 `json.loads`, `isinstance`, `str`, `int`, `errors.invalid`, `.encode`/`.decode`,
 `.get` with one argument, the message and spec constructors, and another
-snapshot's `serialize`/`deserialize`. A second branch, a loop that computes,
+snapshot's `serialize`/`deserialize`, plus structural `list`/`tuple`/`all`
+conversions. A second branch, a filtered or computed loop,
 `.get` with a fallback, arithmetic, and any domain method are findings. The
 engine-side serde (`tesser.adapters.Serde`, in the module of the activity,
 workflow, or signal that binds it) keeps its narrower form: one guard on the

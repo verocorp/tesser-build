@@ -1472,14 +1472,23 @@ class Calls(ts.Component):
   class-level statement — a relay writes the same bytes on every replay. Its
   body is fixed too: `serialize` is one return of `json.dumps` over a literal
   dict whose values are attribute reads or canonical exits (`str(...)`,
-  `int(...)`) of the message, or one return of another snapshot's `serialize`;
+  `int(...)`) of the message, or one return of another snapshot's `serialize`.
+  A tuple field exits as `list(message.values)` for primitives or one
+  unfiltered `[... for record in message.records]` mapping to a literal
+  record; a nested record may use `json.loads(RecordSnapshot().serialize(record))`.
   `deserialize` reads `json.loads`, carries **at most one guard** — built only
   from `isinstance`, truthiness, and comparison to constants over the loaded
-  value — that raises `errors.invalid`, and ends in one constructor call. The
+  value, including `all(isinstance(...) ... for item in snapshot["values"])`
+  for element shape — that raises `errors.invalid`, and ends in one constructor
+  call. A tuple field enters as `tuple(snapshot["values"])` or one unfiltered
+  `tuple(Record(...) for record in snapshot["records"])`; a child snapshot
+  can reconstruct a nested record through
+  `RecordSnapshot().deserialize(json.dumps(record).encode())`. The
   only calls a snapshot may name are `json.dumps`, `json.loads`, `isinstance`,
   `str`, `int`, `errors.invalid`, `.encode`/`.decode`, `.get` with one
   argument, the message and spec constructors, and another snapshot's
-  `serialize`/`deserialize`. A second branch, a loop that computes, `.get` with
+  `serialize`/`deserialize`, plus these structural `list`/`tuple`/`all`
+  conversions. A second branch, a filtered or computed loop, `.get` with
   a fallback, arithmetic, and any domain method are findings — checking shape
   before the constructor sees it is what a snapshot is for; deciding anything
   else is a decision no domain object owns. A snapshot several relays share —

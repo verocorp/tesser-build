@@ -689,7 +689,10 @@ body `POST /OrderOrchestrator/o1/confirm_order/send` carries is:
 **A snapshot decides once, and only about shape.** A field only some members
 can fill is a tuple of zero or one — `prices`, `confirmed_orders`, `payments`,
 `purchases` — and the snapshot checks the shape of the collection and of every
-element in it, and stops there. It does **not** check that a `PRICED` response
+element in it, and stops there. Its one unfiltered collection mapping is
+structural, not a second business decision; primitive tuples use `list(...)`
+and `tuple(...)`, and the one guard may use `all(isinstance(...) ...)` to
+check element shape. It does **not** check that a `PRICED` response
 carries exactly one price: whether the count agrees with the outcome is
 consistency between two fields, not shape, and a snapshot that judged it would
 be deciding twice. A payload where they disagree becomes an `IndexError` in

@@ -70,11 +70,11 @@ class ConfirmOrderResponseSnapshot(ts.Serde):
             {
                 "outcome": confirm_order_response.outcome.value,
                 "order_id": confirm_order_response.order_id,
-                "confirmed_orders": [  # tesser:debt TB082
+                "confirmed_orders": [
                     {"total_cents": confirmed_order.total_cents}
                     for confirmed_order in confirm_order_response.confirmed_orders
                 ],
-                "reasons": list(confirm_order_response.reasons),  # tesser:debt TB082
+                "reasons": list(confirm_order_response.reasons),
             }
         ).encode()
 
@@ -86,8 +86,8 @@ class ConfirmOrderResponseSnapshot(ts.Serde):
             and snapshot["order_id"]
             and isinstance(snapshot.get("confirmed_orders"), list)
             and isinstance(snapshot.get("reasons"), list)
-            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])  # tesser:debt TB082
-            and all(  # tesser:debt TB082
+            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])
+            and all(
                 isinstance(confirmed_order, dict)
                 and isinstance(confirmed_order.get("total_cents"), int)
                 and not isinstance(confirmed_order.get("total_cents"), bool)
@@ -106,11 +106,11 @@ class ConfirmOrderResponseSnapshot(ts.Serde):
         return ConfirmOrderResponse(
             outcome=confirm_order_outcome,
             order_id=snapshot["order_id"],
-            confirmed_orders=tuple(  # tesser:debt TB082
+            confirmed_orders=tuple(
                 ConfirmedOrder(total_cents=confirmed_order["total_cents"])
                 for confirmed_order in snapshot["confirmed_orders"]
             ),
-            reasons=tuple(snapshot["reasons"]),  # tesser:debt TB082
+            reasons=tuple(snapshot["reasons"]),
         )
 
 
