@@ -26,6 +26,14 @@ their own declared kind, `@ts.assembly`.
   test builds its domain objects itself. The rule it replaces,
   "a helper takes only defaulted primitives", forced helpers to make up an
   enum or child records, or to take the child's fields.
+- **TB083: a record is never changed after construction.** A helper's
+  default is one instance that every call shares, so a write to a record
+  would leak from one test into the next. Any write to a spec or DTO after
+  it is built is now a finding, in every module, tests included:
+  attribute or subscript assignment, `del`, `setattr`,
+  `object.__setattr__` or `vars(x)[…]`. The only exceptions are a record's
+  own `__init__` setting its fields, and a write inside
+  `pytest.raises(...)`, which only proves a record refuses the write.
 - **TB085 no longer names a helper's record parameters after their class,**
   because TB073 now fixes those names to the constructor's fields.
 - **Every tree is migrated.** 47 helpers in layout, generator, specs-app,
