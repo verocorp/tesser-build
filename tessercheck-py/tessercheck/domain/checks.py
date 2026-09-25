@@ -11246,7 +11246,7 @@ class Module(ts.Entity):
                 if base_symbol is None or kind_table.block_of(base_symbol) is None:
                     undeclared_base = True
             if (
-                block != SERDE_BLOCK
+                block not in (SERDE_BLOCK, "handler")
                 and block in (ADAPTER_PLACED_BLOCKS | frozenset({"mapper"}))
                 and undeclared_base
             ):
@@ -11256,8 +11256,9 @@ class Module(ts.Entity):
                         cls.lineno,
                         "TB052",
                         f"{where} subclasses a base the tree does not declare; only a "
-                        "serde subclasses a base from outside the tree, because the "
-                        "engine is the caller and the serde is the shape it calls",
+                        "serde or handler subclasses a base from outside the tree, "
+                        "because the framework is the caller and the subclass is the "
+                        "shape it calls",
                     ))
                 )
             if block not in ADAPTER_PLACED_BLOCKS or block in expected:

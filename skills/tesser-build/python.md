@@ -1505,9 +1505,9 @@ class Calls(ts.Component):
   is not retried (`invoke_handler`, `restate/handler.py`); anywhere else — a
   response a caller reads, a promise a workflow reads — a snapshot's
   exception is retried and then pauses the invocation under the
-  registration's retry policy. It is the **one adapter
-  class allowed a base from outside the tree** (TB052): the engine is the
-  caller and the SDK's ABC is the shape it calls, so the class reads
+  registration's retry policy. **An engine serde may subclass an external
+  base**, as may a framework-called handler (TB052): the engine is the caller
+  and the SDK's ABC is the shape it calls, so the serde reads
   `class RestateXSerde(ts.Serde, restate.serde.Serde[relays.X])`.
 - **`json` is legal in `application/relays/` and `application/snapshots/`** and
   nowhere else in the application role (TB062): a snapshot is the one place a
@@ -1852,6 +1852,12 @@ class Handler(ts.Handler):
   host owns, sitting in an adapter: move the logic behind the client, or
   the constant into `srv/`. Private (`_`-prefixed) methods are not read;
   `__call__` is.
+- **A framework-called hook may inherit its SDK base** (TB052). Declare
+  `ts.Handler` alongside that base, inject the context `Client`, and call it
+  from each overridden public hook. Override only hooks the framework calls;
+  TB052 recognizes the external base, while TB082 checks client calls, not
+  whether an external SDK declares the method. `examples/voice/` uses
+  `livekit_agents.Agent` for `on_user_turn_completed`.
 - **The handler matches the context's `ERRORS`; the host catches only its
   own.** A context declares what crosses its `Client` in `client/`
   (`class Rejected(ts.Error)`, and `ERRORS = (Rejected, ...)`); the handler

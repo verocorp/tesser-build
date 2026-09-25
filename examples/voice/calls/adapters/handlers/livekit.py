@@ -17,7 +17,7 @@ _SPEECH_IDENTITY: typing.Final[str] = "speech"
 _FOREIGN_CALLER: typing.Final[str] = "only this call's speech participant may ask the agent to say something"
 
 
-class CallAgent(livekit_agents.Agent, ts.Handler):  # tesser:debt TB052
+class CallAgent(livekit_agents.Agent, ts.Handler):
     def __init__(self, calls_client: client.CallsClient, call_id: str) -> None:
         super().__init__(instructions="")
         self._calls_client = calls_client
