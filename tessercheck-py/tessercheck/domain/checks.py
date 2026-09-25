@@ -5716,12 +5716,135 @@ class ClassDecl(ts.Entity):
                     continue
                 if item.name not in SERDE_METHODS:
                     continue
-                for inner in ast.walk(item):
-                    if isinstance(inner, ast.Call) and not snapshot_call_ok(inner):
-                        serde_facts.append((inner.lineno, "snapshot_call", item.name, ()))
                 guards = [inner for inner in ast.walk(item) if isinstance(inner, ast.If)]
+                tested = {id(sub) for sub in ast.walk(guards[0].test)} if guards else set()
+                serialized: set[int] = set()
+                if item.name == "serialize" and len(item.body) == 1 and isinstance(item.body[0], ast.Return):
+                    encoded = item.body[0].value
+                    if (
+                        isinstance(encoded, ast.Call)
+                        and isinstance(encoded.func, ast.Attribute)
+                        and encoded.func.attr == "encode"
+                        and isinstance(encoded.func.value, ast.Call)
+                        and isinstance(encoded.func.value.func, ast.Attribute)
+                        and encoded.func.value.func.attr == "dumps"
+                        and encoded.func.value.args
+                        and isinstance(encoded.func.value.args[0], ast.Dict)
+                    ):
+                        serialized = {id(sub) for sub in ast.walk(encoded.func.value.args[0])}
+                deserialized: set[int] = set()
+                if item.name == "deserialize" and item.body and isinstance(item.body[-1], ast.Return):
+                    constructed = item.body[-1].value
+                    if isinstance(constructed, ast.Call) and named_block(ast.unparse(constructed.func)) in SNAPSHOT_CONSTRUCTED:
+                        deserialized = {id(sub) for sub in ast.walk(constructed)}
+                collection_calls: set[int] = set()
+                collection_loops: set[int] = set()
+                shape_loops: set[int] = set()
+                for inner in ast.walk(item):
+                    if not isinstance(inner, ast.Call) or not isinstance(inner.func, ast.Name):
+                        continue
+                    if len(inner.args) != 1 or inner.keywords:
+                        continue
+                    value = inner.args[0]
+                    if (
+                        item.name == "serialize"
+                        and inner.func.id == "list"
+                        and id(inner) in serialized
+                        and isinstance(value, ast.Attribute)
+                        and isinstance(value.value, ast.Name)
+                        and len(item.args.args) > 1
+                        and value.value.id == item.args.args[1].arg
+                    ):
+                        collection_calls.add(id(inner))
+                    elif (
+                        item.name == "deserialize"
+                        and inner.func.id == "tuple"
+                        and id(inner) in deserialized
+                        and isinstance(value, ast.Subscript)
+                        and isinstance(value.value, ast.Name)
+                        and isinstance(value.slice, ast.Constant)
+                        and isinstance(value.slice.value, str)
+                    ):
+                        collection_calls.add(id(inner))
+                    elif (
+                        item.name == "deserialize" and inner.func.id in ("tuple", "all")
+                        and (inner.func.id != "all" or id(inner) in tested)
+                        and (inner.func.id != "tuple" or id(inner) in deserialized)
+                        and isinstance(value, ast.GeneratorExp)
+                    ):
+                        if inner.func.id == "all":
+                            predicate = tuple(ast.walk(value.elt))
+                            if not any(
+                                isinstance(sub, ast.Call)
+                                and isinstance(sub.func, ast.Name)
+                                and sub.func.id == "isinstance"
+                                for sub in predicate
+                            ) or any(
+                                isinstance(sub, ast.Call)
+                                and not (
+                                    isinstance(sub.func, ast.Name) and sub.func.id in ("isinstance", "all")
+                                    or isinstance(sub.func, ast.Attribute) and sub.func.attr == "get"
+                                )
+                                for sub in predicate
+                            ) or any(
+                                isinstance(sub, ast.Attribute) and sub.attr != "get"
+                                for sub in predicate
+                            ):
+                                continue
+                        collection_calls.add(id(inner))
+                        collection_loops.add(id(value))
+                        if inner.func.id == "all":
+                            shape_loops.add(id(value))
+                for inner in ast.walk(item):
+                    if not isinstance(inner, ast.ListComp):
+                        continue
+                    if id(inner) in serialized:
+                        collection_loops.add(id(inner))
+                for inner in ast.walk(item):
+                    if id(inner) not in collection_loops:
+                        continue
+                    if not isinstance(inner, (ast.ListComp, ast.GeneratorExp)):
+                        continue
+                    if (
+                        len(inner.generators) != 1
+                        or inner.generators[0].ifs
+                        or inner.generators[0].is_async
+                        or not isinstance(inner.generators[0].target, ast.Name)
+                        or (
+                            isinstance(inner, ast.ListComp)
+                            and (
+                                not isinstance(inner.generators[0].iter, ast.Attribute)
+                                or not isinstance(inner.generators[0].iter.value, ast.Name)
+                                or not (
+                                    isinstance(inner.elt, ast.Dict)
+                                    or isinstance(inner.elt, ast.Call)
+                                    and isinstance(inner.elt.func, ast.Attribute)
+                                    and inner.elt.func.attr == "loads"
+                                    and len(inner.elt.args) == 1
+                                    and isinstance(inner.elt.args[0], ast.Call)
+                                    and isinstance(inner.elt.args[0].func, ast.Attribute)
+                                    and inner.elt.args[0].func.attr == "serialize"
+                                )
+                            )
+                        )
+                        or (
+                            isinstance(inner, ast.GeneratorExp)
+                            and (
+                                not isinstance(inner.generators[0].iter, ast.Subscript)
+                                or not isinstance(inner.generators[0].iter.value, ast.Name)
+                                or not isinstance(inner.generators[0].iter.slice, ast.Constant)
+                                or not isinstance(inner.generators[0].iter.slice.value, str)
+                                or id(inner) not in shape_loops and not isinstance(inner.elt, ast.Call)
+                            )
+                        )
+                    ):
+                        collection_loops.remove(id(inner))
+                for inner in ast.walk(item):
+                    if isinstance(inner, ast.Call) and id(inner) not in collection_calls and not snapshot_call_ok(inner):
+                        serde_facts.append((inner.lineno, "snapshot_call", item.name, ()))
                 banned = [
-                    inner for inner in ast.walk(item) if isinstance(inner, SNAPSHOT_LOOPS)
+                    inner for inner in ast.walk(item)
+                    if isinstance(inner, SNAPSHOT_LOOPS) and id(inner) not in collection_loops
                 ]
                 if item.name == "serialize":
                     for inner in guards + banned:
@@ -5739,9 +5862,6 @@ class ClassDecl(ts.Entity):
                 if len(guards) > 1:
                     for inner in guards[1:]:
                         serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
-                tested = (
-                    {id(sub) for sub in ast.walk(guards[0].test)} if guards else set()
-                )
                 for inner in ast.walk(item):
                     if not isinstance(inner, ast.Compare):
                         continue
@@ -6195,8 +6315,9 @@ class ClassDecl(ts.Entity):
                         "TB082",
                         f"{where}.{member} makes a call a snapshot may not make; a "
                         "snapshot names json.dumps, json.loads, isinstance, str, int, "
-                        "errors.invalid, the message and spec constructors, and another "
-                        "snapshot's serialize or deserialize, and nothing else",
+                        "errors.invalid, the message and spec constructors, another "
+                        "snapshot's serialize or deserialize, and structural list/tuple/all "
+                        "collection conversions, and nothing else",
                     ))
                 )
             elif str(fact.kind()) == "snapshot_decides":
@@ -6206,7 +6327,7 @@ class ClassDecl(ts.Entity):
                         int(fact.lineno()),
                         "TB082",
                         f"{where}.{member} decides; a snapshot decides once, on shape — "
-                        "serialize decides nothing and deserialize carries at most one "
+                        "serialize only maps records and deserialize carries at most one "
                         "guard, built from isinstance, truthiness, and comparison to "
                         "constants over the loaded value",
                     ))

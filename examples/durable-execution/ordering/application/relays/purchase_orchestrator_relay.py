@@ -80,14 +80,14 @@ class PayForOrderResponseSnapshot(ts.Serde):
             {
                 "outcome": pay_for_order_response.outcome.value,
                 "order_id": pay_for_order_response.order_id,
-                "purchases": [  # tesser:debt TB082
+                "purchases": [
                     {
                         "total_cents": purchase.total_cents,
                         "payment_reference": purchase.payment_reference,
                     }
                     for purchase in pay_for_order_response.purchases
                 ],
-                "reasons": list(pay_for_order_response.reasons),  # tesser:debt TB082
+                "reasons": list(pay_for_order_response.reasons),
             }
         ).encode()
 
@@ -99,8 +99,8 @@ class PayForOrderResponseSnapshot(ts.Serde):
             and snapshot["order_id"]
             and isinstance(snapshot.get("purchases"), list)
             and isinstance(snapshot.get("reasons"), list)
-            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])  # tesser:debt TB082
-            and all(  # tesser:debt TB082
+            and all(isinstance(reason, str) and reason for reason in snapshot["reasons"])
+            and all(
                 isinstance(purchase, dict)
                 and isinstance(purchase.get("total_cents"), int)
                 and not isinstance(purchase.get("total_cents"), bool)
@@ -121,14 +121,14 @@ class PayForOrderResponseSnapshot(ts.Serde):
         return PayForOrderResponse(
             outcome=pay_for_order_outcome,
             order_id=snapshot["order_id"],
-            purchases=tuple(  # tesser:debt TB082
+            purchases=tuple(
                 Purchase(
                     total_cents=purchase["total_cents"],
                     payment_reference=purchase["payment_reference"],
                 )
                 for purchase in snapshot["purchases"]
             ),
-            reasons=tuple(snapshot["reasons"]),  # tesser:debt TB082
+            reasons=tuple(snapshot["reasons"]),
         )
 
 

@@ -19163,7 +19163,7 @@ def test_a_snapshot_decides_once_on_shape() -> None:
     )
     assert any(
         "shop.application.snapshots.loose.LooseSnapshot.serialize decides; a snapshot "
-        "decides once, on shape — serialize decides nothing and deserialize carries at "
+        "decides once, on shape — serialize only maps records and deserialize carries at "
         "most one guard, built from isinstance, truthiness, and comparison to constants "
         "over the loaded value" in f
         for f in findings
@@ -19176,8 +19176,9 @@ def test_a_snapshot_decides_once_on_shape() -> None:
     assert any(
         "shop.application.snapshots.loose.LooseSnapshot.serialize makes a call a "
         "snapshot may not make; a snapshot names json.dumps, json.loads, isinstance, "
-        "str, int, errors.invalid, the message and spec constructors, and another "
-        "snapshot's serialize or deserialize, and nothing else" in f
+        "str, int, errors.invalid, the message and spec constructors, another "
+        "snapshot's serialize or deserialize, and structural list/tuple/all "
+        "collection conversions, and nothing else" in f
         for f in findings
     ), findings
     assert any(
@@ -19313,6 +19314,180 @@ def test_a_snapshot_composes_another_snapshot() -> None:
     )
     assert not any("NameSnapshot" in f for f in findings), findings
     assert not any("WrapNameRequestSnapshot" in f for f in findings), findings
+
+
+def test_a_snapshot_carries_primitive_and_nested_record_collections() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/__init__.py",
+                "shop.application.relays",
+                "from shop.application.relays.batch import BatchResponse as BatchResponse\n"
+                "from shop.application.relays.batch import BatchResponseSnapshot as BatchResponseSnapshot\n",
+                True,
+            ),
+            (
+                "shop/application/relays/batch.py",
+                "shop.application.relays.batch",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "import tesser.errors as errors\n"
+                "class Payment(ts.Response):\n"
+                "    def __init__(self, reference: str, codes: tuple[str, ...]) -> None:\n"
+                "        self.reference = reference\n"
+                "        self.codes = codes\n"
+                "class PaymentSnapshot(ts.Serde):\n"
+                "    def serialize(self, payment: Payment) -> bytes:\n"
+                "        return json.dumps({'reference': payment.reference, 'codes': list(payment.codes)}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> Payment:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        if not (isinstance(snapshot, dict) and isinstance(snapshot.get('reference'), str) "
+                "and isinstance(snapshot.get('codes'), list) "
+                "and all(isinstance(code, str) for code in snapshot['codes'])):\n"
+                "            raise errors.invalid('shape', 'a payment has a reference and codes')\n"
+                "        return Payment(reference=snapshot['reference'], codes=tuple(snapshot['codes']))\n"
+                "class BatchResponse(ts.Response):\n"
+                "    def __init__(self, payments: tuple[Payment, ...], reasons: tuple[str, ...]) -> None:\n"
+                "        self.payments = payments\n"
+                "        self.reasons = reasons\n"
+                "class BatchResponseSnapshot(ts.Serde):\n"
+                "    def serialize(self, batch_response: BatchResponse) -> bytes:\n"
+                "        return json.dumps({'payments': [json.loads(PaymentSnapshot().serialize(payment)) "
+                "for payment in batch_response.payments], 'reasons': list(batch_response.reasons)}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> BatchResponse:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        if not (isinstance(snapshot, dict) and isinstance(snapshot.get('payments'), list) "
+                "and isinstance(snapshot.get('reasons'), list) "
+                "and all(isinstance(reason, str) for reason in snapshot['reasons'])):\n"
+                "            raise errors.invalid('shape', 'a batch has payments and reasons')\n"
+                "        return BatchResponse(payments=tuple(PaymentSnapshot().deserialize(json.dumps(payment).encode()) "
+                "for payment in snapshot['payments']), reasons=tuple(snapshot['reasons']))\n",
+                False,
+            ),
+            (
+                "shop/application/relays/test_batch.py",
+                "shop.application.relays.test_batch",
+                "import shop.application.relays as relays\n"
+                "def test_batch_exists() -> None:\n"
+                "    assert relays.BatchResponseSnapshot is not None\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("BatchResponseSnapshot" in finding and "TB082" in finding for finding in findings), findings
+    assert not any("PaymentSnapshot" in finding and "TB082" in finding for finding in findings), findings
+
+
+def test_a_snapshot_maps_nested_record_collections_without_filtering() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/routes.py",
+                "shop.application.relays.routes",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "import tesser.errors as errors\n"
+                "class Segment(ts.Response):\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "class Route(ts.Response):\n"
+                "    def __init__(self, segments: tuple[Segment, ...]) -> None:\n"
+                "        self.segments = segments\n"
+                "class RoutesResponse(ts.Response):\n"
+                "    def __init__(self, routes: tuple[Route, ...]) -> None:\n"
+                "        self.routes = routes\n"
+                "class RoutesResponseSnapshot(ts.Serde):\n"
+                "    def serialize(self, routes_response: RoutesResponse) -> bytes:\n"
+                "        return json.dumps({'routes': [{'segments': [{'name': segment.name} "
+                "for segment in route.segments]} for route in routes_response.routes]}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> RoutesResponse:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        if not (isinstance(snapshot, dict) and isinstance(snapshot.get('routes'), list) "
+                "and all(isinstance(route, dict) and isinstance(route.get('segments'), list) "
+                "and all(isinstance(segment, dict) and isinstance(segment.get('name'), str) "
+                "for segment in route['segments']) for route in snapshot['routes'])):\n"
+                "            raise errors.invalid('shape', 'routes contain segments')\n"
+                "        return RoutesResponse(routes=tuple(Route(segments=tuple(Segment(name=segment['name']) "
+                "for segment in route['segments'])) for route in snapshot['routes']))\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("RoutesResponseSnapshot" in finding and "TB082" in finding for finding in findings), findings
+
+
+def test_a_snapshot_collection_rejects_filters_and_computed_sources() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=(
+            (
+                "shop/application/relays/loose.py",
+                "shop.application.relays.loose",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "class LooseSnapshot(ts.Serde):\n"
+                "    def serialize(self, message: str) -> bytes:\n"
+                "        return json.dumps({'items': [item for item in message.items if item.active], "
+                "'other': list(message.items[1:]), 'raw': [item for item in message.items]}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> str:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        return tuple(item for item in snapshot['items'] if item['active'])\n",
+                False,
+            ),
+            (
+                "shop/application/relays/shape.py",
+                "shop.application.relays.shape",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "class ShapeSnapshot(ts.Serde):\n"
+                "    def serialize(self, message: str) -> bytes:\n"
+                "        return json.dumps({'items': message.items}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> str:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        if not all(item.active for item in snapshot['items']):\n"
+                "            raise ValueError('invalid')\n"
+                "        return str(snapshot['items'])\n",
+                False,
+            ),
+            (
+                "shop/application/relays/raw.py",
+                "shop.application.relays.raw",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "class RawSnapshot(ts.Serde):\n"
+                "    def serialize(self, message: str) -> bytes:\n"
+                "        return json.dumps({'items': [item for item in message.items]}).encode()\n"
+                "    def deserialize(self, buf: bytes) -> str:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        return str(tuple(item for item in snapshot['items']))\n",
+                False,
+            ),
+            (
+                "shop/application/relays/bare.py",
+                "shop.application.relays.bare",
+                "import json\n"
+                "import tesser.application as ts\n"
+                "class BareSnapshot(ts.Serde):\n"
+                "    def serialize(self, message: str) -> bytes:\n"
+                "        return list(message.items)\n"
+                "    def deserialize(self, buf: bytes) -> str:\n"
+                "        snapshot = json.loads(buf)\n"
+                "        return tuple(snapshot['items'])\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert any("LooseSnapshot.serialize decides" in finding for finding in findings), findings
+    assert any("LooseSnapshot.serialize makes a call a snapshot may not make" in finding for finding in findings), findings
+    assert any("LooseSnapshot.deserialize decides" in finding for finding in findings), findings
+    assert any("ShapeSnapshot.deserialize makes a call a snapshot may not make" in finding for finding in findings), findings
+    assert any("RawSnapshot.serialize decides" in finding for finding in findings), findings
+    assert any("RawSnapshot.deserialize decides" in finding for finding in findings), findings
+    assert any("BareSnapshot.serialize makes a call a snapshot may not make" in finding for finding in findings), findings
+    assert any("BareSnapshot.deserialize makes a call a snapshot may not make" in finding for finding in findings), findings
+
 
 def test_relays_and_snapshots_are_packages_never_modules() -> None:
     findings = tuple(
