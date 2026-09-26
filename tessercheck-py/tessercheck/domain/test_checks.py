@@ -20569,8 +20569,16 @@ def test_governance_is_undeclared_when_the_tree_is() -> None:
     assert codebase.governance(domain.Path("loose_a.py")) is domain.Governance.UNDECLARED
 
 
+def test_governance_statuses_are_equal_by_value_and_validate_the_known_states() -> None:
+    assert domain.GovernanceStatus("governed") == domain.GovernanceStatus("governed")
+    assert domain.GovernanceStatus("governed") != domain.GovernanceStatus("skipped")
+    with pytest.raises(ValueError, match="unknown governance"):
+        domain.GovernanceStatus("somewhere")
+
+
 def test_a_hook_run_reads_its_conf_with_advisory_and_enabled_as_the_defaults() -> None:
     assert str(domain.HookRun(_run_spec("")).conf()) == "advisory"
+    assert str(domain.HookRun(_run_spec("")).governance_status()) == "governed"
     assert str(domain.HookRun(_run_spec("mode=feedback\n")).conf()) == "feedback"
     assert str(domain.HookRun(_run_spec("mode = feedback \nenabled = true\n")).conf()) == "feedback"
     assert str(domain.HookRun(_run_spec("mode=banana\n")).conf()) == "advisory"

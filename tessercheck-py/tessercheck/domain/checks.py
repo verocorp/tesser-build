@@ -16495,33 +16495,47 @@ class HookRunSpec(ts.Spec):
         self.findings = findings
 
 
-class HookRun(ts.ValueObject):
+class GovernanceStatus(ts.ValueObject):
 
-    _conf: HookConf
-    _governance: Text
-    _findings: Count
+    _value: str
 
-    def __init__(self, spec: HookRunSpec) -> None:
-        if spec.governance not in (
+    def __init__(self, value: str) -> None:
+        if value not in (
             GOVERNANCE_GOVERNED,
             GOVERNANCE_SKIPPED,
             GOVERNANCE_OUTSIDE,
             GOVERNANCE_UNDECLARED,
         ):
-            raise ValueError(f"unknown governance {spec.governance!r}")
+            raise ValueError(f"unknown governance {value!r}")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class HookRun(ts.ValueObject):
+
+    _conf: HookConf
+    _governance_status: GovernanceStatus
+    _findings: Count
+
+    def __init__(self, spec: HookRunSpec) -> None:
         object.__setattr__(self, "_conf", HookConf(spec.conf))
-        object.__setattr__(self, "_governance", Text(spec.governance))
+        object.__setattr__(self, "_governance_status", GovernanceStatus(spec.governance))
         object.__setattr__(self, "_findings", Count(spec.findings))
 
     def conf(self) -> HookConf:
         return self._conf
 
+    def governance_status(self) -> GovernanceStatus:
+        return self._governance_status
+
     def action(self) -> HookAction:
         if str(self._conf) == HOOK_DISABLED:
             return HookAction.DISABLED
-        if str(self._governance) == GOVERNANCE_UNDECLARED:
+        if str(self._governance_status) == GOVERNANCE_UNDECLARED:
             return HookAction.ADVISE
-        if str(self._governance) != GOVERNANCE_GOVERNED:
+        if str(self._governance_status) != GOVERNANCE_GOVERNED:
             return HookAction.SILENT
         if int(self._findings) == 0:
             return HookAction.SILENT
