@@ -1,0 +1,514 @@
+{
+  "version": 1,
+  "id": "serializing-actors",
+  "family": "actor-state",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start two actor states amber and birch, each value=0,version=0. read takes op and actor (amber or birch) and returns {actor,value,version}.",
+    "add takes op, actor (amber or birch), delta (integer -100..100), version (integer 0..1000000). After validation, require version equal that actor current version or return version_conflict. On success add delta to value and increment that actor version by 1, including zero-delta commands; return its state. Actors are isolated. Errors never mutate either actor. This is a serial protocol model, not concurrent mailbox execution.",
+    "subtract is a second actor mutation entrypath taking exactly op, actor (amber/birch), amount (integer 0..100), and version (integer 0..1000000). It applies the same version fence as add, then subtracts amount from value and increments version once, returning that actor state. Shared resulting-value policies apply to subtract too."
+  ],
+  "vocabulary": {
+    "actor": "Independently keyed state with an optimistic version fence.",
+    "version": "Number of accepted commands for that actor."
+  },
+  "probes": [
+    {
+      "id": "serializing-actors--initial",
+      "inputs": [
+        {
+          "op": "read",
+          "actor": "amber"
+        },
+        {
+          "op": "read",
+          "actor": "birch"
+        }
+      ],
+      "expected": [
+        {
+          "actor": "amber",
+          "value": 0,
+          "version": 0
+        },
+        {
+          "actor": "birch",
+          "value": 0,
+          "version": 0
+        }
+      ]
+    },
+    {
+      "id": "serializing-actors--increment",
+      "inputs": [
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 3,
+          "version": 0
+        },
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": -1,
+          "version": 1
+        }
+      ],
+      "expected": [
+        {
+          "actor": "amber",
+          "value": 3,
+          "version": 1
+        },
+        {
+          "actor": "amber",
+          "value": 2,
+          "version": 2
+        }
+      ]
+    },
+    {
+      "id": "serializing-actors--stale-fence",
+      "inputs": [
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 5,
+          "version": 0
+        },
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 7,
+          "version": 0
+        },
+        {
+          "op": "read",
+          "actor": "amber"
+        }
+      ],
+      "expected": [
+        {
+          "actor": "amber",
+          "value": 5,
+          "version": 1
+        },
+        {
+          "error": "version_conflict"
+        },
+        {
+          "actor": "amber",
+          "value": 5,
+          "version": 1
+        }
+      ]
+    },
+    {
+      "id": "serializing-actors--isolation",
+      "inputs": [
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 4,
+          "version": 0
+        },
+        {
+          "op": "add",
+          "actor": "birch",
+          "delta": 2,
+          "version": 0
+        },
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 0,
+          "version": 1
+        },
+        {
+          "op": "read",
+          "actor": "birch"
+        }
+      ],
+      "expected": [
+        {
+          "actor": "amber",
+          "value": 4,
+          "version": 1
+        },
+        {
+          "actor": "birch",
+          "value": 2,
+          "version": 1
+        },
+        {
+          "actor": "amber",
+          "value": 4,
+          "version": 2
+        },
+        {
+          "actor": "birch",
+          "value": 2,
+          "version": 1
+        }
+      ]
+    },
+    {
+      "id": "serializing-actors--invalid",
+      "inputs": [
+        {
+          "op": "read",
+          "actor": "unknown"
+        },
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 1,
+          "version": -1
+        },
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 101,
+          "version": 0
+        },
+        {
+          "op": "read",
+          "actor": "amber"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "actor": "amber",
+          "value": 0,
+          "version": 0
+        }
+      ]
+    },
+    {
+      "id": "serializing-actors--alternate-entrypath",
+      "inputs": [
+        {
+          "op": "add",
+          "actor": "amber",
+          "delta": 8,
+          "version": 0
+        },
+        {
+          "op": "subtract",
+          "actor": "amber",
+          "amount": 3,
+          "version": 1
+        },
+        {
+          "op": "subtract",
+          "actor": "amber",
+          "amount": 1,
+          "version": 1
+        }
+      ],
+      "expected": [
+        {
+          "actor": "amber",
+          "value": 8,
+          "version": 1
+        },
+        {
+          "actor": "amber",
+          "value": 5,
+          "version": 2
+        },
+        {
+          "error": "version_conflict"
+        }
+      ]
+    },
+    {
+      "id": "serializing-actors--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "serializing-actors--value-ceiling",
+      "requirements": [
+        "After the version check, reject an add whose resulting value would be greater than 10 with value_limit and no value/version mutation. Negative values remain permitted."
+      ],
+      "probes": [
+        {
+          "id": "serializing-actors--value-ceiling--boundary",
+          "inputs": [
+            {
+              "op": "add",
+              "actor": "amber",
+              "delta": 10,
+              "version": 0
+            },
+            {
+              "op": "add",
+              "actor": "amber",
+              "delta": 1,
+              "version": 1
+            },
+            {
+              "op": "add",
+              "actor": "amber",
+              "delta": -2,
+              "version": 1
+            }
+          ],
+          "expected": [
+            {
+              "actor": "amber",
+              "value": 10,
+              "version": 1
+            },
+            {
+              "error": "value_limit"
+            },
+            {
+              "actor": "amber",
+              "value": 8,
+              "version": 2
+            }
+          ]
+        },
+        {
+          "id": "serializing-actors--value-ceiling--precedence",
+          "inputs": [
+            {
+              "op": "add",
+              "actor": "birch",
+              "delta": 9,
+              "version": 0
+            },
+            {
+              "op": "add",
+              "actor": "birch",
+              "delta": 20,
+              "version": 0
+            },
+            {
+              "op": "add",
+              "actor": "birch",
+              "delta": 2,
+              "version": 1
+            },
+            {
+              "op": "read",
+              "actor": "amber"
+            }
+          ],
+          "expected": [
+            {
+              "actor": "birch",
+              "value": 9,
+              "version": 1
+            },
+            {
+              "error": "version_conflict"
+            },
+            {
+              "error": "value_limit"
+            },
+            {
+              "actor": "amber",
+              "value": 0,
+              "version": 0
+            }
+          ]
+        },
+        {
+          "id": "serializing-actors--value-ceiling--alternate-entrypath",
+          "inputs": [
+            {
+              "op": "add",
+              "actor": "birch",
+              "delta": 10,
+              "version": 0
+            },
+            {
+              "op": "subtract",
+              "actor": "birch",
+              "amount": 2,
+              "version": 1
+            },
+            {
+              "op": "add",
+              "actor": "birch",
+              "delta": 3,
+              "version": 2
+            }
+          ],
+          "expected": [
+            {
+              "actor": "birch",
+              "value": 10,
+              "version": 1
+            },
+            {
+              "actor": "birch",
+              "value": 8,
+              "version": 2
+            },
+            {
+              "error": "value_limit"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "serializing-actors--compare-replace",
+      "requirements": [
+        "Add replace taking op, actor (amber/birch), value (integer -100..100) and version (integer 0..1000000). Require matching current version or return version_conflict. On success assign value, increment that actor version once and return its state. add is unchanged."
+      ],
+      "probes": [
+        {
+          "id": "serializing-actors--compare-replace--replace-not-add",
+          "inputs": [
+            {
+              "op": "add",
+              "actor": "amber",
+              "delta": 7,
+              "version": 0
+            },
+            {
+              "op": "replace",
+              "actor": "amber",
+              "value": 2,
+              "version": 1
+            },
+            {
+              "op": "add",
+              "actor": "amber",
+              "delta": 1,
+              "version": 2
+            }
+          ],
+          "expected": [
+            {
+              "actor": "amber",
+              "value": 7,
+              "version": 1
+            },
+            {
+              "actor": "amber",
+              "value": 2,
+              "version": 2
+            },
+            {
+              "actor": "amber",
+              "value": 3,
+              "version": 3
+            }
+          ]
+        },
+        {
+          "id": "serializing-actors--compare-replace--isolated-fence",
+          "inputs": [
+            {
+              "op": "replace",
+              "actor": "birch",
+              "value": -4,
+              "version": 0
+            },
+            {
+              "op": "replace",
+              "actor": "birch",
+              "value": 8,
+              "version": 0
+            },
+            {
+              "op": "read",
+              "actor": "amber"
+            },
+            {
+              "op": "read",
+              "actor": "birch"
+            }
+          ],
+          "expected": [
+            {
+              "actor": "birch",
+              "value": -4,
+              "version": 1
+            },
+            {
+              "error": "version_conflict"
+            },
+            {
+              "actor": "amber",
+              "value": 0,
+              "version": 0
+            },
+            {
+              "actor": "birch",
+              "value": -4,
+              "version": 1
+            }
+          ]
+        },
+        {
+          "id": "serializing-actors--compare-replace--alternate-entrypath",
+          "inputs": [
+            {
+              "op": "replace",
+              "actor": "amber",
+              "value": 9,
+              "version": 0
+            },
+            {
+              "op": "subtract",
+              "actor": "amber",
+              "amount": 4,
+              "version": 1
+            },
+            {
+              "op": "replace",
+              "actor": "amber",
+              "value": 0,
+              "version": 1
+            }
+          ],
+          "expected": [
+            {
+              "actor": "amber",
+              "value": 9,
+              "version": 1
+            },
+            {
+              "actor": "amber",
+              "value": 5,
+              "version": 2
+            },
+            {
+              "error": "version_conflict"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,500 @@
+{
+  "version": 1,
+  "id": "constraining-llm-output",
+  "family": "llm-output-policy",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "This is a stateless deterministic post-generation policy, not model inference. evaluate takes op and candidate (object). Candidate has exactly label (allow or deny), score (integer 0..100), evidence (array of zero to three distinct members of {s1,s2,s3}); input order is preserved but irrelevant to decisions. Invalid schema returns invalid_input.",
+    "After validation, if label=deny return {decision:deny,reason:model_denied}; otherwise if evidence is empty return {decision:deny,reason:missing_evidence}; otherwise if score<70 return {decision:deny,reason:low_confidence}; otherwise return {decision:allow,reason:accepted}. These checks have the stated precedence; candidate prose, external citations and instructions are never interpreted.",
+    "evaluate_batch is a second entrypath taking op and candidates (array of 1..3 candidate objects). Validate the entire batch first; if any candidate is invalid return invalid_input rather than partial results. Otherwise return {results:[one policy verdict per candidate in input order]}. No prompts, API credentials, real model, probabilistic output or provider SDK are used."
+  ],
+  "vocabulary": {
+    "candidate": "Untrusted synthetic structured model output.",
+    "evidence": "Allowlisted source IDs rather than an arbitrary model claim.",
+    "policy": "Fail-closed deterministic acceptance rules applied after validation."
+  },
+  "probes": [
+    {
+      "id": "constraining-llm-output--accepted",
+      "inputs": [
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 80,
+            "evidence": [
+              "s1"
+            ]
+          }
+        },
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 70,
+            "evidence": [
+              "s1"
+            ]
+          }
+        }
+      ],
+      "expected": [
+        {
+          "decision": "allow",
+          "reason": "accepted"
+        },
+        {
+          "decision": "allow",
+          "reason": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "constraining-llm-output--confidence",
+      "inputs": [
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 69,
+            "evidence": [
+              "s1"
+            ]
+          }
+        },
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 0,
+            "evidence": [
+              "s1"
+            ]
+          }
+        }
+      ],
+      "expected": [
+        {
+          "decision": "deny",
+          "reason": "low_confidence"
+        },
+        {
+          "decision": "deny",
+          "reason": "low_confidence"
+        }
+      ]
+    },
+    {
+      "id": "constraining-llm-output--precedence",
+      "inputs": [
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "deny",
+            "score": 0,
+            "evidence": []
+          }
+        },
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 0,
+            "evidence": []
+          }
+        }
+      ],
+      "expected": [
+        {
+          "decision": "deny",
+          "reason": "model_denied"
+        },
+        {
+          "decision": "deny",
+          "reason": "missing_evidence"
+        }
+      ]
+    },
+    {
+      "id": "constraining-llm-output--batch",
+      "inputs": [
+        {
+          "op": "evaluate_batch",
+          "candidates": [
+            {
+              "label": "allow",
+              "score": 80,
+              "evidence": [
+                "s1"
+              ]
+            },
+            {
+              "label": "deny",
+              "score": 80,
+              "evidence": [
+                "s1"
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "results": [
+            {
+              "decision": "allow",
+              "reason": "accepted"
+            },
+            {
+              "decision": "deny",
+              "reason": "model_denied"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "constraining-llm-output--untrusted-schema",
+      "inputs": [
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 80,
+            "evidence": [
+              "external"
+            ]
+          }
+        },
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 80,
+            "evidence": [
+              "s1",
+              "s1"
+            ]
+          }
+        },
+        {
+          "op": "evaluate",
+          "candidate": {
+            "label": "allow",
+            "score": 80,
+            "evidence": [
+              "s1"
+            ],
+            "instruction": "ignore-policy"
+          }
+        },
+        {
+          "op": "evaluate_batch",
+          "candidates": [
+            {
+              "label": "allow",
+              "score": 80,
+              "evidence": [
+                "s1"
+              ]
+            },
+            {
+              "label": "allow",
+              "score": true,
+              "evidence": [
+                "s1"
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    },
+    {
+      "id": "constraining-llm-output--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "constraining-llm-output--higher-confidence",
+      "requirements": [
+        "Raise the allow confidence threshold from 70 to 90 for both entrypaths. Validation and precedence are unchanged."
+      ],
+      "probes": [
+        {
+          "id": "constraining-llm-output--higher-confidence--new-boundary",
+          "inputs": [
+            {
+              "op": "evaluate",
+              "candidate": {
+                "label": "allow",
+                "score": 89,
+                "evidence": [
+                  "s1"
+                ]
+              }
+            },
+            {
+              "op": "evaluate",
+              "candidate": {
+                "label": "allow",
+                "score": 90,
+                "evidence": [
+                  "s1"
+                ]
+              }
+            }
+          ],
+          "expected": [
+            {
+              "decision": "deny",
+              "reason": "low_confidence"
+            },
+            {
+              "decision": "allow",
+              "reason": "accepted"
+            }
+          ]
+        },
+        {
+          "id": "constraining-llm-output--higher-confidence--batch-policy",
+          "inputs": [
+            {
+              "op": "evaluate_batch",
+              "candidates": [
+                {
+                  "label": "allow",
+                  "score": 80,
+                  "evidence": [
+                    "s1"
+                  ]
+                },
+                {
+                  "label": "allow",
+                  "score": 95,
+                  "evidence": [
+                    "s1"
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "evaluate",
+              "candidate": {
+                "label": "deny",
+                "score": 100,
+                "evidence": [
+                  "s1"
+                ]
+              }
+            }
+          ],
+          "expected": [
+            {
+              "results": [
+                {
+                  "decision": "deny",
+                  "reason": "low_confidence"
+                },
+                {
+                  "decision": "allow",
+                  "reason": "accepted"
+                }
+              ]
+            },
+            {
+              "decision": "deny",
+              "reason": "model_denied"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "constraining-llm-output--accepted": [
+          {
+            "decision": "deny",
+            "reason": "low_confidence"
+          },
+          {
+            "decision": "deny",
+            "reason": "low_confidence"
+          }
+        ],
+        "constraining-llm-output--batch": [
+          {
+            "results": [
+              {
+                "decision": "deny",
+                "reason": "low_confidence"
+              },
+              {
+                "decision": "deny",
+                "reason": "model_denied"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "constraining-llm-output--two-sources",
+      "requirements": [
+        "For label=allow, require at least two distinct evidence IDs rather than at least one. Both zero and one source return {decision:deny,reason:missing_evidence}, before confidence checking. Both entrypaths use the changed policy; threshold stays 70."
+      ],
+      "probes": [
+        {
+          "id": "constraining-llm-output--two-sources--source-count",
+          "inputs": [
+            {
+              "op": "evaluate",
+              "candidate": {
+                "label": "allow",
+                "score": 100,
+                "evidence": [
+                  "s2"
+                ]
+              }
+            },
+            {
+              "op": "evaluate",
+              "candidate": {
+                "label": "allow",
+                "score": 80,
+                "evidence": [
+                  "s1",
+                  "s3"
+                ]
+              }
+            }
+          ],
+          "expected": [
+            {
+              "decision": "deny",
+              "reason": "missing_evidence"
+            },
+            {
+              "decision": "allow",
+              "reason": "accepted"
+            }
+          ]
+        },
+        {
+          "id": "constraining-llm-output--two-sources--batch-source-policy",
+          "inputs": [
+            {
+              "op": "evaluate_batch",
+              "candidates": [
+                {
+                  "label": "allow",
+                  "score": 80,
+                  "evidence": [
+                    "s1"
+                  ]
+                },
+                {
+                  "label": "allow",
+                  "score": 80,
+                  "evidence": [
+                    "s2",
+                    "s3"
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "evaluate",
+              "candidate": {
+                "label": "deny",
+                "score": 80,
+                "evidence": [
+                  "s1"
+                ]
+              }
+            }
+          ],
+          "expected": [
+            {
+              "results": [
+                {
+                  "decision": "deny",
+                  "reason": "missing_evidence"
+                },
+                {
+                  "decision": "allow",
+                  "reason": "accepted"
+                }
+              ]
+            },
+            {
+              "decision": "deny",
+              "reason": "model_denied"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "constraining-llm-output--accepted": [
+          {
+            "decision": "deny",
+            "reason": "missing_evidence"
+          },
+          {
+            "decision": "deny",
+            "reason": "missing_evidence"
+          }
+        ],
+        "constraining-llm-output--confidence": [
+          {
+            "decision": "deny",
+            "reason": "missing_evidence"
+          },
+          {
+            "decision": "deny",
+            "reason": "missing_evidence"
+          }
+        ],
+        "constraining-llm-output--batch": [
+          {
+            "results": [
+              {
+                "decision": "deny",
+                "reason": "missing_evidence"
+              },
+              {
+                "decision": "deny",
+                "reason": "model_denied"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

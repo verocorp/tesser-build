@@ -1,0 +1,629 @@
+{
+  "version": 1,
+  "id": "joining-fanout",
+  "family": "fanout",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start with three pending tasks amber, birch, cedar and total=0. status takes only op and returns {pending,total,done}, where pending is the lexicographically sorted array of unfinished names, total is the sum of accepted results, and done is true exactly when no tasks remain.",
+    "complete takes op, task (one of amber/birch/cedar) and value (integer -100..100). A pending task is removed and its value added to total, returning status. A task already completed returns duplicate_task unchanged. Input validation precedes this check. Completion arrival order does not affect final total.",
+    "fail takes exactly op and task (amber/birch/cedar). It settles that task with fallback value 0 and applies exactly the same duplicate and join rules as complete, returning status. A failed task counts as completed; repeated fail is equivalent to repeated complete with value 0."
+  ],
+  "vocabulary": {
+    "join": "Collection of exactly one result from each task.",
+    "pending": "Task names whose result has not been accepted."
+  },
+  "probes": [
+    {
+      "id": "joining-fanout--initial",
+      "inputs": [
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "pending": [
+            "amber",
+            "birch",
+            "cedar"
+          ],
+          "total": 0,
+          "done": false
+        }
+      ]
+    },
+    {
+      "id": "joining-fanout--out-of-order",
+      "inputs": [
+        {
+          "op": "complete",
+          "task": "cedar",
+          "value": 4
+        },
+        {
+          "op": "complete",
+          "task": "amber",
+          "value": 2
+        },
+        {
+          "op": "complete",
+          "task": "birch",
+          "value": 3
+        }
+      ],
+      "expected": [
+        {
+          "pending": [
+            "amber",
+            "birch"
+          ],
+          "total": 4,
+          "done": false
+        },
+        {
+          "pending": [
+            "birch"
+          ],
+          "total": 6,
+          "done": false
+        },
+        {
+          "pending": [],
+          "total": 9,
+          "done": true
+        }
+      ]
+    },
+    {
+      "id": "joining-fanout--duplicate",
+      "inputs": [
+        {
+          "op": "complete",
+          "task": "amber",
+          "value": 5
+        },
+        {
+          "op": "complete",
+          "task": "amber",
+          "value": 8
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "pending": [
+            "birch",
+            "cedar"
+          ],
+          "total": 5,
+          "done": false
+        },
+        {
+          "error": "duplicate_task"
+        },
+        {
+          "pending": [
+            "birch",
+            "cedar"
+          ],
+          "total": 5,
+          "done": false
+        }
+      ]
+    },
+    {
+      "id": "joining-fanout--signed-results",
+      "inputs": [
+        {
+          "op": "complete",
+          "task": "birch",
+          "value": -3
+        },
+        {
+          "op": "complete",
+          "task": "cedar",
+          "value": 0
+        },
+        {
+          "op": "complete",
+          "task": "amber",
+          "value": 3
+        }
+      ],
+      "expected": [
+        {
+          "pending": [
+            "amber",
+            "cedar"
+          ],
+          "total": -3,
+          "done": false
+        },
+        {
+          "pending": [
+            "amber"
+          ],
+          "total": -3,
+          "done": false
+        },
+        {
+          "pending": [],
+          "total": 0,
+          "done": true
+        }
+      ]
+    },
+    {
+      "id": "joining-fanout--invalid",
+      "inputs": [
+        {
+          "op": "complete",
+          "task": "other",
+          "value": 1
+        },
+        {
+          "op": "complete",
+          "task": "amber",
+          "value": 101
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "pending": [
+            "amber",
+            "birch",
+            "cedar"
+          ],
+          "total": 0,
+          "done": false
+        }
+      ]
+    },
+    {
+      "id": "joining-fanout--alternate-entrypath",
+      "inputs": [
+        {
+          "op": "fail",
+          "task": "amber"
+        },
+        {
+          "op": "complete",
+          "task": "amber",
+          "value": 1
+        },
+        {
+          "op": "complete",
+          "task": "birch",
+          "value": 4
+        },
+        {
+          "op": "fail",
+          "task": "cedar"
+        }
+      ],
+      "expected": [
+        {
+          "pending": [
+            "birch",
+            "cedar"
+          ],
+          "total": 0,
+          "done": false
+        },
+        {
+          "error": "duplicate_task"
+        },
+        {
+          "pending": [
+            "cedar"
+          ],
+          "total": 4,
+          "done": false
+        },
+        {
+          "pending": [],
+          "total": 4,
+          "done": true
+        }
+      ]
+    },
+    {
+      "id": "joining-fanout--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "joining-fanout--idempotent-results",
+      "requirements": [
+        "An already completed task with the identical value returns current status without mutation. A repeat with a different value returns conflicting_result instead of duplicate_task."
+      ],
+      "probes": [
+        {
+          "id": "joining-fanout--idempotent-results--same",
+          "inputs": [
+            {
+              "op": "complete",
+              "task": "amber",
+              "value": 6
+            },
+            {
+              "op": "complete",
+              "task": "amber",
+              "value": 6
+            }
+          ],
+          "expected": [
+            {
+              "pending": [
+                "birch",
+                "cedar"
+              ],
+              "total": 6,
+              "done": false
+            },
+            {
+              "pending": [
+                "birch",
+                "cedar"
+              ],
+              "total": 6,
+              "done": false
+            }
+          ]
+        },
+        {
+          "id": "joining-fanout--idempotent-results--different",
+          "inputs": [
+            {
+              "op": "complete",
+              "task": "cedar",
+              "value": -2
+            },
+            {
+              "op": "complete",
+              "task": "cedar",
+              "value": 2
+            },
+            {
+              "op": "complete",
+              "task": "cedar",
+              "value": -2
+            }
+          ],
+          "expected": [
+            {
+              "pending": [
+                "amber",
+                "birch"
+              ],
+              "total": -2,
+              "done": false
+            },
+            {
+              "error": "conflicting_result"
+            },
+            {
+              "pending": [
+                "amber",
+                "birch"
+              ],
+              "total": -2,
+              "done": false
+            }
+          ]
+        },
+        {
+          "id": "joining-fanout--idempotent-results--alternate-entrypath",
+          "inputs": [
+            {
+              "op": "fail",
+              "task": "birch"
+            },
+            {
+              "op": "complete",
+              "task": "birch",
+              "value": 0
+            },
+            {
+              "op": "complete",
+              "task": "birch",
+              "value": 2
+            }
+          ],
+          "expected": [
+            {
+              "pending": [
+                "amber",
+                "cedar"
+              ],
+              "total": 0,
+              "done": false
+            },
+            {
+              "pending": [
+                "amber",
+                "cedar"
+              ],
+              "total": 0,
+              "done": false
+            },
+            {
+              "error": "conflicting_result"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "joining-fanout--duplicate": [
+          {
+            "pending": [
+              "birch",
+              "cedar"
+            ],
+            "total": 5,
+            "done": false
+          },
+          {
+            "error": "conflicting_result"
+          },
+          {
+            "pending": [
+              "birch",
+              "cedar"
+            ],
+            "total": 5,
+            "done": false
+          }
+        ],
+        "joining-fanout--alternate-entrypath": [
+          {
+            "pending": [
+              "birch",
+              "cedar"
+            ],
+            "total": 0,
+            "done": false
+          },
+          {
+            "error": "conflicting_result"
+          },
+          {
+            "pending": [
+              "cedar"
+            ],
+            "total": 4,
+            "done": false
+          },
+          {
+            "pending": [],
+            "total": 4,
+            "done": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "joining-fanout--quorum-two",
+      "requirements": [
+        "Join after any two distinct task completions: done is true when at least two results were accepted. pending still lists tasks without accepted results. After done, every valid complete returns join_closed before duplicate_task, without mutation."
+      ],
+      "probes": [
+        {
+          "id": "joining-fanout--quorum-two--early-close",
+          "inputs": [
+            {
+              "op": "complete",
+              "task": "birch",
+              "value": 7
+            },
+            {
+              "op": "complete",
+              "task": "amber",
+              "value": 8
+            },
+            {
+              "op": "complete",
+              "task": "cedar",
+              "value": 9
+            }
+          ],
+          "expected": [
+            {
+              "pending": [
+                "amber",
+                "cedar"
+              ],
+              "total": 7,
+              "done": false
+            },
+            {
+              "pending": [
+                "cedar"
+              ],
+              "total": 15,
+              "done": true
+            },
+            {
+              "error": "join_closed"
+            }
+          ]
+        },
+        {
+          "id": "joining-fanout--quorum-two--duplicate-not-quorum",
+          "inputs": [
+            {
+              "op": "complete",
+              "task": "cedar",
+              "value": 1
+            },
+            {
+              "op": "complete",
+              "task": "cedar",
+              "value": 1
+            },
+            {
+              "op": "complete",
+              "task": "amber",
+              "value": 2
+            },
+            {
+              "op": "complete",
+              "task": "amber",
+              "value": 2
+            }
+          ],
+          "expected": [
+            {
+              "pending": [
+                "amber",
+                "birch"
+              ],
+              "total": 1,
+              "done": false
+            },
+            {
+              "error": "duplicate_task"
+            },
+            {
+              "pending": [
+                "birch"
+              ],
+              "total": 3,
+              "done": true
+            },
+            {
+              "error": "join_closed"
+            }
+          ]
+        },
+        {
+          "id": "joining-fanout--quorum-two--alternate-entrypath",
+          "inputs": [
+            {
+              "op": "fail",
+              "task": "amber"
+            },
+            {
+              "op": "fail",
+              "task": "cedar"
+            },
+            {
+              "op": "fail",
+              "task": "birch"
+            }
+          ],
+          "expected": [
+            {
+              "pending": [
+                "birch",
+                "cedar"
+              ],
+              "total": 0,
+              "done": false
+            },
+            {
+              "pending": [
+                "birch"
+              ],
+              "total": 0,
+              "done": true
+            },
+            {
+              "error": "join_closed"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "joining-fanout--out-of-order": [
+          {
+            "pending": [
+              "amber",
+              "birch"
+            ],
+            "total": 4,
+            "done": false
+          },
+          {
+            "pending": [
+              "birch"
+            ],
+            "total": 6,
+            "done": true
+          },
+          {
+            "error": "join_closed"
+          }
+        ],
+        "joining-fanout--signed-results": [
+          {
+            "pending": [
+              "amber",
+              "cedar"
+            ],
+            "total": -3,
+            "done": false
+          },
+          {
+            "pending": [
+              "amber"
+            ],
+            "total": -3,
+            "done": true
+          },
+          {
+            "error": "join_closed"
+          }
+        ],
+        "joining-fanout--alternate-entrypath": [
+          {
+            "pending": [
+              "birch",
+              "cedar"
+            ],
+            "total": 0,
+            "done": false
+          },
+          {
+            "error": "duplicate_task"
+          },
+          {
+            "pending": [
+              "cedar"
+            ],
+            "total": 4,
+            "done": true
+          },
+          {
+            "error": "join_closed"
+          }
+        ]
+      }
+    }
+  ]
+}
