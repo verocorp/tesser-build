@@ -339,9 +339,9 @@ class TessercheckService(ts.ApplicationService):
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
         tree_root = domain.TreeRoot(check_file_request.tree)
+        path = domain.Path(check_file_request.path)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        path = domain.Path(check_file_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
         violations = codebase.violations()
         match codebase.governance(path):
@@ -359,9 +359,9 @@ class TessercheckService(ts.ApplicationService):
 
     def check_write(self, check_write_request: client.CheckWriteRequest) -> client.CheckWriteResponse:
         tree_root = domain.TreeRoot(check_write_request.tree)
+        path = domain.Path(check_write_request.path)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        path = domain.Path(check_write_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
         violations = codebase.violations()
         match codebase.governance(path):

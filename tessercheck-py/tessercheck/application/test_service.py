@@ -731,6 +731,30 @@ def test_check_file_reports_the_findings_of_one_governed_file() -> None:
     assert all(code.startswith("TB") for code in check_file_response.codes)
 
 
+def test_check_file_rejects_an_empty_path_before_reading_sources() -> None:
+    fake_source_reader = FakeSourceReader(ports.ReadSourcesOutcome.APP)
+    tessercheck_service = application.TessercheckService(
+        fake_source_reader, FakeSourceWriter(), FakeRulebookSources("")
+    )
+
+    with pytest.raises(ValueError, match="path must be non-empty"):
+        tessercheck_service.check_file(client.CheckFileRequest(tree="some/tree", path=""))
+
+    assert fake_source_reader.roots == []
+
+
+def test_check_write_rejects_an_empty_path_before_reading_sources() -> None:
+    fake_source_reader = FakeSourceReader(ports.ReadSourcesOutcome.APP)
+    tessercheck_service = application.TessercheckService(
+        fake_source_reader, FakeSourceWriter(), FakeRulebookSources("")
+    )
+
+    with pytest.raises(ValueError, match="path must be non-empty"):
+        tessercheck_service.check_write(client.CheckWriteRequest(tree="some/tree", path="", conf=""))
+
+    assert fake_source_reader.roots == []
+
+
 def test_check_file_is_silent_about_a_skipped_or_outside_path() -> None:
     skipped = application.TessercheckService(FakePreparedReader(_loose_tree()), FakeSourceWriter(), FakeRulebookSources("")).check_file(
         client.CheckFileRequest(tree="some/tree", path="legacy/old.py")
