@@ -7,20 +7,21 @@ carries the analyzer package's own version — separate streams.)
 
 ## Unreleased
 
+## [0.6.0.0] - 2026-09-26
+
 ### Added
-- **Experimental agent-improvement harness (`0.6.0.0`).** Added twelve
-  independently specified JSON-lines workload families with withheld
-  followups, a two-family controlled subject producer, and bounded verifier
-  and local-agent trial CLIs. The verifier checks a copied subject against
-  oracle-owned probes and stage gates, retaining failures, digests, and
-  verification-only timing; the trial runner adds a real whole-task deadline
-  for a caller-supplied local agent executable. Neither is a hostile-code
-  sandbox or a provider integration.
-- **First pilot evidence.** Raw applications passed base probes in all twelve
-  families, but two Tesser conversions and two conformant-construction attempts
-  failed the architectural gate. Both arms passed the first two-family
-  withheld policy comparison; the decision is inconclusive, with no speed or
-  cost claim. `rationale/agentlab/PILOT.md` records the unfinished obligations.
+- **Run bounded application-construction experiments.** Twelve independent
+  JSON-lines workloads carry hidden followups; a two-family producer creates
+  controlled structural alternatives. `tesser-experiment` validates copied
+  subjects against protected behavior and gates, or times a caller-supplied
+  local agent through verification under one deadline. It retains failures
+  and unknown resource usage instead of attributing verification time to
+  agent work. It is neither a hostile-code sandbox nor a provider integration.
+- **Inspect a reproducible first pilot.** Twelve raw applications passed base
+  probes, while four Tesser construction/conversion attempts failed the
+  architectural gate. Both policy variants passed two withheld changes, so
+  the comparison is inconclusive; `rationale/agentlab/PILOT.md` and the
+  published evidence explain what remains before a speed or cost claim.
 
 ### Changed
 - **TB082 snapshots can carry collections without debt markers.** Primitive
