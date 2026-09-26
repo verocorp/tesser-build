@@ -1,0 +1,494 @@
+{
+  "version": 1,
+  "id": "transferring-funds",
+  "family": "multi-aggregate-atomic-transfer",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start with account amber=100 and account birch=40. balances takes only op and returns exactly {amber,birch}.",
+    "transfer takes exactly op, from, to and amount. from and to are distinct members of {amber,birch}; amount is an integer in 1..1000. After complete input validation, reject amount>source balance with insufficient_funds. Otherwise atomically subtract amount from source and add amount to destination, returning both balances. No fees exist. All errors leave both balances unchanged.",
+    "purchase is a second payment entrypath taking exactly op and amount (integer 1..1000). It applies the same atomic transfer policy from amber to birch, returning balances on success or insufficient_funds unchanged. It accepts no from/to keys."
+  ],
+  "vocabulary": {
+    "account": "One independently addressed balance.",
+    "atomic": "A rejected transfer changes neither account."
+  },
+  "probes": [
+    {
+      "id": "transferring-funds--initial",
+      "inputs": [
+        {
+          "op": "balances"
+        }
+      ],
+      "expected": [
+        {
+          "amber": 100,
+          "birch": 40
+        }
+      ]
+    },
+    {
+      "id": "transferring-funds--round-trip",
+      "inputs": [
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "birch",
+          "amount": 30
+        },
+        {
+          "op": "transfer",
+          "from": "birch",
+          "to": "amber",
+          "amount": 15
+        }
+      ],
+      "expected": [
+        {
+          "amber": 70,
+          "birch": 70
+        },
+        {
+          "amber": 85,
+          "birch": 55
+        }
+      ]
+    },
+    {
+      "id": "transferring-funds--drain",
+      "inputs": [
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "birch",
+          "amount": 100
+        },
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "birch",
+          "amount": 1
+        },
+        {
+          "op": "balances"
+        }
+      ],
+      "expected": [
+        {
+          "amber": 0,
+          "birch": 140
+        },
+        {
+          "error": "insufficient_funds"
+        },
+        {
+          "amber": 0,
+          "birch": 140
+        }
+      ]
+    },
+    {
+      "id": "transferring-funds--reject-is-atomic",
+      "inputs": [
+        {
+          "op": "transfer",
+          "from": "birch",
+          "to": "amber",
+          "amount": 41
+        },
+        {
+          "op": "transfer",
+          "from": "birch",
+          "to": "amber",
+          "amount": 40
+        }
+      ],
+      "expected": [
+        {
+          "error": "insufficient_funds"
+        },
+        {
+          "amber": 140,
+          "birch": 0
+        }
+      ]
+    },
+    {
+      "id": "transferring-funds--invalid",
+      "inputs": [
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "amber",
+          "amount": 1
+        },
+        {
+          "op": "transfer",
+          "from": "ghost",
+          "to": "birch",
+          "amount": 1
+        },
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "birch",
+          "amount": false
+        },
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "birch",
+          "amount": 0
+        },
+        {
+          "op": "balances"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "amber": 100,
+          "birch": 40
+        }
+      ]
+    },
+    {
+      "id": "transferring-funds--purchase-shares-funds",
+      "inputs": [
+        {
+          "op": "purchase",
+          "amount": 80
+        },
+        {
+          "op": "purchase",
+          "amount": 21
+        },
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "birch",
+          "amount": 20
+        }
+      ],
+      "expected": [
+        {
+          "amber": 20,
+          "birch": 120
+        },
+        {
+          "error": "insufficient_funds"
+        },
+        {
+          "amber": 0,
+          "birch": 140
+        }
+      ]
+    },
+    {
+      "id": "transferring-funds--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    },
+    {
+      "id": "transferring-funds--fractional-input",
+      "inputs": [
+        {
+          "op": "transfer",
+          "from": "amber",
+          "to": "birch",
+          "amount": 1.5
+        },
+        {
+          "op": "purchase",
+          "amount": 1.5
+        },
+        {
+          "op": "balances"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "amber": 100,
+          "birch": 40
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "transferring-funds--flat-fee",
+      "requirements": [
+        "Every successful transfer or purchase charges a fee of 2 to the source in addition to amount, and credits only amount to destination. Require source balance>=amount+2 or return insufficient_funds unchanged. Fee leaves the system; balances shape is unchanged."
+      ],
+      "probes": [
+        {
+          "id": "transferring-funds--flat-fee--fee",
+          "inputs": [
+            {
+              "op": "transfer",
+              "from": "amber",
+              "to": "birch",
+              "amount": 98
+            },
+            {
+              "op": "transfer",
+              "from": "birch",
+              "to": "amber",
+              "amount": 10
+            }
+          ],
+          "expected": [
+            {
+              "amber": 0,
+              "birch": 138
+            },
+            {
+              "amber": 10,
+              "birch": 126
+            }
+          ]
+        },
+        {
+          "id": "transferring-funds--flat-fee--fee-shortfall",
+          "inputs": [
+            {
+              "op": "transfer",
+              "from": "birch",
+              "to": "amber",
+              "amount": 39
+            },
+            {
+              "op": "balances"
+            },
+            {
+              "op": "transfer",
+              "from": "birch",
+              "to": "amber",
+              "amount": 38
+            }
+          ],
+          "expected": [
+            {
+              "error": "insufficient_funds"
+            },
+            {
+              "amber": 100,
+              "birch": 40
+            },
+            {
+              "amber": 138,
+              "birch": 0
+            }
+          ]
+        },
+        {
+          "id": "transferring-funds--flat-fee--purchase-fee",
+          "inputs": [
+            {
+              "op": "purchase",
+              "amount": 99
+            },
+            {
+              "op": "purchase",
+              "amount": 98
+            }
+          ],
+          "expected": [
+            {
+              "error": "insufficient_funds"
+            },
+            {
+              "amber": 0,
+              "birch": 138
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "transferring-funds--round-trip": [
+          {
+            "amber": 68,
+            "birch": 70
+          },
+          {
+            "amber": 83,
+            "birch": 53
+          }
+        ],
+        "transferring-funds--drain": [
+          {
+            "error": "insufficient_funds"
+          },
+          {
+            "amber": 97,
+            "birch": 41
+          },
+          {
+            "amber": 97,
+            "birch": 41
+          }
+        ],
+        "transferring-funds--reject-is-atomic": [
+          {
+            "error": "insufficient_funds"
+          },
+          {
+            "error": "insufficient_funds"
+          }
+        ],
+        "transferring-funds--purchase-shares-funds": [
+          {
+            "amber": 18,
+            "birch": 120
+          },
+          {
+            "error": "insufficient_funds"
+          },
+          {
+            "error": "insufficient_funds"
+          }
+        ]
+      }
+    },
+    {
+      "id": "transferring-funds--credit-failure",
+      "requirements": [
+        "transfer and purchase additionally accept optional fail_credit, a boolean defaulting to false. After input validation and the insufficient_funds check, fail_credit=true returns credit_failed with neither balance changed. false performs the normal transfer or purchase. No fee exists."
+      ],
+      "probes": [
+        {
+          "id": "transferring-funds--credit-failure--rollback",
+          "inputs": [
+            {
+              "op": "transfer",
+              "from": "amber",
+              "to": "birch",
+              "amount": 25,
+              "fail_credit": true
+            },
+            {
+              "op": "balances"
+            },
+            {
+              "op": "transfer",
+              "from": "amber",
+              "to": "birch",
+              "amount": 25
+            }
+          ],
+          "expected": [
+            {
+              "error": "credit_failed"
+            },
+            {
+              "amber": 100,
+              "birch": 40
+            },
+            {
+              "amber": 75,
+              "birch": 65
+            }
+          ]
+        },
+        {
+          "id": "transferring-funds--credit-failure--failure-precedence",
+          "inputs": [
+            {
+              "op": "transfer",
+              "from": "birch",
+              "to": "amber",
+              "amount": 50,
+              "fail_credit": true
+            },
+            {
+              "op": "transfer",
+              "from": "birch",
+              "to": "amber",
+              "amount": 10,
+              "fail_credit": "yes"
+            },
+            {
+              "op": "transfer",
+              "from": "birch",
+              "to": "amber",
+              "amount": 40,
+              "fail_credit": false
+            }
+          ],
+          "expected": [
+            {
+              "error": "insufficient_funds"
+            },
+            {
+              "error": "invalid_input"
+            },
+            {
+              "amber": 140,
+              "birch": 0
+            }
+          ]
+        },
+        {
+          "id": "transferring-funds--credit-failure--purchase-rollback",
+          "inputs": [
+            {
+              "op": "purchase",
+              "amount": 20,
+              "fail_credit": true
+            },
+            {
+              "op": "balances"
+            },
+            {
+              "op": "purchase",
+              "amount": 20,
+              "fail_credit": false
+            }
+          ],
+          "expected": [
+            {
+              "error": "credit_failed"
+            },
+            {
+              "amber": 100,
+              "birch": 40
+            },
+            {
+              "amber": 80,
+              "birch": 60
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

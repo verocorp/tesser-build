@@ -1,0 +1,570 @@
+{
+  "version": 1,
+  "id": "reserving-inventory",
+  "family": "crud-invariants",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start with stock=10 and reserved=0. available is stock minus reserved. status takes only op and returns exactly {stock,reserved,available}.",
+    "reserve, release and restock take exactly op and quantity, an integer in 1..1000. reserve increases reserved by quantity only if quantity<=available, else insufficient_stock. release decreases reserved by quantity only if quantity<=reserved, else insufficient_reserved. restock increases stock by quantity. Success returns the resulting status object. Every error leaves all state unchanged.",
+    "ship is a second allocation entrypath taking exactly op and quantity (integer 1..1000). It requires quantity<=available, otherwise returns insufficient_stock unchanged. On success decrease stock by quantity, leave reserved unchanged, and return status. It ships only unreserved stock; release remains the way to release a reservation."
+  ],
+  "vocabulary": {
+    "stock": "Physical units held, including reserved units.",
+    "reserved": "Held units not available to another reservation.",
+    "available": "stock minus reserved."
+  },
+  "probes": [
+    {
+      "id": "reserving-inventory--initial",
+      "inputs": [
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "stock": 10,
+          "reserved": 0,
+          "available": 10
+        }
+      ]
+    },
+    {
+      "id": "reserving-inventory--failed-release-keeps-reservation",
+      "inputs": [
+        {"op": "reserve", "quantity": 3},
+        {"op": "release", "quantity": 4},
+        {"op": "status"}
+      ],
+      "expected": [
+        {"stock": 10, "reserved": 3, "available": 7},
+        {"error": "insufficient_reserved"},
+        {"stock": 10, "reserved": 3, "available": 7}
+      ]
+    },
+    {
+      "id": "reserving-inventory--reserve-boundary",
+      "inputs": [
+        {
+          "op": "reserve",
+          "quantity": 10
+        },
+        {
+          "op": "reserve",
+          "quantity": 1
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "stock": 10,
+          "reserved": 10,
+          "available": 0
+        },
+        {
+          "error": "insufficient_stock"
+        },
+        {
+          "stock": 10,
+          "reserved": 10,
+          "available": 0
+        }
+      ]
+    },
+    {
+      "id": "reserving-inventory--release-cycle",
+      "inputs": [
+        {
+          "op": "reserve",
+          "quantity": 6
+        },
+        {
+          "op": "release",
+          "quantity": 2
+        },
+        {
+          "op": "reserve",
+          "quantity": 6
+        }
+      ],
+      "expected": [
+        {
+          "stock": 10,
+          "reserved": 6,
+          "available": 4
+        },
+        {
+          "stock": 10,
+          "reserved": 4,
+          "available": 6
+        },
+        {
+          "stock": 10,
+          "reserved": 10,
+          "available": 0
+        }
+      ]
+    },
+    {
+      "id": "reserving-inventory--restock-and-reject",
+      "inputs": [
+        {
+          "op": "release",
+          "quantity": 1
+        },
+        {
+          "op": "restock",
+          "quantity": 3
+        },
+        {
+          "op": "reserve",
+          "quantity": 13
+        }
+      ],
+      "expected": [
+        {
+          "error": "insufficient_reserved"
+        },
+        {
+          "stock": 13,
+          "reserved": 0,
+          "available": 13
+        },
+        {
+          "stock": 13,
+          "reserved": 13,
+          "available": 0
+        }
+      ]
+    },
+    {
+      "id": "reserving-inventory--invalid-shapes",
+      "inputs": [
+        {
+          "op": "reserve",
+          "quantity": 0
+        },
+        {
+          "op": "restock",
+          "quantity": true
+        },
+        {
+          "op": "status",
+          "extra": 1
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "stock": 10,
+          "reserved": 0,
+          "available": 10
+        }
+      ]
+    },
+    {
+      "id": "reserving-inventory--ship-shares-availability",
+      "inputs": [
+        {
+          "op": "reserve",
+          "quantity": 7
+        },
+        {
+          "op": "ship",
+          "quantity": 4
+        },
+        {
+          "op": "ship",
+          "quantity": 3
+        },
+        {
+          "op": "release",
+          "quantity": 2
+        },
+        {
+          "op": "ship",
+          "quantity": 2
+        }
+      ],
+      "expected": [
+        {
+          "stock": 10,
+          "reserved": 7,
+          "available": 3
+        },
+        {
+          "error": "insufficient_stock"
+        },
+        {
+          "stock": 7,
+          "reserved": 7,
+          "available": 0
+        },
+        {
+          "stock": 7,
+          "reserved": 5,
+          "available": 2
+        },
+        {
+          "stock": 5,
+          "reserved": 5,
+          "available": 0
+        }
+      ]
+    },
+    {
+      "id": "reserving-inventory--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    },
+    {
+      "id": "reserving-inventory--fractional-input",
+      "inputs": [
+        {
+          "op": "reserve",
+          "quantity": 1.5
+        },
+        {
+          "op": "ship",
+          "quantity": 1.5
+        },
+        {
+          "op": "release",
+          "quantity": 1.5
+        },
+        {
+          "op": "restock",
+          "quantity": 1.5
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "stock": 10,
+          "reserved": 0,
+          "available": 10
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "reserving-inventory--stock-ceiling",
+      "requirements": [
+        "Add a stock ceiling of 12. A valid restock that would exceed 12 returns capacity_exceeded without mutation; other rules remain unchanged."
+      ],
+      "probes": [
+        {
+          "id": "reserving-inventory--stock-ceiling--ceiling",
+          "inputs": [
+            {
+              "op": "restock",
+              "quantity": 2
+            },
+            {
+              "op": "restock",
+              "quantity": 1
+            },
+            {
+              "op": "status"
+            }
+          ],
+          "expected": [
+            {
+              "stock": 12,
+              "reserved": 0,
+              "available": 12
+            },
+            {
+              "error": "capacity_exceeded"
+            },
+            {
+              "stock": 12,
+              "reserved": 0,
+              "available": 12
+            }
+          ]
+        },
+        {
+          "id": "reserving-inventory--stock-ceiling--reserved-counts",
+          "inputs": [
+            {
+              "op": "reserve",
+              "quantity": 8
+            },
+            {
+              "op": "restock",
+              "quantity": 3
+            },
+            {
+              "op": "release",
+              "quantity": 8
+            }
+          ],
+          "expected": [
+            {
+              "stock": 10,
+              "reserved": 8,
+              "available": 2
+            },
+            {
+              "error": "capacity_exceeded"
+            },
+            {
+              "stock": 10,
+              "reserved": 0,
+              "available": 10
+            }
+          ]
+        },
+        {
+          "id": "reserving-inventory--stock-ceiling--ship-makes-room",
+          "inputs": [
+            {
+              "op": "ship",
+              "quantity": 3
+            },
+            {
+              "op": "restock",
+              "quantity": 5
+            },
+            {
+              "op": "restock",
+              "quantity": 1
+            }
+          ],
+          "expected": [
+            {
+              "stock": 7,
+              "reserved": 0,
+              "available": 7
+            },
+            {
+              "stock": 12,
+              "reserved": 0,
+              "available": 12
+            },
+            {
+              "error": "capacity_exceeded"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "reserving-inventory--restock-and-reject": [
+          {
+            "error": "insufficient_reserved"
+          },
+          {
+            "error": "capacity_exceeded"
+          },
+          {
+            "error": "insufficient_stock"
+          }
+        ]
+      }
+    },
+    {
+      "id": "reserving-inventory--minimum-available",
+      "requirements": [
+        "Both reserve and ship must leave at least 2 available units. After normal input validation, either operation violating this buffer returns insufficient_stock without mutation, including an allocation greater than current available."
+      ],
+      "probes": [
+        {
+          "id": "reserving-inventory--minimum-available--buffer",
+          "inputs": [
+            {
+              "op": "reserve",
+              "quantity": 9
+            },
+            {
+              "op": "reserve",
+              "quantity": 8
+            }
+          ],
+          "expected": [
+            {
+              "error": "insufficient_stock"
+            },
+            {
+              "stock": 10,
+              "reserved": 8,
+              "available": 2
+            }
+          ]
+        },
+        {
+          "id": "reserving-inventory--minimum-available--restocked-buffer",
+          "inputs": [
+            {
+              "op": "restock",
+              "quantity": 4
+            },
+            {
+              "op": "reserve",
+              "quantity": 12
+            },
+            {
+              "op": "reserve",
+              "quantity": 1
+            }
+          ],
+          "expected": [
+            {
+              "stock": 14,
+              "reserved": 0,
+              "available": 14
+            },
+            {
+              "stock": 14,
+              "reserved": 12,
+              "available": 2
+            },
+            {
+              "error": "insufficient_stock"
+            }
+          ]
+        },
+        {
+          "id": "reserving-inventory--minimum-available--shipping-buffer",
+          "inputs": [
+            {
+              "op": "reserve",
+              "quantity": 4
+            },
+            {
+              "op": "ship",
+              "quantity": 5
+            },
+            {
+              "op": "ship",
+              "quantity": 4
+            }
+          ],
+          "expected": [
+            {
+              "stock": 10,
+              "reserved": 4,
+              "available": 6
+            },
+            {
+              "error": "insufficient_stock"
+            },
+            {
+              "stock": 6,
+              "reserved": 4,
+              "available": 2
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "reserving-inventory--reserve-boundary": [
+          {
+            "error": "insufficient_stock"
+          },
+          {
+            "stock": 10,
+            "reserved": 1,
+            "available": 9
+          },
+          {
+            "stock": 10,
+            "reserved": 1,
+            "available": 9
+          }
+        ],
+        "reserving-inventory--release-cycle": [
+          {
+            "stock": 10,
+            "reserved": 6,
+            "available": 4
+          },
+          {
+            "stock": 10,
+            "reserved": 4,
+            "available": 6
+          },
+          {
+            "error": "insufficient_stock"
+          }
+        ],
+        "reserving-inventory--restock-and-reject": [
+          {
+            "error": "insufficient_reserved"
+          },
+          {
+            "stock": 13,
+            "reserved": 0,
+            "available": 13
+          },
+          {
+            "error": "insufficient_stock"
+          }
+        ],
+        "reserving-inventory--ship-shares-availability": [
+          {
+            "stock": 10,
+            "reserved": 7,
+            "available": 3
+          },
+          {
+            "error": "insufficient_stock"
+          },
+          {
+            "error": "insufficient_stock"
+          },
+          {
+            "stock": 10,
+            "reserved": 5,
+            "available": 5
+          },
+          {
+            "stock": 8,
+            "reserved": 5,
+            "available": 3
+          }
+        ]
+      }
+    }
+  ]
+}

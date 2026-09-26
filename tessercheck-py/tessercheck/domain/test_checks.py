@@ -13933,7 +13933,7 @@ def test_an_adapters_mapper_is_admitted_and_takes_a_librarys_primitive() -> None
     )
     assert not any(
         "shop.adapters.repositories.memory.MapToFindItemResponse" in f
-        and "only a serde subclasses a base from outside the tree" in f
+        and "only a serde or handler subclasses a base from outside the tree" in f
         for f in findings
     )
     assert any(
@@ -13941,6 +13941,36 @@ def test_an_adapters_mapper_is_admitted_and_takes_a_librarys_primitive() -> None
         and "a mapper takes whole objects, never a field already pulled off one" in f
         for f in findings
     )
+
+
+def test_a_handler_may_subclass_a_framework_base_but_still_calls_its_client() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=((
+            "shop/adapters/handlers/framework.py",
+            "shop.adapters.handlers.framework",
+            "import framework.callbacks as callbacks\n"
+            "import tesser.adapters as ts\n"
+            "import shop.client.client as client\n"
+            "class FrameworkHandler(callbacks.Agent, ts.Handler):\n"
+            "    def __init__(self, client: client.Client) -> None:\n"
+            "        super().__init__()\n"
+            "        self._client = client\n"
+            "    def on_user_turn_completed(self, words: str) -> None:\n"
+            "        self._client.ask_question(client.AskQuestionRequest(text=words))\n"
+            "    def unrelated_method(self) -> None:\n"
+            "        return None\n",
+            False,
+        ),))).violations()
+    )
+    assert not any(
+        "FrameworkHandler subclasses a base the tree does not declare" in f
+        and "only a serde or handler subclasses a base from outside the tree, because the "
+        "framework is the caller and the subclass is the shape it calls" in f
+        for f in findings
+    )
+    assert any("FrameworkHandler.unrelated_method" in f and "TB082" in f for f in findings)
+    assert not any("FrameworkHandler.on_user_turn_completed" in f and "TB082" in f for f in findings)
 
 
 def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() -> None:
@@ -14054,8 +14084,8 @@ def test_a_serde_declares_two_calls_holds_the_target_type_and_decides_nothing() 
     assert any(
         "shop.adapters.gateways.stray.WiredGateway subclasses a base the tree does "
         "not declare" in f
-        and "only a serde subclasses a base from outside the tree, because the "
-        "engine is the caller and the serde is the shape it calls" in f
+        and "only a serde or handler subclasses a base from outside the tree, "
+        "because the framework is the caller and the subclass is the shape it calls" in f
         for f in findings
     )
     assert not any(

@@ -2,6 +2,24 @@
 
 Deferred work with context. Each entry carries enough for a cold pickup.
 
+## Agent-improvement experiment (first bounded slice)
+
+- [ ] **Complete a checker-conformant conversion and fresh followup comparison.**
+  The first two raw-to-Tesser conversion trials and both from-scratch controls
+  preserved tested behavior but left architectural findings, so the comparison
+  of next-change effort across raw, baseline-converted, and candidate-converted
+  snapshots could not run. Preserve those unsuccessful attempts in the
+  denominator; produce conformant subjects without debt markers, skip
+  directives, checker loopholes, or weakened behavior assertions first.
+- [ ] **Make workload renewal and resource accounting broader.** The controlled
+  implementation producer currently supports two of twelve families; ten
+  agent-generated raw subjects passed base probes but are not deterministic
+  template outputs. Add independently validated reference models and known
+  faults for the remaining families, repeat matched trials across family-level
+  holds, record actual model/machine usage and intervention labor, then exercise
+  representative real runtime hosts before making support claims. The first
+  centralized-versus-scattered comparison was 4/4 correct and inconclusive.
+
 ## Left open by the TB073 helper-mirror change (#213, 2026-09-24)
 
 - [ ] **Design `@ts.assembly` properly (Chris, 2026-09-24).** It was added

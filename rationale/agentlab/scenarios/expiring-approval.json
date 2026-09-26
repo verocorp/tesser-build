@@ -1,0 +1,405 @@
+{
+  "version": 1,
+  "id": "expiring-approval",
+  "family": "approval-timeout",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start phase=idle, now=0, deadline=null. Every success returns exactly {phase,now,deadline}. status takes only op.",
+    "request takes op and ttl (integer 1..1000); only idle may request, setting phase=pending and deadline=now+ttl; otherwise invalid_state. advance takes op and to (integer 0..1000000); to<now returns time_reversal, otherwise sets now=to and expires a pending request when now>=deadline. Expiry changes phase to expired, retaining deadline.",
+    "decide takes op and approve (boolean); only pending permits it, changing phase to approved if true or rejected if false, retaining deadline. Other phases return invalid_state. Terminal decisions do not expire. Errors never mutate state; shape validation precedes state checks."
+  ],
+  "vocabulary": {
+    "now": "Caller-controlled monotone logical tick.",
+    "deadline": "First logical tick at which a pending decision is too late."
+  },
+  "probes": [
+    {
+      "id": "expiring-approval--approve-before",
+      "inputs": [
+        {
+          "op": "request",
+          "ttl": 5
+        },
+        {
+          "op": "advance",
+          "to": 4
+        },
+        {
+          "op": "decide",
+          "approve": true
+        }
+      ],
+      "expected": [
+        {
+          "phase": "pending",
+          "now": 0,
+          "deadline": 5
+        },
+        {
+          "phase": "pending",
+          "now": 4,
+          "deadline": 5
+        },
+        {
+          "phase": "approved",
+          "now": 4,
+          "deadline": 5
+        }
+      ]
+    },
+    {
+      "id": "expiring-approval--exact-expiry",
+      "inputs": [
+        {
+          "op": "request",
+          "ttl": 3
+        },
+        {
+          "op": "advance",
+          "to": 3
+        },
+        {
+          "op": "decide",
+          "approve": true
+        }
+      ],
+      "expected": [
+        {
+          "phase": "pending",
+          "now": 0,
+          "deadline": 3
+        },
+        {
+          "phase": "expired",
+          "now": 3,
+          "deadline": 3
+        },
+        {
+          "error": "invalid_state"
+        }
+      ]
+    },
+    {
+      "id": "expiring-approval--rejection-persists",
+      "inputs": [
+        {
+          "op": "request",
+          "ttl": 2
+        },
+        {
+          "op": "decide",
+          "approve": false
+        },
+        {
+          "op": "advance",
+          "to": 8
+        }
+      ],
+      "expected": [
+        {
+          "phase": "pending",
+          "now": 0,
+          "deadline": 2
+        },
+        {
+          "phase": "rejected",
+          "now": 0,
+          "deadline": 2
+        },
+        {
+          "phase": "rejected",
+          "now": 8,
+          "deadline": 2
+        }
+      ]
+    },
+    {
+      "id": "expiring-approval--logical-origin",
+      "inputs": [
+        {
+          "op": "advance",
+          "to": 10
+        },
+        {
+          "op": "request",
+          "ttl": 4
+        },
+        {
+          "op": "advance",
+          "to": 9
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "phase": "idle",
+          "now": 10,
+          "deadline": null
+        },
+        {
+          "phase": "pending",
+          "now": 10,
+          "deadline": 14
+        },
+        {
+          "error": "time_reversal"
+        },
+        {
+          "phase": "pending",
+          "now": 10,
+          "deadline": 14
+        }
+      ]
+    },
+    {
+      "id": "expiring-approval--validation",
+      "inputs": [
+        {
+          "op": "decide",
+          "approve": true
+        },
+        {
+          "op": "request",
+          "ttl": 0
+        },
+        {
+          "op": "request",
+          "ttl": 1
+        },
+        {
+          "op": "request",
+          "ttl": 2
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_state"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "phase": "pending",
+          "now": 0,
+          "deadline": 1
+        },
+        {
+          "error": "invalid_state"
+        }
+      ]
+    },
+    {
+      "id": "expiring-approval--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "expiring-approval--inclusive-deadline",
+      "requirements": [
+        "Expiry occurs only when now>deadline instead of now>=deadline. A pending decision at exactly deadline remains allowed."
+      ],
+      "probes": [
+        {
+          "id": "expiring-approval--inclusive-deadline--at-deadline",
+          "inputs": [
+            {
+              "op": "request",
+              "ttl": 7
+            },
+            {
+              "op": "advance",
+              "to": 7
+            },
+            {
+              "op": "decide",
+              "approve": true
+            }
+          ],
+          "expected": [
+            {
+              "phase": "pending",
+              "now": 0,
+              "deadline": 7
+            },
+            {
+              "phase": "pending",
+              "now": 7,
+              "deadline": 7
+            },
+            {
+              "phase": "approved",
+              "now": 7,
+              "deadline": 7
+            }
+          ]
+        },
+        {
+          "id": "expiring-approval--inclusive-deadline--after-deadline",
+          "inputs": [
+            {
+              "op": "request",
+              "ttl": 6
+            },
+            {
+              "op": "advance",
+              "to": 7
+            },
+            {
+              "op": "decide",
+              "approve": false
+            }
+          ],
+          "expected": [
+            {
+              "phase": "pending",
+              "now": 0,
+              "deadline": 6
+            },
+            {
+              "phase": "expired",
+              "now": 7,
+              "deadline": 6
+            },
+            {
+              "error": "invalid_state"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "expiring-approval--exact-expiry": [
+          {
+            "phase": "pending",
+            "now": 0,
+            "deadline": 3
+          },
+          {
+            "phase": "pending",
+            "now": 3,
+            "deadline": 3
+          },
+          {
+            "phase": "approved",
+            "now": 3,
+            "deadline": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "expiring-approval--extend-once",
+      "requirements": [
+        "Add extend taking op and ttl (integer 1..1000). Only pending may extend; add ttl to the existing deadline and return status. Permit at most one successful extend per process; a second while pending returns already_extended. Check phase before already_extended. Other behavior is unchanged."
+      ],
+      "probes": [
+        {
+          "id": "expiring-approval--extend-once--extended-window",
+          "inputs": [
+            {
+              "op": "request",
+              "ttl": 4
+            },
+            {
+              "op": "extend",
+              "ttl": 3
+            },
+            {
+              "op": "advance",
+              "to": 5
+            },
+            {
+              "op": "decide",
+              "approve": true
+            }
+          ],
+          "expected": [
+            {
+              "phase": "pending",
+              "now": 0,
+              "deadline": 4
+            },
+            {
+              "phase": "pending",
+              "now": 0,
+              "deadline": 7
+            },
+            {
+              "phase": "pending",
+              "now": 5,
+              "deadline": 7
+            },
+            {
+              "phase": "approved",
+              "now": 5,
+              "deadline": 7
+            }
+          ]
+        },
+        {
+          "id": "expiring-approval--extend-once--extension-guards",
+          "inputs": [
+            {
+              "op": "extend",
+              "ttl": 1
+            },
+            {
+              "op": "request",
+              "ttl": 8
+            },
+            {
+              "op": "extend",
+              "ttl": 2
+            },
+            {
+              "op": "extend",
+              "ttl": 2
+            },
+            {
+              "op": "advance",
+              "to": 10
+            }
+          ],
+          "expected": [
+            {
+              "error": "invalid_state"
+            },
+            {
+              "phase": "pending",
+              "now": 0,
+              "deadline": 8
+            },
+            {
+              "phase": "pending",
+              "now": 0,
+              "deadline": 10
+            },
+            {
+              "error": "already_extended"
+            },
+            {
+              "phase": "expired",
+              "now": 10,
+              "deadline": 10
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

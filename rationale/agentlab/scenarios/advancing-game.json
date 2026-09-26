@@ -1,0 +1,598 @@
+{
+  "version": 1,
+  "id": "advancing-game",
+  "family": "game-tick",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start x=0,energy=3,tick=0,hp=3 on integer cells 0..4. status takes only op and returns {x,energy,tick,hp}. step takes op and action in {left,right,wait}. dash takes op and direction in {left,right}.",
+    "A left/right step moves one cell and costs 1 energy. A dash moves two cells and costs 2 energy, only checking its destination. wait stays put and restores 1 energy capped at 3. After validation, if hp=0 reject every step/dash with game_over. Otherwise check destination bounds first (out_of_bounds), then required energy (exhausted). Errors do not advance tick or mutate state.",
+    "On an accepted step/dash: apply movement/energy, increment tick by 1, then if x=2 and the resulting tick is even, subtract 1 hp. Return status. Hazard applies to wait too, and only to the final destination. hp never goes below zero because hp=0 closes gameplay."
+  ],
+  "vocabulary": {
+    "tick": "One accepted game command, including wait.",
+    "hazard": "Damage at cell 2 on even logical ticks.",
+    "dash": "One tick of movement crossing two cells."
+  },
+  "probes": [
+    {
+      "id": "advancing-game--initial",
+      "inputs": [
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "x": 0,
+          "energy": 3,
+          "tick": 0,
+          "hp": 3
+        }
+      ]
+    },
+    {
+      "id": "advancing-game--hazard-after-movement",
+      "inputs": [
+        {
+          "op": "step",
+          "action": "right"
+        },
+        {
+          "op": "step",
+          "action": "right"
+        },
+        {
+          "op": "step",
+          "action": "wait"
+        }
+      ],
+      "expected": [
+        {
+          "x": 1,
+          "energy": 2,
+          "tick": 1,
+          "hp": 3
+        },
+        {
+          "x": 2,
+          "energy": 1,
+          "tick": 2,
+          "hp": 2
+        },
+        {
+          "x": 2,
+          "energy": 2,
+          "tick": 3,
+          "hp": 2
+        }
+      ]
+    },
+    {
+      "id": "advancing-game--dash-and-exhaustion",
+      "inputs": [
+        {
+          "op": "dash",
+          "direction": "right"
+        },
+        {
+          "op": "dash",
+          "direction": "right"
+        },
+        {
+          "op": "step",
+          "action": "right"
+        },
+        {
+          "op": "step",
+          "action": "right"
+        }
+      ],
+      "expected": [
+        {
+          "x": 2,
+          "energy": 1,
+          "tick": 1,
+          "hp": 3
+        },
+        {
+          "error": "exhausted"
+        },
+        {
+          "x": 3,
+          "energy": 0,
+          "tick": 2,
+          "hp": 3
+        },
+        {
+          "error": "exhausted"
+        }
+      ]
+    },
+    {
+      "id": "advancing-game--bounds-and-recharge",
+      "inputs": [
+        {
+          "op": "step",
+          "action": "left"
+        },
+        {
+          "op": "dash",
+          "direction": "left"
+        },
+        {
+          "op": "step",
+          "action": "wait"
+        }
+      ],
+      "expected": [
+        {
+          "error": "out_of_bounds"
+        },
+        {
+          "error": "out_of_bounds"
+        },
+        {
+          "x": 0,
+          "energy": 3,
+          "tick": 1,
+          "hp": 3
+        }
+      ]
+    },
+    {
+      "id": "advancing-game--terminal",
+      "inputs": [
+        {
+          "op": "dash",
+          "direction": "right"
+        },
+        {
+          "op": "step",
+          "action": "wait"
+        },
+        {
+          "op": "step",
+          "action": "wait"
+        },
+        {
+          "op": "step",
+          "action": "wait"
+        },
+        {
+          "op": "step",
+          "action": "wait"
+        },
+        {
+          "op": "step",
+          "action": "wait"
+        },
+        {
+          "op": "dash",
+          "direction": "left"
+        },
+        {
+          "op": "step",
+          "action": "fly"
+        }
+      ],
+      "expected": [
+        {
+          "x": 2,
+          "energy": 1,
+          "tick": 1,
+          "hp": 3
+        },
+        {
+          "x": 2,
+          "energy": 2,
+          "tick": 2,
+          "hp": 2
+        },
+        {
+          "x": 2,
+          "energy": 3,
+          "tick": 3,
+          "hp": 2
+        },
+        {
+          "x": 2,
+          "energy": 3,
+          "tick": 4,
+          "hp": 1
+        },
+        {
+          "x": 2,
+          "energy": 3,
+          "tick": 5,
+          "hp": 1
+        },
+        {
+          "x": 2,
+          "energy": 3,
+          "tick": 6,
+          "hp": 0
+        },
+        {
+          "error": "game_over"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    },
+    {
+      "id": "advancing-game--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "advancing-game--continuous-hazard",
+      "requirements": [
+        "The cell-2 hazard damages hp on every accepted tick, not only even ticks. Movement/energy still apply before damage. Both step and dash obey it."
+      ],
+      "probes": [
+        {
+          "id": "advancing-game--continuous-hazard--dash-damage",
+          "inputs": [
+            {
+              "op": "dash",
+              "direction": "right"
+            },
+            {
+              "op": "step",
+              "action": "wait"
+            },
+            {
+              "op": "step",
+              "action": "wait"
+            },
+            {
+              "op": "step",
+              "action": "left"
+            }
+          ],
+          "expected": [
+            {
+              "x": 2,
+              "energy": 1,
+              "tick": 1,
+              "hp": 2
+            },
+            {
+              "x": 2,
+              "energy": 2,
+              "tick": 2,
+              "hp": 1
+            },
+            {
+              "x": 2,
+              "energy": 3,
+              "tick": 3,
+              "hp": 0
+            },
+            {
+              "error": "game_over"
+            }
+          ]
+        },
+        {
+          "id": "advancing-game--continuous-hazard--step-damage",
+          "inputs": [
+            {
+              "op": "step",
+              "action": "wait"
+            },
+            {
+              "op": "step",
+              "action": "right"
+            },
+            {
+              "op": "step",
+              "action": "right"
+            },
+            {
+              "op": "dash",
+              "direction": "right"
+            }
+          ],
+          "expected": [
+            {
+              "x": 0,
+              "energy": 3,
+              "tick": 1,
+              "hp": 3
+            },
+            {
+              "x": 1,
+              "energy": 2,
+              "tick": 2,
+              "hp": 3
+            },
+            {
+              "x": 2,
+              "energy": 1,
+              "tick": 3,
+              "hp": 2
+            },
+            {
+              "error": "exhausted"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "advancing-game--hazard-after-movement": [
+          {
+            "x": 1,
+            "energy": 2,
+            "tick": 1,
+            "hp": 3
+          },
+          {
+            "x": 2,
+            "energy": 1,
+            "tick": 2,
+            "hp": 2
+          },
+          {
+            "x": 2,
+            "energy": 2,
+            "tick": 3,
+            "hp": 1
+          }
+        ],
+        "advancing-game--dash-and-exhaustion": [
+          {
+            "x": 2,
+            "energy": 1,
+            "tick": 1,
+            "hp": 2
+          },
+          {
+            "error": "exhausted"
+          },
+          {
+            "x": 3,
+            "energy": 0,
+            "tick": 2,
+            "hp": 2
+          },
+          {
+            "error": "exhausted"
+          }
+        ],
+        "advancing-game--terminal": [
+          {
+            "x": 2,
+            "energy": 1,
+            "tick": 1,
+            "hp": 2
+          },
+          {
+            "x": 2,
+            "energy": 2,
+            "tick": 2,
+            "hp": 1
+          },
+          {
+            "x": 2,
+            "energy": 3,
+            "tick": 3,
+            "hp": 0
+          },
+          {
+            "error": "game_over"
+          },
+          {
+            "error": "game_over"
+          },
+          {
+            "error": "game_over"
+          },
+          {
+            "error": "game_over"
+          },
+          {
+            "error": "invalid_input"
+          }
+        ]
+      }
+    },
+    {
+      "id": "advancing-game--fast-recharge",
+      "requirements": [
+        "wait restores 2 energy capped at 5 instead of 1 capped at 3. Initial energy remains 3; movement costs and hazard are unchanged."
+      ],
+      "probes": [
+        {
+          "id": "advancing-game--fast-recharge--new-cap",
+          "inputs": [
+            {
+              "op": "step",
+              "action": "wait"
+            },
+            {
+              "op": "dash",
+              "direction": "right"
+            },
+            {
+              "op": "dash",
+              "direction": "right"
+            }
+          ],
+          "expected": [
+            {
+              "x": 0,
+              "energy": 5,
+              "tick": 1,
+              "hp": 3
+            },
+            {
+              "x": 2,
+              "energy": 3,
+              "tick": 2,
+              "hp": 2
+            },
+            {
+              "x": 4,
+              "energy": 1,
+              "tick": 3,
+              "hp": 2
+            }
+          ]
+        },
+        {
+          "id": "advancing-game--fast-recharge--recharge-from-empty",
+          "inputs": [
+            {
+              "op": "dash",
+              "direction": "right"
+            },
+            {
+              "op": "step",
+              "action": "right"
+            },
+            {
+              "op": "step",
+              "action": "wait"
+            },
+            {
+              "op": "step",
+              "action": "wait"
+            },
+            {
+              "op": "step",
+              "action": "wait"
+            }
+          ],
+          "expected": [
+            {
+              "x": 2,
+              "energy": 1,
+              "tick": 1,
+              "hp": 3
+            },
+            {
+              "x": 3,
+              "energy": 0,
+              "tick": 2,
+              "hp": 3
+            },
+            {
+              "x": 3,
+              "energy": 2,
+              "tick": 3,
+              "hp": 3
+            },
+            {
+              "x": 3,
+              "energy": 4,
+              "tick": 4,
+              "hp": 3
+            },
+            {
+              "x": 3,
+              "energy": 5,
+              "tick": 5,
+              "hp": 3
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "advancing-game--hazard-after-movement": [
+          {
+            "x": 1,
+            "energy": 2,
+            "tick": 1,
+            "hp": 3
+          },
+          {
+            "x": 2,
+            "energy": 1,
+            "tick": 2,
+            "hp": 2
+          },
+          {
+            "x": 2,
+            "energy": 3,
+            "tick": 3,
+            "hp": 2
+          }
+        ],
+        "advancing-game--bounds-and-recharge": [
+          {
+            "error": "out_of_bounds"
+          },
+          {
+            "error": "out_of_bounds"
+          },
+          {
+            "x": 0,
+            "energy": 5,
+            "tick": 1,
+            "hp": 3
+          }
+        ],
+        "advancing-game--terminal": [
+          {
+            "x": 2,
+            "energy": 1,
+            "tick": 1,
+            "hp": 3
+          },
+          {
+            "x": 2,
+            "energy": 3,
+            "tick": 2,
+            "hp": 2
+          },
+          {
+            "x": 2,
+            "energy": 5,
+            "tick": 3,
+            "hp": 2
+          },
+          {
+            "x": 2,
+            "energy": 5,
+            "tick": 4,
+            "hp": 1
+          },
+          {
+            "x": 2,
+            "energy": 5,
+            "tick": 5,
+            "hp": 1
+          },
+          {
+            "x": 2,
+            "energy": 5,
+            "tick": 6,
+            "hp": 0
+          },
+          {
+            "error": "game_over"
+          },
+          {
+            "error": "invalid_input"
+          }
+        ]
+      }
+    }
+  ]
+}

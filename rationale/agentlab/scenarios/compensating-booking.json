@@ -1,0 +1,401 @@
+{
+  "version": 1,
+  "id": "compensating-booking",
+  "family": "compensation",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start phase=idle. status takes only op and returns {phase,reserved,charged}; reserved is true in reserved/charged/completed, charged is true in charged/completed, otherwise false.",
+    "begin takes only op; in idle it changes phase to reserved, otherwise returns invalid_state. charge takes op and succeed (boolean); only in reserved: true changes phase to charged, false compensates the reservation and changes phase to cancelled. deliver takes op and succeed (boolean); only in charged: true changes phase to completed, false refunds the charge and releases the reservation, changing phase to cancelled. Successful transitions return status. Wrong phase returns invalid_state unchanged; completed and cancelled are terminal."
+  ],
+  "vocabulary": {
+    "compensation": "Reversal of previously accepted reservation and charge after a later failure.",
+    "phase": "Position in a single booking workflow."
+  },
+  "probes": [
+    {
+      "id": "compensating-booking--complete",
+      "inputs": [
+        {
+          "op": "begin"
+        },
+        {
+          "op": "charge",
+          "succeed": true
+        },
+        {
+          "op": "deliver",
+          "succeed": true
+        }
+      ],
+      "expected": [
+        {
+          "phase": "reserved",
+          "reserved": true,
+          "charged": false
+        },
+        {
+          "phase": "charged",
+          "reserved": true,
+          "charged": true
+        },
+        {
+          "phase": "completed",
+          "reserved": true,
+          "charged": true
+        }
+      ]
+    },
+    {
+      "id": "compensating-booking--charge-fails",
+      "inputs": [
+        {
+          "op": "begin"
+        },
+        {
+          "op": "charge",
+          "succeed": false
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "phase": "reserved",
+          "reserved": true,
+          "charged": false
+        },
+        {
+          "phase": "cancelled",
+          "reserved": false,
+          "charged": false
+        },
+        {
+          "phase": "cancelled",
+          "reserved": false,
+          "charged": false
+        }
+      ]
+    },
+    {
+      "id": "compensating-booking--delivery-fails",
+      "inputs": [
+        {
+          "op": "begin"
+        },
+        {
+          "op": "charge",
+          "succeed": true
+        },
+        {
+          "op": "deliver",
+          "succeed": false
+        }
+      ],
+      "expected": [
+        {
+          "phase": "reserved",
+          "reserved": true,
+          "charged": false
+        },
+        {
+          "phase": "charged",
+          "reserved": true,
+          "charged": true
+        },
+        {
+          "phase": "cancelled",
+          "reserved": false,
+          "charged": false
+        }
+      ]
+    },
+    {
+      "id": "compensating-booking--out-of-order",
+      "inputs": [
+        {
+          "op": "deliver",
+          "succeed": true
+        },
+        {
+          "op": "charge",
+          "succeed": true
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_state"
+        },
+        {
+          "error": "invalid_state"
+        },
+        {
+          "phase": "idle",
+          "reserved": false,
+          "charged": false
+        }
+      ]
+    },
+    {
+      "id": "compensating-booking--terminal-and-validation",
+      "inputs": [
+        {
+          "op": "begin"
+        },
+        {
+          "op": "charge",
+          "succeed": 1
+        },
+        {
+          "op": "charge",
+          "succeed": false
+        },
+        {
+          "op": "begin"
+        }
+      ],
+      "expected": [
+        {
+          "phase": "reserved",
+          "reserved": true,
+          "charged": false
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "phase": "cancelled",
+          "reserved": false,
+          "charged": false
+        },
+        {
+          "error": "invalid_state"
+        }
+      ]
+    },
+    {
+      "id": "compensating-booking--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "compensating-booking--manual-cancel",
+      "requirements": [
+        "Add cancel taking only op. In reserved or charged it compensates everything and returns cancelled status. In idle, completed or cancelled return invalid_state unchanged."
+      ],
+      "probes": [
+        {
+          "id": "compensating-booking--manual-cancel--cancel-reserved",
+          "inputs": [
+            {
+              "op": "begin"
+            },
+            {
+              "op": "cancel"
+            },
+            {
+              "op": "cancel"
+            }
+          ],
+          "expected": [
+            {
+              "phase": "reserved",
+              "reserved": true,
+              "charged": false
+            },
+            {
+              "phase": "cancelled",
+              "reserved": false,
+              "charged": false
+            },
+            {
+              "error": "invalid_state"
+            }
+          ]
+        },
+        {
+          "id": "compensating-booking--manual-cancel--cancel-charged",
+          "inputs": [
+            {
+              "op": "cancel"
+            },
+            {
+              "op": "begin"
+            },
+            {
+              "op": "charge",
+              "succeed": true
+            },
+            {
+              "op": "cancel"
+            }
+          ],
+          "expected": [
+            {
+              "error": "invalid_state"
+            },
+            {
+              "phase": "reserved",
+              "reserved": true,
+              "charged": false
+            },
+            {
+              "phase": "charged",
+              "reserved": true,
+              "charged": true
+            },
+            {
+              "phase": "cancelled",
+              "reserved": false,
+              "charged": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "compensating-booking--retry-charge",
+      "requirements": [
+        "A failed charge now leaves phase=reserved, retaining the reservation, and returns reserved status rather than cancelling. A later charge may retry. Failed delivery still compensates to cancelled."
+      ],
+      "probes": [
+        {
+          "id": "compensating-booking--retry-charge--retry-success",
+          "inputs": [
+            {
+              "op": "begin"
+            },
+            {
+              "op": "charge",
+              "succeed": false
+            },
+            {
+              "op": "charge",
+              "succeed": true
+            },
+            {
+              "op": "deliver",
+              "succeed": true
+            }
+          ],
+          "expected": [
+            {
+              "phase": "reserved",
+              "reserved": true,
+              "charged": false
+            },
+            {
+              "phase": "reserved",
+              "reserved": true,
+              "charged": false
+            },
+            {
+              "phase": "charged",
+              "reserved": true,
+              "charged": true
+            },
+            {
+              "phase": "completed",
+              "reserved": true,
+              "charged": true
+            }
+          ]
+        },
+        {
+          "id": "compensating-booking--retry-charge--repeat-failure",
+          "inputs": [
+            {
+              "op": "begin"
+            },
+            {
+              "op": "charge",
+              "succeed": false
+            },
+            {
+              "op": "charge",
+              "succeed": false
+            },
+            {
+              "op": "deliver",
+              "succeed": true
+            }
+          ],
+          "expected": [
+            {
+              "phase": "reserved",
+              "reserved": true,
+              "charged": false
+            },
+            {
+              "phase": "reserved",
+              "reserved": true,
+              "charged": false
+            },
+            {
+              "phase": "reserved",
+              "reserved": true,
+              "charged": false
+            },
+            {
+              "error": "invalid_state"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "compensating-booking--charge-fails": [
+          {
+            "phase": "reserved",
+            "reserved": true,
+            "charged": false
+          },
+          {
+            "phase": "reserved",
+            "reserved": true,
+            "charged": false
+          },
+          {
+            "phase": "reserved",
+            "reserved": true,
+            "charged": false
+          }
+        ],
+        "compensating-booking--terminal-and-validation": [
+          {
+            "phase": "reserved",
+            "reserved": true,
+            "charged": false
+          },
+          {
+            "error": "invalid_input"
+          },
+          {
+            "phase": "reserved",
+            "reserved": true,
+            "charged": false
+          },
+          {
+            "error": "invalid_state"
+          }
+        ]
+      }
+    }
+  ]
+}
