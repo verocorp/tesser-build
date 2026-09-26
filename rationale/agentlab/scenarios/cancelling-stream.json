@@ -1,0 +1,447 @@
+{
+  "version": 1,
+  "id": "cancelling-stream",
+  "family": "streaming-cancellation",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start with immutable ordered chunks [\"a\",\"bb\",\"ccc\"], cursor=0 and cancelled=false. status takes only op and returns {cursor,cancelled,done}; done is cursor==3, independently of cancellation.",
+    "pull takes op and limit (integer 1..3), returns {items,done} containing up to limit next whole chunks in order and advances cursor by the number emitted. drain takes only op and emits every remaining chunk with the same response shape. An exhausted stream returns items=[] and done=true.",
+    "cancel takes only op; if already cancelled return already_cancelled, otherwise set cancelled=true, retain cursor and return status. After cancellation both pull and drain return cancelled without advancing, even when exhausted. Input validation precedes cancelled checks. No background production or actual I/O cancellation is modeled."
+  ],
+  "vocabulary": {
+    "cursor": "Number of chunks already emitted.",
+    "cancellation": "A terminal fence preventing subsequent reads on either entrypath."
+  },
+  "probes": [
+    {
+      "id": "cancelling-stream--initial",
+      "inputs": [
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "cursor": 0,
+          "cancelled": false,
+          "done": false
+        }
+      ]
+    },
+    {
+      "id": "cancelling-stream--pull-then-drain",
+      "inputs": [
+        {
+          "op": "pull",
+          "limit": 1
+        },
+        {
+          "op": "drain"
+        },
+        {
+          "op": "pull",
+          "limit": 3
+        }
+      ],
+      "expected": [
+        {
+          "items": [
+            "a"
+          ],
+          "done": false
+        },
+        {
+          "items": [
+            "bb",
+            "ccc"
+          ],
+          "done": true
+        },
+        {
+          "items": [],
+          "done": true
+        }
+      ]
+    },
+    {
+      "id": "cancelling-stream--cancel-both-paths",
+      "inputs": [
+        {
+          "op": "pull",
+          "limit": 2
+        },
+        {
+          "op": "cancel"
+        },
+        {
+          "op": "pull",
+          "limit": 1
+        },
+        {
+          "op": "drain"
+        }
+      ],
+      "expected": [
+        {
+          "items": [
+            "a",
+            "bb"
+          ],
+          "done": false
+        },
+        {
+          "cursor": 2,
+          "cancelled": true,
+          "done": false
+        },
+        {
+          "error": "cancelled"
+        },
+        {
+          "error": "cancelled"
+        }
+      ]
+    },
+    {
+      "id": "cancelling-stream--cancel-exhausted",
+      "inputs": [
+        {
+          "op": "drain"
+        },
+        {
+          "op": "cancel"
+        },
+        {
+          "op": "drain"
+        },
+        {
+          "op": "cancel"
+        }
+      ],
+      "expected": [
+        {
+          "items": [
+            "a",
+            "bb",
+            "ccc"
+          ],
+          "done": true
+        },
+        {
+          "cursor": 3,
+          "cancelled": true,
+          "done": true
+        },
+        {
+          "error": "cancelled"
+        },
+        {
+          "error": "already_cancelled"
+        }
+      ]
+    },
+    {
+      "id": "cancelling-stream--validation",
+      "inputs": [
+        {
+          "op": "pull",
+          "limit": 0
+        },
+        {
+          "op": "pull",
+          "limit": true
+        },
+        {
+          "op": "cancel"
+        },
+        {
+          "op": "pull",
+          "limit": 4
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "cursor": 0,
+          "cancelled": true,
+          "done": false
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    },
+    {
+      "id": "cancelling-stream--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "cancelling-stream--idempotent-cancel",
+      "requirements": [
+        "Repeated valid cancel returns the current status rather than already_cancelled; cursor remains unchanged. Reads remain fenced."
+      ],
+      "probes": [
+        {
+          "id": "cancelling-stream--idempotent-cancel--before-read",
+          "inputs": [
+            {
+              "op": "cancel"
+            },
+            {
+              "op": "cancel"
+            },
+            {
+              "op": "drain"
+            }
+          ],
+          "expected": [
+            {
+              "cursor": 0,
+              "cancelled": true,
+              "done": false
+            },
+            {
+              "cursor": 0,
+              "cancelled": true,
+              "done": false
+            },
+            {
+              "error": "cancelled"
+            }
+          ]
+        },
+        {
+          "id": "cancelling-stream--idempotent-cancel--partial-read",
+          "inputs": [
+            {
+              "op": "pull",
+              "limit": 1
+            },
+            {
+              "op": "cancel"
+            },
+            {
+              "op": "cancel"
+            },
+            {
+              "op": "pull",
+              "limit": 1
+            }
+          ],
+          "expected": [
+            {
+              "items": [
+                "a"
+              ],
+              "done": false
+            },
+            {
+              "cursor": 1,
+              "cancelled": true,
+              "done": false
+            },
+            {
+              "cursor": 1,
+              "cancelled": true,
+              "done": false
+            },
+            {
+              "error": "cancelled"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "cancelling-stream--cancel-exhausted": [
+          {
+            "items": [
+              "a",
+              "bb",
+              "ccc"
+            ],
+            "done": true
+          },
+          {
+            "cursor": 3,
+            "cancelled": true,
+            "done": true
+          },
+          {
+            "error": "cancelled"
+          },
+          {
+            "cursor": 3,
+            "cancelled": true,
+            "done": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "cancelling-stream--byte-budget",
+      "requirements": [
+        "Both pull and drain additionally obey a per-call budget of 2 ASCII bytes. Emit the longest prefix fitting the budget and the chunk-count limit (drain has no count limit). Never split a chunk. If the next chunk alone exceeds 2 bytes return chunk_too_large without mutation; if at least one chunk fits, return that prefix normally. Check cancellation before the budget."
+      ],
+      "probes": [
+        {
+          "id": "cancelling-stream--byte-budget--budgeted-drain",
+          "inputs": [
+            {
+              "op": "drain"
+            },
+            {
+              "op": "drain"
+            },
+            {
+              "op": "drain"
+            },
+            {
+              "op": "status"
+            }
+          ],
+          "expected": [
+            {
+              "items": [
+                "a"
+              ],
+              "done": false
+            },
+            {
+              "items": [
+                "bb"
+              ],
+              "done": false
+            },
+            {
+              "error": "chunk_too_large"
+            },
+            {
+              "cursor": 2,
+              "cancelled": false,
+              "done": false
+            }
+          ]
+        },
+        {
+          "id": "cancelling-stream--byte-budget--budgeted-pull",
+          "inputs": [
+            {
+              "op": "pull",
+              "limit": 3
+            },
+            {
+              "op": "pull",
+              "limit": 3
+            },
+            {
+              "op": "cancel"
+            },
+            {
+              "op": "pull",
+              "limit": 3
+            }
+          ],
+          "expected": [
+            {
+              "items": [
+                "a"
+              ],
+              "done": false
+            },
+            {
+              "items": [
+                "bb"
+              ],
+              "done": false
+            },
+            {
+              "cursor": 2,
+              "cancelled": true,
+              "done": false
+            },
+            {
+              "error": "cancelled"
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "cancelling-stream--pull-then-drain": [
+          {
+            "items": [
+              "a"
+            ],
+            "done": false
+          },
+          {
+            "items": [
+              "bb"
+            ],
+            "done": false
+          },
+          {
+            "error": "chunk_too_large"
+          }
+        ],
+        "cancelling-stream--cancel-both-paths": [
+          {
+            "items": [
+              "a"
+            ],
+            "done": false
+          },
+          {
+            "cursor": 1,
+            "cancelled": true,
+            "done": false
+          },
+          {
+            "error": "cancelled"
+          },
+          {
+            "error": "cancelled"
+          }
+        ],
+        "cancelling-stream--cancel-exhausted": [
+          {
+            "items": [
+              "a"
+            ],
+            "done": false
+          },
+          {
+            "cursor": 1,
+            "cancelled": true,
+            "done": false
+          },
+          {
+            "error": "cancelled"
+          },
+          {
+            "error": "already_cancelled"
+          }
+        ]
+      }
+    }
+  ]
+}

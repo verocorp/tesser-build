@@ -1,0 +1,557 @@
+{
+  "version": 1,
+  "id": "deduplicating-queue",
+  "family": "queue-dedup",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "Start total=0 and an empty table of accepted delivery IDs and values. status takes only op and returns {total,count}, with count the number of remembered IDs.",
+    "deliver takes op, id (a string matching ASCII [a-z][a-z0-9-]{0,15}) and value (integer -100..100). A new ID adds value to total and remembers the ID/value, returning {total,applied:true}. A remembered ID with equal value returns {total,applied:false}; with a different value returns conflicting_delivery. Errors never mutate the total or table. Base remembers IDs for the entire process.",
+    "deliver_batch takes exactly op and messages, an array of 1..3 objects each having exactly id and value under the deliver field rules. Validate all shapes first. Then process deliveries in array order using the same policy as deliver, returning {results:[delivery responses]}. If any delivery would error, return that first error and roll back the entire batch, including total, remembered IDs and their order. A successful batch retains each per-delivery total in results."
+  ],
+  "vocabulary": {
+    "delivery": "One attempted application of a message value.",
+    "deduplication": "Remembering accepted IDs so redelivery is not applied twice."
+  },
+  "probes": [
+    {
+      "id": "deduplicating-queue--initial",
+      "inputs": [
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "total": 0,
+          "count": 0
+        }
+      ]
+    },
+    {
+      "id": "deduplicating-queue--redelivery",
+      "inputs": [
+        {
+          "op": "deliver",
+          "id": "msg-a",
+          "value": 7
+        },
+        {
+          "op": "deliver",
+          "id": "msg-a",
+          "value": 7
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "total": 7,
+          "applied": true
+        },
+        {
+          "total": 7,
+          "applied": false
+        },
+        {
+          "total": 7,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "deduplicating-queue--conflict",
+      "inputs": [
+        {
+          "op": "deliver",
+          "id": "msg-b",
+          "value": 3
+        },
+        {
+          "op": "deliver",
+          "id": "msg-b",
+          "value": 4
+        },
+        {
+          "op": "deliver",
+          "id": "msg-b",
+          "value": 3
+        }
+      ],
+      "expected": [
+        {
+          "total": 3,
+          "applied": true
+        },
+        {
+          "error": "conflicting_delivery"
+        },
+        {
+          "total": 3,
+          "applied": false
+        }
+      ]
+    },
+    {
+      "id": "deduplicating-queue--distinct-messages",
+      "inputs": [
+        {
+          "op": "deliver",
+          "id": "msg-a",
+          "value": 5
+        },
+        {
+          "op": "deliver",
+          "id": "msg-b",
+          "value": -5
+        },
+        {
+          "op": "deliver",
+          "id": "msg-c",
+          "value": 0
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "total": 5,
+          "applied": true
+        },
+        {
+          "total": 0,
+          "applied": true
+        },
+        {
+          "total": 0,
+          "applied": true
+        },
+        {
+          "total": 0,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "id": "deduplicating-queue--invalid",
+      "inputs": [
+        {
+          "op": "deliver",
+          "id": "",
+          "value": 1
+        },
+        {
+          "op": "deliver",
+          "id": "Upper",
+          "value": 1
+        },
+        {
+          "op": "deliver",
+          "id": "msg-a",
+          "value": true
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "total": 0,
+          "count": 0
+        }
+      ]
+    },
+    {
+      "id": "deduplicating-queue--alternate-entrypath",
+      "inputs": [
+        {
+          "op": "deliver_batch",
+          "messages": [
+            {
+              "id": "a",
+              "value": 2
+            },
+            {
+              "id": "a",
+              "value": 2
+            }
+          ]
+        },
+        {
+          "op": "deliver_batch",
+          "messages": [
+            {
+              "id": "b",
+              "value": 3
+            },
+            {
+              "id": "a",
+              "value": 4
+            }
+          ]
+        },
+        {
+          "op": "status"
+        }
+      ],
+      "expected": [
+        {
+          "results": [
+            {
+              "total": 2,
+              "applied": true
+            },
+            {
+              "total": 2,
+              "applied": false
+            }
+          ]
+        },
+        {
+          "error": "conflicting_delivery"
+        },
+        {
+          "total": 2,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "deduplicating-queue--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "deduplicating-queue--two-id-window",
+      "requirements": [
+        "Remember only the two most recently first-accepted IDs, evicting the oldest when a new ID is accepted at capacity. Redeliveries and conflicts do not refresh order. Eviction does not subtract from total; an evicted ID is a new delivery if seen again. count is remembered IDs, not lifetime applications."
+      ],
+      "probes": [
+        {
+          "id": "deduplicating-queue--two-id-window--evicted-replay",
+          "inputs": [
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 1
+            },
+            {
+              "op": "deliver",
+              "id": "b",
+              "value": 2
+            },
+            {
+              "op": "deliver",
+              "id": "c",
+              "value": 3
+            },
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 1
+            },
+            {
+              "op": "status"
+            }
+          ],
+          "expected": [
+            {
+              "total": 1,
+              "applied": true
+            },
+            {
+              "total": 3,
+              "applied": true
+            },
+            {
+              "total": 6,
+              "applied": true
+            },
+            {
+              "total": 7,
+              "applied": true
+            },
+            {
+              "total": 7,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "id": "deduplicating-queue--two-id-window--no-refresh",
+          "inputs": [
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 4
+            },
+            {
+              "op": "deliver",
+              "id": "b",
+              "value": 5
+            },
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 4
+            },
+            {
+              "op": "deliver",
+              "id": "c",
+              "value": 6
+            },
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 8
+            }
+          ],
+          "expected": [
+            {
+              "total": 4,
+              "applied": true
+            },
+            {
+              "total": 9,
+              "applied": true
+            },
+            {
+              "total": 9,
+              "applied": false
+            },
+            {
+              "total": 15,
+              "applied": true
+            },
+            {
+              "total": 23,
+              "applied": true
+            }
+          ]
+        },
+        {
+          "id": "deduplicating-queue--two-id-window--alternate-entrypath",
+          "inputs": [
+            {
+              "op": "deliver_batch",
+              "messages": [
+                {
+                  "id": "a",
+                  "value": 1
+                },
+                {
+                  "id": "b",
+                  "value": 2
+                },
+                {
+                  "id": "c",
+                  "value": 3
+                }
+              ]
+            },
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 1
+            }
+          ],
+          "expected": [
+            {
+              "results": [
+                {
+                  "total": 1,
+                  "applied": true
+                },
+                {
+                  "total": 3,
+                  "applied": true
+                },
+                {
+                  "total": 6,
+                  "applied": true
+                }
+              ]
+            },
+            {
+              "total": 7,
+              "applied": true
+            }
+          ]
+        }
+      ],
+      "base_expected": {
+        "deduplicating-queue--distinct-messages": [
+          {
+            "total": 5,
+            "applied": true
+          },
+          {
+            "total": 0,
+            "applied": true
+          },
+          {
+            "total": 0,
+            "applied": true
+          },
+          {
+            "total": 0,
+            "count": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "deduplicating-queue--nonnegative-total",
+      "requirements": [
+        "For a new delivery only, reject any value that would make total negative with negative_total; do not remember the rejected ID. Existing-ID deduplication/conflict checks still precede this rule."
+      ],
+      "probes": [
+        {
+          "id": "deduplicating-queue--nonnegative-total--retry-rejected",
+          "inputs": [
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": -1
+            },
+            {
+              "op": "deliver",
+              "id": "b",
+              "value": 2
+            },
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": -1
+            }
+          ],
+          "expected": [
+            {
+              "error": "negative_total"
+            },
+            {
+              "total": 2,
+              "applied": true
+            },
+            {
+              "total": 1,
+              "applied": true
+            }
+          ]
+        },
+        {
+          "id": "deduplicating-queue--nonnegative-total--duplicate-before-guard",
+          "inputs": [
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 5
+            },
+            {
+              "op": "deliver",
+              "id": "b",
+              "value": -5
+            },
+            {
+              "op": "deliver",
+              "id": "b",
+              "value": -5
+            },
+            {
+              "op": "deliver",
+              "id": "b",
+              "value": -6
+            },
+            {
+              "op": "status"
+            }
+          ],
+          "expected": [
+            {
+              "total": 5,
+              "applied": true
+            },
+            {
+              "total": 0,
+              "applied": true
+            },
+            {
+              "total": 0,
+              "applied": false
+            },
+            {
+              "error": "conflicting_delivery"
+            },
+            {
+              "total": 0,
+              "count": 2
+            }
+          ]
+        },
+        {
+          "id": "deduplicating-queue--nonnegative-total--alternate-entrypath",
+          "inputs": [
+            {
+              "op": "deliver_batch",
+              "messages": [
+                {
+                  "id": "a",
+                  "value": 3
+                },
+                {
+                  "id": "b",
+                  "value": -4
+                }
+              ]
+            },
+            {
+              "op": "status"
+            },
+            {
+              "op": "deliver",
+              "id": "a",
+              "value": 2
+            }
+          ],
+          "expected": [
+            {
+              "error": "negative_total"
+            },
+            {
+              "total": 0,
+              "count": 0
+            },
+            {
+              "total": 2,
+              "applied": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

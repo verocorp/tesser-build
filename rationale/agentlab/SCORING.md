@@ -47,8 +47,11 @@ A scenario also declares independent follow-up requirements before the first
 implementation is built. The initial builder/converter receives neither those
 requirements nor their expected outputs. A follow-up trial receives only the
 chosen requirement. Its verifier runs the base behavior and that follow-up's
-probes. Explicitly incompatible migrations need a separately versioned contract,
-not silently removed base checks.
+probes. A follow-up that deliberately changes existing behavior predeclares
+`base_expected` overrides with its requirements, before its implementation is
+released. Every original input still runs; only explicitly named expected
+responses change. Other incompatible migrations need a separately versioned
+contract, not silently removed base checks or post-result oracle edits.
 
 Expected outputs are hypotheses until checked. Validate the oracle through
 independent reasoning, reference models or differential execution as appropriate,

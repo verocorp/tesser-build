@@ -7,6 +7,21 @@ carries the analyzer package's own version — separate streams.)
 
 ## Unreleased
 
+### Added
+- **Experimental agent-improvement harness (`0.6.0.0`).** Added twelve
+  independently specified JSON-lines workload families with withheld
+  followups, a two-family controlled subject producer, and bounded verifier
+  and local-agent trial CLIs. The verifier checks a copied subject against
+  oracle-owned probes and stage gates, retaining failures, digests, and
+  verification-only timing; the trial runner adds a real whole-task deadline
+  for a caller-supplied local agent executable. Neither is a hostile-code
+  sandbox or a provider integration.
+- **First pilot evidence.** Raw applications passed base probes in all twelve
+  families, but two Tesser conversions and two conformant-construction attempts
+  failed the architectural gate. Both arms passed the first two-family
+  withheld policy comparison; the decision is inconclusive, with no speed or
+  cost claim. `rationale/agentlab/PILOT.md` records the unfinished obligations.
+
 ### Changed
 - **TB082 snapshots can carry collections without debt markers.** Primitive
   tuples use structural `list`/`tuple` conversions; an unfiltered mapping

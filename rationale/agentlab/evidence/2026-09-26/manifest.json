@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "comparison": "centralized-policy-versus-scattered",
+  "model": "codex/gpt-6-luna",
+  "reasoning": "medium",
+  "budget_ms": 180000,
+  "measurement": "controller-observed release to completed independent verification; includes observation and copying, not active agent time",
+  "safety": "synthetic disposable cloud subjects; no production integrations",
+  "reconstruction": "Produce seed 1 subjects via cmd/tesser-corpus; replace application.py with the submitted source; retain generated README.md, metadata.json and .tesser-root. The result digest covers the resulting complete tree. Run cmd/tesser-experiment verify with the matching scenario, followup and [\"python3\",\"-B\",\"application.py\"].",
+  "oracle_scope": "scenario JSON contracts in ../scenarios/; expected answers were not disclosed to agents",
+  "records": [
+    {
+      "task": 15,
+      "family": "reserving-inventory",
+      "arm": "scattered",
+      "followup": "reserving-inventory--minimum-available",
+      "seed": 1,
+      "initial_source": {
+        "file": "inventory-scattered.initial.py",
+        "sha256": "e265356a968c81e5bdef6ad57c0d47d30439a2d1995a8dc98dad8dd354127b1a"
+      },
+      "submitted_source": {
+        "file": "inventory-scattered.submitted.py",
+        "sha256": "9f750e5fa329946f7ca316a31ecabcb52fd16b75c4fe9ad9c492d7e4cc9c4315"
+      },
+      "verifier_result": {
+        "file": "inventory-scattered.result.json",
+        "sha256": "082c1787528fb23f6e7f0f39df7d248f8e0224a6133f40f901cc79ae6a5771fa"
+      },
+      "agent_report": {
+        "file": "inventory-scattered.report.md",
+        "sha256": "7ba2de7fd53569426cd93122061523b3b8540ddf37b2a06a49c432ebdb9ec07a"
+      },
+      "contract_sha256": "9dcee52065c58988babfc9987515f62a24d0da07409a37350eeb1d88802bc191",
+      "submitted_tree_sha256": "deddefae34d5db95679e2ba31ee36ced2ca4ed0746e6291327aa7b27dd7574ab",
+      "released_at": "2026-09-26T00:19:20.832000+00:00",
+      "deadline_at": "2026-09-26T00:22:20.832000+00:00",
+      "verified_observed_at": "2026-09-26T00:21:32.442395+00:00",
+      "capped_completion_ms": 131610,
+      "status": "correct",
+      "probe_processes": 12,
+      "usage": "unknown",
+      "cost": "unknown",
+      "controller_interventions": "release only; no human rescue reported"
+    },
+    {
+      "task": 16,
+      "family": "reserving-inventory",
+      "arm": "structured",
+      "followup": "reserving-inventory--minimum-available",
+      "seed": 1,
+      "initial_source": {
+        "file": "inventory-structured.initial.py",
+        "sha256": "da0d6fc01db5e826636098e37a3143621ae9f8d1bed8438fe68bdc4158a44fc1"
+      },
+      "submitted_source": {
+        "file": "inventory-structured.submitted.py",
+        "sha256": "6912f68f9aca1fee6cb1ee2a836328e1f0ba4435ee6938fbc4152cb110b08a47"
+      },
+      "verifier_result": {
+        "file": "inventory-structured.result.json",
+        "sha256": "1bb2e16f010f2c1bf73d6ada9f0109480ca648b155740295c86394ad113463fa"
+      },
+      "agent_report": {
+        "file": "inventory-structured.report.md",
+        "sha256": "7943891b0fd6e6394d43693677bc351b1bda870c6d89050c893c394217d3a50e"
+      },
+      "contract_sha256": "9dcee52065c58988babfc9987515f62a24d0da07409a37350eeb1d88802bc191",
+      "submitted_tree_sha256": "cdac0f5992401522486dfabf7d2e652b85c826e00129389bf797b1b45a25ebcf",
+      "released_at": "2026-09-26T00:19:20.832000+00:00",
+      "deadline_at": "2026-09-26T00:22:20.832000+00:00",
+      "verified_observed_at": "2026-09-26T00:21:32.710357+00:00",
+      "capped_completion_ms": 131878,
+      "status": "correct",
+      "probe_processes": 12,
+      "usage": "unknown",
+      "cost": "unknown",
+      "controller_interventions": "release only; no human rescue reported"
+    },
+    {
+      "task": 17,
+      "family": "transferring-funds",
+      "arm": "scattered",
+      "followup": "transferring-funds--flat-fee",
+      "seed": 1,
+      "initial_source": {
+        "file": "funds-scattered.initial.py",
+        "sha256": "0304d808a8d942b63ed3807479dd01f07da0c311ca94f23a94ff7f206fa300b8"
+      },
+      "submitted_source": {
+        "file": "funds-scattered.submitted.py",
+        "sha256": "8009de99de9134a4d116beb649eb928720565a23881e18ce9b9e9715551a6b63"
+      },
+      "verifier_result": {
+        "file": "funds-scattered.result.json",
+        "sha256": "ecd6db21a7d9ba1338b307af9b59086098b70d6a6ac1781eb0d15ea8d4cab838"
+      },
+      "agent_report": {
+        "file": "funds-scattered.report.md",
+        "sha256": "36ec371ae90589291425400a6f53c30dc23d8d1bd642a34ed0b8d524e73552df"
+      },
+      "contract_sha256": "b08f78350cdbe945274a9a6d7799548d36102db1f3d30e42f9edc717ed1ca5b1",
+      "submitted_tree_sha256": "aa239e3bc8fa38e2c4e7fcbc2d6442e2dbaf8584d527d7bb5ddbd63ea320cd31",
+      "released_at": "2026-09-26T00:19:20.832000+00:00",
+      "deadline_at": "2026-09-26T00:22:20.832000+00:00",
+      "verified_observed_at": "2026-09-26T00:21:32.940752+00:00",
+      "capped_completion_ms": 132108,
+      "status": "correct",
+      "probe_processes": 11,
+      "usage": "unknown",
+      "cost": "unknown",
+      "controller_interventions": "release only; no human rescue reported"
+    },
+    {
+      "task": 18,
+      "family": "transferring-funds",
+      "arm": "structured",
+      "followup": "transferring-funds--flat-fee",
+      "seed": 1,
+      "initial_source": {
+        "file": "funds-structured.initial.py",
+        "sha256": "27b6a5d881e6e7eefe9c7aeba0e421214286e6381c70480569c0789346aa754f"
+      },
+      "submitted_source": {
+        "file": "funds-structured.submitted.py",
+        "sha256": "98792ce9fdf195c470a95e7f5dbd373c50af1ace38a1467ebf981be5d94016bc"
+      },
+      "verifier_result": {
+        "file": "funds-structured.result.json",
+        "sha256": "1bbb4e163498b894f10b7cc63250613f1eb127c3238be91244283e5dcea9f8bd"
+      },
+      "agent_report": {
+        "file": "funds-structured.report.md",
+        "sha256": "faabb34c3bb642f57127ee2c99129e81ac6ea8af9c66e35fa03117a513d839d2"
+      },
+      "contract_sha256": "b08f78350cdbe945274a9a6d7799548d36102db1f3d30e42f9edc717ed1ca5b1",
+      "submitted_tree_sha256": "920758a2e3cb45b40e46d2ada9893721bc0478a532b05c584b5f8c4e3ed6781d",
+      "released_at": "2026-09-26T00:19:20.832000+00:00",
+      "deadline_at": "2026-09-26T00:22:20.832000+00:00",
+      "verified_observed_at": "2026-09-26T00:21:33.192195+00:00",
+      "capped_completion_ms": 132360,
+      "status": "correct",
+      "probe_processes": 11,
+      "usage": "unknown",
+      "cost": "unknown",
+      "controller_interventions": "release only; no human rescue reported"
+    }
+  ]
+}

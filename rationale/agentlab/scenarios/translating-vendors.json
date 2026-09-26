@@ -1,0 +1,394 @@
+{
+  "version": 1,
+  "id": "translating-vendors",
+  "family": "vendor-translation",
+  "requirements": [
+    "Protocol: each probe starts a fresh process; state persists only between its input lines. Read one JSON object per line and emit exactly one JSON object per line, with no other stdout. Object key order is immaterial; arrays are ordered. Inputs use exactly the documented keys; missing/extra keys, unknown operations, wrong types, null, booleans in integer positions and out-of-range values return {\"error\":\"invalid_input\"} without mutation, before any state-dependent checks. All quantities and logical times are integers; no wall clock, randomness, network or floating point is involved. Each followup applies independently to the base, never cumulatively. Followup rules override only the explicitly named base behavior.",
+    "This workload is stateless. quote takes exactly op, vendor (north or south), payload (object). north payload has exactly code (ASCII [a-z][a-z0-9-]{0,15}), minor (integer 0..10000), currency (USD), status (READY or HOLD). south payload has exactly item (same identifier rule), amount (integer 0..10000), currency (usd), available (boolean). Invalid fields, unsupported vendor or currency return invalid_input.",
+    "quote translates to exactly {sku,price_cents,sellable}. sku is code/item unchanged, price_cents is minor/amount unchanged, sellable is status==READY or available.",
+    "invoice is a second translation entrypath taking op, vendor and payloads (array of 1..3 payload objects for that vendor). Validate every payload first. If any valid item is not sellable return unavailable. Otherwise return {items,total_cents} where items are normalized objects in input order and total_cents is their price sum. Duplicate SKUs are separate line items. No SDK, network, conversion rate or real vendor is involved."
+  ],
+  "vocabulary": {
+    "north": "Synthetic vendor with uppercase currency and status enum.",
+    "south": "Synthetic vendor with lowercase currency and availability flag.",
+    "canonical item": "Vendor-independent SKU, integer cents, and sellability."
+  },
+  "probes": [
+    {
+      "id": "translating-vendors--north-ready",
+      "inputs": [
+        {
+          "op": "quote",
+          "vendor": "north",
+          "payload": {
+            "code": "gear",
+            "minor": 120,
+            "currency": "USD",
+            "status": "READY"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "sku": "gear",
+          "price_cents": 120,
+          "sellable": true
+        }
+      ]
+    },
+    {
+      "id": "translating-vendors--south-hold",
+      "inputs": [
+        {
+          "op": "quote",
+          "vendor": "south",
+          "payload": {
+            "item": "gear",
+            "amount": 0,
+            "currency": "usd",
+            "available": false
+          }
+        }
+      ],
+      "expected": [
+        {
+          "sku": "gear",
+          "price_cents": 0,
+          "sellable": false
+        }
+      ]
+    },
+    {
+      "id": "translating-vendors--invoice",
+      "inputs": [
+        {
+          "op": "invoice",
+          "vendor": "north",
+          "payloads": [
+            {
+              "code": "gear",
+              "minor": 120,
+              "currency": "USD",
+              "status": "READY"
+            },
+            {
+              "code": "bolt",
+              "minor": 30,
+              "currency": "USD",
+              "status": "READY"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "items": [
+            {
+              "sku": "gear",
+              "price_cents": 120,
+              "sellable": true
+            },
+            {
+              "sku": "bolt",
+              "price_cents": 30,
+              "sellable": true
+            }
+          ],
+          "total_cents": 150
+        }
+      ]
+    },
+    {
+      "id": "translating-vendors--unavailable",
+      "inputs": [
+        {
+          "op": "invoice",
+          "vendor": "south",
+          "payloads": [
+            {
+              "item": "gear",
+              "amount": 120,
+              "currency": "usd",
+              "available": false
+            }
+          ]
+        },
+        {
+          "op": "quote",
+          "vendor": "north",
+          "payload": {
+            "code": "gear",
+            "minor": 120,
+            "currency": "USD",
+            "status": "HOLD"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "error": "unavailable"
+        },
+        {
+          "sku": "gear",
+          "price_cents": 120,
+          "sellable": false
+        }
+      ]
+    },
+    {
+      "id": "translating-vendors--invalid",
+      "inputs": [
+        {
+          "op": "quote",
+          "vendor": "north",
+          "payload": {
+            "code": "gear",
+            "minor": 120,
+            "currency": "usd",
+            "status": "READY"
+          }
+        },
+        {
+          "op": "quote",
+          "vendor": "south",
+          "payload": {
+            "item": "gear",
+            "amount": true,
+            "currency": "usd",
+            "available": true
+          }
+        },
+        {
+          "op": "invoice",
+          "vendor": "north",
+          "payloads": [
+            {
+              "code": "gear",
+              "minor": 120,
+              "currency": "USD",
+              "status": "HOLD"
+            },
+            {
+              "code": "gear",
+              "minor": -1,
+              "currency": "USD",
+              "status": "READY"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    },
+    {
+      "id": "translating-vendors--protocol-rejections",
+      "inputs": [
+        {},
+        {
+          "op": "unknown"
+        }
+      ],
+      "expected": [
+        {
+          "error": "invalid_input"
+        },
+        {
+          "error": "invalid_input"
+        }
+      ]
+    }
+  ],
+  "followups": [
+    {
+      "id": "translating-vendors--euro-conversion",
+      "requirements": [
+        "Also accept currency EUR for north and eur for south. Translate those prices to canonical cents as floor(source amount*3/2), using integer arithmetic. USD/usd is unchanged. Conversion applies in quote and invoice before summing."
+      ],
+      "probes": [
+        {
+          "id": "translating-vendors--euro-conversion--round-down",
+          "inputs": [
+            {
+              "op": "quote",
+              "vendor": "north",
+              "payload": {
+                "code": "gear",
+                "minor": 3,
+                "currency": "EUR",
+                "status": "READY"
+              }
+            },
+            {
+              "op": "quote",
+              "vendor": "south",
+              "payload": {
+                "item": "gear",
+                "amount": 5,
+                "currency": "eur",
+                "available": true
+              }
+            }
+          ],
+          "expected": [
+            {
+              "sku": "gear",
+              "price_cents": 4,
+              "sellable": true
+            },
+            {
+              "sku": "gear",
+              "price_cents": 7,
+              "sellable": true
+            }
+          ]
+        },
+        {
+          "id": "translating-vendors--euro-conversion--mixed-invoice",
+          "inputs": [
+            {
+              "op": "invoice",
+              "vendor": "north",
+              "payloads": [
+                {
+                  "code": "gear",
+                  "minor": 3,
+                  "currency": "EUR",
+                  "status": "READY"
+                },
+                {
+                  "code": "gear",
+                  "minor": 5,
+                  "currency": "USD",
+                  "status": "READY"
+                }
+              ]
+            },
+            {
+              "op": "quote",
+              "vendor": "south",
+              "payload": {
+                "item": "gear",
+                "amount": 120,
+                "currency": "EUR",
+                "available": true
+              }
+            }
+          ],
+          "expected": [
+            {
+              "items": [
+                {
+                  "sku": "gear",
+                  "price_cents": 4,
+                  "sellable": true
+                },
+                {
+                  "sku": "gear",
+                  "price_cents": 5,
+                  "sellable": true
+                }
+              ],
+              "total_cents": 9
+            },
+            {
+              "error": "invalid_input"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "translating-vendors--blocked-sku",
+      "requirements": [
+        "After complete schema validation, reject SKU recall in either quote or any invoice item with blocked_sku. This check precedes invoice unavailable; other SKUs and prices are unchanged."
+      ],
+      "probes": [
+        {
+          "id": "translating-vendors--blocked-sku--both-vendors",
+          "inputs": [
+            {
+              "op": "quote",
+              "vendor": "north",
+              "payload": {
+                "code": "recall",
+                "minor": 120,
+                "currency": "USD",
+                "status": "READY"
+              }
+            },
+            {
+              "op": "quote",
+              "vendor": "south",
+              "payload": {
+                "item": "recall",
+                "amount": 120,
+                "currency": "usd",
+                "available": false
+              }
+            }
+          ],
+          "expected": [
+            {
+              "error": "blocked_sku"
+            },
+            {
+              "error": "blocked_sku"
+            }
+          ]
+        },
+        {
+          "id": "translating-vendors--blocked-sku--invoice-precedence",
+          "inputs": [
+            {
+              "op": "invoice",
+              "vendor": "north",
+              "payloads": [
+                {
+                  "code": "gear",
+                  "minor": 120,
+                  "currency": "USD",
+                  "status": "HOLD"
+                },
+                {
+                  "code": "recall",
+                  "minor": 120,
+                  "currency": "USD",
+                  "status": "READY"
+                }
+              ]
+            },
+            {
+              "op": "invoice",
+              "vendor": "south",
+              "payloads": [
+                {
+                  "item": "recall",
+                  "amount": -1,
+                  "currency": "usd",
+                  "available": true
+                }
+              ]
+            }
+          ],
+          "expected": [
+            {
+              "error": "blocked_sku"
+            },
+            {
+              "error": "invalid_input"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
