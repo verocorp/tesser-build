@@ -407,6 +407,21 @@ def test_a_declared_empty_tree_answers_with_no_findings() -> None:
     assert check_tree_response.findings == ()
 
 
+def test_checks_return_stably_ordered_findings_and_aligned_codes() -> None:
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(_tree_of("import os\nx = 1\n")), FakeSourceWriter(), FakeRulebookSources("")
+    )
+    check_tree_response = tessercheck_service.check_tree(client.CheckTreeRequest(tree="."))
+    check_file_response = tessercheck_service.check_file(client.CheckFileRequest(tree=".", path="shop/domain/thing.py"))
+    check_write_response = tessercheck_service.check_write(
+        client.CheckWriteRequest(tree=".", path="shop/domain/thing.py", conf="")
+    )
+
+    assert len(check_tree_response.findings) > 1
+    assert check_tree_response.findings == check_file_response.findings == check_write_response.findings == tuple(sorted(check_tree_response.findings))
+    assert check_file_response.codes == check_write_response.codes == tuple(finding.split(": ", 1)[1].split(" ", 1)[0] for finding in check_tree_response.findings)
+
+
 def test_an_undeclared_tree_answers_with_the_declaration_finding() -> None:
     tessercheck_service = application.TessercheckService(
         FakeSourceReader(ports.ReadSourcesOutcome.MISSING), FakeSourceWriter(), FakeRulebookSources("")

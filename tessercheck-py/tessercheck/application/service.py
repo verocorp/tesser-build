@@ -103,11 +103,11 @@ class MapToCheckTreeResponse(ts.Mapper, client.CheckTreeResponse):
     def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         super().__init__(
-            findings=tuple(
+            findings=tuple(sorted(
                 f"{violation.path()}:{int(violation.line())}: "
                 f"{violation.code()} {violation.text()}"
                 for violation in codebase.violations()
-            )
+            ))
         )
 
 
@@ -125,15 +125,17 @@ class MapToCheckFileResponse(ts.Mapper, client.CheckFileResponse):
                 governance = domain.GOVERNANCE_UNDECLARED
             case _ as never:
                 typing.assert_never(never)
-        violations = codebase.violations()
+        violations = tuple(sorted(
+            (
+                f"{violation.path()}:{int(violation.line())}: {violation.code()} {violation.text()}",
+                str(violation.code()),
+            )
+            for violation in codebase.violations()
+        ))
         super().__init__(
             governance=governance,
-            findings=tuple(
-                f"{violation.path()}:{int(violation.line())}: "
-                f"{violation.code()} {violation.text()}"
-                for violation in violations
-            ),
-            codes=tuple(str(violation.code()) for violation in violations),
+            findings=tuple(finding for finding, code in violations),
+            codes=tuple(code for finding, code in violations),
         )
 
 
@@ -151,7 +153,13 @@ class MapToCheckWriteResponse(ts.Mapper, client.CheckWriteResponse):
                 governance = domain.GOVERNANCE_UNDECLARED
             case _ as never:
                 typing.assert_never(never)
-        violations = codebase.violations()
+        violations = tuple(sorted(
+            (
+                f"{violation.path()}:{int(violation.line())}: {violation.code()} {violation.text()}",
+                str(violation.code()),
+            )
+            for violation in codebase.violations()
+        ))
         hook_run = domain.HookRun(domain.HookRunSpec(
             conf=check_write_request.conf, governance=governance, findings=len(violations)
         ))
@@ -170,12 +178,8 @@ class MapToCheckWriteResponse(ts.Mapper, client.CheckWriteResponse):
             governance=governance,
             mode=str(hook_run.conf()),
             action=action,
-            findings=tuple(
-                f"{violation.path()}:{int(violation.line())}: "
-                f"{violation.code()} {violation.text()}"
-                for violation in violations
-            ),
-            codes=tuple(str(violation.code()) for violation in violations),
+            findings=tuple(finding for finding, code in violations),
+            codes=tuple(code for finding, code in violations),
         )
 
 
