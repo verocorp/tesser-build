@@ -51,6 +51,14 @@ Yes → handler.
    context's `Client` and the `self` attribute it is kept on; a call inside
    a nested function or lambda does not count; private (`_`-prefixed)
    helpers are not read, and `__call__` is.
+   When a framework calls a subclass hook, the handler may inherit its base
+   from outside the tree (TB052), while still declaring `ts.Handler` and
+   calling its injected client from the hook. Override only hooks the
+   framework actually calls; an unrelated method is an ordinary handler
+   method, not a reason to inherit the framework base. TB052 can recognize
+   the handler and the external base, but cannot inspect an external SDK to
+   prove that a method is a hook; TB082 still checks public methods for the
+   client call.
 2. **A handler is a total transform: request DTO in, response DTO out.** Every
    endpoint method has the same signature — `(HttpRequest) -> Response` — and
    the handler touches nothing else: no socket, no framework request object, no
