@@ -189,7 +189,9 @@ itself is named only in an annotation, a return, or a case pattern (no
 has only member arms (or `|` of members) before an unguarded `case _ as
 never: assert_never(never)` (or `return assert_never(never)`) with
 `assert_never` still bound to `typing`'s; no function takes an outcome as a
-parameter; and nothing reads `_value_` or `_name_`. Out of scope, by ruling
+parameter; and nothing reads `_value_` or `_name_` on a resolved outcome
+receiver. Plain enum machinery is not an outcome use merely because its
+attributes have the same spelling. Out of scope, by ruling
 rather than oversight: reflection through a *local* (`vars(outcome)`,
 `getattr(outcome, ...)`, `type(outcome)(2)`) and a keep through another
 object's transition (`self._last = other.advance()`) — both need type

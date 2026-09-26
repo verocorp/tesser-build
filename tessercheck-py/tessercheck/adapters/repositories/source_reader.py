@@ -85,8 +85,16 @@ class FilesystemSourceReader(ts.Repository):
         nested: list[str] = []
         symlinked: list[str] = []
         pruned: list[str] = []
-        for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+        directories: list[str] = []
+        unreadable_directories: list[str] = []
+
+        def record_walk_error(error: OSError) -> None:
+            unreadable_directories.append(pathlib.Path(error.filename or base).relative_to(base).as_posix())
+
+        for dirpath, dirnames, filenames in os.walk(base, followlinks=False, onerror=record_walk_error):
             here = pathlib.Path(dirpath)
+            if here != base:
+                directories.append(here.relative_to(base).as_posix())
             dirnames.sort()
             for name in list(dirnames):
                 if name in SKIP_DIRS or name in skips:
@@ -137,4 +145,6 @@ class FilesystemSourceReader(ts.Repository):
             stdlib=tuple(sorted(sys.stdlib_module_names)),
             pure_stdlib=tuple(pure_stdlib),
             pruned=tuple(sorted(pruned)),
+            directories=tuple(sorted(directories)),
+            unreadable_directories=tuple(sorted(unreadable_directories)),
         )

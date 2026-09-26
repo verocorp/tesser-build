@@ -153,31 +153,13 @@ class TestPostgresWidgetStore:
         postgres_widget_store = repositories.PostgresWidgetStore(database)
         async with postgres_widget_store.transaction() as widget_repository:
             await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="p", standing="kept"))
-        first_loaded = asyncio.Event()
-        release_first = asyncio.Event()
-        order: list[str] = []
-
-        async def first() -> None:  # tesser:debt TB023
-            async with postgres_widget_store.transaction() as widget_repository:
-                await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
-                first_loaded.set()
-                await release_first.wait()
-                await widget_repository.save_widget(ports.SaveWidgetRequest(name="a", part="first", standing="kept"))
-                order.append("first")
-
-        async def second() -> None:  # tesser:debt TB023
-            await first_loaded.wait()
-            async with postgres_widget_store.transaction() as widget_repository:
-                loaded = await widget_repository.load_widget(ports.LoadWidgetRequest(name="a"))
-                order.append(f"second saw {loaded.widgets[0].part}")
-
-        second_task = asyncio.create_task(second())
-        first_task = asyncio.create_task(first())
-        await first_loaded.wait()
-        await asyncio.sleep(0.1)
-        waited = list(order)
-        release_first.set()
-        await asyncio.gather(first_task, second_task)
+        async with postgres_widget_store.transaction() as second_repository:
+            async with postgres_widget_store.transaction() as first_repository:
+                await first_repository.load_widget(ports.LoadWidgetRequest(name="a"))
+                second_load = asyncio.create_task(second_repository.load_widget(ports.LoadWidgetRequest(name="a")))
+                await asyncio.sleep(0.1)
+                assert not second_load.done()
+                await first_repository.save_widget(ports.SaveWidgetRequest(name="a", part="first", standing="kept"))
+            loaded = await second_load
         await database.close()
-        assert waited == []
-        assert order == ["first", "second saw first"]
+        assert loaded.widgets[0].part == "first"

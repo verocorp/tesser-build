@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum  # tesser:debt TB062
+import enum
 import json
 import typing
 
@@ -25,11 +25,11 @@ class PriceProductRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("sku"), str)
             and snapshot["sku"]
         ):
-            raise ValueError("a price product request is a sku")  # tesser:debt TB082
+            raise ValueError("a price product request is a sku")
         return PriceProductRequest(sku=snapshot["sku"])
 
 
-class PriceProductOutcome(enum.Enum):  # tesser:debt TB052
+class PriceProductOutcome(enum.Enum):
     PRICED = "priced"
     PRICE_NOT_FOUND = "price_not_found"
 
@@ -81,13 +81,13 @@ class PriceProductResponseSnapshot(ts.Serde):
                 for price in snapshot["prices"]
             )
         ):
-            raise ValueError(  # tesser:debt TB082
+            raise ValueError(
                 "a price product response is an outcome, its prices, and its reasons"
             )
-        try:  # tesser:debt TB082
-            price_product_outcome = PriceProductOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
+        try:
+            price_product_outcome = PriceProductOutcome(snapshot.get("outcome"))
         except ValueError as value_error:
-            raise ValueError("a price product response names a priced outcome") from value_error  # tesser:debt TB082
+            raise ValueError("a price product response names a priced outcome") from value_error
         return PriceProductResponse(
             outcome=price_product_outcome,
             prices=tuple(Price(cents=price["cents"]) for price in snapshot["prices"]),

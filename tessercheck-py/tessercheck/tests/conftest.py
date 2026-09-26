@@ -1,8 +1,6 @@
 import ast
-import inspect
 import json
 import textwrap
-import collections.abc as collections_abc
 import pathlib
 
 import tessercheck.adapters.repositories as repositories
@@ -75,8 +73,8 @@ def conforming_tree(root: pathlib.Path) -> None:
     )
 
 
-def function_tree(func: collections_abc.Callable[..., object]) -> ast.FunctionDef:  # tesser:debt TB022
-    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+def function_tree(source: str) -> ast.FunctionDef:
+    tree = ast.parse(textwrap.dedent(source))
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef))
     return node
 

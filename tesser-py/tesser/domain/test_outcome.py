@@ -15,18 +15,16 @@ class Advance(ts.Outcome):
     DONE = enum.auto()
 
 
-def test_an_outcome_is_a_closed_set_the_type_checker_can_exhaust() -> None:
-    def route(outcome: Advance) -> str:  # tesser:debt TB023
-        match outcome:
-            case Advance.CONTINUE:
-                return "again"
-            case Advance.DONE:
-                return "stop"
-            case _ as never:
-                typing.assert_never(never)
-
-    assert route(Advance.CONTINUE) == "again"
-    assert route(Advance.DONE) == "stop"
+@pytest.mark.parametrize(("advance", "expected"), [(Advance.CONTINUE, "again"), (Advance.DONE, "stop")])
+def test_an_outcome_is_a_closed_set_the_type_checker_can_exhaust(advance: Advance, expected: str) -> None:
+    match advance:
+        case Advance.CONTINUE:
+            actual = "again"
+        case Advance.DONE:
+            actual = "stop"
+        case _ as never:
+            typing.assert_never(never)
+    assert actual == expected
     assert list(Advance) == [Advance.CONTINUE, Advance.DONE]
 
 
@@ -99,9 +97,14 @@ def test_a_metaclass_cannot_skip_the_gate_it_inherits() -> None:
             cls: str,
             bases: tuple[type, ...],
             classdict: enum._EnumDict,
-            **kwargs: typing.Any,  # tesser:debt TB022
+            *,
+            boundary: enum.FlagBoundary | None = None,
+            _simple: bool = False,
+            **kwargs: object,
         ) -> Skipping:
-            return enum.EnumMeta.__new__(metacls, cls, bases, classdict, **kwargs)
+            return enum.EnumMeta.__new__(
+                metacls, cls, bases, classdict, boundary=boundary, _simple=_simple, **kwargs
+            )
 
     with pytest.raises(TypeError, match=r"Escaped uses a custom metaclass"):
 
@@ -242,24 +245,27 @@ def test_an_outcome_member_is_never_an_alias() -> None:
     assert list(Advance) == [Advance.CONTINUE, Advance.DONE]
 
 
-def test_a_well_formed_outcome_survives_the_gate() -> None:
-    class Settle(ts.Outcome):
-        PAID = enum.auto()
-        REFUSED = enum.auto()
-        RETRY = enum.auto()
+class Settle(ts.Outcome):
+    PAID = enum.auto()
+    REFUSED = enum.auto()
+    RETRY = enum.auto()
 
-    def route(outcome: Settle) -> str:  # tesser:debt TB023
-        match outcome:
-            case Settle.PAID:
-                return "paid"
-            case Settle.REFUSED:
-                return "refused"
-            case Settle.RETRY:
-                return "retry"
-            case _ as never:
-                typing.assert_never(never)
 
-    assert [route(member) for member in Settle] == ["paid", "refused", "retry"]
+@pytest.mark.parametrize(("settle", "expected"), [
+    (Settle.PAID, "paid"), (Settle.REFUSED, "refused"), (Settle.RETRY, "retry"),
+])
+def test_a_well_formed_outcome_survives_the_gate(settle: Settle, expected: str) -> None:
+    match settle:
+        case Settle.PAID:
+            actual = "paid"
+        case Settle.REFUSED:
+            actual = "refused"
+        case Settle.RETRY:
+            actual = "retry"
+        case _ as never:
+            typing.assert_never(never)
+    assert actual == expected
+    assert list(Settle) == [Settle.PAID, Settle.REFUSED, Settle.RETRY]
     assert len({Settle.PAID, Settle.REFUSED, Settle.RETRY}) == 3
 
 

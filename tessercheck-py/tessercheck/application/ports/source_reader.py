@@ -54,6 +54,8 @@ class ReadSourcesResponse(ts.Response):
         stdlib: tuple[str, ...],
         pure_stdlib: tuple[str, ...],
         pruned: tuple[str, ...],
+        directories: tuple[str, ...],
+        unreadable_directories: tuple[str, ...],
     ) -> None:
         self.outcome = outcome
         self.nested = nested
@@ -64,6 +66,8 @@ class ReadSourcesResponse(ts.Response):
         self.stdlib = stdlib
         self.pure_stdlib = pure_stdlib
         self.pruned = pruned
+        self.directories = directories
+        self.unreadable_directories = unreadable_directories
 
 
 class SourceReader(ts.Port, typing.Protocol):

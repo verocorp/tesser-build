@@ -1,54 +1,44 @@
 from __future__ import annotations
 
-import ast
+import pathlib
 
-import tests.discovery as discovery
-import tests.support as support
+import tessercheck.client as tessercheck_client
+import tessercheck.component as tessercheck_component
 
 
-def test_no_import_time_side_effects_in_contexts_or_bootstrap() -> None:
-    offenders: dict[str, list[int]] = {}
-    for pkg in (*discovery.discovered_contexts(), "bootstrap"):
-        for path in (support.ROOT / pkg).rglob("*.py"):
-            lines = support.import_time_side_effects(support.parse_module(path))
-            if lines:
-                offenders[str(path.relative_to(support.ROOT))] = lines
-    assert not offenders, f"import-time side effect: {offenders}"
+def test_no_top_level_expression_calls_in_contexts_or_bootstrap() -> None:
+    root = pathlib.Path(__file__).resolve().parent.parent
+    inspect_tree_response = tessercheck_component.Tessercheck(
+        tessercheck_component.Config(tessercheck_component.Spec())
+    ).client.inspect_tree(tessercheck_client.InspectTreeRequest(tree=str(root)))
+    offenders = {
+        source.path: source.top_level_calls for source in inspect_tree_response.sources
+        if source.path.split("/")[0] in (*inspect_tree_response.contexts, "bootstrap") and source.top_level_calls
+    }
+    assert not offenders, f"module-level expression calls: {offenders}"
 
 
 def test_a_context_a_host_exposes_owns_a_handler() -> None:
-    contexts = frozenset(discovery.discovered_contexts())
-    exposed: set[str] = set()
-    for path in support.host_files():
-        reached, _ = support.clients_reached(support.parse_module(path), contexts)
-        exposed |= reached
+    root = pathlib.Path(__file__).resolve().parent.parent
+    inspect_tree_response = tessercheck_component.Tessercheck(
+        tessercheck_component.Config(tessercheck_component.Spec())
+    ).client.inspect_tree(tessercheck_client.InspectTreeRequest(tree=str(root)))
+    exposed = {
+        context for source in inspect_tree_response.sources if source.path.startswith("srv/")
+        for context in source.reached_contexts
+    }
     assert exposed, "no context is reachable from a host — the walk found nothing"
-    missing = sorted(ctx for ctx in exposed if not (support.ROOT / ctx / "adapters" / "handlers").is_dir())
+    missing = sorted(context for context in exposed if f"{context}/adapters/handlers" not in inspect_tree_response.directories)
     assert not missing, f"a host exposes these contexts but they own no handler role: {missing}"
 
 
 def test_a_host_routes_and_never_translates() -> None:
-    contexts = frozenset(discovery.discovered_contexts())
-    offenders: dict[str, list[int]] = {}
-    for path in support.host_files():
-        _, called = support.clients_reached(support.parse_module(path), contexts)
-        if called:
-            offenders[str(path.relative_to(support.ROOT))] = called
+    root = pathlib.Path(__file__).resolve().parent.parent
+    inspect_tree_response = tessercheck_component.Tessercheck(
+        tessercheck_component.Config(tessercheck_component.Spec())
+    ).client.inspect_tree(tessercheck_client.InspectTreeRequest(tree=str(root)))
+    offenders = {
+        source.path: source.client_calls for source in inspect_tree_response.sources
+        if source.path.startswith("srv/") and source.client_calls
+    }
     assert not offenders, f"a host calls a context Client instead of routing to a handler: {offenders}"
-
-
-def test_handler_routing_teeth() -> None:
-    contexts = frozenset({"campaign", "reports"})
-    direct = ast.parse("def f(app):\n    return app.reports.links_by_verdict()\n")
-    aliased = ast.parse("def f(app):\n    reports = app.reports\n    return reports.links_by_verdict()\n")
-    routed = ast.parse("def f(app):\n    return ReportsHandler(app.reports)\n")
-    configured = ast.parse("def f(cfg):\n    return cfg.reports\n")
-    assert support.clients_reached(direct, contexts) == ({"reports"}, [2])
-    assert support.clients_reached(aliased, contexts) == ({"reports"}, [3])
-    assert support.clients_reached(routed, contexts) == ({"reports"}, [])
-    assert support.clients_reached(configured, contexts) == (set(), [])
-
-
-def test_import_time_side_effect_teeth() -> None:
-    assert support.import_time_side_effects(ast.parse("configure_logging()\n")) == [1]
-    assert support.import_time_side_effects(ast.parse("x = configure_logging()\n")) == []

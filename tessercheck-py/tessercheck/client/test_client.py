@@ -19,3 +19,12 @@ class TestErrors:
     def test_the_declared_set_names_every_error_the_client_raises(self) -> None:
         raised = {name for name, value in vars(client).items() if isinstance(value, type) and issubclass(value, Exception)}
         assert {error.__name__ for error in client.ERRORS} == raised
+
+
+class TestTreeNotInspected:
+
+    def test_an_inspection_error_carries_its_domain_code_and_message(self) -> None:
+        tree_not_inspected = client.TreeNotInspected("inspection_syntax", "broken.py: invalid syntax")
+        assert tree_not_inspected.code == "inspection_syntax"
+        assert tree_not_inspected.message == "broken.py: invalid syntax"
+        assert str(tree_not_inspected) == "broken.py: invalid syntax"

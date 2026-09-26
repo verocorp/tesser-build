@@ -9,10 +9,21 @@ import livekit.agents as livekit_agents
 
 import app as app
 import calls.adapters.handlers as calls_handlers
-import srv.livekit as livekit  # tesser:debt TB060
 
 _DEFAULT_STT_MODEL: typing.Final[str] = "deepgram/nova-3"
 _DEFAULT_TTS_MODEL: typing.Final[str] = "cartesia/sonic-2"
+
+
+class LivekitApp(ts.Host):
+
+    def __init__(self, livekit_handler: calls_handlers.LivekitHandler) -> None:
+        self._livekit_handler = livekit_handler
+
+    async def accept_job(self, job_request: livekit_agents.JobRequest) -> None:
+        await self._livekit_handler.accept_job(job_request)
+
+    async def start_job(self, job_context: livekit_agents.JobContext) -> None:
+        await self._livekit_handler.start_job(job_context)
 
 
 class LivekitAgentServer(ts.Host):
@@ -20,7 +31,7 @@ class LivekitAgentServer(ts.Host):
     def run(self, argv: list[str]) -> int:
         voice_app = app.load()
         agent_name = os.environ["LIVEKIT_AGENT_NAME"]
-        livekit_app = livekit.LivekitApp(
+        livekit_app = LivekitApp(
             calls_handlers.LivekitHandler(
                 voice_app.calls.client,
                 agent_name,

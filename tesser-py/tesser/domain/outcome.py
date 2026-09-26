@@ -15,8 +15,8 @@ class _Machinery(enum.Enum):
 _GENERATED: typing.Final[frozenset[str]] = frozenset(_Machinery.__dict__)
 
 
-def _gate(cls: type) -> None:
-    members: dict[str, typing.Any] = cls.__dict__.get("_member_map_", {})  # tesser:debt TB022
+def _gate(cls: enum.EnumMeta) -> None:
+    members: dict[str, enum.Enum] = cls.__dict__.get("_member_map_", {})
     if cls.__bases__ != (Outcome,):
         bases = ", ".join(base.__name__ for base in cls.__bases__)
         raise TypeError(
@@ -45,16 +45,16 @@ def _gate(cls: type) -> None:
             "and nothing else — behavior belongs on the object that returns it"
         )
     for member in members.values():
-        if type(member._value_) is not _Auto:  # tesser:debt TB084
+        if type(member._value_) is not _Auto:
             raise TypeError(
-                f"{cls.__name__}.{member._name_} carries a value: an outcome member "  # tesser:debt TB084
+                f"{cls.__name__}.{member._name_} carries a value: an outcome member "
                 "is enum.auto(), because an outcome is matched, never serialized"
             )
     names = cls.__dict__.get("_member_names_", [])
     for name, member in members.items():
         if name not in names:
             raise TypeError(
-                f"{cls.__name__}.{name} repeats {cls.__name__}.{member._name_}: an outcome "  # tesser:debt TB084
+                f"{cls.__name__}.{name} repeats {cls.__name__}.{member._name_}: an outcome "
                 "member is a name of its own, because two names for one member make a "
                 "case arm unreachable and exhaustiveness a lie"
             )
@@ -67,9 +67,14 @@ class _OutcomeMeta(enum.EnumMeta):
         cls: str,
         bases: tuple[type, ...],
         classdict: enum._EnumDict,
-        **kwargs: typing.Any,  # tesser:debt TB022
+        *,
+        boundary: enum.FlagBoundary | None = None,
+        _simple: bool = False,
+        **kwargs: object,
     ) -> _OutcomeMeta:
-        made = super().__new__(metacls, cls, bases, classdict, **kwargs)
+        made = super().__new__(
+            metacls, cls, bases, classdict, boundary=boundary, _simple=_simple, **kwargs
+        )
         for base in bases:
             if isinstance(base, _OutcomeMeta):
                 _gate(made)

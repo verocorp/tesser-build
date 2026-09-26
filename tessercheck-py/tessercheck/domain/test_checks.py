@@ -13,6 +13,312 @@ import tesser.testing as ts
 import tessercheck.domain as domain
 
 
+@pytest.mark.parametrize("body", (
+    "snapshot = json.loads(buf)\n"
+    "if not isinstance(snapshot, str):\n"
+    "    raise ValueError('a name is text')\n"
+    "try:\n"
+    "    return thing.Name(snapshot)\n"
+    "except errors.DomainError as domain_error:\n"
+    "    raise ValueError(domain_error.message) from domain_error\n",
+    "snapshot = json.loads(buf)\n"
+    "try:\n"
+    "    status = Status(snapshot['status'])\n"
+    "except ValueError as value_error:\n"
+    "    raise ValueError('unknown status') from value_error\n"
+    "return ReadResponse(status=status)\n",
+))
+def test_wire_snapshot_translates_only_reconstruction_errors(body: str) -> None:
+    findings = tuple(
+        f"{v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=((
+            "shop/application/relays/wire.py", "shop.application.relays.wire",
+            "import enum\nimport json\nimport tesser.application as ts\n"
+            "import tesser.errors as errors\nimport shop.domain.thing as thing\n"
+            "class Status(enum.Enum):\n    READY = 'ready'\n"
+            "class ReadResponse(ts.Response):\n"
+            "    def __init__(self, status: Status) -> None:\n        self.status = status\n"
+            "class WireSnapshot(ts.Serde):\n"
+            "    def serialize(self, read_response: ReadResponse) -> bytes:\n"
+            "        return json.dumps({'status': read_response.status.value}).encode()\n"
+            "    def deserialize(self, buf: bytes) -> ReadResponse:\n"
+            + textwrap.indent(body, "        "), False,
+        ),))).violations()
+    )
+    assert not any("WireSnapshot" in finding and finding.startswith(("TB081", "TB082")) for finding in findings), findings
+    assert not any(finding.startswith(("TB052", "TB062")) and "wire" in finding for finding in findings), findings
+    assert not any(finding.startswith("TB085") and "wire" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("body", (
+    "try:\n    return thing.Name(snapshot)\nexcept Exception as error:\n    raise ValueError('bad') from error\n",
+    "try:\n    return thing.Name(snapshot)\nexcept errors.DomainError as error:\n    raise ValueError('bad')\n",
+    "try:\n    return thing.Name(snapshot)\nexcept errors.DomainError as error:\n    return thing.Name('default')\n",
+    "try:\n    status = Status(snapshot['status'])\nexcept ValueError as error:\n    status = Status.READY\nreturn ReadResponse(status=status)\n",
+    "try:\n    status = Status(snapshot['status'])\nexcept ValueError as error:\n    raise ValueError('bad') from error\nfinally:\n    print('cleanup')\nreturn ReadResponse(status=status)\n",
+    "try:\n    return thing.Name(snapshot)\nexcept ValueError as error:\n    raise ValueError('bad') from error\n",
+    "try:\n    snapshot = thing.Name(snapshot)\nexcept errors.DomainError as error:\n    raise ValueError('bad') from error\nreturn snapshot\n",
+))
+def test_wire_snapshot_rejects_recovery_and_broad_exception_translation(body: str) -> None:
+    findings = tuple(
+        f"{v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=((
+            "shop/application/relays/wire.py", "shop.application.relays.wire",
+            "import enum\nimport json\nimport tesser.application as ts\n"
+            "import tesser.errors as errors\nimport shop.domain.thing as thing\n"
+            "class Status(enum.Enum):\n    READY = 'ready'\n"
+            "class ReadResponse(ts.Response):\n"
+            "    def __init__(self, status: Status) -> None:\n        self.status = status\n"
+            "class WireSnapshot(ts.Serde):\n"
+            "    def serialize(self, read_response: ReadResponse) -> bytes:\n"
+            "        return json.dumps({'status': read_response.status.value}).encode()\n"
+            "    def deserialize(self, buf: bytes) -> ReadResponse:\n"
+            "        snapshot = json.loads(buf)\n"
+            + textwrap.indent(body, "        "), False,
+        ),))).violations()
+    )
+    assert any(finding.startswith("TB082") and "WireSnapshot.deserialize decides" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("declaration, code", (
+    ("class Status(enum.StrEnum):\n    READY = 'ready'\n", "TB052"),
+    ("class Status(str, enum.Enum):\n    READY = 'ready'\n", "TB052"),
+    ("class Status(enum.Enum):\n    READY = 'ready'\n    def run(self): ...\n", "TB051"),
+    ("@enum.unique\nclass Status(enum.Enum):\n    READY = 'ready'\n", "TB051"),
+))
+def test_relay_protocol_enums_keep_the_plain_member_only_grammar(declaration: str, code: str) -> None:
+    findings = tuple(
+        f"{v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=((
+            "shop/application/relays/wire.py", "shop.application.relays.wire",
+            "import enum\n" + declaration, False,
+        ),))).violations()
+    )
+    assert any(finding.startswith(code) and "Status" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("binding, arms, allowed", (
+    ("await self._reader.run_read(wire.ReadRequest(text='x'))",
+     "case wire.Status.READY:\n    return MapToReadResponse(read_response)\n"
+     "case wire.Status.ALREADY_STARTED:\n    raise client.ReadRejected('already started')\n"
+     "case _ as never:\n    typing.assert_never(never)\n", True),
+    ("wire.ReadResponse(status=wire.Status.READY)",
+     "case wire.Status.READY:\n    return MapToReadResponse(read_response)\n"
+     "case _ as never:\n    typing.assert_never(never)\n", False),
+    ("await self._reader.run_read(wire.ReadRequest(text='x'))",
+     "case wire.Status.READY:\n    await self._reader.run_read(wire.ReadRequest(text='again'))\n    return MapToReadResponse(read_response)\n"
+     "case _ as never:\n    typing.assert_never(never)\n", False),
+    ("await self._reader.run_read(wire.ReadRequest(text='x'))",
+     "case wire.Status.READY:\n    return MapToReadResponse(await self._reader.run_read(wire.ReadRequest(text='again')))\n"
+     "case _ as never:\n    typing.assert_never(never)\n", False),
+    ("await self._reader.run_read(wire.ReadRequest(text='x'))",
+     "case wire.Status.READY:\n    return MapToReadResponse(read_response)\n"
+     "case _:\n    raise client.ReadRejected('unknown')\n", False),
+    ("await self._reader.run_read(wire.ReadRequest(text='x'))",
+     "case wire.Other.READY:\n    return MapToReadResponse(read_response)\n"
+     "case _ as never:\n    typing.assert_never(never)\n", False),
+    ("await self._reader.run_read(wire.ReadRequest(text='x'))",
+     "case wire.Status.READY if read_response.status:\n    return MapToReadResponse(read_response)\n"
+     "case _ as never:\n    typing.assert_never(never)\n", False),
+    ("await self._reader.run_read(wire.ReadRequest(text='x'))",
+     "case wire.Status.READY:\n    return wire.ReadResponse(status=wire.Status.READY)\n"
+     "case _ as never:\n    typing.assert_never(never)\n", False),
+))
+def test_terminal_relay_translation_requires_provenance_and_public_terminal_arms(binding: str, arms: str, allowed: bool) -> None:
+    findings = tuple(
+        str(v.text()) for v in domain.Codebase(_spec(sources=(
+            ("shop/application/relays/wire.py", "shop.application.relays.wire",
+             "import enum\nimport typing\nimport tesser.application as ts\n"
+             "class Status(enum.Enum):\n    READY = 'ready'\n    ALREADY_STARTED = 'already_started'\n"
+             "class Other(enum.Enum):\n    READY = 'ready'\n"
+             "class ReadRequest(ts.Request):\n"
+             "    def __init__(self, text: str) -> None:\n        self.text = text\n"
+             "class ReadResponse(ts.Response):\n"
+             "    def __init__(self, status: Status) -> None:\n        self.status = status\n"
+             "class Reader(ts.Relay, typing.Protocol):\n"
+             "    async def run_read(self, read_request: ReadRequest) -> ReadResponse: ...\n", False),
+            ("shop/client/read.py", "shop.client.read",
+             "import tesser.context as ts\n"
+             "class ReadRequest(ts.Request):\n"
+             "    def __init__(self, text: str) -> None:\n        self.text = text\n"
+             "class ReadResponse(ts.Response):\n"
+             "    def __init__(self, text: str) -> None:\n        self.text = text\n"
+             "class ReadRejected(ts.Error):\n    pass\n", False),
+            ("shop/application/read.py", "shop.application.read",
+             "import typing\nimport tesser.application as ts\n"
+             "import shop.application.relays.wire as wire\nimport shop.client.read as client\n"
+             "class MapToReadResponse(ts.Mapper, client.ReadResponse):\n"
+             "    def __init__(self, read_response: wire.ReadResponse) -> None:\n"
+             "        super().__init__(text='ready')\n"
+             "class ReaderService(ts.ApplicationService):\n"
+             "    def __init__(self, reader: wire.Reader) -> None:\n        self._reader = reader\n"
+             "    async def read(self, read_request: client.ReadRequest) -> client.ReadResponse:\n"
+             f"        read_response = {binding}\n"
+             "        match read_response.status:\n" + textwrap.indent(arms, "            "), False),
+        ))).violations() if str(v.code()) == "TB082"
+    )
+    rejected = any("ReaderService.read match subject is not a call on a domain object" in finding for finding in findings)
+    assert rejected is not allowed, findings
+    if allowed:
+        assert not any("ReaderService.read" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("block, nested, allowed", (
+    ("Orchestrator", False, True),
+    ("ApplicationService", False, False),
+    ("Orchestrator", True, False),
+))
+def test_sequential_domain_matches_are_only_for_orchestrators(block: str, nested: bool, allowed: bool) -> None:
+    first = "match thing.decide():\n    case model.Decision.DONE:\n        pass\n    case _ as never:\n        typing.assert_never(never)\n"
+    second = "match thing.decide():\n    case model.Decision.DONE:\n        return client.ReadResponse(text='done')\n    case _ as never:\n        typing.assert_never(never)\n"
+    matches = first.replace("        pass\n", textwrap.indent(second, "        ")) if nested else first + second
+    findings = tuple(
+        str(v.text()) for v in domain.Codebase(_spec(sources=(
+            ("shop/domain/model.py", "shop.domain.model",
+             "import enum\nimport tesser.domain as ts\n"
+             "class Decision(ts.Outcome):\n    DONE = enum.auto()\n"
+             "class Thing(ts.ValueObject):\n"
+             "    def __init__(self, text: str) -> None:\n        self._text = text\n"
+             "    def decide(self) -> Decision:\n        return Decision.DONE\n", False),
+            ("shop/application/flow.py", "shop.application.flow",
+             "import typing\nimport tesser.application as ts\n"
+             "import shop.domain.model as model\nimport shop.client.read as client\n"
+             f"class Flow(ts.{block}):\n"
+             "    def run(self, read_request: client.ReadRequest) -> client.ReadResponse:\n"
+             "        thing = model.Thing('x')\n" + textwrap.indent(matches, "        "), False),
+        ))).violations() if str(v.code()) == "TB082"
+    )
+    assert (not any("Flow.run" in finding for finding in findings)) is allowed, findings
+    if nested:
+        assert any(
+            "Flow.run nests a match; an orchestrator matches sequential domain transitions, "
+            "never a decision inside another decision" in finding
+            for finding in findings
+        ), findings
+
+
+@pytest.mark.parametrize("binding, subject, field_type, allowed", (
+    ("thing = run_request.thing\n", "thing.decide()", "model.Thing", True),
+    ("", "run_request.thing.decide()", "model.Thing", True),
+    ("thing = run_request.thing\n", "thing.decide()", "str", False),
+    ("thing = run_request.thing\n", "thing", "model.Decision", False),
+))
+def test_relay_request_domain_fields_preserve_domain_outcome_provenance(binding: str, subject: str, field_type: str, allowed: bool) -> None:
+    findings = tuple(
+        str(v.text()) for v in domain.Codebase(_spec(sources=(
+            ("shop/domain/model.py", "shop.domain.model",
+             "import enum\nimport tesser.domain as ts\n"
+             "class Decision(ts.Outcome):\n    DONE = enum.auto()\n"
+             "class Thing(ts.ValueObject):\n"
+             "    def __init__(self, text: str) -> None:\n        self._text = text\n"
+             "    def decide(self) -> Decision:\n        return Decision.DONE\n", False),
+            ("shop/application/relays/wire.py", "shop.application.relays.wire",
+             "import tesser.application as ts\nimport shop.domain.model as model\n"
+             "class RunRequest(ts.Request):\n"
+             f"    def __init__(self, thing: {field_type}) -> None:\n        self.thing = thing\n", False),
+            ("shop/application/orchestrators/flow.py", "shop.application.orchestrators.flow",
+             "import typing\nimport tesser.application as ts\n"
+             "import shop.domain.model as model\nimport shop.application.relays.wire as wire\n"
+             "class Flow(ts.Orchestrator):\n"
+             "    def run(self, run_request: wire.RunRequest) -> None:\n"
+             + textwrap.indent(binding, "        ")
+             + f"        match {subject}:\n"
+             "            case model.Decision.DONE:\n                return None\n"
+             "            case _ as never:\n                typing.assert_never(never)\n", False),
+        ))).violations() if str(v.code()) == "TB082"
+    )
+    assert (not any("Flow.run" in finding for finding in findings)) is allowed, findings
+
+
+@pytest.mark.parametrize("shape, allowed", (
+    ("((snapshot['status'] == 'ready' and len(snapshot['rows']) == 1) or "
+     "(snapshot['status'] == 'missing' and len(snapshot['rows']) == 0))", True),
+    ("len(snapshot['rows']) <= 1", True),
+    ("snapshot.get('status') not in ('missing', 'already_started') or not snapshot['rows']", True),
+    ("snapshot.get('status') in ('ready', snapshot['other_status'])", False),
+    ("len(snapshot['rows']) == snapshot['expected']", False),
+    ("len(snapshot['rows']) == True", False),
+    ("len(sorted(snapshot['rows'])) == 1", False),
+    ("len(message.rows) == 1", False),
+))
+def test_snapshot_cardinality_is_only_a_loaded_wire_shape_comparison(shape: str, allowed: bool) -> None:
+    findings = tuple(
+        f"{v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=((
+            "shop/application/relays/cardinality.py", "shop.application.relays.cardinality",
+            "import json\nimport tesser.application as ts\n"
+            "class ReadResponse(ts.Response):\n"
+            "    def __init__(self, rows: tuple[str, ...]) -> None:\n        self.rows = rows\n"
+            "class CardinalitySnapshot(ts.Serde):\n"
+            "    def serialize(self, read_response: ReadResponse) -> bytes:\n"
+            "        return json.dumps({'rows': list(read_response.rows)}).encode()\n"
+            "    def deserialize(self, buf: bytes) -> ReadResponse:\n"
+            "        snapshot = json.loads(buf)\n"
+            "        if not (isinstance(snapshot, dict) and isinstance(snapshot.get('rows'), list)\n"
+            f"                and {shape}):\n"
+            "            raise ValueError('inconsistent wire shape')\n"
+            "        return ReadResponse(rows=tuple(snapshot['rows']))\n", False,
+        ),))).violations()
+    )
+    assert (not any(finding.startswith("TB082") and "CardinalitySnapshot.deserialize" in finding for finding in findings)) is allowed, findings
+
+
+@pytest.mark.parametrize("method, statement", (
+    ("serialize", "return json.dumps({'count': len(read_response.rows)}).encode()\n"),
+    ("deserialize", "snapshot = json.loads(buf)\ncount = len(snapshot['rows'])\nreturn ReadResponse(rows=tuple(snapshot['rows']))\n"),
+))
+def test_snapshot_cardinality_does_not_become_a_general_count_operation(method: str, statement: str) -> None:
+    annotation = "read_response: ReadResponse" if method == "serialize" else "buf: bytes"
+    returned = "bytes" if method == "serialize" else "ReadResponse"
+    findings = tuple(
+        f"{v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=((
+            "shop/application/relays/cardinality.py", "shop.application.relays.cardinality",
+            "import json\nimport tesser.application as ts\n"
+            "class ReadResponse(ts.Response):\n"
+            "    def __init__(self, rows: tuple[str, ...]) -> None:\n        self.rows = rows\n"
+            "class CardinalitySnapshot(ts.Serde):\n"
+            f"    def {method}(self, {annotation}) -> {returned}:\n"
+            + textwrap.indent(statement, "        "), False,
+        ),))).violations()
+    )
+    assert any(finding.startswith("TB082") and f"CardinalitySnapshot.{method} makes a call" in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("setup", (
+    "snapshot = {'rows': []}\n",
+    "snapshot = json.loads(buf)\nsnapshot = {'rows': []}\n",
+    "snapshot = json.loads(buf)\nlen = count_rows\n",
+))
+def test_snapshot_cardinality_requires_an_unrebound_json_load_and_builtin_len(setup: str) -> None:
+    findings = tuple(
+        f"{v.code()} {v.text()}"
+        for v in domain.Codebase(_kinds_spec(sources=((
+            "shop/application/relays/cardinality.py", "shop.application.relays.cardinality",
+            "import json\nimport tesser.application as ts\n"
+            "class ReadResponse(ts.Response):\n"
+            "    def __init__(self, rows: tuple[str, ...]) -> None:\n        self.rows = rows\n"
+            "class CardinalitySnapshot(ts.Serde):\n"
+            "    def deserialize(self, buf: bytes) -> ReadResponse:\n"
+            + textwrap.indent(setup, "        ")
+            + "        if len(snapshot['rows']) != 1:\n"
+            "            raise ValueError('one row is required')\n"
+            "        return ReadResponse(rows=tuple(snapshot['rows']))\n", False,
+        ),))).violations()
+    )
+    assert any(
+        finding.startswith("TB082")
+        and "CardinalitySnapshot.deserialize makes a call a snapshot may not make; a "
+        "snapshot names json.dumps, json.loads, isinstance, str, int, "
+        "errors.invalid, the message and spec constructors, another "
+        "snapshot's serialize or deserialize, structural list/tuple/all "
+        "collection conversions, ValueError wire rejection, protocol enum "
+        "decoding, and len over loaded JSON in a shape-guard comparison "
+        "to a nonnegative integer literal, and nothing else" in finding
+        for finding in findings
+    ), findings
+
+
 @ts.assembly
 def _spec(
     sources: tuple[tuple[str, str, str | None, bool], ...] = (),
@@ -231,7 +537,7 @@ def test_placement_is_the_single_routing_decision() -> None:
         "an undeclared export directory must classify as it always did"
     )
     placement_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(domain.Placement.__init__))
+        textwrap.dedent(inspect.getsource(domain.Placement._locate))
     )
     locate = next(
         node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
@@ -253,7 +559,7 @@ def test_placement_is_the_single_routing_decision() -> None:
 
 def test_every_location_token_has_a_dispatch_arm() -> None:
     placement_tree = ast.parse(
-        textwrap.dedent(inspect.getsource(domain.Placement.__init__))
+        textwrap.dedent(inspect.getsource(domain.Placement._locate))
     )
     locate = next(
         node for node in placement_tree.body if isinstance(node, ast.FunctionDef)
@@ -2786,26 +3092,26 @@ def test_a_role_init_re_exports_under_the_name_the_module_defines() -> None:
     )
     client_init = ("mod/client/__init__.py", "mod.client", "", True)
 
-    def run(init: tuple[str, str, str, bool]) -> tuple[str, ...]:  # tesser:debt TB023
-        return tuple(
-            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-            for v in domain.Codebase(_spec(sources=(vo, init, reader, client_init))).violations()
-        )
-
-    clean = run((
-        "mod/domain/__init__.py",
-        "mod.domain",
-        "from mod.domain.vo import Tag as Tag\n",
-        True,
-    ))
+    clean = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(vo, (
+            "mod/domain/__init__.py",
+            "mod.domain",
+            "from mod.domain.vo import Tag as Tag\n",
+            True,
+        ), reader, client_init))).violations()
+    )
     assert not any("mod.domain:" in f for f in clean), clean
 
-    bare = run((
-        "mod/domain/__init__.py",
-        "mod.domain",
-        "from mod.domain.vo import Tag\n",
-        True,
-    ))
+    bare = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(vo, (
+            "mod/domain/__init__.py",
+            "mod.domain",
+            "from mod.domain.vo import Tag\n",
+            True,
+        ), reader, client_init))).violations()
+    )
     assert any(
         "mod.domain imports Tag without repeating the name; a role __init__ "
         "re-exports under the name the module defines — from x import Y as Y, "
@@ -2813,12 +3119,15 @@ def test_a_role_init_re_exports_under_the_name_the_module_defines() -> None:
         for f in bare
     ), bare
 
-    renamed = run((
-        "mod/domain/__init__.py",
-        "mod.domain",
-        "from mod.domain.vo import Tag as Label\n",
-        True,
-    ))
+    renamed = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(vo, (
+            "mod/domain/__init__.py",
+            "mod.domain",
+            "from mod.domain.vo import Tag as Label\n",
+            True,
+        ), reader, client_init))).violations()
+    )
     assert any(
         "mod.domain re-exports Tag as Label; a role __init__ "
         "re-exports under the name the module defines — from x import Y as Y, "
@@ -3312,8 +3621,8 @@ def test_sibling_reference_scoping_and_spoof_resistance() -> None:
     sibling = [f for f in findings if "reaches sibling" in f]
     assert not any("Scoped.outer" in f for f in sibling)
     assert any(
-        "plain.domain.y.Inner.go reaches sibling pick; a method is for outsiders "
-        "— a class reaches into itself only for direct recursion" in f
+        "plain.domain.y.Inner.go reaches sibling pick; a public method is for outsiders "
+        "— shared implementation belongs in a private method" in f
         for f in sibling
     )
     assert not any("Scoped.taken" in f for f in sibling)
@@ -9427,16 +9736,40 @@ def test_kernel_import_allowlist() -> None:
 
 
 def test_a_declared_kernel_import_is_legal_in_a_kernel() -> None:
-    def grown(imports: tuple[str, ...]) -> tuple[str, ...]:  # tesser:debt TB023
-        return tuple(
-        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
-        for v in domain.Codebase(_spec(sources=(('kernel/__init__.py', 'kernel', '', True), ('kernel/money.py', 'kernel.money', 'import tesser.domain as ts\nclass Money(ts.ValueObject):\n    _amount: int\n    def __init__(self, amount: int) -> None:\n        if amount < 0:\n            raise ValueError(f"negative: {amount}")\n        object.__setattr__(self, "_amount", amount)\n', False), ('kernel/prices.py', 'kernel.prices', 'import tesser.domain as ts\nimport money_kernel\nclass PriceSpec(ts.Spec):\n    def __init__(self, text: str) -> None:\n        self.text = text\n', False)), imports=imports)).violations()
-    )
+    findings = {
+        imports: tuple(
+            f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+            for v in domain.Codebase(_spec(sources=(
+                ('kernel/__init__.py', 'kernel', '', True),
+                (
+                    'kernel/money.py', 'kernel.money',
+                    'import tesser.domain as ts\n'
+                    'class Money(ts.ValueObject):\n'
+                    '    _amount: int\n'
+                    '    def __init__(self, amount: int) -> None:\n'
+                    '        if amount < 0:\n'
+                    '            raise ValueError(f"negative: {amount}")\n'
+                    '        object.__setattr__(self, "_amount", amount)\n',
+                    False,
+                ),
+                (
+                    'kernel/prices.py', 'kernel.prices',
+                    'import tesser.domain as ts\n'
+                    'import money_kernel\n'
+                    'class PriceSpec(ts.Spec):\n'
+                    '    def __init__(self, text: str) -> None:\n'
+                    '        self.text = text\n',
+                    False,
+                ),
+            ), imports=imports)).violations()
+        )
+        for imports in (("money_kernel",), ())
+    }
 
     assert not any(
-        "imports money_kernel" in f for f in grown(("money_kernel",))
-    ), grown(("money_kernel",))
-    assert any("imports money_kernel" in f for f in grown(())), grown(())
+        "imports money_kernel" in f for f in findings[("money_kernel",)]
+    ), findings[("money_kernel",)]
+    assert any("imports money_kernel" in f for f in findings[()]), findings[()]
 
 
 def test_only_a_context_kernel_package_imports_a_root_kernel() -> None:
@@ -10016,6 +10349,20 @@ def test_a_stdlib_declaration_widens_the_domain_and_the_kernel() -> None:
         "kernel, tesser.domain, declared kernels, and the pure stdlib" in f
         for f in bare
     ), bare
+
+
+def test_partial_application_names_the_real_operation_without_opening_io_imports() -> None:
+    findings = tuple(
+        f"{v.path()}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            ("mod/application/service.py", "mod.application.service", "import functools\nimport os\n", False),
+            ("mod/client/client.py", "mod.client.client", "import functools\n", False),
+        ))).violations()
+        if str(v.code()) == "TB062"
+    )
+    assert not any("mod.application.service imports functools" in finding for finding in findings), findings
+    assert any("mod.application.service imports os" in finding for finding in findings), findings
+    assert any("mod.client.client imports functools" in finding for finding in findings), findings
 
 
 def test_a_stdlib_declaration_widens_neither_application_nor_client() -> None:
@@ -10977,16 +11324,69 @@ def test_a_sibling_method_reference_is_flagged_in_every_module_kind() -> None:
         ))).violations()
                )
     assert any(
-        "plain.domain.thing.Thing.shout reaches sibling spoken; a method is for "
-        "outsiders — a class reaches into itself only for direct recursion" in f
+        "plain.domain.thing.Thing.shout reaches sibling spoken; a public method is for "
+        "outsiders — shared implementation belongs in a private method, except for "
+        "recursion or an unimplemented property hook" in f
         for f in findings
     )
     assert any(
-        "plain.domain.test_thing.FakeThing.poke reaches sibling prod; a method is for "
-        "outsiders — a class reaches into itself only for direct recursion" in f
+        "plain.domain.test_thing.FakeThing.poke reaches sibling prod; a public method is for "
+        "outsiders — shared implementation belongs in a private method" in f
         for f in findings
     )
     assert not any("Thing.__init__" in f and "private method" in f for f in findings)
+
+
+@pytest.mark.parametrize(("body", "rejected"), (
+    ("    def run(self):\n        return self._parse()\n    def _parse(self):\n        return 1\n", False),
+    ("    def run(self):\n        return self.parse()\n    def parse(self):\n        return 1\n", True),
+    ("    @property\n    def identity(self):\n        raise NotImplementedError('identity')\n    def run(self):\n        return self.identity\n", False),
+    ("    @property\n    def identity(self):\n        return 1\n    def run(self):\n        return self.identity\n", True),
+    ("    def run(self):\n        router = fastapi.APIRouter()\n        router.add_api_route('/', self.handle)\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        router = fastapi.APIRouter()\n        router.add_api_route('/', self._handle)\n    def _handle(self):\n        return 1\n", False),
+    ("    def run(self):\n        router = fastapi.APIRouter()\n        router.add_api_route('/', self.handle())\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        saved = self.handle\n        return saved()\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        self._invoke(self.handle)\n    def _invoke(self, handler):\n        return handler()\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        router = fastapi.APIRouter()\n        router = self\n        router.add_api_route('/', self.handle)\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        fastapi = self\n        fastapi.register(self.handle)\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self, fastapi):\n        fastapi.register(self.handle)\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        return functools.partial(self.handle)()\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        callback = functools.partial(self.handle)\n        return callback()\n    def handle(self):\n        return 1\n", True),
+    ("    def run(self):\n        operator.call(self.handle)\n    def handle(self):\n        return 1\n", True),
+))
+def test_private_implementation_hooks_and_external_callbacks_have_distinct_roles(body: str, rejected: bool) -> None:
+    findings = tuple(
+        str(v.text())
+        for v in domain.Codebase(_spec(sources=((
+            "srv/http/main.py", "srv.http.main",
+            "import fastapi\nimport functools\nimport operator\nimport tesser.srv as ts\nclass HttpHost(ts.Host):\n" + body,
+            False,
+        ),))).violations()
+        if str(v.code()) == "TB051"
+    )
+    assert any("reaches sibling" in finding for finding in findings) is rejected, findings
+
+
+@pytest.mark.parametrize("base", ("ApplicationService", "Actions", "Orchestrator"))
+def test_private_helpers_cannot_hide_a_coordinating_operations_decisions(base: str) -> None:
+    findings = tuple(
+        str(v.text())
+        for v in domain.Codebase(_spec(sources=((
+            "mod/application/service.py", "mod.application.service",
+            "import tesser.application as ts\n"
+            f"class Work(ts.{base}):\n"
+            "    def run(self):\n        return self._choose()\n"
+            "    def _choose(self):\n        return 1 if self.ready else 2\n",
+            False,
+        ),))).violations()
+        if str(v.code()) == "TB051"
+    )
+    assert any(
+        "a coordinating operation keeps its work in the public method, because a "
+        "private helper must not hide a decision or port call from the operation's "
+        "shape checks" in finding
+        for finding in findings
+    ), findings
 
 
 def test_a_domain_enum_is_a_primitive() -> None:
@@ -12690,6 +13090,171 @@ def test_an_outcome_is_tracked_through_the_shapes_the_rules_do_not_name() -> Non
     assert not any("reads_value" in f and "TB084" in f for f in findings)
     assert any("run.py:12: TB084 shop.domain.run.__init__ takes an outcome" in f for f in findings)
     assert len(tb084) == 6
+
+
+def test_outcome_slot_reads_resolve_receivers_without_banning_enum_machinery() -> None:
+    source = (
+        "import enum\n"
+        "import tesser.domain as ts\n"
+        "class Advance(ts.Outcome):\n"
+        "    DONE = enum.auto()\n"
+        "class Color(enum.Enum):\n"
+        "    RED = 'red'\n"
+        "def plain(member: enum.Enum) -> object:\n"
+        "    return member._value_, member._name_\n"
+        "def color(member: Color) -> object:\n"
+        "    return member._value_, Color.RED._name_\n"
+        "def unknown(member: object) -> object:\n"
+        "    return member._value_\n"
+        "def typed(member: Advance) -> object:\n"
+        "    return member._value_\n"
+        "def alias(member: Advance) -> object:\n"
+        "    copied = member\n"
+        "    return copied._name_\n"
+        "def produce() -> Advance:\n"
+        "    return Advance.DONE\n"
+        "def returned() -> object:\n"
+        "    member = produce()\n"
+        "    return member._value_\n"
+        "def direct() -> object:\n"
+        "    return Advance.DONE._name_\n"
+        "class Runner:\n"
+        "    def advance(self) -> Advance:\n"
+        "        return Advance.DONE\n"
+        "    def peek(self) -> object:\n"
+        "        member = self.advance()\n"
+        "        return member._value_, self.advance()._name_\n"
+        "def plain_after(member: enum.Enum) -> object:\n"
+        "    return member._value_, member._name_\n"
+        "def defaulted(value: object = Advance.DONE._value_) -> object:\n"
+        "    return value\n"
+        "def annotated() -> object:\n"
+        "    member: Advance\n"
+        "    return member._name_\n"
+    )
+    violations = domain.Codebase(_spec(sources=((
+        "shop/domain/run.py", "shop.domain.run", source, False,
+    ),))).violations()
+    reads = {
+        (int(violation.line()), str(violation.text()).split(" reads ")[1].split(";")[0])
+        for violation in violations
+        if str(violation.code()) == "TB084" and " reads " in str(violation.text())
+    }
+    assert reads == {
+        (14, "_value_"), (17, "_name_"), (22, "_value_"), (24, "_name_"),
+        (30, "_value_"), (30, "_name_"),
+        (33, "_value_"), (37, "_name_"),
+    }
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    (
+        ("value = self.advance()\nif flag:\n    value = other\nreturn value._value_", 1),
+        ("value = other\nif flag:\n    value = self.advance()\nelse:\n    value = other\nreturn value._value_", 1),
+        ("value = self.advance()\nif flag:\n    value = other\nelse:\n    value = other\nreturn value._value_", 0),
+        ("value = self.advance()\nif flag:\n    value = other\nvalue = other\nreturn value._value_", 0),
+        ("value = self.advance()\nfor item in ():\n    value = other\nreturn value._value_", 1),
+        ("value = self.advance()\nwhile flag:\n    value = other\nreturn value._value_", 1),
+        ("value = other\nwhile flag:\n    value = self.advance()\nreturn value._value_", 1),
+        ("value = other\nwhile flag:\n    value._value_\n    value = self.advance()", 1),
+        ("value = other\nwhile flag:\n    value = self.advance()\n    value = other\n    value._value_", 0),
+        ("value = self.advance() if flag else other\nreturn value._value_", 1),
+        ("value = optional\nreturn value._value_", 1),
+        ("value = legacy_optional\nreturn value._value_", 1),
+        ("value = plain_optional\nreturn value._value_", 0),
+        ("for value in (Advance.DONE,):\n    value._value_", 1),
+        (
+            "value = other\nwhile flag:\n    value = self.advance()\n    if flag:\n        break\n"
+            "    value = other\nreturn value._value_", 1,
+        ),
+        (
+            "value = other\nwhile flag:\n    value._value_\n    value = self.advance()\n"
+            "    if flag:\n        continue\n    value = other", 1,
+        ),
+        (
+            "value = other\nwhile flag:\n    value = self.advance()\n    if flag:\n        break\n"
+            "    value = other\nvalue = other\nreturn value._value_", 0,
+        ),
+        (
+            "value = other\nwhile flag:\n    try:\n        value = self.advance()\n        break\n"
+            "    finally:\n        value = other\nreturn value._value_", 0,
+        ),
+        (
+            "value = self.advance()\ntry:\n    if flag:\n        raise ValueError()\n    value = other\n"
+            "except ValueError:\n    pass\nreturn value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    value = self.advance()\n    may_raise()\n    value = other\n"
+            "except ValueError:\n    pass\nreturn value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    if flag:\n        value = self.advance()\n        may_raise()\n"
+            "        value = other\nexcept ValueError:\n    pass\nreturn value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    value = self.advance()\nexcept ValueError:\n    value = other\n"
+            "else:\n    value = other\nreturn value._value_", 0,
+        ),
+        (
+            "value = other\ntry:\n    may_raise()\nexcept ValueError:\n    value = self.advance()\n"
+            "else:\n    value = other\nreturn value._value_", 1,
+        ),
+        (
+            "value = self.advance()\ntry:\n    may_raise()\n    value = other\nexcept ValueError:\n    pass\n"
+            "finally:\n    value = other\nreturn value._value_", 0,
+        ),
+        (
+            "value = other\ntry:\n    value = self.advance()\n    may_raise()\n    value = other\n"
+            "finally:\n    value._value_\n    value = other\nreturn value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    may_raise()\nfinally:\n    value = self.advance()\nreturn value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    try:\n        value = self.advance()\n        may_raise()\n"
+            "        value = other\n    finally:\n        pass\nexcept ValueError:\n    pass\nreturn value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    may_raise()\nexcept ValueError:\n    value = self.advance()\n"
+            "    may_raise()\n    value = other\nfinally:\n    value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    pass\nexcept ValueError:\n    pass\nelse:\n    value = self.advance()\n"
+            "    may_raise()\n    value = other\nfinally:\n    value._value_", 1,
+        ),
+        (
+            "value = other\ntry:\n    may_raise()\nexcept ValueError:\n    value = self.advance()\n"
+            "    may_raise()\n    value = other\nfinally:\n    value = other\n    value._value_", 0,
+        ),
+    ),
+)
+def test_outcome_slot_reads_keep_possible_receivers_across_branch_and_loop_joins(
+    body: str, expected: int
+) -> None:
+    source = (
+        "import enum\n"
+        "import typing\n"
+        "import tesser.domain as ts\n"
+        "class Advance(ts.Outcome):\n"
+        "    DONE = enum.auto()\n"
+        "class Color(enum.Enum):\n"
+        "    RED = 'red'\n"
+        "class Runner:\n"
+        "    def advance(self) -> Advance:\n"
+        "        return Advance.DONE\n"
+        "    def peek(self, flag: bool, other: Color, optional: Advance | None, "
+        "legacy_optional: typing.Optional[Advance], plain_optional: enum.Enum | None) -> object:\n"
+        + "".join(f"        {line}\n" for line in body.splitlines())
+    )
+    violations = domain.Codebase(_spec(sources=((
+        "shop/domain/run.py", "shop.domain.run", source, False,
+    ),))).violations()
+    reads = [
+        violation for violation in violations
+        if str(violation.code()) == "TB084" and " reads _value_;" in str(violation.text())
+    ]
+    assert len(reads) == expected
 
 
 def test_an_outcome_is_neither_kept_nor_reached_into_nor_widened() -> None:
@@ -14981,6 +15546,214 @@ def test_a_literal_string_in_an_annotation_is_data_not_a_quoted_type() -> None:
     assert not any("TB021" in f for f in findings)
 
 
+@pytest.mark.parametrize(
+    ("declarations", "expected"),
+    (
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., object])\n"
+            "def marker(fn: F) -> F:\n"
+            "    return fn\n"
+            "def second(fn: F, /) -> F:\n"
+            "    return fn\n",
+            0,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., object])\n"
+            "def marker(fn: F) -> F:\n"
+            "    return fn\n"
+            "def invoke(fn: F) -> object:\n"
+            "    return fn()\n",
+            1,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., object])\n"
+            "def invoke(fn: F) -> F:\n"
+            "    fn()\n"
+            "    return fn\n",
+            1,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., object])\n",
+            1,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[[], object])\n"
+            "def marker(fn: F) -> F:\n"
+            "    return fn\n",
+            1,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., typing.Any])\n"
+            "def marker(fn: F) -> F:\n"
+            "    return fn\n",
+            2,
+        ),
+        (
+            "def marker(\n"
+            "    fn: abc.Callable[..., object],\n"
+            ") -> abc.Callable[..., object]:\n"
+            "    return fn\n",
+            2,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., object])\n"
+            "def marker(fn: F) -> F:\n"
+            "    return fn\n"
+            "Alias = F\n",
+            1,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., object])\n"
+            "def marker[F](fn: F) -> F:\n"
+            "    return fn\n",
+            1,
+        ),
+        (
+            "F = typing.TypeVar('F', bound=abc.Callable[..., object])\n"
+            "@transform\n"
+            "def marker(fn: F) -> F:\n"
+            "    return fn\n",
+            1,
+        ),
+    ),
+)
+def test_callable_bounds_are_only_for_exact_type_identity_decorators(
+    declarations: str, expected: int
+) -> None:
+    violations = domain.Codebase(_spec(sources=((
+        "shop/domain/markers.py",
+        "shop.domain.markers",
+        "import collections.abc as abc\nimport typing\n" + declarations,
+        False,
+    ),))).violations()
+    assert len([violation for violation in violations if str(violation.code()) == "TB022"]) == expected
+
+
+@pytest.mark.parametrize(
+    ("use", "expected"),
+    (
+        ('room.register("rpc", RpcPeer(received, "ok"))', False),
+        ('room.register("rpc", callback=RpcPeer(received, "ok"))', False),
+        ('sdk.Room().register("rpc", RpcPeer(received, "ok"))', False),
+        ('await room.register("rpc", RpcPeer(received, "ok"))', False),
+        ('callback = room.register("rpc", RpcPeer(received, "ok"))\nawait callback(sdk.Invocation())', True),
+        ('return room.register("rpc", RpcPeer(received, "ok"))', True),
+        ('return await room.register("rpc", RpcPeer(received, "ok"))', True),
+        ('saved.append(room.register("rpc", RpcPeer(received, "ok")))', True),
+        ('await room.register("rpc", RpcPeer(received, "ok"))(sdk.Invocation())', True),
+        ('await RpcPeer(received, "ok")(sdk.Invocation())', True),
+        ('gateway.register("rpc", RpcPeer(received, "ok"))', True),
+        ('callback = RpcPeer(received, "ok")\nroom.register("rpc", callback)', True),
+        ('room.register("rpc", functools.partial(RpcPeer(received, "ok")))', True),
+        ('saved.append(RpcPeer(received, "ok"))', True),
+        ('room = gateway\nroom.register("rpc", RpcPeer(received, "ok"))', True),
+        ('for room in [gateway]:\n    room.register("rpc", RpcPeer(received, "ok"))', True),
+        ('sdk = gateway\nsdk.Room().register("rpc", RpcPeer(received, "ok"))', True),
+        ('sdk = gateway\nsdk.register("rpc", RpcPeer(received, "ok"))', True),
+        ('alias = room\nalias.register("rpc", RpcPeer(received, "ok"))', True),
+        ('pass', True),
+    ),
+)
+def test_a_peer_is_constructed_only_as_a_concrete_sdk_callback(use: str, expected: bool) -> None:
+    source = (
+        "import asyncio\n"
+        "import functools\n"
+        "import sdk\n"
+        "import tesser.testing as ts\n"
+        "@ts.peer\n"
+        "class RpcPeer:\n"
+        "    def __init__(self, received: asyncio.Queue[sdk.Invocation], reply: str) -> None:\n"
+        "        self._received = received\n"
+        "        self._reply = reply\n"
+        "    async def __call__(self, invocation: sdk.Invocation) -> str:\n"
+        "        await self._received.put(invocation)\n"
+        "        return self._reply\n"
+        "async def test_register() -> None:\n"
+        "    room = sdk.Room()\n"
+        "    received: asyncio.Queue[sdk.Invocation] = asyncio.Queue()\n"
+        + "".join(f"    {line}\n" for line in use.splitlines())
+    )
+    violations = domain.Codebase(_spec(sources=((
+        "shop/adapters/gateways/test_rpc.py", "shop.adapters.gateways.test_rpc", source, False,
+    ),))).violations()
+    assert any(str(violation.code()) == "TB072" and "RpcPeer" in str(violation.text()) for violation in violations) is expected
+    assert any(
+        str(violation.code()) == "TB072" and str(violation.text()) ==
+        "shop.adapters.gateways.test_rpc.RpcPeer is not constructed directly at a foreign SDK callback argument "
+        "whose registration result is discarded; a peer is registered in its integration test, never invoked, "
+        "aliased, passed to the code under test, or unused"
+        for violation in violations
+    ) is expected
+
+
+@pytest.mark.parametrize(
+    ("path", "incoming", "body"),
+    (
+        ("shop/domain/test_rpc.py", "sdk.Invocation", "return self._reply"),
+        ("shop/adapters/gateways/test_rpc.py", "int", "return self._reply"),
+        ("shop/adapters/gateways/test_rpc.py", "sdk.Invocation", "return domain.answer(invocation)"),
+        ("shop/adapters/gateways/test_rpc.py", "sdk.Invocation", "if invocation:\n    return self._reply\nreturn self._reply"),
+        ("shop/adapters/gateways/test_rpc.py", "sdk.Invocation", "await self._received.put(domain.answer(invocation))\nreturn self._reply"),
+        ("shop/adapters/gateways/test_rpc.py", "sdk.Invocation", "self._reply = 'changed'\nreturn self._reply"),
+        ("shop/adapters/gateways/test_rpc.py", "sdk.Invocation", "await invocation.perform()\nreturn self._reply"),
+    ),
+)
+def test_a_peer_declares_only_sdk_input_observation_and_a_supplied_response(
+    path: str, incoming: str, body: str
+) -> None:
+    source = (
+        "import asyncio\n"
+        "import sdk\n"
+        "import shop.domain as domain\n"
+        "import tesser.testing as ts\n"
+        "@ts.peer\n"
+        "class RpcPeer:\n"
+        "    def __init__(self, received: asyncio.Queue[sdk.Invocation], reply: str) -> None:\n"
+        "        self._received = received\n"
+        "        self._reply = reply\n"
+        f"    async def __call__(self, invocation: {incoming}) -> str:\n"
+        + "".join(f"        {line}\n" for line in body.splitlines())
+        + "async def test_register() -> None:\n"
+        "    room = sdk.Room()\n"
+        "    received: asyncio.Queue[sdk.Invocation] = asyncio.Queue()\n"
+        "    room.register('rpc', RpcPeer(received, 'ok'))\n"
+    )
+    violations = domain.Codebase(_spec(sources=((path, path[:-3].replace("/", "."), source, False),))).violations()
+    assert any(str(violation.code()) == "TB072" and "RpcPeer" in str(violation.text()) for violation in violations)
+    if path == "shop/domain/test_rpc.py":
+        assert any(
+            str(violation.code()) == "TB072" and str(violation.text()) ==
+            "shop.domain.test_rpc.RpcPeer declares a peer outside an adapter test; a peer is a real integration callback"
+            for violation in violations
+        )
+    else:
+        assert any(
+            str(violation.code()) == "TB072" and str(violation.text()) ==
+            "shop.adapters.gateways.test_rpc.RpcPeer is not an annotated observation/response peer; "
+            "a peer has only a field-binding __init__ and an async __call__ that records its SDK-owned input "
+            "and returns a supplied response"
+            for violation in violations
+        )
+
+
+def test_an_integration_peer_is_not_hidden_in_a_test_local_class() -> None:
+    source = (
+        "import tesser.testing as ts\n"
+        "def test_register() -> None:\n"
+        "    @ts.peer\n"
+        "    class Hidden:\n"
+        "        pass\n"
+    )
+    violations = domain.Codebase(_spec(sources=((
+        "shop/adapters/gateways/test_rpc.py", "shop.adapters.gateways.test_rpc", source, False,
+    ),))).violations()
+    assert any(
+        str(violation.code()) == "TB072" and str(violation.text()) ==
+        "shop.adapters.gateways.test_rpc.Hidden nests a peer; an integration peer is declared at module level"
+        for violation in violations
+    )
+
+
 def test_any_callable_and_awaitable_are_findings_wherever_they_are_named() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -16748,13 +17521,97 @@ def test_a_conditional_expression_over_a_comparison_is_one_decision() -> None:
     assert "chooses with a conditional expression" in chose[0], chose
 
 
+@ts.helper
+def _annotation_spec(
+    source: str = "dict[str, int] | None",
+    head: str | None = None,
+    container: str | None = "dict",
+    scalars: tuple[str, ...] = ("int", "str"),
+    refs: tuple[str, ...] = ("dict", "str", "int"),
+    produced: tuple[str, ...] = ("int", "str"),
+    produced_refs: tuple[str, ...] = ("int", "str"),
+    leaves: tuple[str, ...] | None = None,
+    primary: str | None = None,
+    quoted: tuple[str, ...] = (),
+    slice_names: tuple[str, ...] = (),
+    spec_candidates: tuple[str, ...] = (),
+    form: tuple[str, ...] = ("union", "primitive_leaf"),
+) -> domain.AnnotationSpec:
+    return domain.AnnotationSpec(
+        source=source, head=head, container=container, scalars=scalars, refs=refs,
+        produced=produced, produced_refs=produced_refs, leaves=leaves, primary=primary,
+        quoted=quoted, slice_names=slice_names, spec_candidates=spec_candidates, form=form,
+    )
+
+
 def test_annotation_equality() -> None:
-    one = domain.Annotation(ast.parse("dict[str, int] | None", mode="eval").body)
-    same = domain.Annotation(ast.parse("(dict[str, int] | None)", mode="eval").body)
-    other = domain.Annotation(ast.parse("dict[str, str] | None", mode="eval").body)
+    one = domain.Annotation(_annotation_spec())
+    same = domain.Annotation(_annotation_spec(scalars=("str", "int")))
+    other = domain.Annotation(_annotation_spec(
+        source="dict[str, str] | None", scalars=("str",), refs=("dict", "str", "str"),
+        produced=("str",), produced_refs=("str",),
+    ))
     assert one == same
     assert hash(one) == hash(same)
     assert one != other
+
+
+def test_syntax_projection_preserves_nested_source_positions() -> None:
+    findings = tuple(
+        (int(violation.line()), str(violation.code()), str(violation.text()))
+        for violation in domain.Codebase(_spec(sources=((
+            "shop/application/mapper.py", "shop.application.mapper",
+            "\n\nimport tesser.application as ts\n"
+            "import shop.domain as domain\n"
+            "class MapToThingSpec(ts.Mapper, domain.ThingSpec):\n"
+            "    def __init__(self, thing: domain.Thing) -> None:\n"
+            "        self.value = 'new'\n"
+            "        return\n", False,
+        ),))).violations()
+        if str(violation.path()) == "shop/application/mapper.py"
+    )
+    assert any(line == 7 and code == "TB080" and "stores 'value'" in text for line, code, text in findings), findings
+    assert any(line == 8 and code == "TB080" and "__init__ returns" in text for line, code, text in findings), findings
+
+
+def test_annotation_projection_normalizes_parenthesized_syntax() -> None:
+    findings = tuple(
+        tuple(
+            (int(violation.line()), str(violation.code()), str(violation.text()))
+            for violation in domain.Codebase(_spec(sources=((
+                "shop/domain/bundle.py", "shop.domain.bundle",
+                "import tesser.domain as ts\n"
+                "class Bundle(ts.ValueObject):\n"
+                f"    def __init__(self, value: {annotation}) -> None:\n"
+                "        object.__setattr__(self, '_value', value)\n", False,
+            ),))).violations()
+            if str(violation.path()) == "shop/domain/bundle.py" and str(violation.code()) == "TB080"
+        )
+        for annotation in ("dict[str, int] | None", "(dict[str, int] | None)")
+    )
+    assert findings[0]
+    assert findings[0] == findings[1]
+
+
+def test_syntax_projection_uses_the_existing_parse_tree() -> None:
+    tree = ast.parse(pathlib.Path(inspect.getfile(domain.Codebase)).read_text(encoding="utf-8"))
+    expected = {
+        "_annotation_spec", "_enum_shape_spec", "_body_spec", "_client_class_spec",
+        "_helper_spec", "_field_spec", "_param_spec", "_method_spec", "_class_decl_spec",
+    }
+    projectors = tuple(
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name in expected
+    )
+    assert {node.name for node in projectors} == expected
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "ast"
+        and node.func.attr == "parse"
+        for projector in projectors
+        for node in ast.walk(projector)
+    )
 
 
 def test_names_equality() -> None:
@@ -18658,6 +19515,27 @@ def test_a_call_the_analyzer_cannot_read_is_a_finding() -> None:
     ), findings
 
 
+def test_a_plain_class_constructor_is_read_without_inventing_a_tesser_role() -> None:
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(_spec(sources=(
+            (
+                "mod/domain/test_structural.py",
+                "mod.domain.test_structural",
+                "class StructuralSaver:\n"
+                "    def save(self, value: str) -> None:\n"
+                "        pass\n"
+                "def test_saves() -> None:\n"
+                "    saver = StructuralSaver()\n"
+                "    saver.save('a')\n",
+                False,
+            ),
+        ))).violations()
+    )
+    assert not any("TB085" in f for f in findings), findings
+    assert any("TB072" in f and "StructuralSaver" in f for f in findings), findings
+
+
 def test_a_local_from_a_module_function_carries_the_declared_return() -> None:
     findings = tuple(
         f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
@@ -19265,12 +20143,13 @@ def test_a_snapshot_guard_raises_and_deserialize_ends_in_a_constructor() -> None
         "shop.application.snapshots.slack.SlackSnapshot.deserialize carries a guard "
         "that does not raise; deserialize's one guard raises errors.invalid and does "
         "nothing else, because a payload of the wrong shape never reaches the "
-        "constructor" in f
+        "constructor; ValueError is also a wire rejection" in f
         for f in findings
     ), findings
     assert any(
         "shop.application.snapshots.slack.SlackSnapshot.deserialize does not end in a "
-        "return; deserialize ends in one constructor call over what json.loads read" in f
+        "return; deserialize ends in one constructor call over what json.loads read, "
+        "optionally inside a chained wire-error translation" in f
         for f in findings
     ), findings
     assert not any("SlackSnapshot.serialize" in f for f in findings), findings
@@ -19690,8 +20569,16 @@ def test_governance_is_undeclared_when_the_tree_is() -> None:
     assert codebase.governance(domain.Path("loose_a.py")) is domain.Governance.UNDECLARED
 
 
+def test_governance_statuses_are_equal_by_value_and_validate_the_known_states() -> None:
+    assert domain.GovernanceStatus("governed") == domain.GovernanceStatus("governed")
+    assert domain.GovernanceStatus("governed") != domain.GovernanceStatus("skipped")
+    with pytest.raises(ValueError, match="unknown governance"):
+        domain.GovernanceStatus("somewhere")
+
+
 def test_a_hook_run_reads_its_conf_with_advisory_and_enabled_as_the_defaults() -> None:
     assert str(domain.HookRun(_run_spec("")).conf()) == "advisory"
+    assert str(domain.HookRun(_run_spec("")).governance_status()) == "governed"
     assert str(domain.HookRun(_run_spec("mode=feedback\n")).conf()) == "feedback"
     assert str(domain.HookRun(_run_spec("mode = feedback \nenabled = true\n")).conf()) == "feedback"
     assert str(domain.HookRun(_run_spec("mode=banana\n")).conf()) == "advisory"

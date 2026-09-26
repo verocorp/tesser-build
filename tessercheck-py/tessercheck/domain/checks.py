@@ -70,6 +70,7 @@ TESSER_DECORATORS: typing.Final[dict[tuple[str, str], str]] = {
     ("tesser.testing", "helper"): "helper",
     ("tesser.testing", "fake"): "fake",
     ("tesser.testing", "assembly"): "assembly",
+    ("tesser.testing", "peer"): "peer",
 }
 
 TS_NAME_BY_BLOCK: typing.Final[dict[str, str]] = {
@@ -827,12 +828,14 @@ CORE_STDLIB: typing.Final[dict[str, frozenset[str]]] = {
         }
     ),
     "client": frozenset({"__future__", "typing"}),
-    "application": frozenset({"__future__", "typing"}),
+    "application": frozenset({"__future__", "typing", "functools"}),
 }
 
 PORTS_STDLIB: typing.Final[frozenset[str]] = frozenset({"__future__", "typing", "enum"})
 
 SNAPSHOT_STDLIB: typing.Final[frozenset[str]] = CORE_STDLIB["application"] | frozenset({"json"})
+
+RELAY_STDLIB: typing.Final[frozenset[str]] = SNAPSHOT_STDLIB | frozenset({"enum"})
 
 SNAPSHOT_PLACES: typing.Final[frozenset[str]] = frozenset(
     {"relays", "relays-file", "snapshots", "snapshots-file"}
@@ -1765,7 +1768,6 @@ class ImportEdge(ts.ValueObject):
         )
 
 
-
 class TesserImportSpec(ts.Spec):
 
     def __init__(
@@ -1939,9 +1941,7 @@ class KindTable(ts.ValueObject):
     def block_of(self, symbol: Symbol) -> Text | None:
         wanted_module = str(symbol.module())
         wanted_name = str(symbol.name())
-        index = bisect.bisect_left(
-            self._entries, (wanted_module, wanted_name), key=lambda item: (item[0], item[1])  # tesser:debt TB023
-        )
+        index = bisect.bisect_left(self._entries, (wanted_module, wanted_name, ""))
         if (
             index < len(self._entries)
             and self._entries[index][0] == wanted_module
@@ -2667,10 +2667,19 @@ class Scope(ts.ValueObject):
 
 
 class EnumShapeSpec(ts.Spec):
-
-    def __init__(self, node: ast.ClassDef, scope: ScopeSpec) -> None:  # tesser:debt TB080
-        self.node = node
-        self.scope = scope
+    def __init__(
+        self,
+        base: str | None,
+        extras: tuple[int, ...],
+        positions: tuple[int, ...],
+        mixed: tuple[str, ...],
+        decorated: tuple[str, ...],
+    ) -> None:
+        self.base = base
+        self.extras = extras
+        self.positions = positions
+        self.mixed = mixed
+        self.decorated = decorated
 
 
 class EnumShape(ts.ValueObject):
@@ -2682,65 +2691,11 @@ class EnumShape(ts.ValueObject):
     _decorated: Names
 
     def __init__(self, spec: EnumShapeSpec) -> None:
-        node = spec.node
-        scope = Scope(spec.scope)
-        base_name: str | None = None
-        for base in node.bases:
-            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
-                package = scope.package_of(Text(base.value.id))
-                if package is not None and str(package) == ENUM_MODULE:
-                    base_name = base.attr
-                    break
-            elif isinstance(base, ast.Name):
-                origin = scope.import_of(Text(base.id))
-                if origin is not None and str(origin.module()) == ENUM_MODULE:
-                    base_name = str(origin.name())
-                    break
-
-        def is_enum_auto(value: ast.expr) -> bool:  # tesser:debt TB023
-            if not isinstance(value, ast.Call) or value.args or value.keywords:
-                return False
-            if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
-                package = scope.package_of(Text(value.func.value.id))
-                return package is not None and str(package) == ENUM_MODULE and value.func.attr == "auto"
-            if isinstance(value.func, ast.Name):
-                origin = scope.import_of(Text(value.func.id))
-                return origin is not None and str(origin.module()) == ENUM_MODULE and str(origin.name()) == "auto"
-            return False
-
-        extras: list[int] = []
-        positions: list[int] = []
-        for position, item in enumerate(node.body, start=1):
-            if isinstance(item, ast.Pass):
-                continue
-            member_target: ast.expr | None = None
-            member_value: ast.expr | None = None
-            if isinstance(item, ast.AnnAssign):
-                member_target, member_value = item.target, item.value
-            elif isinstance(item, ast.Assign) and len(item.targets) == 1:
-                member_target, member_value = item.targets[0], item.value
-            is_member = (
-                isinstance(member_target, ast.Name)
-                and not member_target.id.startswith("_")
-                and not (isinstance(item, ast.AnnAssign) and not isinstance(item.annotation, ast.Name))
-                and (
-                    isinstance(member_value, ast.Constant)
-                    or (
-                        isinstance(member_value, ast.UnaryOp)
-                        and isinstance(member_value.operand, ast.Constant)
-                        and isinstance(member_value.operand.value, (int, float))
-                    )
-                    or (member_value is not None and is_enum_auto(member_value))
-                )
-            )
-            if not is_member:
-                extras.append(item.lineno)
-                positions.append(position)
-        object.__setattr__(self, "_base", Text(base_name) if base_name else None)
-        object.__setattr__(self, "_extras", tuple(Line(line) for line in extras))
-        object.__setattr__(self, "_positions", tuple(Line(position) for position in positions))
-        object.__setattr__(self, "_mixed", Names(("mixed",) if len(node.bases) > 1 else ()))
-        object.__setattr__(self, "_decorated", Names(("decorated",) if node.decorator_list or node.keywords else ()))
+        object.__setattr__(self, "_base", Text(spec.base) if spec.base is not None else None)
+        object.__setattr__(self, "_extras", tuple((Line(item) for item in spec.extras)))
+        object.__setattr__(self, "_positions", tuple((Line(item) for item in spec.positions)))
+        object.__setattr__(self, "_mixed", Names(spec.mixed))
+        object.__setattr__(self, "_decorated", Names(spec.decorated))
 
     def base(self) -> Text | None:
         return self._base
@@ -2758,74 +2713,39 @@ class EnumShape(ts.ValueObject):
         return self._decorated
 
 
+class AnnotationSpec(ts.Spec):
+    def __init__(
+        self,
+        source: str,
+        head: str | None,
+        container: str | None,
+        scalars: tuple[str, ...],
+        refs: tuple[str, ...],
+        produced: tuple[str, ...],
+        produced_refs: tuple[str, ...],
+        leaves: tuple[str, ...] | None,
+        primary: str | None,
+        quoted: tuple[str, ...],
+        slice_names: tuple[str, ...],
+        spec_candidates: tuple[str, ...],
+        form: tuple[str, ...],
+    ) -> None:
+        self.source = source
+        self.head = head
+        self.container = container
+        self.scalars = scalars
+        self.refs = refs
+        self.produced = produced
+        self.produced_refs = produced_refs
+        self.leaves = leaves
+        self.primary = primary
+        self.quoted = quoted
+        self.slice_names = slice_names
+        self.spec_candidates = spec_candidates
+        self.form = form
+
+
 class Annotation(ts.ValueObject):
-
-    def _head_of(self, inner: ast.expr) -> str | None:
-        if isinstance(inner, ast.Name):
-            return inner.id
-        if isinstance(inner, ast.Attribute):
-            return inner.attr
-        if isinstance(inner, ast.Subscript):
-            return self._head_of(inner.value)
-        return None
-
-    def _candidates(self, inner: ast.expr | None) -> list[tuple[str, str]]:
-        if inner is None:
-            return []
-        if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
-            return self._candidates(inner.left) + self._candidates(inner.right)
-        if isinstance(inner, ast.Subscript):
-            sub_head = self._head_of(inner)
-            elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
-            if sub_head in ("Optional", "Union"):
-                return [item for each in elements for item in self._candidates(each)]
-            if sub_head in ("tuple", "list", "set", "frozenset", "Sequence", "Iterable", "Collection"):
-                return [(ref, "many") for each in elements for ref, shape in self._candidates(each) if shape == "one"]
-            return []
-        if isinstance(inner, ast.Name):
-            return [(inner.id, "one")]
-        if isinstance(inner, ast.Attribute) and isinstance(inner.value, (ast.Name, ast.Attribute)):
-            return [(f"{ast.unparse(inner.value)}.{inner.attr}", "one")]
-        return []
-
-    def _names_bool(self, inner: ast.expr | None) -> bool:
-        if inner is None:
-            return False
-        probe = inner
-        if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
-            return self._names_bool(probe.left) or self._names_bool(probe.right)
-        if isinstance(probe, ast.Subscript) and self._head_of(probe) in ("Optional", "Final", "Annotated"):
-            wrapped = probe.slice
-            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
-                wrapped = wrapped.elts[0]
-            return self._names_bool(wrapped)
-        return isinstance(probe, ast.Name) and probe.id == "bool"
-
-    def _is_union(self, inner: ast.expr | None) -> bool:
-        if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
-            return True
-        if isinstance(inner, ast.Subscript):
-            if isinstance(inner.value, ast.Name) and inner.value.id in ("Optional", "Union"):
-                return True
-            elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
-            return any(self._is_union(element) for element in elements)
-        if isinstance(inner, ast.Attribute):
-            return inner.attr in ("Optional", "Union")
-        return False
-
-    def _primitive_leaf(self, inner: ast.expr) -> bool:
-        probe = inner
-        if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
-            return self._primitive_leaf(probe.left) or self._primitive_leaf(probe.right)
-        if isinstance(probe, ast.Subscript):
-            sub_head = self._head_of(probe)
-            elements = probe.slice.elts if isinstance(probe.slice, ast.Tuple) else [probe.slice]
-            if sub_head in ("Callable", "Literal", "type", "Type"):
-                return False
-            if sub_head in ("dict", "Dict", "Mapping", "MutableMapping"):
-                elements = elements[-1:]
-            return any(self._primitive_leaf(each) for each in elements)
-        return self._head_of(probe) in PRIMITIVES
 
     _source: Text
     _head: Text | None
@@ -2841,178 +2761,20 @@ class Annotation(ts.ValueObject):
     _spec_candidates: tuple[Text, ...]
     _form: Names
 
-    def __init__(self, node: ast.expr) -> None:  # tesser:debt TB080
-        form: list[str] = []
-        if isinstance(node, (ast.Name, ast.Attribute)):
-            form.append("bare")
-        if self._names_bool(node):
-            form.append("bool")
-        if self._is_union(node):
-            form.append("union")
-        if self._primitive_leaf(node):
-            form.append("primitive_leaf")
-        spec_candidates = tuple(Text(f"{ref}|{shape}") for ref, shape in self._candidates(node))
-        slice_names: list[str] = []
-        sliced = node
-        if isinstance(sliced, ast.Subscript):
-            elements = sliced.slice.elts if isinstance(sliced.slice, ast.Tuple) else [sliced.slice]
-            for element in elements:
-                if isinstance(element, ast.Name):
-                    slice_names.append(element.id)
-                elif isinstance(element, ast.Attribute) and isinstance(element.value, (ast.Name, ast.Attribute)):
-                    slice_names.append(f"{ast.unparse(element.value)}.{element.attr}")
-                elif not (isinstance(element, ast.Constant) and element.value is Ellipsis):
-                    slice_names.append("?")
-        quoted_anywhere = False
-        marks: list[ast.expr] = [node]
-        while marks:
-            mark = marks.pop()
-            if isinstance(mark, ast.Constant):
-                if isinstance(mark.value, str):
-                    quoted_anywhere = True
-                continue
-            if isinstance(mark, ast.Subscript) and self._head_of(mark.value) == LITERAL:
-                marks.append(mark.value)
-                continue
-            marks.extend(
-                child for child in ast.iter_child_nodes(mark) if isinstance(child, ast.expr)
-            )
-        quote_marks: list[str] = ["quoted"] if quoted_anywhere else []
-        primary: ast.expr = node
-        while isinstance(primary, ast.Subscript):
-            primary = primary.value
-        primary_ref: str | None = None
-        if isinstance(primary, ast.Name):
-            primary_ref = primary.id
-        elif isinstance(primary, ast.Attribute) and isinstance(primary.value, (ast.Name, ast.Attribute)):
-            primary_ref = f"{ast.unparse(primary.value)}.{primary.attr}"
-        cursor: ast.expr | None = node
-        head: str | None = None
-        while cursor is not None:
-            if isinstance(cursor, ast.Name):
-                head = cursor.id
-                break
-            if isinstance(cursor, ast.Attribute):
-                head = cursor.attr
-                break
-            if isinstance(cursor, ast.Subscript):
-                cursor = cursor.value
-                continue
-            break
-        container: str | None = None
-        pending: list[ast.expr] = [node]
-        while pending and container is None:
-            probe = pending.pop()
-            if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
-                pending.extend([probe.left, probe.right])
-                continue
-            if isinstance(probe, ast.Subscript):
-                wrapper: ast.expr = probe.value
-                wrapper_head = (
-                    wrapper.id
-                    if isinstance(wrapper, ast.Name)
-                    else wrapper.attr
-                    if isinstance(wrapper, ast.Attribute)
-                    else None
-                )
-                if wrapper_head in ("Optional", "Final", "Annotated"):
-                    wrapped = probe.slice
-                    if isinstance(wrapped, ast.Tuple) and wrapped.elts:
-                        wrapped = wrapped.elts[0]
-                    pending.append(wrapped)
-                    continue
-                probe = probe.value
-            if isinstance(probe, ast.Attribute) and probe.attr in CONTAINER_NAMES:
-                container = probe.attr
-            elif isinstance(probe, ast.Name) and probe.id in CONTAINER_NAMES:
-                container = probe.id
-        names: set[str] = set()
-        refs: list[str] = []
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Name):
-                names.add(sub.id)
-                refs.append(sub.id)
-            elif isinstance(sub, ast.Attribute):
-                names.add(sub.attr)
-                if isinstance(sub.value, (ast.Name, ast.Attribute)):
-                    refs.append(f"{ast.unparse(sub.value)}.{sub.attr}")
-        produced: set[str] = set()
-        produced_refs: set[str] = set()
-        walk_stack: list[ast.expr] = [node]
-        while walk_stack:
-            walked = walk_stack.pop()
-            if isinstance(walked, ast.Subscript):
-                inner: ast.expr = walked.value
-                while isinstance(inner, ast.Subscript):
-                    inner = inner.value
-                inner_head = (
-                    inner.id
-                    if isinstance(inner, ast.Name)
-                    else inner.attr
-                    if isinstance(inner, ast.Attribute)
-                    else None
-                )
-                if inner_head not in ("type", "Type", "Callable"):
-                    walk_stack.append(walked.slice)
-                continue
-            if isinstance(walked, ast.Constant):
-                continue
-            if isinstance(walked, ast.Attribute):
-                produced.add(walked.attr)
-                if isinstance(walked.value, (ast.Name, ast.Attribute)):
-                    produced_refs.add(f"{ast.unparse(walked.value)}.{walked.attr}")
-                continue
-            if isinstance(walked, ast.Name):
-                produced.add(walked.id)
-                produced_refs.add(walked.id)
-                continue
-            walk_stack.extend(
-                child for child in ast.iter_child_nodes(walked) if isinstance(child, ast.expr)
-            )
-        leaves: list[str] | None = []
-        peel: list[ast.expr] = [node]
-        while peel and leaves is not None:
-            leaf = peel.pop()
-            if isinstance(leaf, ast.Constant):
-                if leaf.value is Ellipsis or leaf.value is None:
-                    continue
-                leaves = None
-                continue
-            if isinstance(leaf, ast.Name):
-                leaves.append(leaf.id)
-                continue
-            if isinstance(leaf, ast.Attribute) and isinstance(leaf.value, (ast.Name, ast.Attribute)):
-                leaves.append(f"{ast.unparse(leaf.value)}.{leaf.attr}")
-                continue
-            if isinstance(leaf, ast.BinOp) and isinstance(leaf.op, ast.BitOr):
-                left_none = isinstance(leaf.left, ast.Constant) and leaf.left.value is None
-                right_none = isinstance(leaf.right, ast.Constant) and leaf.right.value is None
-                if left_none == right_none:
-                    leaves = None
-                    continue
-                peel.append(leaf.right if left_none else leaf.left)
-                continue
-            if isinstance(leaf, ast.Subscript) and isinstance(leaf.value, ast.Name) and leaf.value.id == "tuple":
-                peel.extend(leaf.slice.elts if isinstance(leaf.slice, ast.Tuple) else [leaf.slice])
-                continue
-            leaves = None
-        object.__setattr__(self, "_source", Text(ast.unparse(node)))
-        object.__setattr__(self, "_head", Text(head) if head else None)
-        object.__setattr__(self, "_container", Text(container) if container else None)
-        object.__setattr__(
-            self, "_scalars", Names(tuple(names - RETURN_WRAPPERS - SELF_NAMES))
-        )
-        object.__setattr__(self, "_refs", Refs(tuple(refs)))
-        object.__setattr__(self, "_produced", Names(tuple(produced)))
-        object.__setattr__(self, "_produced_refs", Names(tuple(produced_refs)))
-        object.__setattr__(self, "_leaves", Names(tuple(leaves)) if leaves is not None else None)
-        object.__setattr__(self, "_primary", Text(primary_ref) if primary_ref else None)
-        object.__setattr__(self, "_quoted", Names(tuple(quote_marks)))
-        if isinstance(sliced, ast.Subscript) and isinstance(sliced.slice, ast.Tuple) and len(sliced.slice.elts) > 1:
-            form.append("multi_slice")
-        object.__setattr__(self, "_slice_names", Names(tuple(slice_names)))
-        object.__setattr__(self, "_spec_candidates", spec_candidates)
-        object.__setattr__(self, "_form", Names(tuple(form)))
+    def __init__(self, spec: AnnotationSpec) -> None:
+        object.__setattr__(self, "_source", Text(spec.source))
+        object.__setattr__(self, "_head", Text(spec.head) if spec.head is not None else None)
+        object.__setattr__(self, "_container", Text(spec.container) if spec.container is not None else None)
+        object.__setattr__(self, "_scalars", Names(spec.scalars))
+        object.__setattr__(self, "_refs", Refs(spec.refs))
+        object.__setattr__(self, "_produced", Names(spec.produced))
+        object.__setattr__(self, "_produced_refs", Names(spec.produced_refs))
+        object.__setattr__(self, "_leaves", Names(spec.leaves) if spec.leaves is not None else None)
+        object.__setattr__(self, "_primary", Text(spec.primary) if spec.primary is not None else None)
+        object.__setattr__(self, "_quoted", Names(spec.quoted))
+        object.__setattr__(self, "_slice_names", Names(spec.slice_names))
+        object.__setattr__(self, "_spec_candidates", tuple((Text(item) for item in spec.spec_candidates)))
+        object.__setattr__(self, "_form", Names(spec.form))
 
     def source(self) -> Text:
         return self._source
@@ -3437,28 +3199,21 @@ class Fact(ts.ValueObject):
 
 
 class BodySpec(ts.Spec):
-
-    def __init__(  # tesser:debt TB080
+    def __init__(
         self,
-        node: ast.FunctionDef | ast.AsyncFunctionDef,
         where: str,
         path: str,
-        class_methods: tuple[str, ...],
-        held_ports: tuple[str, ...],
-        held_stores: tuple[str, ...],
+        lineno: int,
+        name: str,
         signature: SignatureSpec,
-        scope: ScopeSpec,
-        registry: RegistrySpec,
+        facts: tuple[FactSpec, ...],
     ) -> None:
-        self.node = node
         self.where = where
         self.path = path
-        self.class_methods = class_methods
-        self.held_ports = held_ports
-        self.held_stores = held_stores
+        self.lineno = lineno
+        self.name = name
         self.signature = signature
-        self.scope = scope
-        self.registry = registry
+        self.facts = facts
 
 
 class Body(ts.ValueObject):
@@ -3471,330 +3226,12 @@ class Body(ts.ValueObject):
     _facts: tuple[Fact, ...]
 
     def __init__(self, spec: BodySpec) -> None:
-        fn = spec.node
-        scope = Scope(spec.scope)
-        registry = Registry(spec.registry)
-        kind_table = registry.kinds()
-        class_methods = frozenset(spec.class_methods)
-        names = scope.functions()
-        held_ports = frozenset(spec.held_ports)
-        held_stores = frozenset(spec.held_stores)
-        facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-
-        def ref_of(node: ast.expr) -> str | None:  # tesser:debt TB023
-            cursor = node
-            while isinstance(cursor, ast.Subscript):
-                cursor = cursor.value
-            if isinstance(cursor, ast.Name):
-                return cursor.id
-            if isinstance(cursor, ast.Attribute) and isinstance(cursor.value, (ast.Name, ast.Attribute)):
-                return f"{ast.unparse(cursor.value)}.{cursor.attr}"
-            return None
-
-        def block_of(node: ast.expr | None) -> str | None:  # tesser:debt TB023
-            if node is None:
-                return None
-            ref = ref_of(node)
-            if ref is None:
-                return None
-            symbol = scope.resolve(Text(ref))
-            if symbol is None:
-                return None
-            block = kind_table.block_of(symbol)
-            return str(block) if block is not None else None
-
-        def symbol_of(node: ast.expr) -> Symbol | None:  # tesser:debt TB023
-            ref = ref_of(node)
-            return scope.resolve(Text(ref)) if ref is not None else None
-
-        def own_scope(root: ast.AST) -> typing.Iterator[ast.AST]:  # tesser:debt TB023
-            stack: list[ast.AST] = list(ast.iter_child_nodes(root))
-            while stack:
-                node = stack.pop()
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
-                    continue
-                yield node
-                stack.extend(ast.iter_child_nodes(node))
-
-        def bindings() -> tuple[dict[str, list[ast.expr]], frozenset[str]]:  # tesser:debt TB023
-            values: dict[str, list[ast.expr]] = {}
-            args = fn.args
-            otherwise: set[str] = {arg.arg for arg in args.posonlyargs + args.args + args.kwonlyargs}
-            if args.vararg is not None:
-                otherwise.add(args.vararg.arg)
-            if args.kwarg is not None:
-                otherwise.add(args.kwarg.arg)
-            for node in own_scope(fn):
-                targets: list[ast.expr] = []
-                value: ast.expr | None = None
-                if isinstance(node, ast.Assign):
-                    targets, value = list(node.targets), node.value
-                elif isinstance(node, ast.AnnAssign):
-                    if node.value is None:
-                        continue
-                    targets, value = [node.target], node.value
-                elif isinstance(node, (ast.AugAssign, ast.NamedExpr)):
-                    targets, value = [node.target], node.value
-                elif isinstance(node, ast.comprehension):
-                    continue
-                elif isinstance(node, (ast.For, ast.AsyncFor)):
-                    otherwise.update(sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name))
-                    continue
-                elif isinstance(node, (ast.With, ast.AsyncWith)):
-                    for item in node.items:
-                        if item.optional_vars is not None:
-                            otherwise.update(
-                                sub.id for sub in ast.walk(item.optional_vars) if isinstance(sub, ast.Name)
-                            )
-                    continue
-                elif isinstance(node, ast.ExceptHandler):
-                    if node.name is not None:
-                        otherwise.add(node.name)
-                    continue
-                elif isinstance(node, (ast.MatchAs, ast.MatchStar)):
-                    if node.name is not None:
-                        otherwise.add(node.name)
-                    continue
-                elif isinstance(node, ast.MatchMapping):
-                    if node.rest is not None:
-                        otherwise.add(node.rest)
-                    continue
-                elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                    otherwise.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
-                    continue
-                elif isinstance(node, (ast.Global, ast.Nonlocal)):
-                    otherwise.update(node.names)
-                    continue
-                if len(targets) == 1 and isinstance(targets[0], ast.Name) and value is not None:
-                    values.setdefault(targets[0].id, []).append(value)
-                    continue
-                for target in targets:
-                    otherwise.update(sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name))
-            return values, frozenset(otherwise)
-
-        def domain_kind(node: ast.expr) -> tuple[str, str] | None:  # tesser:debt TB023
-            if not isinstance(node, ast.Call):
-                return None
-            symbol = symbol_of(node.func)
-            if symbol is None:
-                return None
-            block = kind_table.block_of(symbol)
-            if block is None or str(block) not in DOMAIN_BLOCKS:
-                return None
-            return (str(symbol.module()), str(symbol.name()))
-
-        values, otherwise = bindings()
-        store_bound: set[str] = set()
-        for node in own_scope(fn):
-            if not isinstance(node, (ast.With, ast.AsyncWith)):
-                continue
-            for item in node.items:
-                opened = item.context_expr
-                if (
-                    isinstance(item.optional_vars, ast.Name)
-                    and isinstance(opened, ast.Call)
-                    and isinstance(opened.func, ast.Attribute)
-                    and opened.func.attr == STORE_METHOD
-                    and isinstance(opened.func.value, ast.Attribute)
-                    and isinstance(opened.func.value.value, ast.Name)
-                    and opened.func.value.value.id == "self"
-                    and opened.func.value.attr in held_stores
-                ):
-                    store_bound.add(item.optional_vars.id)
-        domain_names: dict[str, tuple[str, str]] = {}
-        for name, bound in values.items():
-            if name in otherwise:
-                continue
-            found_kinds = [domain_kind(value) for value in bound]
-            first = found_kinds[0]
-            if first is not None and all(kind == first for kind in found_kinds):
-                domain_names[name] = first
-
-        def answers_an_outcome(node: ast.expr) -> bool:  # tesser:debt TB023
-            if isinstance(node, ast.Await):
-                node = node.value
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-                return False
-            receiver = node.func.value
-            owner: tuple[str, str] | None = None
-            if isinstance(receiver, ast.Name):
-                owner = domain_names.get(receiver.id)
-            if owner is None:
-                owner = domain_kind(receiver)
-            if owner is None:
-                return False
-            return f"{owner[0]}|{owner[1]}|{node.func.attr}" in registry.outcome_methods()
-
-        outcome_names = frozenset(
-            name
-            for name, bound in values.items()
-            if name not in otherwise and all(answers_an_outcome(value) for value in bound)
-        )
-
-        def outcome_key(node: ast.expr) -> bool:  # tesser:debt TB023
-            if not isinstance(node, ast.Attribute):
-                return False
-            return block_of(node.value) == OUTCOME_BLOCK
-
-        def is_comparison_call(func: ast.expr) -> bool:  # tesser:debt TB023
-            if isinstance(func, ast.Attribute):
-                if func.attr in COMPARISON_CALLS:
-                    return True
-                if isinstance(func.value, ast.Name):
-                    package = scope.package_of(Text(func.value.id))
-                    return package is not None and str(package) == OPERATOR_MODULE and func.attr in OPERATOR_COMPARISONS
-                return False
-            if isinstance(func, ast.Name):
-                origin = scope.import_of(Text(func.id))
-                return (
-                    origin is not None
-                    and str(origin.module()) == OPERATOR_MODULE
-                    and str(origin.name()) in OPERATOR_COMPARISONS
-                )
-            return False
-
-        def is_truth_builtin(func: ast.expr) -> bool:  # tesser:debt TB023
-            return isinstance(func, ast.Name) and func.id in TRUTH_BUILTINS and func.id not in scope.locals()
-
-        positional = list(fn.args.args)
-        request_arg = positional[1] if len(positional) >= 2 else None
-        request = request_arg.arg if request_arg is not None else None
-        relayed = (
-            request_arg is not None
-            and request_arg.annotation is not None
-            and block_of(request_arg.annotation) in RELAY_DTO_BLOCKS
-        )
-        for stmt in fn.body:
-            if not isinstance(stmt, ast.Assign):
-                continue
-            if not isinstance(stmt.value, (ast.Name, ast.Attribute)):
-                continue
-            if any(isinstance(node, ast.Call) for node in ast.walk(stmt.value)):
-                continue
-            if (
-                relayed
-                and isinstance(stmt.value, ast.Attribute)
-                and isinstance(stmt.value.value, ast.Name)
-                and stmt.value.value.id == request
-            ):
-                continue
-            facts.append((stmt.lineno, "accessor", None, ()))
-        decided: set[int] = set()
-        computed: set[int] = set()
-        matches: list[ast.Match] = []
-        for node in ast.walk(fn):
-            if isinstance(node, ast.Call):
-                callee = node.func
-                if (
-                    isinstance(callee, ast.Attribute)
-                    and isinstance(callee.value, ast.Name)
-                    and callee.value.id == "self"
-                    and callee.attr in class_methods
-                ):
-                    facts.append((node.lineno, "delegation", callee.attr, ("self",)))
-                elif isinstance(callee, ast.Name) and callee.id in names:
-                    facts.append((node.lineno, "delegation", callee.id, ("function",)))
-                for value in list(node.args) + [kw.value for kw in node.keywords]:
-                    if isinstance(value, ast.Call) and block_of(value.func) is None:
-                        computed.add(id(value))
-                        facts.append((value.lineno, "computed", None, ()))
-                if id(node) in computed:
-                    pass
-                elif (
-                    isinstance(callee, ast.Name)
-                    and callee.id in BUILTIN_NAMES
-                    and callee.id not in TRUTH_BUILTINS
-                    and callee.id not in scope.locals()
-                ):
-                    facts.append((node.lineno, "operation", callee.id, ()))
-                elif (
-                    isinstance(callee, ast.Attribute)
-                    and callee.attr in MUTATIONS
-                    and isinstance(callee.value, ast.Name)
-                    and callee.value.id != "self"
-                    and callee.value.id not in domain_names
-                ):
-                    facts.append((node.lineno, "operation", f".{callee.attr}", ()))
-                holder: str | None = None
-                if (
-                    isinstance(callee, ast.Attribute)
-                    and isinstance(callee.value, ast.Attribute)
-                    and isinstance(callee.value.value, ast.Name)
-                    and callee.value.value.id == "self"
-                ):
-                    holder = callee.value.attr
-                    if holder in held_ports:
-                        facts.append((node.lineno, "port_call", holder, ()))
-                elif (
-                    isinstance(callee, ast.Attribute)
-                    and isinstance(callee.value, ast.Name)
-                    and callee.value.id in store_bound
-                ):
-                    holder = callee.value.id
-                    facts.append((node.lineno, "port_call", holder, ()))
-                if holder is not None and request is not None:
-                    for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
-                        if isinstance(passed, ast.Name) and passed.id == request:
-                            facts.append((passed.lineno, "request", None, ()))
-                    for inner in ast.walk(node):
-                        if not isinstance(inner, ast.Attribute):
-                            continue
-                        current: ast.expr = inner
-                        while isinstance(current, ast.Attribute):
-                            current = current.value
-                        if isinstance(current, ast.Name) and current.id == request:
-                            facts.append((inner.lineno, "request_field", inner.attr, ()))
-            if isinstance(node, (ast.If, ast.While)) and not (
-                isinstance(node, ast.While) and isinstance(node.test, ast.Constant) and node.test.value is True
-            ):
-                decided.update(id(sub) for sub in ast.walk(node.test))
-                facts.append((node.lineno, "branch", "if" if isinstance(node, ast.If) else "while", ()))
-            elif isinstance(node, ast.Match):
-                matches.append(node)
-            elif isinstance(node, ast.BinOp):
-                facts.append((node.lineno, "operation", BINARY_OPERATORS.get(type(node.op).__name__, "?"), ()))
-            elif isinstance(node, ast.IfExp):
-                decided.update(id(sub) for sub in ast.walk(node.test))
-            elif isinstance(node, ast.comprehension) and node.ifs:
-                decided.update(id(sub) for test in node.ifs for sub in ast.walk(test))
-        for node in ast.walk(fn):
-            if id(node) in decided:
-                continue
-            if isinstance(node, ast.Compare):
-                facts.append((node.lineno, "decision", "compare", ()))
-            elif isinstance(node, ast.Call) and is_comparison_call(node.func):
-                facts.append((node.lineno, "decision", "comparison_call", ()))
-            elif isinstance(node, ast.Call) and is_truth_builtin(node.func):
-                facts.append((node.lineno, "decision", "truth", ()))
-            elif isinstance(node, ast.IfExp):
-                facts.append((node.lineno, "decision", "ifexp", ()))
-            elif isinstance(node, ast.BoolOp):
-                facts.append((node.lineno, "decision", "boolop", ()))
-            elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-                facts.append((node.lineno, "decision", "not", ()))
-            elif isinstance(node, ast.comprehension) and node.ifs:
-                facts.append((node.ifs[0].lineno, "decision", "filter", ()))
-        matches.sort(key=lambda node: node.lineno)  # tesser:debt TB023
-        for node in matches:
-            traits: list[str] = []
-            subject = node.subject
-            answered = subject.id in outcome_names if isinstance(subject, ast.Name) else answers_an_outcome(subject)
-            if answered:
-                traits.append("answers")
-            if any(
-                outcome_key(sub.value)
-                for case in node.cases
-                for sub in ast.walk(case.pattern)
-                if isinstance(sub, ast.MatchValue)
-            ):
-                traits.append("members")
-            facts.append((node.lineno, "match", None, tuple(traits)))
         object.__setattr__(self, "_where", Text(spec.where))
         object.__setattr__(self, "_path", Path(spec.path))
-        object.__setattr__(self, "_lineno", Line(fn.lineno))
-        object.__setattr__(self, "_name", Text(fn.name))
+        object.__setattr__(self, "_lineno", Line(spec.lineno))
+        object.__setattr__(self, "_name", Text(spec.name))
         object.__setattr__(self, "_signature", Signature(spec.signature))
-        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*item)) for item in facts))
+        object.__setattr__(self, "_facts", tuple((Fact(item) for item in spec.facts)))
 
     def name(self) -> Text:
         return self._name
@@ -4006,6 +3443,8 @@ class Body(ts.ValueObject):
                     )
         matched = [fact for fact in self._facts if str(fact.kind()) == "match"]
         for fact in matched[1:]:
+            if "orchestrator" in fact.traits() and "nested" not in fact.traits():
+                continue
             found.append(
                 Violation(ViolationSpec(
                     path,
@@ -4017,6 +3456,13 @@ class Body(ts.ValueObject):
                 ))
             )
         for fact in matched:
+            if "nested" in fact.traits() and "orchestrator" in fact.traits():
+                found.append(Violation(ViolationSpec(
+                    path, int(fact.lineno()), "TB082",
+                    f"{where} nests a match; an orchestrator matches sequential domain transitions, never a decision inside another decision",
+                )))
+            if "translation" in fact.traits():
+                continue
             if "answers" not in fact.traits():
                 found.append(
                     Violation(ViolationSpec(
@@ -4060,11 +3506,10 @@ class Body(ts.ValueObject):
 
 
 class ClientClassSpec(ts.Spec):
-
-    def __init__(self, node: ast.ClassDef, where: str, path: str) -> None:  # tesser:debt TB080
-        self.node = node
+    def __init__(self, where: str, path: str, facts: tuple[FactSpec, ...]) -> None:
         self.where = where
         self.path = path
+        self.facts = facts
 
 
 class ClientClass(ts.ValueObject):
@@ -4074,46 +3519,9 @@ class ClientClass(ts.ValueObject):
     _facts: tuple[Fact, ...]
 
     def __init__(self, spec: ClientClassSpec) -> None:
-        stmt = spec.node
-        members = [
-            item
-            for item in stmt.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
-        computed: list[ast.expr] = list(stmt.bases)
-        for item in members:
-            computed.extend(
-                arg.annotation
-                for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
-                if arg.annotation is not None
-            )
-            if item.returns is not None:
-                computed.append(item.returns)
-            computed.extend(item.args.defaults)
-            computed.extend(value for value in item.args.kw_defaults if value is not None)
-        runs = (
-            bool(stmt.decorator_list)
-            or bool(stmt.keywords)
-            or any(item.decorator_list for item in members)
-            or any(
-                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
-                or isinstance(
-                    inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
-                )
-                for node in computed
-                for inner in ast.walk(node)
-            )
-        )
-        rows: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        if runs:
-            rows.append((stmt.lineno, "runs", None, ()))
-        for held in stmt.body:
-            if isinstance(held, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Pass)):
-                continue
-            rows.append((held.lineno, "held", None, ()))
         object.__setattr__(self, "_where", Text(spec.where))
         object.__setattr__(self, "_path", Path(spec.path))
-        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*row)) for row in rows))
+        object.__setattr__(self, "_facts", tuple((Fact(item) for item in spec.facts)))
 
     def violations(self) -> tuple[Violation, ...]:
         where = str(self._where)
@@ -4220,24 +3628,12 @@ class ConstructorRows(ts.ValueObject):
 
 
 class HelperSpec(ts.Spec):
-
-    def __init__(  # tesser:debt TB080
-        self,
-        node: ast.FunctionDef | ast.AsyncFunctionDef,
-        where: str,
-        path: str,
-        scope: ScopeSpec,
-        registry: RegistrySpec,
-        helpers: tuple[str, ...],
-        assembly: bool = False,
+    def __init__(
+        self, where: str, path: str, rows: tuple[tuple[int, str, str, tuple[str, ...]], ...]
     ) -> None:
-        self.node = node
         self.where = where
         self.path = path
-        self.scope = scope
-        self.registry = registry
-        self.helpers = helpers
-        self.assembly = assembly
+        self.rows = rows
 
 
 class Helper(ts.ValueObject):
@@ -4245,287 +3641,165 @@ class Helper(ts.ValueObject):
     _found: tuple[Violation, ...]
 
     def __init__(self, spec: HelperSpec) -> None:
-        fn = spec.node
-        registry = Registry(spec.registry)
-        kind_table = registry.kinds()
-        constructor_rows = registry.constructors()
-        symbols = registry.enums()
-        scope = Scope(spec.scope)
-        line = fn.lineno
-        rows: list[tuple[int, str, str, tuple[str, ...]]] = []
-        args = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
-        positional = fn.args.posonlyargs + fn.args.args
-        defaults: dict[str, ast.expr | None] = {arg.arg: None for arg in args}
-        for arg, default in zip(positional[len(positional) - len(fn.args.defaults):], fn.args.defaults):
-            defaults[arg.arg] = default
-        for arg, kw_default in zip(fn.args.kwonlyargs, fn.args.kw_defaults):
-            defaults[arg.arg] = kw_default
-        for arg in args:
-            given = defaults[arg.arg]
-            if given is None:
-                rows.append((line, "default", arg.arg, ()))
-                continue
-            pending: list[ast.expr] = [given]
-            composed = True
-            while pending and composed:
-                value = pending.pop()
-                if isinstance(value, ast.Constant) and value.value is not Ellipsis:
-                    continue
-                if (
-                    isinstance(value, ast.UnaryOp)
-                    and isinstance(value.op, ast.USub)
-                    and isinstance(value.operand, ast.Constant)
-                ):
-                    continue
-                if isinstance(value, ast.Tuple):
-                    pending.extend(value.elts)
-                    continue
-                if isinstance(value, ast.Attribute):
-                    member_of = scope.resolve(Text(ast.unparse(value.value)))
-                    composed = (
-                        member_of is not None
-                        and member_of in symbols
-                        and not value.attr.startswith("__")
-                        and not (value.attr.startswith("_") and value.attr.endswith("_"))
-                    )
-                    continue
-                if (
-                    isinstance(value, ast.Call)
-                    and isinstance(value.func, ast.Name)
-                    and value.func.id in spec.helpers
-                    and not value.args
-                    and all(keyword.arg is not None for keyword in value.keywords)
-                ):
-                    pending.extend(keyword.value for keyword in value.keywords)
-                    continue
-                built = (
-                    scope.resolve(Text(ast.unparse(value.func)))
-                    if isinstance(value, ast.Call) and isinstance(value.func, (ast.Name, ast.Attribute))
-                    else None
-                )
-                built_block = kind_table.block_of(built) if built is not None else None
-                if (
-                    isinstance(value, ast.Call)
-                    and built_block is not None
-                    and str(built_block) in DEFAULT_BUILT_BLOCKS
-                    and all(keyword.arg is not None for keyword in value.keywords)
-                ):
-                    pending.extend(value.args)
-                    pending.extend(keyword.value for keyword in value.keywords)
-                    continue
-                composed = False
-            if not composed:
-                rows.append((line, "composed", arg.arg, ()))
-        returned_ref = Annotation(fn.returns).primary() if fn.returns is not None else None
-        constructed = scope.resolve(returned_ref) if returned_ref is not None else None
-        symbol = constructed
-        block = kind_table.block_of(symbol) if symbol is not None else None
-        if symbol is not None and block is not None and str(block) == "mapper":
-            symbol = registry.mapper_target(symbol)
-            block = kind_table.block_of(symbol) if symbol is not None else None
-        if block is None or str(block) not in DATA_BLOCKS:
-            rows.append((line, "data", "", ()))
-        elif str(block) in RELAY_DTO_BLOCKS and not spec.assembly:
-            rows.append((line, "relay", "", ()))
-        constructor = (
-            constructor_rows.constructor(constructed) if constructed is not None and not spec.assembly else None
-        )
-        if (
-            constructed is not None
-            and constructor is None
-            and not spec.assembly
-            and block is not None
-            and str(block) in DATA_BLOCKS
-        ):
-            rows.append((line, "unread", "", (str(constructed.name()),)))
-        if constructed is not None and constructor is not None:
-            target_name = str(constructed.name())
-            for arg in args:
-                wanted = constructor.type_of(Text(arg.arg))
-                if arg.arg not in constructor.params():
-                    rows.append((line, "stray", arg.arg, (target_name,)))
-                elif wanted is None:
-                    continue
-                elif arg.annotation is None:
-                    rows.append((line, "untyped", arg.arg, (target_name, str(wanted))))
-                else:
-                    written = str(TypeForm(TypeFormSpec(ast.unparse(arg.annotation), spec.scope)).text())
-                    if written != str(wanted):
-                        rows.append((line, "typed", arg.arg, (target_name, written, str(wanted))))
-            for name in constructor.params():
-                if name not in defaults:
-                    rows.append((line, "missing", name, (target_name,)))
-            for extra in (fn.args.vararg, fn.args.kwarg):
-                if extra is not None:
-                    rows.append((line, "stray", extra.arg, (target_name,)))
-        passed = False
-        returned = fn.body[0].value if len(fn.body) == 1 and isinstance(fn.body[0], ast.Return) else None
-        if isinstance(returned, ast.Call):
-            callee = scope.resolve(Text(ast.unparse(returned.func)))
-            passed_names = sorted(keyword.arg for keyword in returned.keywords if keyword.arg is not None)
-            passed = (
-                callee is not None
-                and callee == constructed
-                and not returned.args
-                and all(
-                    isinstance(keyword.value, ast.Name) and keyword.value.id == keyword.arg
-                    for keyword in returned.keywords
-                )
-                and passed_names == sorted(defaults)
-            )
-        if not passed and not spec.assembly:
-            rows.append((line, "through", "", ()))
-        if isinstance(fn, ast.AsyncFunctionDef):
-            rows.append((line, "async", "", ()))
-        names = registry.module_names()
-        for node in (walked for stmt in fn.body for walked in ast.walk(stmt)):
-            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)) and not spec.assembly:
-                rows.append((node.lineno, "control", "", ()))
-            if spec.assembly and isinstance(
-                node,
-                (
-                    ast.If, ast.Match, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.TryStar, ast.With,
-                    ast.AsyncWith, ast.Raise, ast.Assert, ast.IfExp, ast.BoolOp, ast.NamedExpr,
-                    ast.Yield, ast.YieldFrom, ast.Await,
-                    ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp,
-                ),
-            ):
-                rows.append((node.lineno, "assembly_control", "", ()))
-            if spec.assembly and isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
-                called = scope.resolve(Text(ast.unparse(node.func)))
-                called_block = kind_table.block_of(called) if called is not None else None
-                reached: ast.expr = node.func
-                while called is None and isinstance(reached, ast.Attribute) and isinstance(
-                    reached.value, (ast.Attribute, ast.Name)
-                ):
-                    reached = reached.value
-                    owner = scope.resolve(Text(ast.unparse(reached)))
-                    owner_block = kind_table.block_of(owner) if owner is not None else None
-                    if owner is not None and owner_block is not None:
-                        called = owner
-                        called_block = owner_block
-                if (
-                    called is not None
-                    and str(called.module()) in names
-                    and (called_block is None or str(called_block) not in DATA_BLOCKS)
-                ):
-                    rows.append((node.lineno, "assembly_call", ast.unparse(node.func), ()))
+        rows = spec.rows
         where = spec.where
         path = spec.path
         found: list[Violation] = []
         for line, kind, param, traits in rows:
             if kind == "default":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} parameter {param!r} has no default; every helper parameter has a default",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} parameter {param!r} has no default; every helper parameter has a default",
+                        )
+                    )
+                )
             elif kind == "composed":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} parameter {param!r} defaults to something other than a literal, an enum member, "
-                    "a helper's result, a config built from those, or a tuple of those; "
-                    "a default holds values and builds a record only through its helper",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} parameter {param!r} defaults to something other than a literal, an enum member, a helper's result, a config built from those, or a tuple of those; a default holds values and builds a record only through its helper",
+                        )
+                    )
+                )
             elif kind == "stray":
                 target_name = traits[0]
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} parameter {param!r} is not a parameter of {target_name}; "
-                    "a helper mirrors the constructor it feeds",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} parameter {param!r} is not a parameter of {target_name}; a helper mirrors the constructor it feeds",
+                        )
+                    )
+                )
             elif kind == "missing":
                 target_name = traits[0]
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} takes no {param!r}, which {target_name} takes; "
-                    "a helper mirrors the constructor it feeds",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} takes no {param!r}, which {target_name} takes; a helper mirrors the constructor it feeds",
+                        )
+                    )
+                )
             elif kind == "untyped":
                 target_name, wanted_type = traits
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} parameter {param!r} has no annotation where {target_name} takes {wanted_type}; "
-                    "a helper mirrors the constructor it feeds",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} parameter {param!r} has no annotation where {target_name} takes {wanted_type}; a helper mirrors the constructor it feeds",
+                        )
+                    )
+                )
             elif kind == "typed":
                 target_name, written_type, wanted_type = traits
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} parameter {param!r} is {written_type} where {target_name} takes {wanted_type}; "
-                    "a helper mirrors the constructor it feeds",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} parameter {param!r} is {written_type} where {target_name} takes {wanted_type}; a helper mirrors the constructor it feeds",
+                        )
+                    )
+                )
             elif kind == "unread":
                 target_name = traits[0]
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} returns {target_name}, whose constructor the analyzer cannot read; "
-                    "a helper mirrors a constructor declared in the tree",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} returns {target_name}, whose constructor the analyzer cannot read; a helper mirrors a constructor declared in the tree",
+                        )
+                    )
+                )
             elif kind == "relay":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} returns a relay record; a relay record carries domain objects, "
-                    "and a test builds its domain objects itself",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} returns a relay record; a relay record carries domain objects, and a test builds its domain objects itself",
+                        )
+                    )
+                )
             elif kind == "data":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} returns no construction data; a helper builds a spec or a DTO",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} returns no construction data; a helper builds a spec or a DTO",
+                        )
+                    )
+                )
             elif kind == "through":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} does not pass each parameter through by name to one construction; "
-                    "a helper's body invents nothing",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} does not pass each parameter through by name to one construction; a helper's body invents nothing",
+                        )
+                    )
+                )
             elif kind == "async":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} is async; a helper or assembly returns its construction, never a coroutine",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} is async; a helper or assembly returns its construction, never a coroutine",
+                        )
+                    )
+                )
             elif kind == "assembly_control":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} has control flow; an assembly puts parts together without branching or looping",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} has control flow; an assembly puts parts together without branching or looping",
+                        )
+                    )
+                )
             elif kind == "assembly_call":
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} calls {param} in the code under test; an assembly builds a test input and runs nothing",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(
+                            path,
+                            line,
+                            "TB073",
+                            f"{where} calls {param} in the code under test; an assembly builds a test input and runs nothing",
+                        )
+                    )
+                )
             else:
-                found.append(Violation(ViolationSpec(
-                    path,
-                    line,
-                    "TB073",
-                    f"{where} has control flow; a helper only constructs",
-                )))
+                found.append(
+                    Violation(
+                        ViolationSpec(path, line, "TB073", f"{where} has control flow; a helper only constructs")
+                    )
+                )
         object.__setattr__(self, "_found", tuple(found))
 
     def violations(self) -> tuple[Violation, ...]:
@@ -4899,10 +4173,9 @@ class Declaration(ts.ValueObject):
 
 
 class FieldSpec(ts.Spec):
-
-    def __init__(self, name: str, node: ast.expr, lineno: int) -> None:  # tesser:debt TB080
+    def __init__(self, name: str, annotation: AnnotationSpec, lineno: int) -> None:
         self.name = name
-        self.node = node
+        self.annotation = annotation
         self.lineno = lineno
 
 
@@ -4914,7 +4187,7 @@ class Field(ts.ValueObject):
 
     def __init__(self, spec: FieldSpec) -> None:
         object.__setattr__(self, "_name", Text(spec.name))
-        object.__setattr__(self, "_annotation", Annotation(spec.node))
+        object.__setattr__(self, "_annotation", Annotation(spec.annotation))
         object.__setattr__(self, "_lineno", Line(spec.lineno))
 
     def name(self) -> Text:
@@ -4928,10 +4201,9 @@ class Field(ts.ValueObject):
 
 
 class ParamSpec(ts.Spec):
-
-    def __init__(self, name: str, node: ast.expr | None, lineno: int) -> None:  # tesser:debt TB080
+    def __init__(self, name: str, annotation: AnnotationSpec | None, lineno: int) -> None:
         self.name = name
-        self.node = node
+        self.annotation = annotation
         self.lineno = lineno
 
 
@@ -4943,7 +4215,9 @@ class Param(ts.ValueObject):
 
     def __init__(self, spec: ParamSpec) -> None:
         object.__setattr__(self, "_name", Text(spec.name))
-        object.__setattr__(self, "_annotation", Annotation(spec.node) if spec.node is not None else None)
+        object.__setattr__(
+            self, "_annotation", Annotation(spec.annotation) if spec.annotation is not None else None
+        )
         object.__setattr__(self, "_lineno", Line(spec.lineno))
 
     def name(self) -> Text:
@@ -4957,23 +4231,38 @@ class Param(ts.ValueObject):
 
 
 class MethodSpec(ts.Spec):
-
-    def __init__(self, node: ast.FunctionDef | ast.AsyncFunctionDef, owner: str) -> None:  # tesser:debt TB080
-        self.node = node
-        self.owner = owner
+    def __init__(
+        self,
+        identity: str,
+        name: str,
+        lineno: int,
+        decorators: tuple[str, ...],
+        returns: AnnotationSpec | None,
+        leading: ParamSpec | None,
+        params: tuple[ParamSpec, ...],
+        open: tuple[str, ...],
+        bare_self_attr: str | None,
+        delegated: str | None,
+        constructs: tuple[str, ...],
+        form: tuple[str, ...],
+        facts: tuple[FactSpec, ...],
+    ) -> None:
+        self.identity = identity
+        self.name = name
+        self.lineno = lineno
+        self.decorators = decorators
+        self.returns = returns
+        self.leading = leading
+        self.params = params
+        self.open = open
+        self.bare_self_attr = bare_self_attr
+        self.delegated = delegated
+        self.constructs = constructs
+        self.form = form
+        self.facts = facts
 
 
 class Method(ts.Entity):
-
-    def _own_returns(self, root: ast.AST) -> list[ast.Return]:
-        returned: list[ast.Return] = []
-        for child in ast.iter_child_nodes(root):
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
-                continue
-            if isinstance(child, ast.Return):
-                returned.append(child)
-            returned.extend(self._own_returns(child))
-        return returned
 
     _identity: Text
     _name: Text
@@ -4990,216 +4279,21 @@ class Method(ts.Entity):
     _facts: tuple[Fact, ...]
 
     def __init__(self, spec: MethodSpec) -> None:
-        node = spec.node
-        method_facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        if node.decorator_list:
-            method_facts.append((node.lineno, "decorated", None, ()))
-        if isinstance(node, ast.AsyncFunctionDef):
-            method_facts.append((node.lineno, "async", None, ()))
-        assignable = frozenset(
-            arg.arg for arg in node.args.posonlyargs + node.args.args + node.args.kwonlyargs if arg.arg != "self"
-        )
-        carrier = True
-        for stmt in node.body:
-            if isinstance(stmt, ast.Return) and (
-                stmt.value is None or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)
-            ):
-                continue
-            target: ast.expr | None = None
-            assigned: ast.expr | None = None
-            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
-                target, assigned = stmt.targets[0], stmt.value
-            elif isinstance(stmt, ast.AnnAssign):
-                target, assigned = stmt.target, stmt.value
-            if (
-                isinstance(target, ast.Attribute)
-                and isinstance(target.value, ast.Name)
-                and target.value.id == "self"
-                and isinstance(assigned, ast.Name)
-                and assigned.id in assignable
-            ):
-                continue
-            carrier = False
-            break
-        if carrier:
-            method_facts.append((node.lineno, "carrier", None, ()))
-
-        for returned in self._own_returns(node):
-            method_facts.append((returned.lineno, "return", None, ()))
-        selves = {"self"}
-        grew = True
-        while grew:
-            grew = False
-            for inner in ast.walk(node):
-                if (
-                    isinstance(inner, (ast.Assign, ast.NamedExpr))
-                    and isinstance(inner.value, ast.Name)
-                    and inner.value.id in selves
-                ):
-                    for alias in (inner.targets if isinstance(inner, ast.Assign) else [inner.target]):
-                        if isinstance(alias, ast.Name) and alias.id not in selves:
-                            selves.add(alias.id)
-                            grew = True
-        for inner in ast.walk(node):
-            if (
-                isinstance(inner, ast.Call)
-                and isinstance(inner.func, ast.Attribute)
-                and inner.func.attr == "__init__"
-                and isinstance(inner.func.value, ast.Call)
-                and isinstance(inner.func.value.func, ast.Name)
-                and inner.func.value.func.id == "super"
-            ):
-                as_statement = any(isinstance(stmt, ast.Expr) and stmt.value is inner for stmt in node.body)
-                method_facts.append((inner.lineno, "super", None, ("statement",) if as_statement else ()))
-            targets: list[ast.expr] = []
-            if isinstance(inner, ast.Assign):
-                targets = list(inner.targets)
-            elif isinstance(inner, (ast.AugAssign, ast.AnnAssign)):
-                targets = [inner.target]
-            elif isinstance(inner, (ast.For, ast.AsyncFor)):
-                targets = [inner.target]
-            elif isinstance(inner, (ast.With, ast.AsyncWith)):
-                targets = [item.optional_vars for item in inner.items if item.optional_vars is not None]
-            elif isinstance(inner, ast.NamedExpr):
-                targets = [inner.target]
-            elif isinstance(inner, ast.Delete):
-                targets = list(inner.targets)
-            stored: ast.expr | None = None
-            pending = list(targets)
-            while pending and stored is None:
-                leaf = pending.pop(0)
-                if isinstance(leaf, (ast.Tuple, ast.List)):
-                    pending = list(leaf.elts) + pending
-                    continue
-                if isinstance(leaf, ast.Starred):
-                    pending.insert(0, leaf.value)
-                    continue
-                if not isinstance(leaf, (ast.Attribute, ast.Subscript)):
-                    continue
-                root: ast.expr = leaf
-                while isinstance(root, (ast.Attribute, ast.Subscript)):
-                    root = root.value
-                if isinstance(root, ast.Name) and root.id in selves:
-                    stored = leaf
-            if stored is None and (
-                isinstance(inner, ast.Call)
-                and isinstance(inner.func, ast.Attribute)
-                and inner.func.attr == "__setattr__"
-            ):
-                stored = inner
-            if stored is None and (
-                isinstance(inner, ast.Call)
-                and isinstance(inner.func, ast.Name)
-                and inner.func.id in ("setattr", "vars", "delattr")
-                and inner.args
-                and isinstance(inner.args[0], ast.Name)
-                and inner.args[0].id in selves
-            ):
-                stored = inner
-            if stored is None and (
-                isinstance(inner, ast.Attribute)
-                and inner.attr == "__dict__"
-                and isinstance(inner.value, ast.Name)
-                and inner.value.id in selves
-            ):
-                stored = inner
-            if stored is None and (
-                isinstance(inner, ast.Call)
-                and isinstance(inner.func, ast.Attribute)
-                and isinstance(inner.func.value, ast.Attribute)
-                and isinstance(inner.func.value.value, ast.Name)
-                and inner.func.value.value.id in selves
-            ):
-                stored = inner.func.value
-            if stored is not None:
-                named: ast.expr = stored
-                while isinstance(named, ast.Subscript):
-                    named = named.value
-                stored_field = (
-                    named.attr
-                    if isinstance(named, ast.Attribute)
-                    else named.func.id
-                    if isinstance(named, ast.Call) and isinstance(named.func, ast.Name)
-                    else "__setattr__"
-                    if isinstance(named, ast.Call)
-                    else "__dict__"
-                )
-                method_facts.append((stored.lineno, "store", stored_field, ()))
-        object.__setattr__(self, "_facts", tuple(Fact(FactSpec(*item)) for item in method_facts))
-        shape_only = all(
-            isinstance(stmt, ast.Pass)
-            or (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and stmt.value.value is Ellipsis)
-            for stmt in node.body
-        )
-        object.__setattr__(self, "_form", Names(("shape",) if shape_only else ()))
-        object.__setattr__(self, "_identity", Text(f"{spec.owner}.{node.name}"))
-        object.__setattr__(self, "_name", Text(node.name))
-        object.__setattr__(self, "_lineno", Line(node.lineno))
-        decorators: set[str] = set()
-        for decorator in node.decorator_list:
-            target = decorator.func if isinstance(decorator, ast.Call) else decorator
-            if isinstance(target, ast.Name):
-                decorators.add(target.id)
-        object.__setattr__(self, "_decorators", Names(tuple(decorators)))
+        object.__setattr__(self, "_identity", Text(spec.identity))
+        object.__setattr__(self, "_name", Text(spec.name))
+        object.__setattr__(self, "_lineno", Line(spec.lineno))
+        object.__setattr__(self, "_decorators", Names(spec.decorators))
+        object.__setattr__(self, "_returns", Annotation(spec.returns) if spec.returns is not None else None)
+        object.__setattr__(self, "_leading", Param(spec.leading) if spec.leading is not None else None)
+        object.__setattr__(self, "_params", tuple((Param(item) for item in spec.params)))
+        object.__setattr__(self, "_open", Names(spec.open))
         object.__setattr__(
-            self, "_returns", Annotation(node.returns) if node.returns is not None else None
+            self, "_bare_self_attr", Text(spec.bare_self_attr) if spec.bare_self_attr is not None else None
         )
-        positional = list(node.args.posonlyargs) + list(node.args.args)
-        leading: ast.arg | None = None
-        if positional and (positional[0].arg == "self" or (positional[0].arg == "cls" and "classmethod" in decorators)):
-            leading = positional[0]
-            positional = positional[1:]
-        object.__setattr__(
-            self,
-            "_leading",
-            Param(ParamSpec(leading.arg, leading.annotation, leading.lineno)) if leading is not None else None,
-        )
-        object.__setattr__(
-            self,
-            "_params",
-            tuple(
-                Param(ParamSpec(arg.arg, arg.annotation, arg.lineno))
-                for arg in positional + list(node.args.kwonlyargs)
-            ),
-        )
-        opened: list[str] = []
-        if node.args.vararg is not None:
-            opened.append("*args")
-        if node.args.kwarg is not None:
-            opened.append("**kwargs")
-        object.__setattr__(self, "_open", Names(tuple(opened)))
-        bare = node.body[0].value if len(node.body) == 1 and isinstance(node.body[0], ast.Return) else None
-        bare_self_attr: str | None = None
-        delegated: str | None = None
-        if isinstance(bare, ast.Attribute) and isinstance(bare.value, ast.Name) and bare.value.id == "self":
-            bare_self_attr = bare.attr
-        if isinstance(bare, ast.Call) and len(bare.args) == 1:
-            delegated = (
-                bare.func.id
-                if isinstance(bare.func, ast.Name)
-                else bare.func.attr
-                if isinstance(bare.func, ast.Attribute)
-                else None
-            )
-            if not (
-                isinstance(bare.args[0], ast.Attribute)
-                and isinstance(bare.args[0].value, ast.Name)
-                and bare.args[0].value.id == "self"
-            ):
-                delegated = None
-        object.__setattr__(self, "_bare_self_attr", Text(bare_self_attr) if bare_self_attr else None)
-        object.__setattr__(self, "_delegated", Text(delegated) if delegated else None)
-        object.__setattr__(
-            self,
-            "_constructs",
-            Names(tuple(
-                call.func.id
-                for call in ast.walk(node)
-                if isinstance(call, ast.Call)
-                and isinstance(call.func, ast.Name)
-                and call.func.id in ("cls", spec.owner)
-            )),
-        )
+        object.__setattr__(self, "_delegated", Text(spec.delegated) if spec.delegated is not None else None)
+        object.__setattr__(self, "_constructs", Names(spec.constructs))
+        object.__setattr__(self, "_form", Names(spec.form))
+        object.__setattr__(self, "_facts", tuple((Fact(item) for item in spec.facts)))
 
     @property
     def identity(self) -> Text:
@@ -5243,20 +4337,71 @@ class Method(ts.Entity):
 
 
 class ClassDeclSpec(ts.Spec):
-
-    def __init__(  # tesser:debt TB080
+    def __init__(
         self,
-        node: ast.ClassDef,
+        identity: str,
         module: str,
         path: str,
+        name: str,
+        lineno: int,
         scope: ScopeSpec,
         registry: RegistrySpec,
+        parameter_policy: AnnotationPolicySpec,
+        fields: tuple[FieldSpec, ...],
+        methods: tuple[MethodSpec, ...],
+        signatures: tuple[SignatureSpec, ...],
+        bodies: tuple[BodySpec, ...],
+        held_ports: tuple[str, ...],
+        held_relays: tuple[str, ...],
+        idle_handlers: tuple[FactSpec, ...],
+        stores: tuple[FactSpec, ...],
+        self_annotations: tuple[FieldSpec, ...],
+        registered_containers: tuple[str, ...],
+        bases: tuple[str, ...],
+        decoration: tuple[str, ...],
+        extras: tuple[FactSpec, ...],
+        block: str | None,
+        statements: tuple[FactSpec, ...],
+        serde_facts: tuple[FactSpec, ...],
+        spec_reader: SpecReaderSpec,
+        constructor_policy: AnnotationPolicySpec,
+        spec_policy: AnnotationPolicySpec,
+        port_dto_policy: AnnotationPolicySpec,
+        client_dto_policy: AnnotationPolicySpec,
+        relay_dto_policy: AnnotationPolicySpec,
+        leaf: str | None,
     ) -> None:
-        self.node = node
+        self.identity = identity
         self.module = module
         self.path = path
+        self.name = name
+        self.lineno = lineno
         self.scope = scope
         self.registry = registry
+        self.parameter_policy = parameter_policy
+        self.fields = fields
+        self.methods = methods
+        self.signatures = signatures
+        self.bodies = bodies
+        self.held_ports = held_ports
+        self.held_relays = held_relays
+        self.idle_handlers = idle_handlers
+        self.stores = stores
+        self.self_annotations = self_annotations
+        self.registered_containers = registered_containers
+        self.bases = bases
+        self.decoration = decoration
+        self.extras = extras
+        self.block = block
+        self.statements = statements
+        self.serde_facts = serde_facts
+        self.spec_reader = spec_reader
+        self.constructor_policy = constructor_policy
+        self.spec_policy = spec_policy
+        self.port_dto_policy = port_dto_policy
+        self.client_dto_policy = client_dto_policy
+        self.relay_dto_policy = relay_dto_policy
+        self.leaf = leaf
 
 
 class ClassDecl(ts.Entity):
@@ -5294,662 +4439,37 @@ class ClassDecl(ts.Entity):
     _leaf: Text | None
 
     def __init__(self, spec: ClassDeclSpec) -> None:
-        node = spec.node
-        object.__setattr__(self, "_identity", Text(f"{spec.module}.{node.name}"))
+        object.__setattr__(self, "_identity", Text(spec.identity))
         object.__setattr__(self, "_module", Text(spec.module))
         object.__setattr__(self, "_path", Path(spec.path))
-        object.__setattr__(self, "_name", Text(node.name))
-        object.__setattr__(self, "_lineno", Line(node.lineno))
+        object.__setattr__(self, "_name", Text(spec.name))
+        object.__setattr__(self, "_lineno", Line(spec.lineno))
         object.__setattr__(self, "_scope", Scope(spec.scope))
         object.__setattr__(self, "_registry", Registry(spec.registry))
-        object.__setattr__(
-            self,
-            "_parameter_policy",
-            AnnotationPolicy(AnnotationPolicySpec(
-                tuple(DOMAIN_METHOD_PARAMETER_BLOCKS),
-                tuple(DOMAIN_METHOD_PRIMITIVES),
-                (),
-                spec.scope,
-                spec.registry,
-            )),
-        )
-        fields: list[Field] = []
-        methods: list[Method] = []
-        for stmt in node.body:
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
-                fields.append(Field(FieldSpec(stmt.target.id, stmt.annotation, stmt.lineno)))
-            elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                methods.append(Method(MethodSpec(stmt, node.name)))
-        object.__setattr__(self, "_fields", tuple(fields))
-        object.__setattr__(self, "_methods", tuple(methods))
-        scope = self._scope
-        kind_table = self._registry.kinds()
-
-        SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None]
-
-        def slot(name: str, annotation: Annotation | None) -> SlotRow:  # tesser:debt TB023
-            if annotation is None:
-                return (name, None, (), None)
-            primary = annotation.primary()
-            resolved = scope.resolve(primary) if primary is not None else None
-            named_block = kind_table.block_of(resolved) if resolved is not None else None
-            block = str(named_block) if named_block is not None else None
-            touched: list[str] = []
-            for symbol in scope.symbols(annotation):
-                found_block = kind_table.block_of(symbol)
-                if found_block is not None:
-                    touched.append(str(found_block))
-            return (
-                name,
-                block,
-                tuple(touched),
-                (str(resolved.module()), str(resolved.name())) if resolved is not None else None,
-            )
-
-        SignatureRow = tuple[
-            str, str, int, str, tuple[str, ...], tuple[SlotRow, ...], SlotRow | None, SlotRow | None
-        ]
-
-        def slot_spec(row: SlotRow) -> SlotSpec:  # tesser:debt TB023
-            symbol = row[3]
-            return SlotSpec(
-                row[0],
-                row[1],
-                row[2],
-                SymbolSpec(symbol[0], symbol[1]) if symbol is not None else None,
-            )
-
-        def signature_spec(row: SignatureRow) -> SignatureSpec:  # tesser:debt TB023
-            return SignatureSpec(
-                row[0],
-                row[1],
-                row[2],
-                row[3],
-                row[4],
-                tuple(slot_spec(item) for item in row[5]),
-                slot_spec(row[6]) if row[6] is not None else None,
-                slot_spec(row[7]) if row[7] is not None else None,
-            )
-
-        signature_rows: list[SignatureRow] = []
-        for method in methods:
-            first = method.leading()
-            signature_rows.append((
-                f"{spec.module}.{node.name}.{method.name()}",
-                spec.path,
-                int(method.lineno()),
-                str(method.name()),
-                tuple(method.open()),
-                tuple(slot(str(param.name()), param.annotation()) for param in method.params()),
-                slot("return", method.returns()) if method.returns() is not None else None,
-                slot(str(first.name()), first.annotation()) if first is not None else None,
-            ))
-        object.__setattr__(self, "_signatures", tuple(Signature(signature_spec(row)) for row in signature_rows))
-        own_block = kind_table.block_of(Symbol(SymbolSpec(spec.module, node.name)))
-        init_node = next(
-            (
-                item
-                for item in node.body
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
-            ),
-            None,
-        )
-
-        def held(kind: str) -> tuple[str, ...]:  # tesser:debt TB023
-            if init_node is None:
-                return ()
-            named: set[str] = set()
-            for arg in init_node.args.posonlyargs + init_node.args.args + init_node.args.kwonlyargs:
-                if arg.arg == "self" or arg.annotation is None:
-                    continue
-                primary = Annotation(arg.annotation).primary()
-                resolved = scope.resolve(primary) if primary is not None else None
-                block = kind_table.block_of(resolved) if resolved is not None else None
-                if block is not None and str(block) == kind:
-                    named.add(arg.arg)
-            kept: set[str] = set()
-            for inner in ast.walk(init_node):
-                if isinstance(inner, ast.AnnAssign):
-                    targets: list[ast.expr] = [inner.target]
-                    value: ast.expr | None = inner.value
-                elif isinstance(inner, ast.Assign):
-                    targets = list(inner.targets)
-                    value = inner.value
-                else:
-                    continue
-                if not (isinstance(value, ast.Name) and value.id in named):
-                    continue
-                for target in targets:
-                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
-                        kept.add(target.attr)
-            return tuple(sorted(kept))
-
-        held_ports = held("port")
-        held_stores = held("store")
-        held_relays = held(RELAY_BLOCK)
-        object.__setattr__(self, "_held_ports", Names(held_ports))
-        object.__setattr__(self, "_held_relays", Names(held_relays))
-        idle_handlers: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        if own_block is not None and str(own_block) == "handler":
-            held_clients = frozenset(held("client"))
-            for item in node.body:
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                if item.name.startswith("_") and item.name != "__call__":
-                    continue
-                client_aliases: set[str] = set()
-                calls_client = False
-                pending: list[ast.AST] = list(item.body)
-                while pending:
-                    inner = pending.pop(0)
-                    if isinstance(
-                        inner, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef, ast.GeneratorExp)
-                    ):
-                        continue
-                    pending.extend(ast.iter_child_nodes(inner))
-                    if isinstance(inner, ast.Assign) and len(inner.targets) == 1 and isinstance(inner.targets[0], ast.Name):
-                        aliased = inner.value
-                        if isinstance(aliased, ast.Attribute) and isinstance(aliased.value, ast.Attribute):
-                            if not aliased.attr.startswith("_"):
-                                aliased = aliased.value
-                        if (
-                            isinstance(aliased, ast.Attribute)
-                            and isinstance(aliased.value, ast.Name)
-                            and aliased.value.id == "self"
-                            and aliased.attr in held_clients
-                        ):
-                            client_aliases.add(inner.targets[0].id)
-                    if not isinstance(inner, ast.Call):
-                        continue
-                    callee = inner.func
-                    if isinstance(callee, ast.Name) and callee.id in client_aliases:
-                        calls_client = True
-                    if not isinstance(callee, ast.Attribute):
-                        continue
-                    if isinstance(callee.value, ast.Name) and callee.value.id == "self" and callee.attr in held_clients:
-                        calls_client = True
-                    if callee.attr.startswith("_"):
-                        continue
-                    receiver = callee.value
-                    if isinstance(receiver, ast.Name) and receiver.id in client_aliases:
-                        calls_client = True
-                    if (
-                        isinstance(receiver, ast.Attribute)
-                        and isinstance(receiver.value, ast.Name)
-                        and receiver.value.id == "self"
-                        and receiver.attr in held_clients
-                    ):
-                        calls_client = True
-                if not calls_client:
-                    idle_handlers.append((item.lineno, "idle_handler", item.name, ()))
-        object.__setattr__(self, "_idle_handlers", tuple(Fact(FactSpec(*row)) for row in idle_handlers))
-        stores: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        for inner in ast.walk(node):
-            if isinstance(inner, ast.AnnAssign):
-                store_targets: list[ast.expr] = [inner.target]
-            elif isinstance(inner, ast.Assign):
-                store_targets = list(inner.targets)
-            elif isinstance(inner, ast.AugAssign):
-                store_targets = [inner.target]
-            else:
-                continue
-            for target in store_targets:
-                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
-                    stores.append((inner.lineno, "store", target.attr, ()))
-        object.__setattr__(self, "_stores", tuple(Fact(FactSpec(*item)) for item in stores))
-        self_annotations: list[Field] = []
-        for inner in ast.walk(node):
-            if (
-                isinstance(inner, ast.AnnAssign)
-                and isinstance(inner.target, ast.Attribute)
-                and isinstance(inner.target.value, ast.Name)
-                and inner.target.value.id == "self"
-            ):
-                self_annotations.append(Field(FieldSpec(inner.target.attr, inner.annotation, inner.lineno)))
-        object.__setattr__(self, "_self_annotations", tuple(self_annotations))
-        engine_containers: set[str] = set()
-        for inner in ast.walk(node):
-            if isinstance(inner, ast.Assign) and len(inner.targets) == 1:
-                container_target: ast.expr = inner.targets[0]
-            elif isinstance(inner, ast.AnnAssign):
-                container_target = inner.target
-            else:
-                continue
-            maker = inner.value.func if isinstance(inner.value, ast.Call) else None
-            made = maker.attr if isinstance(maker, ast.Attribute) else maker.id if isinstance(maker, ast.Name) else ""
-            if (
-                made in ENGINE_REGISTRATIONS
-                and isinstance(container_target, ast.Attribute)
-                and isinstance(container_target.value, ast.Name)
-                and container_target.value.id == "self"
-            ):
-                engine_containers.add(container_target.attr)
-        registered_containers: set[str] = set()
-        for inner in ast.walk(node) if engine_containers else ():
-            if not isinstance(inner, ast.Call):
-                continue
-            called = scope.resolve(Text(ast.unparse(inner.func)))
-            called_block = kind_table.block_of(called) if called is not None else None
-            if called_block is None or str(called_block) not in REGISTRATION_BLOCKS:
-                continue
-            for argument in list(inner.args) + [keyword.value for keyword in inner.keywords]:
-                if (
-                    isinstance(argument, ast.Attribute)
-                    and isinstance(argument.value, ast.Name)
-                    and argument.value.id == "self"
-                    and argument.attr in engine_containers
-                    and argument.attr != "client"
-                ):
-                    registered_containers.add(argument.attr)
-        object.__setattr__(self, "_registered_containers", Names(tuple(sorted(registered_containers))))
-        bases: list[str] = []
-        for base in node.bases:
-            base_ref = Annotation(base).primary()
-            base_symbol = scope.resolve(base_ref) if base_ref is not None else None
-            bases.append(f"{base_symbol.module()}|{base_symbol.name()}" if base_symbol is not None else "?")
-        object.__setattr__(self, "_bases", Names(tuple(f"{index}:{item}" for index, item in enumerate(bases))))
-        decoration: list[str] = []
-        if node.decorator_list:
-            decoration.append("decorated")
-        if node.keywords:
-            decoration.append("keyworded")
-        object.__setattr__(self, "_decoration", Names(tuple(decoration)))
-
-        def is_enum_auto(value: ast.expr) -> bool:  # tesser:debt TB023
-            if not isinstance(value, ast.Call) or value.args or value.keywords:
-                return False
-            if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
-                package = scope.package_of(Text(value.func.value.id))
-                return package is not None and str(package) == ENUM_MODULE and value.func.attr == "auto"
-            if isinstance(value.func, ast.Name):
-                origin = scope.import_of(Text(value.func.id))
-                return origin is not None and str(origin.module()) == ENUM_MODULE and str(origin.name()) == "auto"
-            return False
-
-        extras: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        for item in node.body:
-            if isinstance(item, ast.Pass):
-                continue
-            member_target: ast.expr | None = None
-            member_value: ast.expr | None = None
-            if isinstance(item, ast.AnnAssign):
-                member_target, member_value = item.target, item.value
-            elif isinstance(item, ast.Assign) and len(item.targets) == 1:
-                member_target, member_value = item.targets[0], item.value
-            is_member = (
-                isinstance(member_target, ast.Name)
-                and not member_target.id.startswith("_")
-                and not (isinstance(item, ast.AnnAssign) and not isinstance(item.annotation, ast.Name))
-                and (
-                    isinstance(member_value, ast.Constant)
-                    or (
-                        isinstance(member_value, ast.UnaryOp)
-                        and isinstance(member_value.operand, ast.Constant)
-                        and isinstance(member_value.operand.value, (int, float))
-                    )
-                    or (member_value is not None and is_enum_auto(member_value))
-                )
-            )
-            if not is_member:
-                extras.append((item.lineno, "extra", None, ()))
-            valued = (
-                isinstance(item, ast.Assign) and len(item.targets) == 1 and not is_enum_auto(item.value)
-            ) or (
-                isinstance(item, ast.AnnAssign) and item.value is not None and not is_enum_auto(item.value)
-            )
-            if valued:
-                extras.append((item.lineno, "valued", None, ()))
-        object.__setattr__(self, "_extras", tuple(Fact(FactSpec(*item)) for item in extras))
-        object.__setattr__(self, "_block", own_block)
-        serde_facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
-        if own_block is not None and str(own_block) in (SERDE_BLOCK, SNAPSHOT_BLOCK):
-            named_types = len(node.type_params)
-            if named_types == 0:
-                subscripted = [base for base in node.bases if isinstance(base, ast.Subscript)]
-                if len(subscripted) == 1 and not isinstance(subscripted[0].slice, ast.Tuple):
-                    named_types = 1
-            serde_facts.append((node.lineno, "type_params", str(named_types), ()))
-            serde_methods = [
-                item for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-            ]
-            held_types: set[str] = set()
-            for item in serde_methods:
-                if item.name != "__init__":
-                    continue
-                for arg in list(item.args.posonlyargs) + list(item.args.args) + list(item.args.kwonlyargs):
-                    if arg.arg == "self":
-                        continue
-                    param_head = Annotation(arg.annotation).head() if arg.annotation is not None else None
-                    if param_head is not None and str(param_head) in SERDE_HELD:
-                        held_types.add(arg.arg)
-                        continue
-                    serde_facts.append((arg.lineno, "init_param", arg.arg, ()))
-            for item in serde_methods:
-                for inner in ast.walk(item):
-                    targets: list[ast.expr] = []
-                    if isinstance(inner, ast.Assign):
-                        targets = list(inner.targets)
-                    elif isinstance(inner, (ast.AnnAssign, ast.AugAssign)):
-                        targets = [inner.target]
-                    for stored_leaf in targets:
-                        if not isinstance(stored_leaf, ast.Attribute):
-                            continue
-                        if not (isinstance(stored_leaf.value, ast.Name) and stored_leaf.value.id == "self"):
-                            continue
-                        if (
-                            item.name == "__init__"
-                            and isinstance(inner, ast.Assign)
-                            and isinstance(inner.value, ast.Name)
-                            and inner.value.id in held_types
-                        ):
-                            continue
-                        serde_facts.append((stored_leaf.lineno, "store", stored_leaf.attr, ()))
-
-            def empty_test(test: ast.expr) -> bool:  # tesser:debt TB023
-                if isinstance(test, ast.Name):
-                    return True
-                if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
-                    return isinstance(test.operand, ast.Name)
-                if isinstance(test, ast.Compare) and len(test.ops) == 1:
-                    return (
-                        isinstance(test.ops[0], (ast.Is, ast.IsNot))
-                        and isinstance(test.left, ast.Name)
-                        and isinstance(test.comparators[0], ast.Constant)
-                        and test.comparators[0].value is None
-                    )
-                return False
-
-            for item in serde_methods:
-                if item.name not in SERDE_METHODS:
-                    continue
-                allowed: set[int] = set()
-                for inner in ast.walk(item):
-                    if isinstance(inner, ast.If) and empty_test(inner.test):
-                        allowed.update(id(sub) for sub in ast.walk(inner.test))
-                        allowed.add(id(inner))
-                for inner in ast.walk(item):
-                    if id(inner) in allowed or not isinstance(inner, SERDE_DECISIONS):
-                        continue
-                    serde_facts.append((inner.lineno, "decision", item.name, ()))
-        if own_block is not None and str(own_block) == SNAPSHOT_BLOCK:
-
-            def named_block(text: str) -> str | None:  # tesser:debt TB023
-                resolved = self._scope.resolve(Text(text))
-                found = kind_table.block_of(resolved) if resolved is not None else None
-                return str(found) if found is not None else None
-
-            def snapshot_call_ok(call: ast.Call) -> bool:  # tesser:debt TB023
-                func = call.func
-                if isinstance(func, ast.Name):
-                    if func.id in SNAPSHOT_BUILTINS:
-                        return True
-                    block = named_block(func.id)
-                    return block is not None and block in SNAPSHOT_CONSTRUCTED
-                if not isinstance(func, ast.Attribute):
-                    return False
-                if func.attr in SNAPSHOT_READS and not call.args and not call.keywords:
-                    return True
-                if func.attr == "get" and len(call.args) == 1 and not call.keywords:
-                    return True
-                if isinstance(func.value, ast.Name):
-                    package = self._scope.package_of(Text(func.value.id))
-                    if (
-                        package is not None
-                        and str(package) == JSON_MODULE
-                        and func.attr in JSON_CALLS
-                    ):
-                        return True
-                    resolved = self._scope.resolve(Text(f"{func.value.id}.{func.attr}"))
-                    if resolved is not None and (
-                        str(resolved.module()),
-                        str(resolved.name()),
-                    ) == ERRORS_INVALID:
-                        return True
-                    block = named_block(f"{func.value.id}.{func.attr}")
-                    return block is not None and block in SNAPSHOT_CONSTRUCTED
-                if func.attr in SERDE_METHODS and isinstance(func.value, ast.Call):
-                    return snapshot_call_ok(func.value)
-                return False
-
-            for item in node.body:
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                if item.name not in SERDE_METHODS:
-                    continue
-                guards = [inner for inner in ast.walk(item) if isinstance(inner, ast.If)]
-                tested = {id(sub) for sub in ast.walk(guards[0].test)} if guards else set()
-                serialized: set[int] = set()
-                if item.name == "serialize" and len(item.body) == 1 and isinstance(item.body[0], ast.Return):
-                    encoded = item.body[0].value
-                    if (
-                        isinstance(encoded, ast.Call)
-                        and isinstance(encoded.func, ast.Attribute)
-                        and encoded.func.attr == "encode"
-                        and isinstance(encoded.func.value, ast.Call)
-                        and isinstance(encoded.func.value.func, ast.Attribute)
-                        and encoded.func.value.func.attr == "dumps"
-                        and encoded.func.value.args
-                        and isinstance(encoded.func.value.args[0], ast.Dict)
-                    ):
-                        serialized = {id(sub) for sub in ast.walk(encoded.func.value.args[0])}
-                deserialized: set[int] = set()
-                if item.name == "deserialize" and item.body and isinstance(item.body[-1], ast.Return):
-                    constructed = item.body[-1].value
-                    if isinstance(constructed, ast.Call) and named_block(ast.unparse(constructed.func)) in SNAPSHOT_CONSTRUCTED:
-                        deserialized = {id(sub) for sub in ast.walk(constructed)}
-                collection_calls: set[int] = set()
-                collection_loops: set[int] = set()
-                shape_loops: set[int] = set()
-                for inner in ast.walk(item):
-                    if not isinstance(inner, ast.Call) or not isinstance(inner.func, ast.Name):
-                        continue
-                    if len(inner.args) != 1 or inner.keywords:
-                        continue
-                    value = inner.args[0]
-                    if (
-                        item.name == "serialize"
-                        and inner.func.id == "list"
-                        and id(inner) in serialized
-                        and isinstance(value, ast.Attribute)
-                        and isinstance(value.value, ast.Name)
-                        and len(item.args.args) > 1
-                        and value.value.id == item.args.args[1].arg
-                    ):
-                        collection_calls.add(id(inner))
-                    elif (
-                        item.name == "deserialize"
-                        and inner.func.id == "tuple"
-                        and id(inner) in deserialized
-                        and isinstance(value, ast.Subscript)
-                        and isinstance(value.value, ast.Name)
-                        and isinstance(value.slice, ast.Constant)
-                        and isinstance(value.slice.value, str)
-                    ):
-                        collection_calls.add(id(inner))
-                    elif (
-                        item.name == "deserialize" and inner.func.id in ("tuple", "all")
-                        and (inner.func.id != "all" or id(inner) in tested)
-                        and (inner.func.id != "tuple" or id(inner) in deserialized)
-                        and isinstance(value, ast.GeneratorExp)
-                    ):
-                        if inner.func.id == "all":
-                            predicate = tuple(ast.walk(value.elt))
-                            if not any(
-                                isinstance(sub, ast.Call)
-                                and isinstance(sub.func, ast.Name)
-                                and sub.func.id == "isinstance"
-                                for sub in predicate
-                            ) or any(
-                                isinstance(sub, ast.Call)
-                                and not (
-                                    isinstance(sub.func, ast.Name) and sub.func.id in ("isinstance", "all")
-                                    or isinstance(sub.func, ast.Attribute) and sub.func.attr == "get"
-                                )
-                                for sub in predicate
-                            ) or any(
-                                isinstance(sub, ast.Attribute) and sub.attr != "get"
-                                for sub in predicate
-                            ):
-                                continue
-                        collection_calls.add(id(inner))
-                        collection_loops.add(id(value))
-                        if inner.func.id == "all":
-                            shape_loops.add(id(value))
-                for inner in ast.walk(item):
-                    if not isinstance(inner, ast.ListComp):
-                        continue
-                    if id(inner) in serialized:
-                        collection_loops.add(id(inner))
-                for inner in ast.walk(item):
-                    if id(inner) not in collection_loops:
-                        continue
-                    if not isinstance(inner, (ast.ListComp, ast.GeneratorExp)):
-                        continue
-                    if (
-                        len(inner.generators) != 1
-                        or inner.generators[0].ifs
-                        or inner.generators[0].is_async
-                        or not isinstance(inner.generators[0].target, ast.Name)
-                        or (
-                            isinstance(inner, ast.ListComp)
-                            and (
-                                not isinstance(inner.generators[0].iter, ast.Attribute)
-                                or not isinstance(inner.generators[0].iter.value, ast.Name)
-                                or not (
-                                    isinstance(inner.elt, ast.Dict)
-                                    or isinstance(inner.elt, ast.Call)
-                                    and isinstance(inner.elt.func, ast.Attribute)
-                                    and inner.elt.func.attr == "loads"
-                                    and len(inner.elt.args) == 1
-                                    and isinstance(inner.elt.args[0], ast.Call)
-                                    and isinstance(inner.elt.args[0].func, ast.Attribute)
-                                    and inner.elt.args[0].func.attr == "serialize"
-                                )
-                            )
-                        )
-                        or (
-                            isinstance(inner, ast.GeneratorExp)
-                            and (
-                                not isinstance(inner.generators[0].iter, ast.Subscript)
-                                or not isinstance(inner.generators[0].iter.value, ast.Name)
-                                or not isinstance(inner.generators[0].iter.slice, ast.Constant)
-                                or not isinstance(inner.generators[0].iter.slice.value, str)
-                                or id(inner) not in shape_loops and not isinstance(inner.elt, ast.Call)
-                            )
-                        )
-                    ):
-                        collection_loops.remove(id(inner))
-                for inner in ast.walk(item):
-                    if isinstance(inner, ast.Call) and id(inner) not in collection_calls and not snapshot_call_ok(inner):
-                        serde_facts.append((inner.lineno, "snapshot_call", item.name, ()))
-                banned = [
-                    inner for inner in ast.walk(item)
-                    if isinstance(inner, SNAPSHOT_LOOPS) and id(inner) not in collection_loops
-                ]
-                if item.name == "serialize":
-                    for inner in guards + banned:
-                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
-                    for inner in ast.walk(item):
-                        if isinstance(inner, (ast.BoolOp, ast.Compare)):
-                            serde_facts.append(
-                                (inner.lineno, "snapshot_decides", item.name, ())
-                            )
-                    if len(item.body) != 1 or not isinstance(item.body[0], ast.Return):
-                        serde_facts.append((item.lineno, "snapshot_serialize_shape", item.name, ()))
-                    continue
-                for inner in banned:
-                    serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
-                if len(guards) > 1:
-                    for inner in guards[1:]:
-                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
-                for inner in ast.walk(item):
-                    if not isinstance(inner, ast.Compare):
-                        continue
-                    if id(inner) not in tested or not all(
-                        isinstance(other, ast.Constant) for other in inner.comparators
-                    ):
-                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
-                for guard in guards[:1]:
-                    if guard.orelse or len(guard.body) != 1 or not isinstance(
-                        guard.body[0], ast.Raise
-                    ):
-                        serde_facts.append(
-                            (guard.lineno, "snapshot_guard_shape", item.name, ())
-                        )
-                if not item.body or not isinstance(item.body[-1], ast.Return):
-                    serde_facts.append((item.lineno, "snapshot_return_shape", item.name, ()))
-        object.__setattr__(self, "_serde_facts", tuple(Fact(FactSpec(*item)) for item in serde_facts))
-        object.__setattr__(
-            self,
-            "_statements",
-            tuple(
-                Fact(FactSpec(item.lineno, "statement", None, ("pass",) if isinstance(item, ast.Pass) else ()))
-                for item in node.body
-                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-            ),
-        )
-        object.__setattr__(self, "_spec_reader", SpecReader(SpecReaderSpec(spec.scope, spec.registry)))
-        object.__setattr__(
-            self,
-            "_constructor_policy",
-            AnnotationPolicy(AnnotationPolicySpec((), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry)),
-        )
-        object.__setattr__(
-            self,
-            "_spec_policy",
-            AnnotationPolicy(AnnotationPolicySpec(("spec",), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry)),
-        )
-        object.__setattr__(
-            self,
-            "_port_dto_policy",
-            AnnotationPolicy(AnnotationPolicySpec(
-                ("port_request", "port_response"), tuple(sorted(PORT_DTO_PRIMITIVES)), tuple(self._scope.enums()), spec.scope, spec.registry, "none"
-            )),
-        )
-        object.__setattr__(
-            self,
-            "_client_dto_policy",
-            AnnotationPolicy(AnnotationPolicySpec(
-                ("request", "response"), tuple(sorted(PRIMITIVES)), (), spec.scope, spec.registry, "none"
-            )),
-        )
-        object.__setattr__(
-            self,
-            "_relay_dto_policy",
-            AnnotationPolicy(AnnotationPolicySpec(
-                tuple(sorted(RELAY_DTO_BLOCKS | DOMAIN_BLOCKS)),
-                tuple(sorted(PORT_DTO_PRIMITIVES)),
-                tuple(self._scope.enums()),
-                spec.scope,
-                spec.registry,
-            )),
-        )
-        bodies: list[Body] = []
-        if own_block is not None and str(own_block) in BODY_BLOCKS:
-            class_methods = tuple(str(method.name()) for method in methods)
-            for item, row in zip(
-                (stmt for stmt in node.body if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))),
-                signature_rows,
-            ):
-                bodies.append(Body(BodySpec(
-                    item,
-                    row[0],
-                    spec.path,
-                    class_methods,
-                    held_ports,
-                    held_stores,
-                    signature_spec(row),
-                    spec.scope,
-                    spec.registry,
-                )))
-        object.__setattr__(self, "_bodies", tuple(bodies))
-        stored = [field for field in fields if str(field.annotation().head()) != "ClassVar"]
-        leaf: str | None = None
-        if len(stored) == 1:
-            head = str(stored[0].annotation().head())
-            if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
-                leaf = head
-        object.__setattr__(self, "_leaf", Text(leaf) if leaf else None)
+        object.__setattr__(self, "_parameter_policy", AnnotationPolicy(spec.parameter_policy))
+        object.__setattr__(self, "_fields", tuple((Field(item) for item in spec.fields)))
+        object.__setattr__(self, "_methods", tuple((Method(item) for item in spec.methods)))
+        object.__setattr__(self, "_signatures", tuple((Signature(item) for item in spec.signatures)))
+        object.__setattr__(self, "_bodies", tuple((Body(item) for item in spec.bodies)))
+        object.__setattr__(self, "_held_ports", Names(spec.held_ports))
+        object.__setattr__(self, "_held_relays", Names(spec.held_relays))
+        object.__setattr__(self, "_idle_handlers", tuple((Fact(item) for item in spec.idle_handlers)))
+        object.__setattr__(self, "_stores", tuple((Fact(item) for item in spec.stores)))
+        object.__setattr__(self, "_self_annotations", tuple((Field(item) for item in spec.self_annotations)))
+        object.__setattr__(self, "_registered_containers", Names(spec.registered_containers))
+        object.__setattr__(self, "_bases", Names(spec.bases))
+        object.__setattr__(self, "_decoration", Names(spec.decoration))
+        object.__setattr__(self, "_extras", tuple((Fact(item) for item in spec.extras)))
+        object.__setattr__(self, "_block", Text(spec.block) if spec.block is not None else None)
+        object.__setattr__(self, "_statements", tuple((Fact(item) for item in spec.statements)))
+        object.__setattr__(self, "_serde_facts", tuple((Fact(item) for item in spec.serde_facts)))
+        object.__setattr__(self, "_spec_reader", SpecReader(spec.spec_reader))
+        object.__setattr__(self, "_constructor_policy", AnnotationPolicy(spec.constructor_policy))
+        object.__setattr__(self, "_spec_policy", AnnotationPolicy(spec.spec_policy))
+        object.__setattr__(self, "_port_dto_policy", AnnotationPolicy(spec.port_dto_policy))
+        object.__setattr__(self, "_client_dto_policy", AnnotationPolicy(spec.client_dto_policy))
+        object.__setattr__(self, "_relay_dto_policy", AnnotationPolicy(spec.relay_dto_policy))
+        object.__setattr__(self, "_leaf", Text(spec.leaf) if spec.leaf is not None else None)
 
     @property
     def identity(self) -> Text:
@@ -6307,7 +4827,22 @@ class ClassDecl(ts.Entity):
             )
         for fact in self._serde_facts:
             member = str(fact.detail())
-            if str(fact.kind()) == "snapshot_call":
+            if str(fact.kind()) == "snapshot_call" and member == "deserialize":
+                found.append(
+                    Violation(ViolationSpec(
+                        str(self._path),
+                        int(fact.lineno()),
+                        "TB082",
+                        f"{where}.{member} makes a call a snapshot may not make; a "
+                        "snapshot names json.dumps, json.loads, isinstance, str, int, "
+                        "errors.invalid, the message and spec constructors, another "
+                        "snapshot's serialize or deserialize, structural list/tuple/all "
+                        "collection conversions, ValueError wire rejection, protocol enum "
+                        "decoding, and len over loaded JSON in a shape-guard comparison "
+                        "to a nonnegative integer literal, and nothing else",
+                    ))
+                )
+            elif str(fact.kind()) == "snapshot_call":
                 found.append(
                     Violation(ViolationSpec(
                         str(self._path),
@@ -6353,7 +4888,7 @@ class ClassDecl(ts.Entity):
                         f"{where}.{member} carries a guard that does not raise; "
                         "deserialize's one guard raises errors.invalid and does nothing "
                         "else, because a payload of the wrong shape never reaches the "
-                        "constructor",
+                        "constructor; ValueError is also a wire rejection",
                     ))
                 )
             elif str(fact.kind()) == "snapshot_return_shape":
@@ -6363,7 +4898,8 @@ class ClassDecl(ts.Entity):
                         int(fact.lineno()),
                         "TB081",
                         f"{where}.{member} does not end in a return; deserialize ends in "
-                        "one constructor call over what json.loads read",
+                        "one constructor call over what json.loads read, optionally inside "
+                        "a chained wire-error translation",
                     ))
                 )
         return tuple(found)
@@ -7100,9 +5636,9 @@ class ClassDecl(ts.Entity):
             if not named and expected == RUNTIME_BLOCK and annotation is not None and str(annotation.head()) == "tuple":
                 elements = list(annotation.slice_names())
                 named = bool(elements) and all(
-                    element != "?" and (
-                        lambda resolved: resolved is not None and str(kind_table.block_of(resolved)) == RUNTIME_BLOCK  # tesser:debt TB023
-                    )(self._scope.resolve(Text(element)))
+                    element != "?"
+                    and (resolved := self._scope.resolve(Text(element))) is not None
+                    and str(kind_table.block_of(resolved)) == RUNTIME_BLOCK
                     for element in elements
                 )
             if not named:
@@ -7881,7 +6417,7 @@ class StatementPolicy(ts.ValueObject):
                 and stmt.test.comparators[0].value == "__main__"
             ):
                 callee = (
-                    Annotation(stmt.body[0].value.func).primary()
+                    Annotation(Module._annotation_spec(stmt.body[0].value.func)).primary()
                     if len(stmt.body) == 1
                     and isinstance(stmt.body[0], ast.Expr)
                     and isinstance(stmt.body[0].value, ast.Call)
@@ -8018,101 +6554,102 @@ class Placement(ts.ValueObject):
         contexts = frozenset(spec.contexts)
         export = spec.export
 
-        def locate() -> str:  # tesser:debt TB023
-            parts = name.split(".")
-            basename = parts[-1]
-            reserved = (
-                basename == "conftest"
-                or basename.startswith("test_")
-                or basename.startswith(EVAL_PREFIX)
-            )
-            inside_application = (
-                len(parts) >= 4 and parts[0] in contexts and parts[1] == PORTS_PARENT_ROLE
-            )
-            if inside_application and parts[2] == PORTS_PACKAGE and reserved:
-                return "ports-stray"
-            if inside_application and parts[2] == APPLICATION_CLIENT_PACKAGE and reserved:
-                return "app-client-stray"
-            if basename == "conftest":
-                return "conftest-root" if len(parts) == 1 else "conftest"
-            if basename.startswith("test_"):
-                return "test"
-            if basename.startswith(EVAL_PREFIX):
-                return "eval"
-            if parts[0] in APP_PACKAGES:
-                if is_package:
-                    return "shell-init"
-                if parts[0] == "srv":
-                    return "shell-srv"
-                return "shell-app"
-            if parts[0] == TESTS_ROLE:
-                return "root-tests"
-            if parts[0] == PROTOCOL_PACKAGE:
-                return "protocol-init" if is_package else "protocol"
-            if parts[0] == KERNEL_PACKAGE or (export is not None and parts[0] == export):
-                if is_package:
-                    return "kernel-init"
-                if len(parts) == 1:
-                    return "kernel-file"
-                return "kernel"
-            if parts[0] not in contexts:
-                return "root"
-            if len(parts) == 1:
-                return "context-init"
-            if parts[1] == TESTS_ROLE:
-                return "context-tests-init" if is_package else "context-tests-stray"
-            if parts[1] in ROLES:
-                if parts[1] == CONTEXT_KERNEL_HOME[0] and tuple(parts[2:3]) == CONTEXT_KERNEL_HOME[1:]:
-                    if is_package:
-                        return "context-kernel-init"
-                    if len(parts) == 3:
-                        return "context-kernel-file"
-                    return "context-kernel"
-                if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
-                    if is_package:
-                        return "ports-init"
-                    return "ports-file" if len(parts) == 3 else "ports"
-                if (
-                    parts[1] == PORTS_PARENT_ROLE
-                    and len(parts) >= 3
-                    and parts[2] == APPLICATION_CLIENT_PACKAGE
-                ):
-                    if is_package:
-                        return "app-client-init"
-                    return "app-client-file" if len(parts) == 3 else "app-client"
-                if (
-                    parts[1] == PORTS_PARENT_ROLE
-                    and len(parts) >= 3
-                    and parts[2] == ORCHESTRATORS_PACKAGE
-                ):
-                    if is_package:
-                        return "orchestrators-init"
-                    return "orchestrators-file" if len(parts) == 3 else "orchestrators"
-                if (
-                    parts[1] == PORTS_PARENT_ROLE
-                    and len(parts) >= 3
-                    and parts[2] == RELAYS_PACKAGE
-                ):
-                    if is_package:
-                        return "relays-init"
-                    return "relays-file" if len(parts) == 3 else "relays"
-                if (
-                    parts[1] == PORTS_PARENT_ROLE
-                    and len(parts) >= 3
-                    and parts[2] == SNAPSHOTS_PACKAGE
-                ):
-                    if is_package:
-                        return "snapshots-init"
-                    return "snapshots-file" if len(parts) == 3 else "snapshots"
-                if is_package:
-                    return "role-init"
-                return "role-file" if len(parts) == 2 else "role"
-            return "context-stray"
 
-        object.__setattr__(self, "_value", locate())
+        object.__setattr__(self, "_value", self._locate(contexts, export, is_package, name))
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
+
+    def _locate(self, contexts: frozenset[str], export: str | None, is_package: bool, name: str) -> str:
+        parts = name.split(".")
+        basename = parts[-1]
+        reserved = (
+            basename == "conftest"
+            or basename.startswith("test_")
+            or basename.startswith(EVAL_PREFIX)
+        )
+        inside_application = (
+            len(parts) >= 4 and parts[0] in contexts and parts[1] == PORTS_PARENT_ROLE
+        )
+        if inside_application and parts[2] == PORTS_PACKAGE and reserved:
+            return "ports-stray"
+        if inside_application and parts[2] == APPLICATION_CLIENT_PACKAGE and reserved:
+            return "app-client-stray"
+        if basename == "conftest":
+            return "conftest-root" if len(parts) == 1 else "conftest"
+        if basename.startswith("test_"):
+            return "test"
+        if basename.startswith(EVAL_PREFIX):
+            return "eval"
+        if parts[0] in APP_PACKAGES:
+            if is_package:
+                return "shell-init"
+            if parts[0] == "srv":
+                return "shell-srv"
+            return "shell-app"
+        if parts[0] == TESTS_ROLE:
+            return "root-tests"
+        if parts[0] == PROTOCOL_PACKAGE:
+            return "protocol-init" if is_package else "protocol"
+        if parts[0] == KERNEL_PACKAGE or (export is not None and parts[0] == export):
+            if is_package:
+                return "kernel-init"
+            if len(parts) == 1:
+                return "kernel-file"
+            return "kernel"
+        if parts[0] not in contexts:
+            return "root"
+        if len(parts) == 1:
+            return "context-init"
+        if parts[1] == TESTS_ROLE:
+            return "context-tests-init" if is_package else "context-tests-stray"
+        if parts[1] in ROLES:
+            if parts[1] == CONTEXT_KERNEL_HOME[0] and tuple(parts[2:3]) == CONTEXT_KERNEL_HOME[1:]:
+                if is_package:
+                    return "context-kernel-init"
+                if len(parts) == 3:
+                    return "context-kernel-file"
+                return "context-kernel"
+            if parts[1] == PORTS_PARENT_ROLE and len(parts) >= 3 and parts[2] == PORTS_PACKAGE:
+                if is_package:
+                    return "ports-init"
+                return "ports-file" if len(parts) == 3 else "ports"
+            if (
+                parts[1] == PORTS_PARENT_ROLE
+                and len(parts) >= 3
+                and parts[2] == APPLICATION_CLIENT_PACKAGE
+            ):
+                if is_package:
+                    return "app-client-init"
+                return "app-client-file" if len(parts) == 3 else "app-client"
+            if (
+                parts[1] == PORTS_PARENT_ROLE
+                and len(parts) >= 3
+                and parts[2] == ORCHESTRATORS_PACKAGE
+            ):
+                if is_package:
+                    return "orchestrators-init"
+                return "orchestrators-file" if len(parts) == 3 else "orchestrators"
+            if (
+                parts[1] == PORTS_PARENT_ROLE
+                and len(parts) >= 3
+                and parts[2] == RELAYS_PACKAGE
+            ):
+                if is_package:
+                    return "relays-init"
+                return "relays-file" if len(parts) == 3 else "relays"
+            if (
+                parts[1] == PORTS_PARENT_ROLE
+                and len(parts) >= 3
+                and parts[2] == SNAPSHOTS_PACKAGE
+            ):
+                if is_package:
+                    return "snapshots-init"
+                return "snapshots-file" if len(parts) == 3 else "snapshots"
+            if is_package:
+                return "role-init"
+            return "role-file" if len(parts) == 2 else "role"
+        return "context-stray"
 
 
 class ModuleSpec(ts.Spec):
@@ -8442,7 +6979,7 @@ class Module(ts.Entity):
 
         enum_names: list[str] = []
         for stmt in self._class_defs:
-            if EnumShape(EnumShapeSpec(stmt, ScopeSpec(
+            if EnumShape(Module._enum_shape_spec(stmt, ScopeSpec(
                 self._name,
                 tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
                 tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
@@ -8518,95 +7055,9 @@ class Module(ts.Entity):
     def outcome_use_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
         path = self._path
-        kind_table = Registry(registry_spec).kinds()
-        scope = self._scope
-
-        def resolve(node: ast.expr) -> tuple[str, str] | None:  # tesser:debt TB023
-            cursor = node
-            while isinstance(cursor, ast.Subscript):
-                cursor = cursor.value
-            ref: str | None = None
-            if isinstance(cursor, ast.Name):
-                ref = cursor.id
-            elif isinstance(cursor, ast.Attribute) and isinstance(cursor.value, (ast.Name, ast.Attribute)):
-                ref = f"{ast.unparse(cursor.value)}.{cursor.attr}"
-            if ref is None:
-                return None
-            symbol = scope.resolve(Text(ref))
-            return (str(symbol.module()), str(symbol.name())) if symbol is not None else None
-
-        def block_of(node: ast.expr) -> str | None:  # tesser:debt TB023
-            key = resolve(node)
-            if key is None:
-                return None
-            block = kind_table.block_of(Symbol(SymbolSpec(key[0], key[1])))
-            return str(block) if block is not None else None
-
-        def names_outcome(node: ast.expr) -> bool:  # tesser:debt TB023
-            for sub in ast.walk(node):
-                if isinstance(sub, (ast.Name, ast.Attribute)) and block_of(sub) == OUTCOME_BLOCK:
-                    return True
-            return False
-
-        def outcome_key(node: ast.expr) -> tuple[str, str] | None:  # tesser:debt TB023
-            if not isinstance(node, ast.Attribute):
-                return None
-            key = resolve(node.value)
-            if key is None or block_of(node.value) != OUTCOME_BLOCK:
-                return None
-            return key
-
-        def is_member_pattern(pattern: ast.pattern) -> bool:  # tesser:debt TB023
-            if isinstance(pattern, ast.MatchOr):
-                return all(is_member_pattern(alternative) for alternative in pattern.patterns)
-            return isinstance(pattern, ast.MatchValue) and outcome_key(pattern.value) is not None
-
-        def closes_with_assert_never(node: ast.Match) -> bool:  # tesser:debt TB023
-            last = node.cases[-1]
-            pattern = last.pattern
-            if last.guard is not None:
-                return False
-            if not (isinstance(pattern, ast.MatchAs) and pattern.name is not None):
-                return False
-            wildcard = pattern.pattern
-            if wildcard is not None and not (
-                isinstance(wildcard, ast.MatchAs) and wildcard.pattern is None and wildcard.name is None
-            ):
-                return False
-            if len(last.body) != 1 or not isinstance(last.body[0], (ast.Expr, ast.Return)):
-                return False
-            call = last.body[0].value
-            if not (isinstance(call, ast.Call) and len(call.args) == 1 and not call.keywords):
-                return False
-            if not (isinstance(call.args[0], ast.Name) and call.args[0].id == pattern.name):
-                return False
-            callee = call.func
-            rebound = {
-                target.id
-                for assignment in self._assignments
-                for target in (
-                    assignment.targets if isinstance(assignment, ast.Assign) else [assignment.target]
-                )
-                if isinstance(target, ast.Name)
-            }
-            if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
-                package = scope.package_of(Text(callee.value.id))
-                return (
-                    package is not None
-                    and str(package) == TYPING_MODULE
-                    and callee.attr == ASSERT_NEVER
-                    and callee.value.id not in rebound
-                )
-            if isinstance(callee, ast.Name):
-                origin = scope.import_of(Text(callee.id))
-                return (
-                    origin is not None
-                    and str(origin.module()) == TYPING_MODULE
-                    and str(origin.name()) == ASSERT_NEVER
-                    and callee.id not in rebound
-                )
-            return False
-
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        slot_reads = self._outcome_slot_reads(registry, self._body, {})
         found: list[Violation] = []
         matched: set[int] = set()
         attributes: list[ast.Attribute] = []
@@ -8619,7 +7070,7 @@ class Module(ts.Entity):
                     if arg.annotation is None:
                         continue
                     annotated.update(id(sub) for sub in ast.walk(arg.annotation))
-                    if names_outcome(arg.annotation):
+                    if self._outcome_names_outcome(kind_table, arg.annotation):
                         taker = node.name
                         found.append(
                             Violation(ViolationSpec(
@@ -8635,7 +7086,7 @@ class Module(ts.Entity):
                     annotated.update(id(sub) for sub in ast.walk(node.returns))
             elif isinstance(node, ast.AnnAssign):
                 annotated.update(id(sub) for sub in ast.walk(node.annotation))
-                if isinstance(node.target, ast.Attribute) and names_outcome(node.annotation):
+                if isinstance(node.target, ast.Attribute) and self._outcome_names_outcome(kind_table, node.annotation):
                     kept = ast.unparse(node.target)
                     found.append(
                         Violation(ViolationSpec(
@@ -8654,7 +7105,7 @@ class Module(ts.Entity):
                     for item in node.body
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
                     and item.returns is not None
-                    and names_outcome(item.returns)
+                    and self._outcome_names_outcome(kind_table, item.returns)
                 )
                 carriers: set[str] = set()
                 for assignment in ast.walk(node):
@@ -8720,7 +7171,7 @@ class Module(ts.Entity):
             if isinstance(node, ast.Attribute):
                 attributes.append(node)
                 names.append(node)
-                if node.attr in OUTCOME_SUNDERS:
+                if id(node) in slot_reads:
                     sunder = node.attr
                     found.append(
                         Violation(ViolationSpec(
@@ -8740,12 +7191,12 @@ class Module(ts.Entity):
                 outcome_match = False
                 for case in node.cases:
                     for sub in ast.walk(case.pattern):
-                        if isinstance(sub, ast.MatchValue) and outcome_key(sub.value) is not None:
+                        if isinstance(sub, ast.MatchValue) and self._outcome_outcome_key(kind_table, sub.value) is not None:
                             outcome_match = True
                             matched.add(id(sub.value))
                 if outcome_match:
                     for case in node.cases[:-1]:
-                        if case.guard is None and is_member_pattern(case.pattern):
+                        if case.guard is None and self._outcome_is_member_pattern(kind_table, case.pattern):
                             continue
                         found.append(
                             Violation(ViolationSpec(
@@ -8757,7 +7208,7 @@ class Module(ts.Entity):
                                 "capture, or guarded arm swallows a member added later",
                             ))
                         )
-                if outcome_match and not closes_with_assert_never(node):
+                if outcome_match and not self._outcome_closes_with_assert_never(node):
                     found.append(
                         Violation(ViolationSpec(
                             path,
@@ -8770,7 +7221,7 @@ class Module(ts.Entity):
                     )
         member_bases: set[int] = set()
         for node in attributes:
-            key = outcome_key(node)
+            key = self._outcome_outcome_key(kind_table, node)
             if key is None:
                 continue
             member_bases.update(id(sub) for sub in ast.walk(node.value))
@@ -8791,8 +7242,8 @@ class Module(ts.Entity):
         for node in names:
             if id(node) in annotated or id(node) in member_bases:
                 continue
-            key = resolve(node)
-            if key is None or block_of(node) != OUTCOME_BLOCK:
+            key = self._outcome_resolve(node)
+            if key is None or self._outcome_block_of(kind_table, node) != OUTCOME_BLOCK:
                 continue
             outcome = key[1]
             found.append(
@@ -8822,8 +7273,10 @@ class Module(ts.Entity):
                 elif isinstance(node, ast.AnnAssign):
                     sites.append(node.annotation)
         found: list[Violation] = []
-        for site in sorted(sites, key=lambda item: (item.lineno, item.col_offset)):  # tesser:debt TB023
-            annotation = Annotation(site)
+        for _, _, _, site in sorted(
+            (site.lineno, site.col_offset, index, site) for index, site in enumerate(sites)
+        ):
+            annotation = Annotation(Module._annotation_spec(site))
             if not annotation.quoted():
                 continue
             found.append(
@@ -8841,9 +7294,12 @@ class Module(ts.Entity):
 
     def type_name_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
+        identity_bounds = self._identity_callable_bounds()
         sites: list[tuple[int, int, str]] = []
         for stmt in self._body:
             for node in ast.walk(stmt):
+                if id(node) in identity_bounds:
+                    continue
                 if isinstance(node, ast.Name) and node.id in BANNED_TYPES:
                     sites.append((node.lineno, node.col_offset, node.id))
                 elif isinstance(node, ast.Attribute) and node.attr in BANNED_TYPES:
@@ -8862,6 +7318,65 @@ class Module(ts.Entity):
                 ))
             )
         return tuple(found)
+
+    def _identity_callable_bounds(self) -> set[int]:
+        allowed: set[int] = set()
+        for stmt in self._body:
+            if not (
+                isinstance(stmt, ast.Assign)
+                and len(stmt.targets) == 1
+                and isinstance(stmt.targets[0], ast.Name)
+                and isinstance(stmt.value, ast.Call)
+                and self._resolve(stmt.value.func) == ("typing", "TypeVar")
+                and len(stmt.value.args) == 1
+                and isinstance(stmt.value.args[0], ast.Constant)
+                and stmt.value.args[0].value == stmt.targets[0].id
+                and len(stmt.value.keywords) == 1
+                and stmt.value.keywords[0].arg == "bound"
+            ):
+                continue
+            bound = stmt.value.keywords[0].value
+            if not (
+                isinstance(bound, ast.Subscript)
+                and self._resolve(bound.value) in (("typing", "Callable"), ("collections.abc", "Callable"))
+                and isinstance(bound.slice, ast.Tuple)
+                and len(bound.slice.elts) == 2
+                and isinstance(bound.slice.elts[0], ast.Constant)
+                and bound.slice.elts[0].value is Ellipsis
+                and isinstance(bound.slice.elts[1], ast.Name)
+                and bound.slice.elts[1].id == "object"
+            ):
+                continue
+            references = {id(stmt.targets[0])}
+            for function in self._body:
+                if not isinstance(function, ast.FunctionDef) or function.decorator_list or function.type_params:
+                    continue
+                params = function.args.posonlyargs + function.args.args
+                if not (
+                    len(params) == 1
+                    and not function.args.kwonlyargs
+                    and function.args.vararg is None
+                    and function.args.kwarg is None
+                    and not function.args.defaults
+                    and isinstance(params[0].annotation, ast.Name)
+                    and params[0].annotation.id == stmt.targets[0].id
+                    and isinstance(function.returns, ast.Name)
+                    and function.returns.id == stmt.targets[0].id
+                    and len(function.body) == 1
+                    and isinstance(function.body[0], ast.Return)
+                    and isinstance(function.body[0].value, ast.Name)
+                    and function.body[0].value.id == params[0].arg
+                ):
+                    continue
+                references.update((id(params[0].annotation), id(function.returns)))
+            if len(references) > 1 and all(
+                id(node) in references
+                for item in self._body
+                for node in ast.walk(item)
+                if isinstance(node, ast.Name) and node.id == stmt.targets[0].id
+            ):
+                allowed.add(id(bound.value))
+        return allowed
 
     def function_placement_violations(self) -> tuple[Violation, ...]:
         module_name = self._name
@@ -9189,110 +7704,55 @@ class Module(ts.Entity):
                     )
         return tuple(found)
 
-    def sibling_reference_violations(self) -> tuple[Violation, ...]:
+    def sibling_reference_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         module_name = self._name
-        def declared(body: list[ast.stmt]) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:  # tesser:debt TB023
-            out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
-            stack: list[ast.AST] = list(body)
-            while stack:
-                cur = stack.pop()
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    out.append(cur)
-                    continue
-                if isinstance(cur, (ast.ClassDef, ast.Lambda)):
-                    continue
-                stack.extend(ast.iter_child_nodes(cur))
-            return out
+        kind_table = Registry(registry_spec).kinds()
 
-        def receiver(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:  # tesser:debt TB023
-            names = {d.id for d in fn.decorator_list if isinstance(d, ast.Name)}
-            if "staticmethod" in names:
-                return None
-            args = fn.args.posonlyargs + fn.args.args
-            if not args:
-                return None
-            return args[0].arg
-
-        def rebinds(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, name: str) -> bool:  # tesser:debt TB023
-            args = fn.args
-            bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
-            if args.vararg is not None:
-                bound.add(args.vararg.arg)
-            if args.kwarg is not None:
-                bound.add(args.kwarg.arg)
-            return name in bound
-
-        def reads(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> list[ast.Attribute]:  # tesser:debt TB023
-            hits: list[ast.Attribute] = []
-            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
-            while stack:
-                cur = stack.pop()
-                if isinstance(cur, ast.ClassDef):
-                    continue
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-                    if rebinds(cur, name):
-                        continue
-                    stack.extend(ast.iter_child_nodes(cur))
-                    continue
-                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-                    targets = {
-                        t.id
-                        for comp in cur.generators
-                        for t in ast.walk(comp.target)
-                        if isinstance(t, ast.Name)
-                    }
-                    if name in targets:
-                        continue
-                    stack.extend(ast.iter_child_nodes(cur))
-                    continue
-                if (
-                    isinstance(cur, ast.Attribute)
-                    and isinstance(cur.ctx, ast.Load)
-                    and isinstance(cur.value, ast.Name)
-                    and cur.value.id == name
-                ):
-                    hits.append(cur)
-                stack.extend(ast.iter_child_nodes(cur))
-            return hits
-
-        def recurs(fn: ast.FunctionDef | ast.AsyncFunctionDef, name: str | None) -> bool:  # tesser:debt TB023
-            if name is None:
-                return False
-            stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
-            while stack:
-                cur = stack.pop()
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
-                    continue
-                if (
-                    isinstance(cur, ast.Call)
-                    and isinstance(cur.func, ast.Attribute)
-                    and isinstance(cur.func.value, ast.Name)
-                    and cur.func.value.id == name
-                    and cur.func.attr == fn.name
-                ):
-                    return True
-                stack.extend(ast.iter_child_nodes(cur))
-            return False
 
         found: list[Violation] = []
         for stmt in self._body:
             for node in ast.walk(stmt):
                 if not isinstance(node, ast.ClassDef):
                     continue
-                methods = declared(node.body)
+                methods = self._sibling_reference_declared(node.body)
+                block = kind_table.block_of(Symbol(SymbolSpec(module_name, node.name)))
+                coordinates = block is not None and str(block) in ("service", "actions", "orchestrator")
                 names = {method.name for method in methods}
-                recursive = {method.name for method in methods if recurs(method, receiver(method))}
+                recursive = {method.name for method in methods if self._sibling_reference_recurs(method, self._sibling_reference_receiver(method))}
+                hooks = {
+                    method.name
+                    for method in methods
+                    if any(isinstance(decorator, ast.Name) and decorator.id == "property" for decorator in method.decorator_list)
+                    and len(method.body) == 1
+                    and isinstance(method.body[0], ast.Raise)
+                    and isinstance(method.body[0].exc, ast.Call)
+                    and isinstance(method.body[0].exc.func, ast.Name)
+                    and method.body[0].exc.func.id == "NotImplementedError"
+                }
                 for member in methods:
-                    own = receiver(member)
+                    own = self._sibling_reference_receiver(member)
                     if own is None:
                         continue
-                    for inner in reads(member, own):
+                    for inner in self._sibling_reference_reads(member, own):
                         sibling = inner.attr
                         if sibling not in names:
                             continue
-                        if sibling == member.name or sibling in recursive:
+                        if sibling == member.name or sibling in recursive or sibling in hooks:
                             continue
                         if sibling.startswith("__") and sibling.endswith("__"):
+                            continue
+                        if sibling.startswith("_") and not coordinates:
+                            continue
+                        if sibling.startswith("_"):
+                            found.append(Violation(ViolationSpec(
+                                self._path,
+                                inner.lineno,
+                                "TB051",
+                                f"{module_name}.{node.name}.{member.name} reaches sibling "
+                                f"{sibling}; a coordinating operation keeps its work in the "
+                                "public method, because a private helper must not hide a "
+                                "decision or port call from the operation's shape checks",
+                            )))
                             continue
                         found.append(
                             Violation(ViolationSpec(
@@ -9300,8 +7760,9 @@ class Module(ts.Entity):
                                 inner.lineno,
                                 "TB051",
                                 f"{module_name}.{node.name}.{member.name} reaches sibling "
-                                f"{sibling}; a method is for outsiders — a class reaches "
-                                "into itself only for direct recursion",
+                                f"{sibling}; a public method is for outsiders — shared "
+                                "implementation belongs in a private method, except for "
+                                "recursion or an unimplemented property hook",
                             ))
                         )
         return tuple(found)
@@ -9848,7 +8309,7 @@ class Module(ts.Entity):
                 for node in annotations:
                     if node is None:
                         continue
-                    primary = Annotation(node).primary()
+                    primary = Annotation(Module._annotation_spec(node)).primary()
                     if primary is None:
                         continue
                     symbol = self._scope.resolve(primary)
@@ -9961,7 +8422,7 @@ class Module(ts.Entity):
                     isinstance(item, ast.AnnAssign)
                     and isinstance(item.target, ast.Name)
                 ):
-                    stated = Annotation(item.annotation).primary()
+                    stated = Annotation(Module._annotation_spec(item.annotation)).primary()
                     named = scope.resolve(stated) if stated is not None else None
                     if named is not None:
                         held.setdefault(item.target.id, named)
@@ -9974,7 +8435,7 @@ class Module(ts.Entity):
                 for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs:
                     if arg.annotation is None:
                         continue
-                    annotation = Annotation(arg.annotation)
+                    annotation = Annotation(Module._annotation_spec(arg.annotation))
                     shape = str(annotation.source())
                     primary = annotation.primary()
                     if (
@@ -10013,7 +8474,7 @@ class Module(ts.Entity):
                     ):
                         continue
                     if isinstance(node, ast.AnnAssign):
-                        written = Annotation(node.annotation)
+                        written = Annotation(Module._annotation_spec(node.annotation))
                         shape = str(written.source())
                         primary = written.primary()
                         if (
@@ -10265,7 +8726,10 @@ class Module(ts.Entity):
                         rows.add((f"{self._name}|{cls.name}", argument.attr, called[0], called[1]))
         return tuple(sorted(rows))
 
-    def _dispatch_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, str, str, str], ...]:
+    def _dispatch_rows(
+        self,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[tuple[str, str, str, str, str], ...]:
         if str(self._placement) in TEST_TIER:
             return ()
         rows: set[tuple[str, str, str, str, str]] = set()
@@ -10342,11 +8806,14 @@ class Module(ts.Entity):
                 for item in cls.body
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
             )
-        rows: list[tuple[str, str, str, str]] = []
+        rows: list[tuple[str, str, str, str]] = [
+            ("", cls.name, self._name, cls.name)
+            for cls in self._class_defs
+        ]
         for owner, fn in declared:
             if fn.returns is None:
                 continue
-            annotation = Annotation(fn.returns)
+            annotation = Annotation(Module._annotation_spec(fn.returns))
             shape = str(annotation.source())
             primary = annotation.primary()
             symbol = None
@@ -10399,14 +8866,14 @@ class Module(ts.Entity):
                 (decorator_symbol := scope.resolve(decorator_ref)) is not None
                 and TESSER_DECORATORS.get((str(decorator_symbol.module()), str(decorator_symbol.name()))) == "helper"
                 for decorator in fn.decorator_list
-                if (decorator_ref := Annotation(decorator).primary()) is not None
+                if (decorator_ref := Annotation(Module._annotation_spec(decorator)).primary()) is not None
             )
             fields_only = (fn.name == "__init__" and block in FIELD_NAME_BLOCKS) or declared_helper
             spec_taker = fn.name == "__init__" and block in SPEC_READER_BLOCKS
             for arg in parameters:
                 if arg.arg in UNNAMED_PARAMETERS or arg.annotation is None:
                     continue
-                annotation = Annotation(arg.annotation)
+                annotation = Annotation(Module._annotation_spec(arg.annotation))
                 shape = str(annotation.source())
                 primary = annotation.primary()
                 if primary is None:
@@ -10449,7 +8916,7 @@ class Module(ts.Entity):
                 if bound is None:
                     continue
                 if isinstance(node, ast.AnnAssign):
-                    written = Annotation(node.annotation)
+                    written = Annotation(Module._annotation_spec(node.annotation))
                     stated = written.primary()
                     declared = scope.resolve(stated) if stated is not None else None
                     if declared is None:
@@ -10892,7 +9359,7 @@ class Module(ts.Entity):
             if isinstance(stmt, ast.FunctionDef):
                 declared = False
                 for decorator in stmt.decorator_list:
-                    ref = Annotation(decorator).primary()
+                    ref = Annotation(Module._annotation_spec(decorator)).primary()
                     symbol = scope.resolve(ref) if ref is not None else None
                     if symbol is not None and TESSER_DECORATORS.get((str(symbol.module()), str(symbol.name()))) == "load":
                         declared = True
@@ -11121,9 +9588,11 @@ class Module(ts.Entity):
                 named = kind_table.block_of(Symbol(SymbolSpec(module_name, stmt.name)))
                 block = str(named) if named is not None else None
                 where = f"{module_name}.{stmt.name}"
-                enum_shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
+                enum_shape = EnumShape(Module._enum_shape_spec(stmt, scope_spec))
                 enum_base = str(enum_shape.base()) if enum_shape.base() is not None else None
-                if enum_base is not None and block is None and role == "domain":
+                if enum_base is not None and block is None and (
+                    role == "domain" or role == "application" and kind_package == RELAYS_PACKAGE
+                ):
                     if enum_base not in ENUM_BASES:
                         found.append(
                             Violation(ViolationSpec(
@@ -11241,7 +9710,7 @@ class Module(ts.Entity):
             where = f"{module_name}.{cls.name}"
             undeclared_base = False
             for base in cls.bases:
-                base_ref = Annotation(base).primary()
+                base_ref = Annotation(Module._annotation_spec(base)).primary()
                 base_symbol = scope.resolve(base_ref) if base_ref is not None else None
                 if base_symbol is None or kind_table.block_of(base_symbol) is None:
                     undeclared_base = True
@@ -11484,7 +9953,8 @@ class Module(ts.Entity):
                     or any(target == declared or target.startswith(declared + ".") for declared in pure_stdlib)
                 )
                 if str(self._placement) in SNAPSHOT_PLACES:
-                    if not (target in SNAPSHOT_STDLIB or pieces[0] in SNAPSHOT_STDLIB):
+                    allowed_stdlib = RELAY_STDLIB if len(own) >= 4 and own[2] == RELAYS_PACKAGE else SNAPSHOT_STDLIB
+                    if not (target in allowed_stdlib or pieces[0] in allowed_stdlib):
                         found.append(
                             Violation(ViolationSpec(
                                 self._path,
@@ -11686,7 +10156,7 @@ class Module(ts.Entity):
                             "module declares its protocol at module level",
                         ))
                     )
-                found.extend(ClientClass(ClientClassSpec(stmt, where, self._path)).violations())
+                found.extend(ClientClass(Module._client_class_spec(stmt, where, self._path)).violations())
                 continue
             if block == "actions_client":
                 protocols.append(stmt)
@@ -11720,7 +10190,7 @@ class Module(ts.Entity):
                         "module declares its protocol at module level",
                     ))
                 )
-            found.extend(ClientClass(ClientClassSpec(stmt, where, self._path)).violations())
+            found.extend(ClientClass(Module._client_class_spec(stmt, where, self._path)).violations())
         if len(protocols) != 1 and self._class_defs:
             found.append(
                 Violation(ViolationSpec(
@@ -11762,41 +10232,6 @@ class Module(ts.Entity):
         )
         found: list[Violation] = []
 
-        def block_named(class_name: str) -> str | None:  # tesser:debt TB023
-            named = kind_table.block_of(Symbol(SymbolSpec(module_name, class_name)))
-            return str(named) if named is not None else None
-
-        def computes(node: ast.expr | None) -> bool:  # tesser:debt TB023
-            return node is not None and any(
-                isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
-                or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-                for inner in ast.walk(node)
-            )
-
-        def decoration(where: str, node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[Violation, ...]:  # tesser:debt TB023
-            return tuple(
-                Violation(ViolationSpec(
-                    path,
-                    node.lineno,
-                    "TB051",
-                    f"{module_name}.{where} is decorated; a ports module holds no "
-                    "decorator, because a decorator is a call that runs at import in the "
-                    "one application module adapters may import",
-                ))
-                for _ in node.decorator_list
-            )
-
-        def unreadable(where: str, node: ast.AST) -> tuple[Violation, ...]:  # tesser:debt TB023
-            return (
-                Violation(ViolationSpec(
-                    path,
-                    getattr(node, "lineno", 1),
-                    "TB069",
-                    f"{where} holds a {type(node).__name__}; a ports module holds only the "
-                    "shapes its rules can read, so anything else is a finding by default "
-                    "rather than a gap nobody enumerated",
-                )),
-            )
 
         for edge in self._edges:
             target = str(edge._target)
@@ -11839,7 +10274,7 @@ class Module(ts.Entity):
                     ))
                 )
         for stmt in self._nested_class_defs(list(self._body)):
-            found.extend(decoration(stmt.name, stmt))
+            found.extend(self._ports_decoration(stmt.name, stmt))
             for _ in stmt.keywords:
                 found.append(
                     Violation(ViolationSpec(
@@ -11870,7 +10305,7 @@ class Module(ts.Entity):
                     for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
                     if arg.arg != "self"
                 ] + [item.returns]
-                if any(computes(node) for node in annotations):
+                if any(self._ports_computes(node) for node in annotations):
                     found.append(
                         Violation(ViolationSpec(
                             path,
@@ -11893,7 +10328,7 @@ class Module(ts.Entity):
                     ))
                 )
             for base in stmt.bases:
-                if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)) and not computes(base):
+                if isinstance(base, (ast.Name, ast.Attribute, ast.Subscript)) and not self._ports_computes(base):
                     continue
                 found.append(
                     Violation(ViolationSpec(
@@ -11907,7 +10342,7 @@ class Module(ts.Entity):
                 )
             for item in stmt.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    found.extend(decoration(f"{stmt.name}.{item.name}", item))
+                    found.extend(self._ports_decoration(f"{stmt.name}.{item.name}", item))
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
                     not isinstance(default, ast.Constant)
                     for default in item.args.defaults + [
@@ -11924,7 +10359,7 @@ class Module(ts.Entity):
                             "import, because every adapter imports it",
                         ))
                     )
-            shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
+            shape = EnumShape(Module._enum_shape_spec(stmt, scope_spec))
             if shape.base() is not None:
                 for extra_line in shape.extras():
                     found.append(
@@ -11958,9 +10393,9 @@ class Module(ts.Entity):
         ports: list[ast.ClassDef] = []
         stores: list[ast.ClassDef] = []
         for stmt in self._nested_class_defs(list(self._body)):
-            block = block_named(stmt.name)
+            block = self._ports_block_named(kind_table, stmt.name)
             where = f"{module_name}.{stmt.name}"
-            shape = EnumShape(EnumShapeSpec(stmt, scope_spec))
+            shape = EnumShape(Module._enum_shape_spec(stmt, scope_spec))
             enum_base = str(shape.base()) if shape.base() is not None else None
             if enum_base is not None and block is None:
                 if enum_base not in ENUM_BASES:
@@ -12010,7 +10445,7 @@ class Module(ts.Entity):
             elif block == "store":
                 stores.append(stmt)
             if block in ("port_request", "port_response") and any(
-                block_named(base.id) in ("port_request", "port_response")
+                self._ports_block_named(kind_table, base.id) in ("port_request", "port_response")
                 for base in stmt.bases
                 if isinstance(base, ast.Name)
             ):
@@ -12078,24 +10513,24 @@ class Module(ts.Entity):
         for loose in self._body:
             if isinstance(loose, (ast.Import, ast.ImportFrom, ast.ClassDef)):
                 continue
-            found.extend(unreadable(module_name, loose))
+            found.extend(self._ports_unreadable(module_name, loose))
         for holder in self._class_defs:
-            shape = EnumShape(EnumShapeSpec(holder, scope_spec))
+            shape = EnumShape(Module._enum_shape_spec(holder, scope_spec))
             enum_member = shape.base() is not None
             enum_extras = frozenset(int(position) for position in shape.positions())
             for base in holder.bases:
                 if not self._readable(base):
-                    found.extend(unreadable(f"{module_name}.{holder.name}", base))
+                    found.extend(self._ports_unreadable(f"{module_name}.{holder.name}", base))
             for position, item in enumerate(holder.body, start=1):
                 where = f"{module_name}.{holder.name}"
                 if isinstance(item, ast.Pass):
                     continue
                 if enum_member:
                     if position in enum_extras:
-                        found.extend(unreadable(where, item))
+                        found.extend(self._ports_unreadable(where, item))
                     continue
                 if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    found.extend(unreadable(where, item))
+                    found.extend(self._ports_unreadable(where, item))
                     continue
                 shape_name = f"{where}.{item.name}"
                 for node in [
@@ -12104,7 +10539,7 @@ class Module(ts.Entity):
                     if arg.arg != "self"
                 ] + [item.returns]:
                     if node is not None and not self._readable(node):
-                        found.extend(unreadable(shape_name, node))
+                        found.extend(self._ports_unreadable(shape_name, node))
                 for body_stmt in item.body:
                     if isinstance(
                         body_stmt, (ast.Pass, ast.Return, ast.Assign, ast.AnnAssign)
@@ -12116,7 +10551,7 @@ class Module(ts.Entity):
                         and body_stmt.value.value is Ellipsis
                     ):
                         continue
-                    found.extend(unreadable(shape_name, body_stmt))
+                    found.extend(self._ports_unreadable(shape_name, body_stmt))
         return tuple(found)
 
     def test_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
@@ -12126,147 +10561,66 @@ class Module(ts.Entity):
         export = str(registry.export()) if registry.export() is not None else None
         contexts = frozenset(registry.contexts())
         scope = self._scope
-        scope_spec = ScopeSpec(
-            self._name,
-            tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
-            tuple(AliasSpec(alias, package) for alias, package in self._package_aliases.items()),
-            tuple(self._classes),
-            tuple(sorted(self._functions)),
-            self._spoken,
-            self._enums,
-            self._reexports,
-        )
+        scope_spec = ScopeSpec(self._name, tuple((ImportSpec(local, target, original) for local, (target, original) in self._imported.items())), tuple((AliasSpec(alias, package) for alias, package in self._package_aliases.items())), tuple(self._classes), tuple(sorted(self._functions)), self._spoken, self._enums, self._reexports)
         found: list[Violation] = []
         for edge in self._edges:
-            if str(edge._target).split(".")[0] in contexts:
+            if str(edge._target).split('.')[0] in contexts:
                 found.extend(edge.form_violations())
         if export != TESSER:
             found.extend(TEST_TESSER_IMPORTS.violations(self))
-
-        def decorated_as(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, wanted: str) -> bool:  # tesser:debt TB023
-            for decorator in node.decorator_list:
-                ref = Annotation(decorator).primary()
-                symbol = scope.resolve(ref) if ref is not None else None
-                if symbol is not None and TESSER_DECORATORS.get((str(symbol.module()), str(symbol.name()))) == wanted:
-                    return True
-            return False
-
-        helper_names = tuple(sorted(
-            stmt.name
-            for stmt in self._body
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and (decorated_as(stmt, "helper") or decorated_as(stmt, "assembly"))
-        ))
+        helper_names = tuple(sorted((stmt.name for stmt in self._body if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and (self._test_decorated_as(stmt, 'helper') or self._test_decorated_as(stmt, 'assembly')))))
+        for statement in self._body:
+            for nested in ast.walk(statement):
+                if isinstance(nested, ast.ClassDef) and nested not in self._body and self._test_decorated_as(nested, "peer"):
+                    found.append(Violation(ViolationSpec(
+                        self._path, nested.lineno, "TB072",
+                        f"{module_name}.{nested.name} nests a peer; an integration peer is declared at module level",
+                    )))
         for stmt in self._body:
             if isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 continue
             if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                where = f"{module_name}.{stmt.name}"
-                if stmt.name.startswith("test_"):
+                where = f'{module_name}.{stmt.name}'
+                if stmt.name.startswith('test_'):
                     continue
-                if decorated_as(stmt, "helper"):
-                    found.extend(
-                        Helper(HelperSpec(stmt, where, self._path, scope_spec, registry_spec, helper_names)).violations()
-                    )
+                if self._test_decorated_as(stmt, 'helper'):
+                    found.extend(Helper(Module._helper_spec(stmt, where, self._path, scope_spec, registry_spec, helper_names)).violations())
                     continue
-                if decorated_as(stmt, "assembly"):
-                    found.extend(
-                        Helper(HelperSpec(
-                            stmt, where, self._path, scope_spec, registry_spec, helper_names, assembly=True
-                        )).violations()
-                    )
+                if self._test_decorated_as(stmt, 'assembly'):
+                    found.extend(Helper(Module._helper_spec(stmt, where, self._path, scope_spec, registry_spec, helper_names, assembly=True)).violations())
                     continue
-                found.append(
-                    Violation(ViolationSpec(
-                        self._path,
-                        stmt.lineno,
-                        "TB071",
-                        f"{where} is neither a test nor a declared helper; a test module holds "
-                        "tests, @ts.helper builders, @ts.assembly inputs, and @ts.fake doubles",
-                    ))
-                )
+                found.append(Violation(ViolationSpec(self._path, stmt.lineno, 'TB071', f'{where} is neither a test nor a declared helper; a test module holds tests, @ts.helper builders, @ts.assembly inputs, and @ts.fake doubles')))
             elif isinstance(stmt, ast.ClassDef):
                 if export == TESSER:
                     continue
-                where = f"{module_name}.{stmt.name}"
-                if not decorated_as(stmt, "fake"):
-                    if stmt.name.startswith("Test"):
+                where = f'{module_name}.{stmt.name}'
+                if self._test_decorated_as(stmt, 'peer'):
+                    found.extend(self._peer_violations(stmt, registry))
+                    continue
+                if not self._test_decorated_as(stmt, 'fake'):
+                    if stmt.name.startswith('Test'):
                         for item in stmt.body:
                             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                                if not item.name.startswith("test_"):
-                                    found.append(
-                                        Violation(ViolationSpec(
-                                            self._path,
-                                            item.lineno,
-                                            "TB071",
-                                            f"{where}.{item.name} is not a test method; a test class holds only test methods",
-                                        ))
-                                    )
+                                if not item.name.startswith('test_'):
+                                    found.append(Violation(ViolationSpec(self._path, item.lineno, 'TB071', f'{where}.{item.name} is not a test method; a test class holds only test methods')))
                             elif isinstance(item, ast.ClassDef):
-                                found.append(
-                                    Violation(ViolationSpec(
-                                        self._path,
-                                        item.lineno,
-                                        "TB071",
-                                        f"{where}.{item.name} is a nested class; a test class holds test methods, never nested classes",
-                                    ))
-                                )
+                                found.append(Violation(ViolationSpec(self._path, item.lineno, 'TB071', f'{where}.{item.name} is a nested class; a test class holds test methods, never nested classes')))
                             else:
-                                found.append(
-                                    Violation(ViolationSpec(
-                                        self._path,
-                                        item.lineno,
-                                        "TB071",
-                                        f"{where} carries a loose statement in its body; a test class holds test methods, never loose statements",
-                                    ))
-                                )
+                                found.append(Violation(ViolationSpec(self._path, item.lineno, 'TB071', f'{where} carries a loose statement in its body; a test class holds test methods, never loose statements')))
                         continue
-                    found.append(
-                        Violation(ViolationSpec(
-                            self._path,
-                            stmt.lineno,
-                            "TB072",
-                            f"{where} is an undeclared class; a class in a test module is a Test-prefixed test class or declares itself with @ts.fake",
-                        ))
-                    )
+                    found.append(Violation(ViolationSpec(self._path, stmt.lineno, 'TB072', f'{where} is an undeclared class; a class in a test module is a Test-prefixed test class or declares itself with @ts.fake')))
                 else:
                     doubles = False
                     for base in stmt.bases:
-                        ref = Annotation(base.value if isinstance(base, ast.Subscript) else base).primary()
+                        ref = Annotation(Module._annotation_spec(base.value if isinstance(base, ast.Subscript) else base)).primary()
                         symbol = scope.resolve(ref) if ref is not None else None
                         block = kind_table.block_of(symbol) if symbol is not None else None
-                        if block is not None and str(block) in (
-                            "port",
-                            "store",
-                            "client",
-                            "actions_client",
-                            RELAY_BLOCK,
-                            "protocol_port",
-                            "config_repository",
-                            DEPRECATED_WORKFLOW_BLOCK,
-                        ):
+                        if block is not None and str(block) in ('port', 'store', 'client', 'actions_client', RELAY_BLOCK, 'protocol_port', 'config_repository', DEPRECATED_WORKFLOW_BLOCK):
                             doubles = True
                     if not doubles:
-                        found.append(
-                            Violation(ViolationSpec(
-                                self._path,
-                                stmt.lineno,
-                                "TB072",
-                                f"{where} implements no application port, store, relay, protocol "
-                                "port, client, deprecated workflow, or config repository; a fake implements "
-                                "the contract it doubles",
-                            ))
-                        )
+                        found.append(Violation(ViolationSpec(self._path, stmt.lineno, 'TB072', f'{where} implements no application port, store, relay, protocol port, client, deprecated workflow, or config repository; a fake implements the contract it doubles')))
             else:
-                found.append(
-                    Violation(ViolationSpec(
-                        self._path,
-                        stmt.lineno,
-                        "TB071",
-                        f"{module_name} has a loose module-level statement; "
-                        "a test module holds only imports, tests, helpers, and fakes",
-                    ))
-                )
+                found.append(Violation(ViolationSpec(self._path, stmt.lineno, 'TB071', f'{module_name} has a loose module-level statement; a test module holds only imports, tests, helpers, and fakes')))
         return tuple(found)
 
     def placement_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
@@ -12497,7 +10851,6 @@ class Module(ts.Entity):
                     ))
                 )
         return tuple(found)
-
 
     def enums(self) -> Names:
         return Names(self._enums)
@@ -14153,401 +12506,30 @@ class Module(ts.Entity):
             registry_spec,
         ))
 
-        def annotation(node: ast.expr | None) -> SpecRef | None:  # tesser:debt TB023
-            return spec_reader.ref(Annotation(node)) if node is not None else None
-
-        def resolve(node: ast.expr) -> Symbol | None:  # tesser:debt TB023
-            ref = Annotation(node).primary()
-            return scope.resolve(ref) if ref is not None else None
-
-        def maker(node: ast.expr) -> SpecRef | None:  # tesser:debt TB023
-            made = annotation(node)
-            if made is not None:
-                return made
-            if isinstance(node, ast.Name):
-                return registry.spec_maker(Symbol(SymbolSpec(module_name, node.id)))
-            symbol = resolve(node)
-            if symbol is not None:
-                known = registry.spec_maker(symbol)
-                if known is not None:
-                    return known
-            if isinstance(node, ast.Attribute):
-                return registry.spec_method(Text(node.attr))
-            return None
-
-        def typed(node: ast.expr, names: dict[str, SpecRef]) -> SpecRef | None:  # tesser:debt TB023
-            if isinstance(node, (ast.Await, ast.NamedExpr)):
-                return typed(node.value, names)
-            if isinstance(node, ast.Name):
-                return names.get(node.id)
-            if isinstance(node, ast.Call):
-                made = maker(node.func)
-                if made is not None:
-                    return made
-                if isinstance(node.func, ast.Name) and node.func.id == "enumerate" and node.args:
-                    return typed(node.args[0], names)
-                return None
-            if isinstance(node, ast.Attribute):
-                owner = typed(node.value, names)
-                if owner is not None and owner.shape() == SPEC_ONE:
-                    return registry.spec_field(Text(f"{owner.symbol().module()}|{owner.symbol().name()}|{node.attr}"))
-                return None
-            if isinstance(node, ast.Subscript):
-                owner = typed(node.value, names)
-                if owner is not None and owner.shape() == SPEC_MANY:
-                    return owner if isinstance(node.slice, ast.Slice) else owner.one()
-                return None
-            if isinstance(node, ast.IfExp):
-                return typed(node.body, names) or typed(node.orelse, names)
-            if isinstance(node, ast.BoolOp):
-                for each in node.values:
-                    found_value = typed(each, names)
-                    if found_value is not None:
-                        return found_value
-            return None
-
-        def carried(node: ast.expr, names: dict[str, SpecRef]) -> str | None:  # tesser:debt TB023
-            if isinstance(node, (ast.Name, ast.Call, ast.Attribute, ast.Subscript)) and typed(node, names) is not None:
-                if isinstance(node, ast.Name):
-                    return node.id
-                if isinstance(node, ast.Call) and maker(node.func) is not None:
-                    return ast.unparse(node.func)
-                return ast.unparse(node)
-            parts: list[ast.expr] = []
-            if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-                parts = list(node.elts)
-            elif isinstance(node, ast.Dict):
-                parts = [value for value in node.values if value is not None]
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in ("list", "tuple", "set", "frozenset", "dict")
-            ):
-                parts = [*node.args, *(k.value for k in node.keywords)]
-            elif isinstance(node, ast.IfExp):
-                parts = [node.body, node.orelse]
-            elif isinstance(node, ast.BoolOp):
-                parts = list(node.values)
-            elif isinstance(node, (ast.Await, ast.NamedExpr)):
-                parts = [node.value]
-            for each in parts:
-                hit = carried(each, names)
-                if hit is not None:
-                    return hit
-            return None
-
-        def bound(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:  # tesser:debt TB023
-            args = fn.args
-            out = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
-            if args.vararg is not None:
-                out.add(args.vararg.arg)
-            if args.kwarg is not None:
-                out.add(args.kwarg.arg)
-            return out
-
-        def own_scope(nodes: list[ast.AST]) -> list[ast.AST]:  # tesser:debt TB023
-            out: list[ast.AST] = []
-            stack = list(nodes)
-            while stack:
-                cur = stack.pop()
-                out.append(cur)
-                if isinstance(
-                    cur,
-                    (
-                        ast.FunctionDef,
-                        ast.AsyncFunctionDef,
-                        ast.Lambda,
-                        ast.ClassDef,
-                        ast.ListComp,
-                        ast.SetComp,
-                        ast.DictComp,
-                        ast.GeneratorExp,
-                    ),
-                ):
-                    continue
-                stack.extend(ast.iter_child_nodes(cur))
-            return out
-
-        def stored(node: ast.AST) -> list[str]:  # tesser:debt TB023
-            return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
-
-        def element(target: ast.expr, iterable: ast.expr, names: dict[str, SpecRef]) -> tuple[str, SpecRef] | None:  # tesser:debt TB023
-            many = typed(iterable, names)
-            if many is None or many.shape() != SPEC_MANY:
-                return None
-            if isinstance(target, ast.Name):
-                return target.id, many.one()
-            if (
-                isinstance(target, ast.Tuple)
-                and len(target.elts) == 2
-                and isinstance(target.elts[1], ast.Name)
-                and isinstance(iterable, ast.Call)
-                and isinstance(iterable.func, ast.Name)
-                and iterable.func.id == "enumerate"
-            ):
-                return target.elts[1].id, many.one()
-            return None
-
-        def held_in(body: list[ast.stmt], names: dict[str, SpecRef]) -> dict[str, SpecRef]:  # tesser:debt TB023
-            names = dict(names)
-            local = own_scope(list(body))
-            local.extend(
-                inner
-                for node in local
-                if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
-                for inner in ast.walk(node)
-                if isinstance(inner, ast.NamedExpr)
-            )
-            changed = True
-            while changed:
-                changed = False
-                for node in local:
-                    if isinstance(node, ast.Assign):
-                        made = typed(node.value, names)
-                        if made is not None:
-                            for target in node.targets:
-                                if isinstance(target, ast.Name) and target.id not in names:
-                                    names[target.id] = made
-                                    changed = True
-                    elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                        made = annotation(node.annotation) or (
-                            typed(node.value, names) if node.value is not None else None
-                        )
-                        if made is not None and node.target.id not in names:
-                            names[node.target.id] = made
-                            changed = True
-                    elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
-                        made = typed(node.value, names)
-                        if made is not None and node.target.id not in names:
-                            names[node.target.id] = made
-                            changed = True
-                    elif isinstance(node, (ast.For, ast.AsyncFor)):
-                        picked = element(node.target, node.iter, names)
-                        if picked is not None and picked[0] not in names:
-                            names[picked[0]] = picked[1]
-                            changed = True
-            shadowed: set[str] = set()
-            for node in local:
-                if isinstance(node, (ast.For, ast.AsyncFor)):
-                    if element(node.target, node.iter, names) is None:
-                        shadowed.update(stored(node.target))
-                elif isinstance(node, (ast.With, ast.AsyncWith)):
-                    for item in node.items:
-                        if item.optional_vars is not None:
-                            shadowed.update(stored(item.optional_vars))
-                elif isinstance(node, ast.ExceptHandler) and node.name is not None:
-                    shadowed.add(node.name)
-                elif isinstance(node, ast.Assign) and typed(node.value, names) is None:
-                    for target in node.targets:
-                        shadowed.update(stored(target))
-                elif isinstance(node, ast.AnnAssign) and annotation(node.annotation) is None and (
-                    node.value is None or typed(node.value, names) is None
-                ):
-                    shadowed.update(stored(node.target))
-                elif isinstance(node, ast.AugAssign):
-                    shadowed.update(stored(node.target))
-                elif isinstance(node, ast.NamedExpr) and typed(node.value, names) is None:
-                    shadowed.update(stored(node.target))
-                elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                    shadowed.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
-                elif isinstance(node, ast.Match):
-                    for case in node.cases:
-                        for pattern in ast.walk(case.pattern):
-                            if isinstance(pattern, (ast.MatchAs, ast.MatchStar)) and pattern.name is not None:
-                                shadowed.add(pattern.name)
-                            elif isinstance(pattern, ast.MatchMapping) and pattern.rest is not None:
-                                shadowed.add(pattern.rest)
-            return {name: made for name, made in names.items() if name not in shadowed}
-
-        def held(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: dict[str, SpecRef]) -> dict[str, SpecRef]:  # tesser:debt TB023
-            seeded = dict(names)
-            for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
-                made = annotation(a.annotation)
-                if made is not None:
-                    seeded[a.arg] = made
-            return held_in(list(fn.body), seeded)
-
-        def kept(node: ast.AST, names: dict[str, SpecRef], top: bool) -> str | None:  # tesser:debt TB023
-            if top and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) for t in node.targets):
-                return carried(node.value, names)
-            if top and isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                if node.value is not None:
-                    return carried(node.value, names)
-                return ast.unparse(node.annotation) if annotation(node.annotation) is not None else None
-            if isinstance(node, ast.Assign) and any(
-                isinstance(t, (ast.Attribute, ast.Subscript))
-                for target in node.targets
-                for t in (target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target])
-            ):
-                return carried(node.value, names)
-            if isinstance(node, ast.AugAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
-                return carried(node.value, names)
-            if isinstance(node, ast.AnnAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
-                if node.value is not None:
-                    return carried(node.value, names)
-                return ast.unparse(node.annotation) if annotation(node.annotation) is not None else None
-            if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Attribute) and node.func.attr in (
-                    "append", "appendleft", "extend", "insert", "setdefault"
-                ):
-                    for each in [*node.args, *(k.value for k in node.keywords)]:
-                        hit = carried(each, names)
-                        if hit is not None:
-                            return hit
-                if isinstance(node.func, ast.Attribute) and node.func.attr == "__setattr__":
-                    if len(node.args) == 3:
-                        return carried(node.args[2], names)
-                    if len(node.args) == 2:
-                        return carried(node.args[1], names)
-                if isinstance(node.func, ast.Name) and node.func.id == "setattr" and len(node.args) == 3:
-                    return carried(node.args[2], names)
-            return None
-
-        def read(node: ast.AST, names: dict[str, SpecRef]) -> tuple[str, str, Symbol] | None:  # tesser:debt TB023
-            if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
-                owner = typed(node.value, names)
-                if owner is not None and owner.shape() == SPEC_ONE and not node.attr.startswith("__"):
-                    return ast.unparse(node.value), node.attr, owner.symbol()
-                return None
-            if isinstance(node, ast.Call) and node.args:
-                owner = typed(node.args[0], names)
-                if owner is None or owner.shape() == SPEC_MANY:
-                    return None
-                if isinstance(node.func, ast.Name) and node.func.id in ("getattr", "vars"):
-                    field = (
-                        node.args[1].value
-                        if len(node.args) > 1
-                        and isinstance(node.args[1], ast.Constant)
-                        and isinstance(node.args[1].value, str)
-                        else "__dict__"
-                    )
-                    return ast.unparse(node.args[0]), field, owner.symbol()
-                if ast.unparse(node.func).split(".")[-1] in ("asdict", "astuple", "copy", "deepcopy"):
-                    return ast.unparse(node.args[0]), "__dict__", owner.symbol()
-            return None
 
         found: list[Violation] = []
         seen: set[tuple[int, str, str]] = set()
 
-        def scan(  # tesser:debt TB023
-            nodes: list[ast.AST],
-            names: dict[str, SpecRef],
-            where: str,
-            owner_here: Symbol | None,
-            assembling: bool,
-            top: bool = False,
-        ) -> None:
-            for cur in own_scope(nodes):
-                if top and isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                if top and isinstance(cur, ast.ClassDef):
-                    scan(list(cur.body), names, f"{where}.{cur.name}", None, False, True)
-                    continue
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    scan(
-                        list(cur.body),
-                        held(cur, {n: t for n, t in names.items() if n not in bound(cur)}),
-                        f"{where}.{cur.name}",
-                        owner_here,
-                        assembling,
-                    )
-                    continue
-                if isinstance(cur, ast.Lambda):
-                    scan(
-                        [cur.body],
-                        {n: t for n, t in names.items() if n not in bound(cur)},
-                        where,
-                        owner_here,
-                        assembling,
-                    )
-                    continue
-                if isinstance(cur, ast.ClassDef):
-                    scan(list(cur.body), names, f"{where}.{cur.name}", owner_here, assembling)
-                    continue
-                if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-                    first, rest = cur.generators[0], cur.generators[1:]
-                    scan([first.iter], names, where, owner_here, assembling)
-                    targets = {
-                        t.id
-                        for comp in cur.generators
-                        for t in ast.walk(comp.target)
-                        if isinstance(t, ast.Name)
-                    }
-                    inner = {n: t for n, t in names.items() if n not in targets}
-                    for comp in cur.generators:
-                        picked = element(comp.target, comp.iter, inner if comp is not first else names)
-                        if picked is not None:
-                            inner[picked[0]] = picked[1]
-                    parts: list[ast.AST] = [*first.ifs]
-                    for comp in rest:
-                        parts.extend([comp.iter, *comp.ifs])
-                    parts.extend([cur.key, cur.value] if isinstance(cur, ast.DictComp) else [cur.elt])
-                    scan(parts, inner, where, owner_here, assembling)
-                    continue
-                if not isinstance(cur, (ast.stmt, ast.expr)):
-                    continue
-                spec_name = kept(cur, names, top)
-                if spec_name is not None and not assembling and (cur.lineno, "\x00keeps", spec_name) not in seen:
-                    seen.add((cur.lineno, "\x00keeps", spec_name))
-                    found.append(
-                        Violation(ViolationSpec(
-                            path,
-                            cur.lineno,
-                            "TB083",
-                            f"{where} keeps the spec {spec_name!r}; "
-                            "a spec is never kept, it initializes its own object and is done",
-                        ))
-                    )
-                hit = read(cur, names)
-                if hit is not None:
-                    spec_name, field, key = hit
-                    licensed = owner_here is not None and owner_here in registry.spec_takers(key)
-                    if not licensed and (cur.lineno, field, spec_name) not in seen:
-                        seen.add((cur.lineno, field, spec_name))
-                        found.append(
-                            Violation(ViolationSpec(
-                                path,
-                                cur.lineno,
-                                "TB083",
-                                f"{where} reads {field!r} of the spec {spec_name!r}; "
-                                "a spec is only read where it initializes its own object",
-                            ))
-                        )
 
-        def roots() -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]]:  # tesser:debt TB023
-            out: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]] = []
-            stack: list[tuple[ast.AST, ast.ClassDef | None]] = [(stmt, None) for stmt in self._body]
-            while stack:
-                cur, cls = stack.pop()
-                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    out.append((cur, cls))
-                    continue
-                if isinstance(cur, ast.Lambda):
-                    continue
-                if isinstance(cur, ast.ClassDef):
-                    stack.extend((item, cur) for item in cur.body)
-                    continue
-                stack.extend((child, cls) for child in ast.iter_child_nodes(cur))
-            return out
-
-        module_names = held_in(list(self._body), {})
-        scan(list(self._body), module_names, module_name, None, False, True)
-        for fn, cls in roots():
+        module_names = self._spec_held_in(registry, spec_reader, list(self._body), {})
+        self._spec_scan(found, registry, seen, spec_reader, list(self._body), module_names, module_name, None, False, True)
+        for fn, cls in self._spec_roots():
             named_block = kind_table.block_of(Symbol(SymbolSpec(module_name, cls.name))) if cls is not None else None
             block = str(named_block) if named_block is not None else None
             where = (
                 f"{module_name}.{cls.name}.{fn.name}" if cls is not None else f"{module_name}.{fn.name}"
             )
-            scan(
+            self._spec_scan(found, registry, seen, spec_reader,
                 list(fn.body),
-                held(fn, module_names),
+                self._spec_held(registry, spec_reader, fn, module_names),
                 where,
                 Symbol(SymbolSpec(module_name, cls.name))
                 if cls is not None and fn.name == "__init__" and block in SPEC_READER_BLOCKS
                 else None,
                 fn.name == "__init__" and block in SPEC_BLOCKS,
             )
-        return tuple(sorted(found, key=lambda v: int(v.line())))  # tesser:debt TB023
+        ordered = sorted((int(violation.line()), index, violation) for index, violation in enumerate(found))
+        return tuple(violation for _, _, violation in ordered)
 
     def record_write_violations(self, registry_spec: RegistrySpec) -> tuple[Violation, ...]:
         record_reader = RecordReader(RecordReaderSpec(
@@ -14567,7 +12549,7 @@ class Module(ts.Entity):
         made: dict[str, str] = {}
         for stmt in self._body:
             if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.returns is not None:
-                returned = record_reader.ref(Annotation(stmt.returns))
+                returned = record_reader.ref(Annotation(Module._annotation_spec(stmt.returns)))
                 if returned is not None:
                     made[stmt.name] = str(returned.shape())
         units: list[tuple[list[ast.stmt], str, ast.FunctionDef | ast.AsyncFunctionDef | None, ast.ClassDef | None]] = [
@@ -14608,7 +12590,7 @@ class Module(ts.Entity):
                             if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store)
                         )
                 elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                    annotated = record_reader.ref(Annotation(node.annotation))
+                    annotated = record_reader.ref(Annotation(Module._annotation_spec(node.annotation)))
                     bindings.append((
                         node.target.id,
                         node.value,
@@ -14663,7 +12645,7 @@ class Module(ts.Entity):
                         shadowed.add(extra.arg)
                 held = {name: shape for name, shape in module_held.items() if name not in shadowed}
                 for arg in params:
-                    taken = record_reader.ref(Annotation(arg.annotation)) if arg.annotation is not None else None
+                    taken = record_reader.ref(Annotation(Module._annotation_spec(arg.annotation))) if arg.annotation is not None else None
                     if taken is not None:
                         held[arg.arg] = str(taken.shape())
                 if record_class and first is not None:
@@ -14695,7 +12677,7 @@ class Module(ts.Entity):
                             elif isinstance(probe, ast.Call):
                                 called = made.get(probe.func.id) if isinstance(probe.func, ast.Name) else None
                                 if called is None:
-                                    ref = Annotation(probe.func).primary()
+                                    ref = Annotation(Module._annotation_spec(probe.func)).primary()
                                     symbol = self._scope.resolve(ref) if ref is not None else None
                                     built = record_reader.made(symbol) if symbol is not None else None
                                     called = str(built.shape()) if built is not None else None
@@ -14718,7 +12700,7 @@ class Module(ts.Entity):
                 raising = False
                 for withitem in node.items:
                     ref = (
-                        Annotation(withitem.context_expr.func).primary()
+                        Annotation(Module._annotation_spec(withitem.context_expr.func)).primary()
                         if isinstance(withitem.context_expr, ast.Call)
                         else None
                     )
@@ -14812,10 +12794,13 @@ class Module(ts.Entity):
             self._reexports,
         )
         return tuple(
-            ClassDecl(ClassDeclSpec(node, self._name, self._path, scope_spec, registry_spec)) for node in self._class_defs
+            ClassDecl(Module._class_decl_spec(node, self._name, self._path, scope_spec, registry_spec)) for node in self._class_defs
         )
 
-    def _constructor_rows(self, blocks: dict[tuple[str, str], str]) -> tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...]:
+    def _constructor_rows(
+        self,
+        blocks: dict[tuple[str, str], str],
+    ) -> tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...]:
         scope_spec = ScopeSpec(
             self._name,
             tuple(ImportSpec(local, target, original) for local, (target, original) in self._imported.items()),
@@ -14903,6 +12888,3367 @@ class Module(ts.Entity):
                 break
             found = hopped
         return found
+
+    def _outcome_resolve(self, node: ast.expr) -> tuple[str, str] | None:
+        cursor = node
+        while isinstance(cursor, ast.Subscript):
+            cursor = cursor.value
+        ref: str | None = None
+        if isinstance(cursor, ast.Name):
+            ref = cursor.id
+        elif isinstance(cursor, ast.Attribute) and isinstance(cursor.value, (ast.Name, ast.Attribute)):
+            ref = f"{ast.unparse(cursor.value)}.{cursor.attr}"
+        if ref is None:
+            return None
+        symbol = self._scope.resolve(Text(ref))
+        return (str(symbol.module()), str(symbol.name())) if symbol is not None else None
+
+    def _outcome_annotation_types(self, node: ast.expr) -> set[Symbol]:
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            return self._outcome_annotation_types(node.left) | self._outcome_annotation_types(node.right)
+        if isinstance(node, ast.Subscript):
+            head = self._resolve(node.value)
+            if head in (("typing", "Optional"), ("typing", "Union")):
+                elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+                return {symbol for element in elements for symbol in self._outcome_annotation_types(element)}
+            return set()
+        symbol = self._scope.resolve(Text(ast.unparse(node)))
+        return {symbol} if symbol is not None else set()
+
+    def _outcome_value_types(
+        self, registry: Registry, node: ast.expr, bindings: dict[str, set[Symbol]]
+    ) -> set[Symbol]:
+        if isinstance(node, ast.Await):
+            return self._outcome_value_types(registry, node.value, bindings)
+        if isinstance(node, ast.IfExp):
+            return (
+                self._outcome_value_types(registry, node.body, bindings)
+                | self._outcome_value_types(registry, node.orelse, bindings)
+            )
+        if isinstance(node, ast.BoolOp):
+            return {symbol for value in node.values for symbol in self._outcome_value_types(registry, value, bindings)}
+        if isinstance(node, ast.Name) and node.id in bindings:
+            return bindings[node.id]
+        if isinstance(node, ast.Call):
+            callee = self._scope.resolve(Text(ast.unparse(node.func)))
+            if callee is not None:
+                returned = registry.returns().returned(Text(f"{callee.module()}||{callee.name()}"))
+                return {returned} if returned is not None else set()
+            if isinstance(node.func, ast.Name) and node.func.id in self._functions:
+                returned = registry.returns().returned(Text(f"{self._name}||{node.func.id}"))
+                return {returned} if returned is not None else set()
+            if isinstance(node.func, ast.Attribute):
+                return {
+                    returned
+                    for owner in self._outcome_value_types(registry, node.func.value, bindings)
+                    if (returned := registry.returns().returned(
+                        Text(f"{owner.module()}|{owner.name()}|{node.func.attr}")
+                    )) is not None
+                }
+            return set()
+        if isinstance(node, ast.Attribute):
+            found: set[Symbol] = set()
+            for owner in self._outcome_value_types(registry, node.value, bindings):
+                block = registry.kinds().block_of(owner)
+                if (
+                    block is not None
+                    and str(block) == OUTCOME_BLOCK
+                    and self._outcome_outcome_key(registry.kinds(), node) is not None
+                ):
+                    found.add(owner)
+                held = registry.attrs().held(Text(f"{owner.module()}|{owner.name()}|{node.attr}"))
+                if held is not None:
+                    found.add(held)
+            if found:
+                return found
+        symbol = self._scope.resolve(Text(ast.unparse(node)))
+        return {symbol} if symbol is not None else set()
+
+    def _outcome_join(
+        self, bindings: dict[str, set[Symbol]], branches: tuple[dict[str, set[Symbol]], ...]
+    ) -> None:
+        bindings.clear()
+        for branch in branches:
+            for name, symbols in branch.items():
+                bindings.setdefault(name, set()).update(symbols)
+
+    def _outcome_slot_reads(
+        self, registry: Registry, nodes: tuple[ast.AST, ...], bindings: dict[str, set[Symbol]],
+        interruptions: dict[str, set[Symbol]] | None = None,
+        transfers: dict[str, set[Symbol]] | None = None,
+    ) -> set[int]:
+        reads: set[int] = set()
+        pending: list[ast.AST] = list(nodes)
+        while pending:
+            if interruptions is not None:
+                for name, symbols in bindings.items():
+                    interruptions.setdefault(name, set()).update(symbols)
+            node = pending.pop(0)
+            if isinstance(node, (ast.Break, ast.Continue)):
+                if transfers is not None:
+                    self._outcome_join(transfers, (dict(transfers), bindings))
+                break
+            if isinstance(node, ast.ClassDef):
+                symbol = Symbol(SymbolSpec(self._name, node.name))
+                reads.update(self._outcome_slot_reads(registry, tuple(node.body), {"self": {symbol}, "cls": {symbol}}))
+                pending[0:0] = node.bases + node.decorator_list + [keyword.value for keyword in node.keywords]
+                continue
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                local = dict(bindings)
+                params = node.args.posonlyargs + node.args.args + node.args.kwonlyargs
+                params += [arg for arg in (node.args.vararg, node.args.kwarg) if arg is not None]
+                for arg in params:
+                    if arg.annotation is not None:
+                        local[arg.arg] = self._outcome_annotation_types(arg.annotation)
+                    elif arg.arg not in ("self", "cls"):
+                        local[arg.arg] = set()
+                reads.update(self._outcome_slot_reads(registry, tuple(node.body), local))
+                pending[0:0] = (
+                    node.decorator_list + node.args.defaults
+                    + [default for default in node.args.kw_defaults if default is not None]
+                    + [arg.annotation for arg in params if arg.annotation is not None]
+                    + ([node.returns] if node.returns is not None else [])
+                )
+                continue
+            if isinstance(node, ast.If):
+                reads.update(self._outcome_slot_reads(registry, (node.test,), bindings, interruptions, transfers))
+                left, right = dict(bindings), dict(bindings)
+                reads.update(self._outcome_slot_reads(registry, tuple(node.body), left, interruptions, transfers))
+                reads.update(self._outcome_slot_reads(registry, tuple(node.orelse), right, interruptions, transfers))
+                self._outcome_join(bindings, (left, right))
+                continue
+            if isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
+                if isinstance(node, (ast.For, ast.AsyncFor)):
+                    reads.update(self._outcome_slot_reads(registry, (node.iter,), bindings, interruptions))
+                initial = dict(bindings)
+                carried = dict(bindings)
+                loop_transfers: dict[str, set[Symbol]] = {}
+                while True:
+                    body = dict(carried)
+                    if isinstance(node, ast.While):
+                        reads.update(self._outcome_slot_reads(registry, (node.test,), body, interruptions))
+                    else:
+                        elements = node.iter.elts if isinstance(node.iter, (ast.Tuple, ast.List, ast.Set)) else []
+                        iterated = {
+                            symbol for element in elements
+                            for symbol in self._outcome_value_types(registry, element, body)
+                        }
+                        for target in ast.walk(node.target):
+                            if isinstance(target, ast.Name):
+                                body[target.id] = iterated
+                    reads.update(self._outcome_slot_reads(registry, tuple(node.body), body, interruptions, loop_transfers))
+                    joined: dict[str, set[Symbol]] = {}
+                    self._outcome_join(joined, (initial, body, loop_transfers))
+                    if joined == carried:
+                        break
+                    carried = joined
+                otherwise = dict(carried)
+                reads.update(self._outcome_slot_reads(registry, tuple(node.orelse), otherwise, interruptions, transfers))
+                self._outcome_join(bindings, (carried, otherwise))
+                continue
+            if isinstance(node, ast.Match):
+                reads.update(self._outcome_slot_reads(registry, (node.subject,), bindings, interruptions, transfers))
+                branches = [dict(bindings)]
+                for case in node.cases:
+                    branch = dict(bindings)
+                    if case.guard is not None:
+                        reads.update(self._outcome_slot_reads(registry, (case.guard,), branch, interruptions, transfers))
+                    reads.update(self._outcome_slot_reads(registry, tuple(case.body), branch, interruptions, transfers))
+                    branches.append(branch)
+                self._outcome_join(bindings, tuple(branches))
+                continue
+            if isinstance(node, (ast.Try, ast.TryStar)):
+                normal = dict(bindings)
+                prefixes: dict[str, set[Symbol]] = {}
+                leaving: dict[str, set[Symbol]] = {}
+                reads.update(self._outcome_slot_reads(registry, tuple(node.body), normal, prefixes, leaving))
+                cleanup: dict[str, set[Symbol]] = {}
+                self._outcome_join(cleanup, (prefixes,))
+                exits: list[dict[str, set[Symbol]]] = []
+                for handler in node.handlers:
+                    handled = dict(prefixes)
+                    if isinstance(node, ast.TryStar):
+                        self._outcome_join(handled, (prefixes, *exits))
+                    if handler.name is not None:
+                        handled[handler.name] = set()
+                    reads.update(self._outcome_slot_reads(registry, tuple(handler.body), handled, cleanup, leaving))
+                    exits.append(handled)
+                reads.update(self._outcome_slot_reads(registry, tuple(node.orelse), normal, cleanup, leaving))
+                if interruptions is not None:
+                    self._outcome_join(interruptions, (dict(interruptions), cleanup))
+                self._outcome_join(bindings, (normal, *exits))
+                if node.finalbody:
+                    exceptional: dict[str, set[Symbol]] = {}
+                    self._outcome_join(exceptional, (cleanup, bindings))
+                    reads.update(self._outcome_slot_reads(registry, tuple(node.finalbody), exceptional, interruptions, transfers))
+                    reads.update(self._outcome_slot_reads(registry, tuple(node.finalbody), bindings, interruptions, transfers))
+                    if leaving:
+                        reads.update(self._outcome_slot_reads(registry, tuple(node.finalbody), leaving, interruptions, transfers))
+                if transfers is not None and leaving:
+                    self._outcome_join(transfers, (dict(transfers), leaving))
+                continue
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                symbols = self._outcome_value_types(registry, node.value, bindings) if node.value is not None else set()
+                if isinstance(node, ast.AnnAssign):
+                    symbols = symbols | self._outcome_annotation_types(node.annotation)
+                if node.value is not None:
+                    reads.update(self._outcome_slot_reads(registry, (node.value,), bindings, interruptions, transfers))
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        bindings[target.id] = symbols
+                reads.update(self._outcome_slot_reads(registry, tuple(targets), bindings, interruptions, transfers))
+                continue
+            if isinstance(node, ast.Attribute) and node.attr in OUTCOME_SUNDERS:
+                if any(
+                    (block := registry.kinds().block_of(receiver)) is not None and str(block) == OUTCOME_BLOCK
+                    for receiver in self._outcome_value_types(registry, node.value, bindings)
+                ):
+                    reads.add(id(node))
+            pending[0:0] = list(ast.iter_child_nodes(node))
+        if interruptions is not None:
+            for name, symbols in bindings.items():
+                interruptions.setdefault(name, set()).update(symbols)
+        return reads
+
+    def _outcome_block_of(self, kind_table: KindTable, node: ast.expr) -> str | None:
+        key = self._outcome_resolve(node)
+        if key is None:
+            return None
+        block = kind_table.block_of(Symbol(SymbolSpec(key[0], key[1])))
+        return str(block) if block is not None else None
+
+    def _outcome_names_outcome(self, kind_table: KindTable, node: ast.expr) -> bool:
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Name, ast.Attribute)) and self._outcome_block_of(kind_table, sub) == OUTCOME_BLOCK:
+                return True
+        return False
+
+    def _outcome_outcome_key(self, kind_table: KindTable, node: ast.expr) -> tuple[str, str] | None:
+        if not isinstance(node, ast.Attribute):
+            return None
+        key = self._outcome_resolve(node.value)
+        if key is None or self._outcome_block_of(kind_table, node.value) != OUTCOME_BLOCK:
+            return None
+        return key
+
+    def _outcome_is_member_pattern(self, kind_table: KindTable, pattern: ast.pattern) -> bool:
+        if isinstance(pattern, ast.MatchOr):
+            return all(self._outcome_is_member_pattern(kind_table, alternative) for alternative in pattern.patterns)
+        return isinstance(pattern, ast.MatchValue) and self._outcome_outcome_key(kind_table, pattern.value) is not None
+
+    def _outcome_closes_with_assert_never(self, node: ast.Match) -> bool:
+        last = node.cases[-1]
+        pattern = last.pattern
+        if last.guard is not None:
+            return False
+        if not (isinstance(pattern, ast.MatchAs) and pattern.name is not None):
+            return False
+        wildcard = pattern.pattern
+        if wildcard is not None and not (
+            isinstance(wildcard, ast.MatchAs) and wildcard.pattern is None and wildcard.name is None
+        ):
+            return False
+        if len(last.body) != 1 or not isinstance(last.body[0], (ast.Expr, ast.Return)):
+            return False
+        call = last.body[0].value
+        if not (isinstance(call, ast.Call) and len(call.args) == 1 and not call.keywords):
+            return False
+        if not (isinstance(call.args[0], ast.Name) and call.args[0].id == pattern.name):
+            return False
+        callee = call.func
+        rebound = {
+            target.id
+            for assignment in self._assignments
+            for target in (
+                assignment.targets if isinstance(assignment, ast.Assign) else [assignment.target]
+            )
+            if isinstance(target, ast.Name)
+        }
+        if isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name):
+            package = self._scope.package_of(Text(callee.value.id))
+            return (
+                package is not None
+                and str(package) == TYPING_MODULE
+                and callee.attr == ASSERT_NEVER
+                and callee.value.id not in rebound
+            )
+        if isinstance(callee, ast.Name):
+            origin = self._scope.import_of(Text(callee.id))
+            return (
+                origin is not None
+                and str(origin.module()) == TYPING_MODULE
+                and str(origin.name()) == ASSERT_NEVER
+                and callee.id not in rebound
+            )
+        return False
+
+    def _sibling_reference_declared(
+        self,
+        body: list[ast.stmt],
+    ) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+        out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+        stack: list[ast.AST] = list(body)
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                out.append(cur)
+                continue
+            if isinstance(cur, (ast.ClassDef, ast.Lambda)):
+                continue
+            stack.extend(ast.iter_child_nodes(cur))
+        return out
+
+    def _sibling_reference_receiver(self, fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+        names = {d.id for d in fn.decorator_list if isinstance(d, ast.Name)}
+        if "staticmethod" in names:
+            return None
+        args = fn.args.posonlyargs + fn.args.args
+        if not args:
+            return None
+        return args[0].arg
+
+    def _sibling_reference_rebinds(
+        self,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
+        name: str,
+    ) -> bool:
+        args = fn.args
+        bound = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
+        if args.vararg is not None:
+            bound.add(args.vararg.arg)
+        if args.kwarg is not None:
+            bound.add(args.kwarg.arg)
+        return name in bound
+
+    def _sibling_reference_reads(
+        self,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        name: str,
+    ) -> list[ast.Attribute]:
+        hits: list[ast.Attribute] = []
+        stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, ast.ClassDef):
+                continue
+            if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                if self._sibling_reference_rebinds(cur, name):
+                    continue
+                stack.extend(ast.iter_child_nodes(cur))
+                continue
+            if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                targets = {
+                    t.id
+                    for comp in cur.generators
+                    for t in ast.walk(comp.target)
+                    if isinstance(t, ast.Name)
+                }
+                if name in targets:
+                    continue
+                stack.extend(ast.iter_child_nodes(cur))
+                continue
+            if (
+                isinstance(cur, ast.Attribute)
+                and isinstance(cur.ctx, ast.Load)
+                and isinstance(cur.value, ast.Name)
+                and cur.value.id == name
+            ):
+                hits.append(cur)
+            stack.extend(ast.iter_child_nodes(cur))
+        return hits
+
+    def _sibling_reference_recurs(
+        self,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        name: str | None,
+    ) -> bool:
+        if name is None:
+            return False
+        stack: list[ast.AST] = list(ast.iter_child_nodes(fn))
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            if (
+                isinstance(cur, ast.Call)
+                and isinstance(cur.func, ast.Attribute)
+                and isinstance(cur.func.value, ast.Name)
+                and cur.func.value.id == name
+                and cur.func.attr == fn.name
+            ):
+                return True
+            stack.extend(ast.iter_child_nodes(cur))
+        return False
+
+    def _ports_block_named(self, kind_table: KindTable, class_name: str) -> str | None:
+        named = kind_table.block_of(Symbol(SymbolSpec(self._name, class_name)))
+        return str(named) if named is not None else None
+
+    def _ports_computes(self, node: ast.expr | None) -> bool:
+        return node is not None and any(
+            isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+            or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+            for inner in ast.walk(node)
+        )
+
+    def _ports_decoration(
+        self,
+        where: str,
+        node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> tuple[Violation, ...]:
+        return tuple(
+            Violation(ViolationSpec(
+                self._path,
+                node.lineno,
+                "TB051",
+                f"{self._name}.{where} is decorated; a ports module holds no "
+                "decorator, because a decorator is a call that runs at import in the "
+                "one application module adapters may import",
+            ))
+            for _ in node.decorator_list
+        )
+
+    def _ports_unreadable(self, where: str, node: ast.AST) -> tuple[Violation, ...]:
+        return (
+            Violation(ViolationSpec(
+                self._path,
+                getattr(node, "lineno", 1),
+                "TB069",
+                f"{where} holds a {type(node).__name__}; a ports module holds only the "
+                "shapes its rules can read, so anything else is a finding by default "
+                "rather than a gap nobody enumerated",
+            )),
+        )
+
+    def _peer_contract(self, node: ast.ClassDef, registry: Registry) -> tuple[str, str] | None:
+        if node.bases or node.keywords or len(node.decorator_list) != 1 or len(node.body) != 2:
+            return None
+        init = next((item for item in node.body if isinstance(item, ast.FunctionDef) and item.name == "__init__"), None)
+        call = next((item for item in node.body if isinstance(item, ast.AsyncFunctionDef) and item.name == "__call__"), None)
+        if init is None or call is None or init.decorator_list or call.decorator_list:
+            return None
+        if any(
+            method.args.vararg is not None or method.args.kwarg is not None
+            or method.args.kwonlyargs or method.args.defaults
+            for method in (init, call)
+        ):
+            return None
+        params = init.args.posonlyargs + init.args.args
+        incoming = call.args.posonlyargs + call.args.args
+        if (
+            not params or params[0].arg != "self" or len(incoming) != 2 or incoming[0].arg != "self"
+            or incoming[1].annotation is None or not isinstance(incoming[1].annotation, (ast.Name, ast.Attribute))
+            or not isinstance(init.returns, ast.Constant) or init.returns.value is not None
+            or not isinstance(call.returns, ast.Name) or call.returns.id not in PRIMITIVES
+        ):
+            return None
+        sdk = self._resolve(incoming[1].annotation)
+        if sdk is None or sdk[0].split(".")[0] in {*registry.tops(), TESSER, "typing", "builtins"}:
+            return None
+        context: dict[str, ast.expr] = {}
+        queues: set[str] = set()
+        for param in params[1:]:
+            annotation = param.annotation
+            if isinstance(annotation, ast.Name) and annotation.id in PRIMITIVES:
+                context[param.arg] = annotation
+            elif (
+                isinstance(annotation, ast.Subscript)
+                and self._resolve(annotation.value) == ("asyncio", "Queue")
+                and self._resolve(annotation.slice) == sdk
+            ):
+                context[param.arg] = annotation
+                queues.add(param.arg)
+            else:
+                return None
+        fields: dict[str, str] = {}
+        for assignment in init.body:
+            if not (
+                isinstance(assignment, ast.Assign) and len(assignment.targets) == 1
+                and isinstance(assignment.targets[0], ast.Attribute)
+                and isinstance(assignment.targets[0].value, ast.Name)
+                and assignment.targets[0].value.id == "self"
+                and assignment.targets[0].attr.startswith("_")
+                and isinstance(assignment.value, ast.Name) and assignment.value.id in context
+                and assignment.targets[0].attr not in fields
+            ):
+                return None
+            fields[assignment.targets[0].attr] = assignment.value.id
+        if set(fields.values()) != set(context) or len(fields) != len(context):
+            return None
+        if not call.body or not isinstance(call.body[-1], ast.Return):
+            return None
+        reply = call.body[-1].value
+        if isinstance(reply, ast.Attribute) and isinstance(reply.value, ast.Name) and reply.value.id == "self":
+            field = fields.get(reply.attr)
+            if field is None or ast.unparse(context[field]) != call.returns.id:
+                return None
+        elif not (isinstance(reply, ast.Constant) and type(reply.value).__name__ == call.returns.id):
+            return None
+        for observation in call.body[:-1]:
+            if not isinstance(observation, ast.Expr):
+                return None
+            expression = observation.value
+            awaited = isinstance(expression, ast.Await)
+            observed = expression.value if isinstance(expression, ast.Await) else expression
+            if not (
+                isinstance(observed, ast.Call) and isinstance(observed.func, ast.Attribute)
+                and observed.func.attr == ("put" if awaited else "put_nowait")
+                and isinstance(observed.func.value, ast.Attribute)
+                and isinstance(observed.func.value.value, ast.Name) and observed.func.value.value.id == "self"
+                and fields.get(observed.func.value.attr) in queues
+                and len(observed.args) == 1 and not observed.keywords
+                and isinstance(observed.args[0], ast.Name) and observed.args[0].id == incoming[1].arg
+            ):
+                return None
+        return sdk
+
+    def _peer_registration(
+        self, call: ast.Call, sdk: tuple[str, str], parents: dict[int, ast.AST]
+    ) -> bool:
+        if not isinstance(call.func, ast.Attribute):
+            return False
+        root: ast.expr = call.func.value
+        while isinstance(root, ast.Attribute):
+            root = root.value
+        if isinstance(root, ast.Call):
+            receiver = self._resolve(root.func)
+            if receiver is None or receiver[0].split(".")[0] != sdk[0].split(".")[0]:
+                return False
+            root = root.func
+            while isinstance(root, ast.Attribute):
+                root = root.value
+        if not isinstance(root, ast.Name):
+            return False
+        enclosing: ast.AST = call
+        while not isinstance(enclosing, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            parent = parents.get(id(enclosing))
+            if parent is None:
+                return False
+            enclosing = parent
+        origins: list[tuple[str, str] | None] = [
+            self._resolve(param.annotation) if param.annotation is not None else None
+            for param in enclosing.args.posonlyargs + enclosing.args.args + enclosing.args.kwonlyargs
+            if param.arg == root.id
+        ]
+        for statement in ast.walk(enclosing):
+            if not isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
+                continue
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            if not any(isinstance(target, ast.Name) and target.id == root.id for target in targets):
+                continue
+            value = statement.value
+            origins.append(
+                self._resolve(value.func)
+                if isinstance(value, ast.Call) and statement.lineno < call.lineno else None
+            )
+        stores = sum(
+            isinstance(item, ast.Name) and item.id == root.id and isinstance(item.ctx, (ast.Store, ast.Del))
+            for item in ast.walk(enclosing)
+        )
+        parameter = any(
+            param.arg == root.id for param in enclosing.args.posonlyargs + enclosing.args.args + enclosing.args.kwonlyargs
+        )
+        if stores + int(parameter) != len(origins):
+            return False
+        package = self._package_aliases.get(root.id)
+        if package is None and root.id in self._imported:
+            package = self._imported[root.id][0]
+        if package is not None:
+            return not origins and package.split(".")[0] == sdk[0].split(".")[0]
+        return (
+            len(origins) == 1 and origins[0] is not None
+            and origins[0][0].split(".")[0] == sdk[0].split(".")[0]
+        )
+
+    def _peer_violations(self, node: ast.ClassDef, registry: Registry) -> tuple[Violation, ...]:
+        where = f"{self._name}.{node.name}"
+        if not self._adapter_side or str(self._placement) not in TEST_TIER:
+            return (Violation(ViolationSpec(
+                self._path, node.lineno, "TB072",
+                f"{where} declares a peer outside an adapter test; a peer is a real integration callback",
+            )),)
+        sdk = self._peer_contract(node, registry)
+        if sdk is None:
+            return (Violation(ViolationSpec(
+                self._path, node.lineno, "TB072",
+                f"{where} is not an annotated observation/response peer; a peer has only a field-binding "
+                "__init__ and an async __call__ that records its SDK-owned input and returns a supplied response",
+            )),)
+        parents = {
+            id(child): parent for statement in self._body
+            for parent in ast.walk(statement) for child in ast.iter_child_nodes(parent)
+        }
+        references = [
+            reference for statement in self._body for reference in ast.walk(statement)
+            if isinstance(reference, ast.Name) and reference.id == node.name
+        ]
+        rejected: list[int] = []
+        for reference in references:
+            construction = parents.get(id(reference))
+            if not isinstance(construction, ast.Call) or construction.func is not reference:
+                rejected.append(reference.lineno)
+                continue
+            registration = parents.get(id(construction))
+            if isinstance(registration, ast.keyword):
+                registration = parents.get(id(registration))
+            if not (
+                isinstance(registration, ast.Call) and registration.func is not construction
+                and self._peer_registration(registration, sdk, parents)
+            ):
+                rejected.append(reference.lineno)
+                continue
+            discarded = parents.get(id(registration))
+            if isinstance(discarded, ast.Await):
+                discarded = parents.get(id(discarded))
+            if not isinstance(discarded, ast.Expr):
+                rejected.append(reference.lineno)
+        if not references:
+            rejected.append(node.lineno)
+        return tuple(Violation(ViolationSpec(
+            self._path, line, "TB072",
+            f"{where} is not constructed directly at a foreign SDK callback argument whose registration result is discarded; "
+            "a peer is registered in its integration test, never invoked, aliased, passed to the code under test, or unused",
+        )) for line in sorted(set(rejected)))
+
+    def _test_decorated_as(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
+        wanted: str,
+    ) -> bool:
+        for decorator in node.decorator_list:
+            ref = Annotation(Module._annotation_spec(decorator)).primary()
+            symbol = self._scope.resolve(ref) if ref is not None else None
+            if symbol is not None and TESSER_DECORATORS.get((str(symbol.module()), str(symbol.name()))) == wanted:
+                return True
+        return False
+
+    def _spec_annotation(self, spec_reader: SpecReader, node: ast.expr | None) -> SpecRef | None:
+        return spec_reader.ref(Annotation(Module._annotation_spec(node))) if node is not None else None
+
+    def _spec_resolve(self, node: ast.expr) -> Symbol | None:
+        ref = Annotation(Module._annotation_spec(node)).primary()
+        return self._scope.resolve(ref) if ref is not None else None
+
+    def _spec_maker(self, registry: Registry, spec_reader: SpecReader, node: ast.expr) -> SpecRef | None:
+        made = self._spec_annotation(spec_reader, node)
+        if made is not None:
+            return made
+        if isinstance(node, ast.Name):
+            return registry.spec_maker(Symbol(SymbolSpec(self._name, node.id)))
+        symbol = self._spec_resolve(node)
+        if symbol is not None:
+            known = registry.spec_maker(symbol)
+            if known is not None:
+                return known
+        if isinstance(node, ast.Attribute):
+            return registry.spec_method(Text(node.attr))
+        return None
+
+    def _spec_typed(
+        self,
+        registry: Registry,
+        spec_reader: SpecReader,
+        node: ast.expr,
+        names: dict[str, SpecRef],
+    ) -> SpecRef | None:
+        if isinstance(node, (ast.Await, ast.NamedExpr)):
+            return self._spec_typed(registry, spec_reader, node.value, names)
+        if isinstance(node, ast.Name):
+            return names.get(node.id)
+        if isinstance(node, ast.Call):
+            made = self._spec_maker(registry, spec_reader, node.func)
+            if made is not None:
+                return made
+            if isinstance(node.func, ast.Name) and node.func.id == "enumerate" and node.args:
+                return self._spec_typed(registry, spec_reader, node.args[0], names)
+            return None
+        if isinstance(node, ast.Attribute):
+            owner = self._spec_typed(registry, spec_reader, node.value, names)
+            if owner is not None and owner.shape() == SPEC_ONE:
+                return registry.spec_field(Text(f"{owner.symbol().module()}|{owner.symbol().name()}|{node.attr}"))
+            return None
+        if isinstance(node, ast.Subscript):
+            owner = self._spec_typed(registry, spec_reader, node.value, names)
+            if owner is not None and owner.shape() == SPEC_MANY:
+                return owner if isinstance(node.slice, ast.Slice) else owner.one()
+            return None
+        if isinstance(node, ast.IfExp):
+            return self._spec_typed(registry, spec_reader, node.body, names) or self._spec_typed(registry, spec_reader, node.orelse, names)
+        if isinstance(node, ast.BoolOp):
+            for each in node.values:
+                found_value = self._spec_typed(registry, spec_reader, each, names)
+                if found_value is not None:
+                    return found_value
+        return None
+
+    def _spec_carried(
+        self,
+        registry: Registry,
+        spec_reader: SpecReader,
+        node: ast.expr,
+        names: dict[str, SpecRef],
+    ) -> str | None:
+        if isinstance(node, (ast.Name, ast.Call, ast.Attribute, ast.Subscript)) and self._spec_typed(registry, spec_reader, node, names) is not None:
+            if isinstance(node, ast.Name):
+                return node.id
+            if isinstance(node, ast.Call) and self._spec_maker(registry, spec_reader, node.func) is not None:
+                return ast.unparse(node.func)
+            return ast.unparse(node)
+        parts: list[ast.expr] = []
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            parts = list(node.elts)
+        elif isinstance(node, ast.Dict):
+            parts = [value for value in node.values if value is not None]
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("list", "tuple", "set", "frozenset", "dict")
+        ):
+            parts = [*node.args, *(k.value for k in node.keywords)]
+        elif isinstance(node, ast.IfExp):
+            parts = [node.body, node.orelse]
+        elif isinstance(node, ast.BoolOp):
+            parts = list(node.values)
+        elif isinstance(node, (ast.Await, ast.NamedExpr)):
+            parts = [node.value]
+        for each in parts:
+            hit = self._spec_carried(registry, spec_reader, each, names)
+            if hit is not None:
+                return hit
+        return None
+
+    def _spec_bound(self, fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> set[str]:
+        args = fn.args
+        out = {a.arg for a in args.posonlyargs + args.args + args.kwonlyargs}
+        if args.vararg is not None:
+            out.add(args.vararg.arg)
+        if args.kwarg is not None:
+            out.add(args.kwarg.arg)
+        return out
+
+    def _spec_own_scope(self, nodes: list[ast.AST]) -> list[ast.AST]:
+        out: list[ast.AST] = []
+        stack = list(nodes)
+        while stack:
+            cur = stack.pop()
+            out.append(cur)
+            if isinstance(
+                cur,
+                (
+                    ast.FunctionDef,
+                    ast.AsyncFunctionDef,
+                    ast.Lambda,
+                    ast.ClassDef,
+                    ast.ListComp,
+                    ast.SetComp,
+                    ast.DictComp,
+                    ast.GeneratorExp,
+                ),
+            ):
+                continue
+            stack.extend(ast.iter_child_nodes(cur))
+        return out
+
+    def _spec_stored(self, node: ast.AST) -> list[str]:
+        return [t.id for t in ast.walk(node) if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store)]
+
+    def _spec_element(
+        self,
+        registry: Registry,
+        spec_reader: SpecReader,
+        target: ast.expr,
+        iterable: ast.expr,
+        names: dict[str, SpecRef],
+    ) -> tuple[str, SpecRef] | None:
+        many = self._spec_typed(registry, spec_reader, iterable, names)
+        if many is None or many.shape() != SPEC_MANY:
+            return None
+        if isinstance(target, ast.Name):
+            return target.id, many.one()
+        if (
+            isinstance(target, ast.Tuple)
+            and len(target.elts) == 2
+            and isinstance(target.elts[1], ast.Name)
+            and isinstance(iterable, ast.Call)
+            and isinstance(iterable.func, ast.Name)
+            and iterable.func.id == "enumerate"
+        ):
+            return target.elts[1].id, many.one()
+        return None
+
+    def _spec_held_in(
+        self,
+        registry: Registry,
+        spec_reader: SpecReader,
+        body: list[ast.stmt],
+        names: dict[str, SpecRef],
+    ) -> dict[str, SpecRef]:
+        names = dict(names)
+        local = self._spec_own_scope(list(body))
+        local.extend(
+            inner
+            for node in local
+            if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.NamedExpr)
+        )
+        changed = True
+        while changed:
+            changed = False
+            for node in local:
+                if isinstance(node, ast.Assign):
+                    made = self._spec_typed(registry, spec_reader, node.value, names)
+                    if made is not None:
+                        for target in node.targets:
+                            if isinstance(target, ast.Name) and target.id not in names:
+                                names[target.id] = made
+                                changed = True
+                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                    made = self._spec_annotation(spec_reader, node.annotation) or (
+                        self._spec_typed(registry, spec_reader, node.value, names) if node.value is not None else None
+                    )
+                    if made is not None and node.target.id not in names:
+                        names[node.target.id] = made
+                        changed = True
+                elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
+                    made = self._spec_typed(registry, spec_reader, node.value, names)
+                    if made is not None and node.target.id not in names:
+                        names[node.target.id] = made
+                        changed = True
+                elif isinstance(node, (ast.For, ast.AsyncFor)):
+                    picked = self._spec_element(registry, spec_reader, node.target, node.iter, names)
+                    if picked is not None and picked[0] not in names:
+                        names[picked[0]] = picked[1]
+                        changed = True
+        shadowed: set[str] = set()
+        for node in local:
+            if isinstance(node, (ast.For, ast.AsyncFor)):
+                if self._spec_element(registry, spec_reader, node.target, node.iter, names) is None:
+                    shadowed.update(self._spec_stored(node.target))
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    if item.optional_vars is not None:
+                        shadowed.update(self._spec_stored(item.optional_vars))
+            elif isinstance(node, ast.ExceptHandler) and node.name is not None:
+                shadowed.add(node.name)
+            elif isinstance(node, ast.Assign) and self._spec_typed(registry, spec_reader, node.value, names) is None:
+                for target in node.targets:
+                    shadowed.update(self._spec_stored(target))
+            elif isinstance(node, ast.AnnAssign) and self._spec_annotation(spec_reader, node.annotation) is None and (
+                node.value is None or self._spec_typed(registry, spec_reader, node.value, names) is None
+            ):
+                shadowed.update(self._spec_stored(node.target))
+            elif isinstance(node, ast.AugAssign):
+                shadowed.update(self._spec_stored(node.target))
+            elif isinstance(node, ast.NamedExpr) and self._spec_typed(registry, spec_reader, node.value, names) is None:
+                shadowed.update(self._spec_stored(node.target))
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                shadowed.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.Match):
+                for case in node.cases:
+                    for pattern in ast.walk(case.pattern):
+                        if isinstance(pattern, (ast.MatchAs, ast.MatchStar)) and pattern.name is not None:
+                            shadowed.add(pattern.name)
+                        elif isinstance(pattern, ast.MatchMapping) and pattern.rest is not None:
+                            shadowed.add(pattern.rest)
+        return {name: made for name, made in names.items() if name not in shadowed}
+
+    def _spec_held(
+        self,
+        registry: Registry,
+        spec_reader: SpecReader,
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+        names: dict[str, SpecRef],
+    ) -> dict[str, SpecRef]:
+        seeded = dict(names)
+        for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
+            made = self._spec_annotation(spec_reader, a.annotation)
+            if made is not None:
+                seeded[a.arg] = made
+        return self._spec_held_in(registry, spec_reader, list(fn.body), seeded)
+
+    def _spec_kept(
+        self,
+        registry: Registry,
+        spec_reader: SpecReader,
+        node: ast.AST,
+        names: dict[str, SpecRef],
+        top: bool,
+    ) -> str | None:
+        if top and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) for t in node.targets):
+            return self._spec_carried(registry, spec_reader, node.value, names)
+        if top and isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.value is not None:
+                return self._spec_carried(registry, spec_reader, node.value, names)
+            return ast.unparse(node.annotation) if self._spec_annotation(spec_reader, node.annotation) is not None else None
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, (ast.Attribute, ast.Subscript))
+            for target in node.targets
+            for t in (target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target])
+        ):
+            return self._spec_carried(registry, spec_reader, node.value, names)
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
+            return self._spec_carried(registry, spec_reader, node.value, names)
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, (ast.Attribute, ast.Subscript)):
+            if node.value is not None:
+                return self._spec_carried(registry, spec_reader, node.value, names)
+            return ast.unparse(node.annotation) if self._spec_annotation(spec_reader, node.annotation) is not None else None
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute) and node.func.attr in (
+                "append", "appendleft", "extend", "insert", "setdefault"
+            ):
+                for each in [*node.args, *(k.value for k in node.keywords)]:
+                    hit = self._spec_carried(registry, spec_reader, each, names)
+                    if hit is not None:
+                        return hit
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "__setattr__":
+                if len(node.args) == 3:
+                    return self._spec_carried(registry, spec_reader, node.args[2], names)
+                if len(node.args) == 2:
+                    return self._spec_carried(registry, spec_reader, node.args[1], names)
+            if isinstance(node.func, ast.Name) and node.func.id == "setattr" and len(node.args) == 3:
+                return self._spec_carried(registry, spec_reader, node.args[2], names)
+        return None
+
+    def _spec_read(
+        self,
+        registry: Registry,
+        spec_reader: SpecReader,
+        node: ast.AST,
+        names: dict[str, SpecRef],
+    ) -> tuple[str, str, Symbol] | None:
+        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
+            owner = self._spec_typed(registry, spec_reader, node.value, names)
+            if owner is not None and owner.shape() == SPEC_ONE and not node.attr.startswith("__"):
+                return ast.unparse(node.value), node.attr, owner.symbol()
+            return None
+        if isinstance(node, ast.Call) and node.args:
+            owner = self._spec_typed(registry, spec_reader, node.args[0], names)
+            if owner is None or owner.shape() == SPEC_MANY:
+                return None
+            if isinstance(node.func, ast.Name) and node.func.id in ("getattr", "vars"):
+                field = (
+                    node.args[1].value
+                    if len(node.args) > 1
+                    and isinstance(node.args[1], ast.Constant)
+                    and isinstance(node.args[1].value, str)
+                    else "__dict__"
+                )
+                return ast.unparse(node.args[0]), field, owner.symbol()
+            if ast.unparse(node.func).split(".")[-1] in ("asdict", "astuple", "copy", "deepcopy"):
+                return ast.unparse(node.args[0]), "__dict__", owner.symbol()
+        return None
+
+    def _spec_scan(
+        self,
+        found: list[Violation],
+        registry: Registry,
+        seen: set[tuple[int, str, str]],
+        spec_reader: SpecReader,
+        nodes: list[ast.AST],
+        names: dict[str, SpecRef],
+        where: str,
+        owner_here: Symbol | None,
+        assembling: bool,
+        top: bool = False,
+    ) -> None:
+        for cur in self._spec_own_scope(nodes):
+            if top and isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if top and isinstance(cur, ast.ClassDef):
+                self._spec_scan(found, registry, seen, spec_reader, list(cur.body), names, f"{where}.{cur.name}", None, False, True)
+                continue
+            if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                self._spec_scan(found, registry, seen, spec_reader,
+                    list(cur.body),
+                    self._spec_held(registry, spec_reader, cur, {n: t for n, t in names.items() if n not in self._spec_bound(cur)}),
+                    f"{where}.{cur.name}",
+                    owner_here,
+                    assembling,
+                )
+                continue
+            if isinstance(cur, ast.Lambda):
+                self._spec_scan(found, registry, seen, spec_reader,
+                    [cur.body],
+                    {n: t for n, t in names.items() if n not in self._spec_bound(cur)},
+                    where,
+                    owner_here,
+                    assembling,
+                )
+                continue
+            if isinstance(cur, ast.ClassDef):
+                self._spec_scan(found, registry, seen, spec_reader, list(cur.body), names, f"{where}.{cur.name}", owner_here, assembling)
+                continue
+            if isinstance(cur, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                first, rest = cur.generators[0], cur.generators[1:]
+                self._spec_scan(found, registry, seen, spec_reader, [first.iter], names, where, owner_here, assembling)
+                targets = {
+                    t.id
+                    for comp in cur.generators
+                    for t in ast.walk(comp.target)
+                    if isinstance(t, ast.Name)
+                }
+                inner = {n: t for n, t in names.items() if n not in targets}
+                for comp in cur.generators:
+                    picked = self._spec_element(registry, spec_reader, comp.target, comp.iter, inner if comp is not first else names)
+                    if picked is not None:
+                        inner[picked[0]] = picked[1]
+                parts: list[ast.AST] = [*first.ifs]
+                for comp in rest:
+                    parts.extend([comp.iter, *comp.ifs])
+                parts.extend([cur.key, cur.value] if isinstance(cur, ast.DictComp) else [cur.elt])
+                self._spec_scan(found, registry, seen, spec_reader, parts, inner, where, owner_here, assembling)
+                continue
+            if not isinstance(cur, (ast.stmt, ast.expr)):
+                continue
+            spec_name = self._spec_kept(registry, spec_reader, cur, names, top)
+            if spec_name is not None and not assembling and (cur.lineno, "\x00keeps", spec_name) not in seen:
+                seen.add((cur.lineno, "\x00keeps", spec_name))
+                found.append(
+                    Violation(ViolationSpec(
+                        self._path,
+                        cur.lineno,
+                        "TB083",
+                        f"{where} keeps the spec {spec_name!r}; "
+                        "a spec is never kept, it initializes its own object and is done",
+                    ))
+                )
+            hit = self._spec_read(registry, spec_reader, cur, names)
+            if hit is not None:
+                spec_name, field, key = hit
+                licensed = owner_here is not None and owner_here in registry.spec_takers(key)
+                if not licensed and (cur.lineno, field, spec_name) not in seen:
+                    seen.add((cur.lineno, field, spec_name))
+                    found.append(
+                        Violation(ViolationSpec(
+                            self._path,
+                            cur.lineno,
+                            "TB083",
+                            f"{where} reads {field!r} of the spec {spec_name!r}; "
+                            "a spec is only read where it initializes its own object",
+                        ))
+                    )
+
+    def _spec_roots(self) -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]]:
+        out: list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.ClassDef | None]] = []
+        stack: list[tuple[ast.AST, ast.ClassDef | None]] = [(stmt, None) for stmt in self._body]
+        while stack:
+            cur, cls = stack.pop()
+            if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                out.append((cur, cls))
+                continue
+            if isinstance(cur, ast.Lambda):
+                continue
+            if isinstance(cur, ast.ClassDef):
+                stack.extend((item, cur) for item in cur.body)
+                continue
+            stack.extend((child, cls) for child in ast.iter_child_nodes(cur))
+        return out
+
+    @staticmethod
+    def _enum_shape_is_enum_auto(scope: Scope, value: ast.expr) -> bool:
+        if not isinstance(value, ast.Call) or value.args or value.keywords:
+            return False
+        if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
+            package = scope.package_of(Text(value.func.value.id))
+            return package is not None and str(package) == ENUM_MODULE and (value.func.attr == "auto")
+        if isinstance(value.func, ast.Name):
+            origin = scope.import_of(Text(value.func.id))
+            return origin is not None and str(origin.module()) == ENUM_MODULE and (str(origin.name()) == "auto")
+        return False
+
+    @staticmethod
+    def _enum_shape_spec(node: ast.ClassDef, scope_spec: ScopeSpec) -> EnumShapeSpec:
+        scope = Scope(scope_spec)
+        base_name: str | None = None
+        for base in node.bases:
+            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+                package = scope.package_of(Text(base.value.id))
+                if package is not None and str(package) == ENUM_MODULE:
+                    base_name = base.attr
+                    break
+            elif isinstance(base, ast.Name):
+                origin = scope.import_of(Text(base.id))
+                if origin is not None and str(origin.module()) == ENUM_MODULE:
+                    base_name = str(origin.name())
+                    break
+        extras: list[int] = []
+        positions: list[int] = []
+        for position, item in enumerate(node.body, start=1):
+            if isinstance(item, ast.Pass):
+                continue
+            member_target: ast.expr | None = None
+            member_value: ast.expr | None = None
+            if isinstance(item, ast.AnnAssign):
+                member_target, member_value = (item.target, item.value)
+            elif isinstance(item, ast.Assign) and len(item.targets) == 1:
+                member_target, member_value = (item.targets[0], item.value)
+            is_member = (
+                isinstance(member_target, ast.Name)
+                and (not member_target.id.startswith("_"))
+                and (not (isinstance(item, ast.AnnAssign) and (not isinstance(item.annotation, ast.Name))))
+                and (
+                    isinstance(member_value, ast.Constant)
+                    or (
+                        isinstance(member_value, ast.UnaryOp)
+                        and isinstance(member_value.operand, ast.Constant)
+                        and isinstance(member_value.operand.value, (int, float))
+                    )
+                    or (member_value is not None and Module._enum_shape_is_enum_auto(scope, member_value))
+                )
+            )
+            if not is_member:
+                extras.append(item.lineno)
+                positions.append(position)
+        projected_base = base_name if base_name else None
+        projected_extras = tuple((line for line in extras))
+        projected_positions = tuple((position for position in positions))
+        projected_mixed = ("mixed",) if len(node.bases) > 1 else ()
+        projected_decorated = ("decorated",) if node.decorator_list or node.keywords else ()
+        return EnumShapeSpec(
+            base=projected_base,
+            extras=projected_extras,
+            positions=projected_positions,
+            mixed=projected_mixed,
+            decorated=projected_decorated,
+        )
+
+    @staticmethod
+    def _annotation_head_of(inner: ast.expr) -> str | None:
+        if isinstance(inner, ast.Name):
+            return inner.id
+        if isinstance(inner, ast.Attribute):
+            return inner.attr
+        if isinstance(inner, ast.Subscript):
+            return Module._annotation_head_of(inner.value)
+        return None
+
+    @staticmethod
+    def _annotation_candidates(inner: ast.expr | None) -> list[tuple[str, str]]:
+        if inner is None:
+            return []
+        if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
+            return Module._annotation_candidates(inner.left) + Module._annotation_candidates(inner.right)
+        if isinstance(inner, ast.Subscript):
+            sub_head = Module._annotation_head_of(inner)
+            elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
+            if sub_head in ("Optional", "Union"):
+                return [item for each in elements for item in Module._annotation_candidates(each)]
+            if sub_head in ("tuple", "list", "set", "frozenset", "Sequence", "Iterable", "Collection"):
+                return [
+                    (ref, "many")
+                    for each in elements
+                    for ref, shape in Module._annotation_candidates(each)
+                    if shape == "one"
+                ]
+            return []
+        if isinstance(inner, ast.Name):
+            return [(inner.id, "one")]
+        if isinstance(inner, ast.Attribute) and isinstance(inner.value, (ast.Name, ast.Attribute)):
+            return [(f"{ast.unparse(inner.value)}.{inner.attr}", "one")]
+        return []
+
+    @staticmethod
+    def _annotation_names_bool(inner: ast.expr | None) -> bool:
+        if inner is None:
+            return False
+        probe = inner
+        if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+            return Module._annotation_names_bool(probe.left) or Module._annotation_names_bool(probe.right)
+        if isinstance(probe, ast.Subscript) and Module._annotation_head_of(probe) in (
+            "Optional",
+            "Final",
+            "Annotated",
+        ):
+            wrapped = probe.slice
+            if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                wrapped = wrapped.elts[0]
+            return Module._annotation_names_bool(wrapped)
+        return isinstance(probe, ast.Name) and probe.id == "bool"
+
+    @staticmethod
+    def _annotation_is_union(inner: ast.expr | None) -> bool:
+        if isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
+            return True
+        if isinstance(inner, ast.Subscript):
+            if isinstance(inner.value, ast.Name) and inner.value.id in ("Optional", "Union"):
+                return True
+            elements = inner.slice.elts if isinstance(inner.slice, ast.Tuple) else [inner.slice]
+            return any((Module._annotation_is_union(element) for element in elements))
+        if isinstance(inner, ast.Attribute):
+            return inner.attr in ("Optional", "Union")
+        return False
+
+    @staticmethod
+    def _annotation_primitive_leaf(inner: ast.expr) -> bool:
+        probe = inner
+        if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+            return Module._annotation_primitive_leaf(probe.left) or Module._annotation_primitive_leaf(probe.right)
+        if isinstance(probe, ast.Subscript):
+            sub_head = Module._annotation_head_of(probe)
+            elements = probe.slice.elts if isinstance(probe.slice, ast.Tuple) else [probe.slice]
+            if sub_head in ("Callable", "Literal", "type", "Type"):
+                return False
+            if sub_head in ("dict", "Dict", "Mapping", "MutableMapping"):
+                elements = elements[-1:]
+            return any((Module._annotation_primitive_leaf(each) for each in elements))
+        return Module._annotation_head_of(probe) in PRIMITIVES
+
+    @staticmethod
+    def _annotation_spec(node: ast.expr) -> AnnotationSpec:
+        form: list[str] = []
+        if isinstance(node, (ast.Name, ast.Attribute)):
+            form.append("bare")
+        if Module._annotation_names_bool(node):
+            form.append("bool")
+        if Module._annotation_is_union(node):
+            form.append("union")
+        if Module._annotation_primitive_leaf(node):
+            form.append("primitive_leaf")
+        spec_candidates = tuple((f"{ref}|{shape}" for ref, shape in Module._annotation_candidates(node)))
+        slice_names: list[str] = []
+        sliced = node
+        if isinstance(sliced, ast.Subscript):
+            elements = sliced.slice.elts if isinstance(sliced.slice, ast.Tuple) else [sliced.slice]
+            for element in elements:
+                if isinstance(element, ast.Name):
+                    slice_names.append(element.id)
+                elif isinstance(element, ast.Attribute) and isinstance(element.value, (ast.Name, ast.Attribute)):
+                    slice_names.append(f"{ast.unparse(element.value)}.{element.attr}")
+                elif not (isinstance(element, ast.Constant) and element.value is Ellipsis):
+                    slice_names.append("?")
+        quoted_anywhere = False
+        marks: list[ast.expr] = [node]
+        while marks:
+            mark = marks.pop()
+            if isinstance(mark, ast.Constant):
+                if isinstance(mark.value, str):
+                    quoted_anywhere = True
+                continue
+            if isinstance(mark, ast.Subscript) and Module._annotation_head_of(mark.value) == LITERAL:
+                marks.append(mark.value)
+                continue
+            marks.extend((child for child in ast.iter_child_nodes(mark) if isinstance(child, ast.expr)))
+        quote_marks: list[str] = ["quoted"] if quoted_anywhere else []
+        primary: ast.expr = node
+        while isinstance(primary, ast.Subscript):
+            primary = primary.value
+        primary_ref: str | None = None
+        if isinstance(primary, ast.Name):
+            primary_ref = primary.id
+        elif isinstance(primary, ast.Attribute) and isinstance(primary.value, (ast.Name, ast.Attribute)):
+            primary_ref = f"{ast.unparse(primary.value)}.{primary.attr}"
+        cursor: ast.expr | None = node
+        head: str | None = None
+        while cursor is not None:
+            if isinstance(cursor, ast.Name):
+                head = cursor.id
+                break
+            if isinstance(cursor, ast.Attribute):
+                head = cursor.attr
+                break
+            if isinstance(cursor, ast.Subscript):
+                cursor = cursor.value
+                continue
+            break
+        container: str | None = None
+        pending: list[ast.expr] = [node]
+        while pending and container is None:
+            probe = pending.pop()
+            if isinstance(probe, ast.BinOp) and isinstance(probe.op, ast.BitOr):
+                pending.extend([probe.left, probe.right])
+                continue
+            if isinstance(probe, ast.Subscript):
+                wrapper: ast.expr = probe.value
+                wrapper_head = (
+                    wrapper.id
+                    if isinstance(wrapper, ast.Name)
+                    else wrapper.attr
+                    if isinstance(wrapper, ast.Attribute)
+                    else None
+                )
+                if wrapper_head in ("Optional", "Final", "Annotated"):
+                    wrapped = probe.slice
+                    if isinstance(wrapped, ast.Tuple) and wrapped.elts:
+                        wrapped = wrapped.elts[0]
+                    pending.append(wrapped)
+                    continue
+                probe = probe.value
+            if isinstance(probe, ast.Attribute) and probe.attr in CONTAINER_NAMES:
+                container = probe.attr
+            elif isinstance(probe, ast.Name) and probe.id in CONTAINER_NAMES:
+                container = probe.id
+        names: set[str] = set()
+        refs: list[str] = []
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Name):
+                names.add(sub.id)
+                refs.append(sub.id)
+            elif isinstance(sub, ast.Attribute):
+                names.add(sub.attr)
+                if isinstance(sub.value, (ast.Name, ast.Attribute)):
+                    refs.append(f"{ast.unparse(sub.value)}.{sub.attr}")
+        produced: set[str] = set()
+        produced_refs: set[str] = set()
+        walk_stack: list[ast.expr] = [node]
+        while walk_stack:
+            walked = walk_stack.pop()
+            if isinstance(walked, ast.Subscript):
+                inner: ast.expr = walked.value
+                while isinstance(inner, ast.Subscript):
+                    inner = inner.value
+                inner_head = (
+                    inner.id
+                    if isinstance(inner, ast.Name)
+                    else inner.attr
+                    if isinstance(inner, ast.Attribute)
+                    else None
+                )
+                if inner_head not in ("type", "Type", "Callable"):
+                    walk_stack.append(walked.slice)
+                continue
+            if isinstance(walked, ast.Constant):
+                continue
+            if isinstance(walked, ast.Attribute):
+                produced.add(walked.attr)
+                if isinstance(walked.value, (ast.Name, ast.Attribute)):
+                    produced_refs.add(f"{ast.unparse(walked.value)}.{walked.attr}")
+                continue
+            if isinstance(walked, ast.Name):
+                produced.add(walked.id)
+                produced_refs.add(walked.id)
+                continue
+            walk_stack.extend((child for child in ast.iter_child_nodes(walked) if isinstance(child, ast.expr)))
+        leaves: list[str] | None = []
+        peel: list[ast.expr] = [node]
+        while peel and leaves is not None:
+            leaf = peel.pop()
+            if isinstance(leaf, ast.Constant):
+                if leaf.value is Ellipsis or leaf.value is None:
+                    continue
+                leaves = None
+                continue
+            if isinstance(leaf, ast.Name):
+                leaves.append(leaf.id)
+                continue
+            if isinstance(leaf, ast.Attribute) and isinstance(leaf.value, (ast.Name, ast.Attribute)):
+                leaves.append(f"{ast.unparse(leaf.value)}.{leaf.attr}")
+                continue
+            if isinstance(leaf, ast.BinOp) and isinstance(leaf.op, ast.BitOr):
+                left_none = isinstance(leaf.left, ast.Constant) and leaf.left.value is None
+                right_none = isinstance(leaf.right, ast.Constant) and leaf.right.value is None
+                if left_none == right_none:
+                    leaves = None
+                    continue
+                peel.append(leaf.right if left_none else leaf.left)
+                continue
+            if (
+                isinstance(leaf, ast.Subscript)
+                and isinstance(leaf.value, ast.Name)
+                and (leaf.value.id == "tuple")
+            ):
+                peel.extend(leaf.slice.elts if isinstance(leaf.slice, ast.Tuple) else [leaf.slice])
+                continue
+            leaves = None
+        projected_source = ast.unparse(node)
+        projected_head = head if head else None
+        projected_container = container if container else None
+        projected_scalars = tuple(names - RETURN_WRAPPERS - SELF_NAMES)
+        projected_refs = tuple(refs)
+        projected_produced = tuple(produced)
+        projected_produced_refs = tuple(produced_refs)
+        projected_leaves = tuple(leaves) if leaves is not None else None
+        projected_primary = primary_ref if primary_ref else None
+        projected_quoted = tuple(quote_marks)
+        if (
+            isinstance(sliced, ast.Subscript)
+            and isinstance(sliced.slice, ast.Tuple)
+            and (len(sliced.slice.elts) > 1)
+        ):
+            form.append("multi_slice")
+        projected_slice_names = tuple(slice_names)
+        projected_spec_candidates = spec_candidates
+        projected_form = tuple(form)
+        return AnnotationSpec(
+            source=projected_source,
+            head=projected_head,
+            container=projected_container,
+            scalars=projected_scalars,
+            refs=projected_refs,
+            produced=projected_produced,
+            produced_refs=projected_produced_refs,
+            leaves=projected_leaves,
+            primary=projected_primary,
+            quoted=projected_quoted,
+            slice_names=projected_slice_names,
+            spec_candidates=projected_spec_candidates,
+            form=projected_form,
+        )
+
+    @staticmethod
+    def _body_terminal_relay_translation(
+        registry: Registry,
+        scope: Scope,
+        symbol: Symbol,
+        values: dict[str, list[ast.expr]],
+        otherwise: frozenset[str],
+        node: ast.Match,
+    ) -> bool:
+        subject = node.subject
+        if not isinstance(subject, ast.Attribute) or not isinstance(subject.value, ast.Name):
+            return False
+        name = subject.value.id
+        bound = values.get(name, [])
+        if name in otherwise or len(bound) != 1 or (not isinstance(bound[0], ast.Await)):
+            return False
+        call = bound[0].value
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Attribute)
+            and isinstance(call.func.value.value, ast.Name)
+            and (call.func.value.value.id == "self")
+            and (call.lineno < node.lineno)
+        ):
+            return False
+        relay = registry.attrs().held(Text(f"{symbol.module()}|{symbol.name()}|{call.func.value.attr}"))
+        if relay is None or str(registry.kinds().block_of(relay)) != RELAY_BLOCK:
+            return False
+        response = registry.returns().returned(Text(f"{relay.module()}|{relay.name()}|{call.func.attr}"))
+        if response is None or str(registry.kinds().block_of(response)) != "relay_response":
+            return False
+        discriminant = registry.attrs().held(Text(f"{response.module()}|{response.name()}|{subject.attr}"))
+        if (
+            discriminant is None
+            or discriminant not in registry.enums()
+            or f".{RELAYS_IMPORT}." not in str(discriminant.module())
+        ):
+            return False
+        if len(node.cases) < 2:
+            return False
+        closer = node.cases[-1]
+        if not (
+            closer.guard is None
+            and isinstance(closer.pattern, ast.MatchAs)
+            and (closer.pattern.name is not None)
+            and isinstance(closer.pattern.pattern, ast.MatchAs)
+            and (closer.pattern.pattern.name is None)
+            and (closer.pattern.pattern.pattern is None)
+            and (len(closer.body) == 1)
+            and isinstance(closer.body[0], ast.Expr)
+            and isinstance(closer.body[0].value, ast.Call)
+        ):
+            return False
+        exhaustive = closer.body[0].value
+        assertion = Module._body_symbol_of(scope, exhaustive.func)
+        if not (
+            assertion is not None
+            and (str(assertion.module()), str(assertion.name())) == ("typing", "assert_never")
+            and (len(exhaustive.args) == 1)
+            and (not exhaustive.keywords)
+            and isinstance(exhaustive.args[0], ast.Name)
+            and (exhaustive.args[0].id == closer.pattern.name)
+        ):
+            return False
+        for case in node.cases[:-1]:
+            patterns = case.pattern.patterns if isinstance(case.pattern, ast.MatchOr) else [case.pattern]
+            if (
+                case.guard is not None
+                or not all(
+                    (
+                        isinstance(pattern, ast.MatchValue)
+                        and isinstance(pattern.value, ast.Attribute)
+                        and (Module._body_symbol_of(scope, pattern.value.value) == discriminant)
+                        for pattern in patterns
+                    )
+                )
+                or len(case.body) != 1
+            ):
+                return False
+            terminal = case.body[0]
+            if isinstance(terminal, ast.Return):
+                value, expected = (terminal.value, "response")
+            elif isinstance(terminal, ast.Raise) and terminal.cause is None:
+                value, expected = (terminal.exc, "error")
+            else:
+                return False
+            if not isinstance(value, ast.Call):
+                return False
+            target = Module._body_symbol_of(scope, value.func)
+            if target is not None and str(registry.kinds().block_of(target)) == "mapper":
+                target = registry.mapper_target(target)
+            if target is None or str(registry.kinds().block_of(target)) != expected:
+                return False
+            if any(
+                (
+                    isinstance(
+                        inner,
+                        (
+                            ast.Call,
+                            ast.Await,
+                            ast.NamedExpr,
+                            ast.Lambda,
+                            ast.ListComp,
+                            ast.SetComp,
+                            ast.DictComp,
+                            ast.GeneratorExp,
+                        ),
+                    )
+                    for argument in list(value.args) + [kw.value for kw in value.keywords]
+                    for inner in ast.walk(argument)
+                )
+            ):
+                return False
+        return True
+
+    @staticmethod
+    def _body_ref_of(node: ast.expr) -> str | None:
+        cursor = node
+        while isinstance(cursor, ast.Subscript):
+            cursor = cursor.value
+        if isinstance(cursor, ast.Name):
+            return cursor.id
+        if isinstance(cursor, ast.Attribute) and isinstance(cursor.value, (ast.Name, ast.Attribute)):
+            return f"{ast.unparse(cursor.value)}.{cursor.attr}"
+        return None
+
+    @staticmethod
+    def _body_block_of(kind_table: KindTable, scope: Scope, node: ast.expr | None) -> str | None:
+        if node is None:
+            return None
+        ref = Module._body_ref_of(node)
+        if ref is None:
+            return None
+        symbol = scope.resolve(Text(ref))
+        if symbol is None:
+            return None
+        block = kind_table.block_of(symbol)
+        return str(block) if block is not None else None
+
+    @staticmethod
+    def _body_symbol_of(scope: Scope, node: ast.expr) -> Symbol | None:
+        ref = Module._body_ref_of(node)
+        return scope.resolve(Text(ref)) if ref is not None else None
+
+    @staticmethod
+    def _body_own_scope(root: ast.AST) -> typing.Iterator[ast.AST]:
+        stack: list[ast.AST] = list(ast.iter_child_nodes(root))
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            yield node
+            stack.extend(ast.iter_child_nodes(node))
+
+    @staticmethod
+    def _body_bindings(
+        fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> tuple[dict[str, list[ast.expr]], frozenset[str]]:
+        values: dict[str, list[ast.expr]] = {}
+        args = fn.args
+        otherwise: set[str] = {arg.arg for arg in args.posonlyargs + args.args + args.kwonlyargs}
+        if args.vararg is not None:
+            otherwise.add(args.vararg.arg)
+        if args.kwarg is not None:
+            otherwise.add(args.kwarg.arg)
+        for node in Module._body_own_scope(fn):
+            targets: list[ast.expr] = []
+            value: ast.expr | None = None
+            if isinstance(node, ast.Assign):
+                targets, value = (list(node.targets), node.value)
+            elif isinstance(node, ast.AnnAssign):
+                if node.value is None:
+                    continue
+                targets, value = ([node.target], node.value)
+            elif isinstance(node, (ast.AugAssign, ast.NamedExpr)):
+                targets, value = ([node.target], node.value)
+            elif isinstance(node, ast.comprehension):
+                continue
+            elif isinstance(node, (ast.For, ast.AsyncFor)):
+                otherwise.update((sub.id for sub in ast.walk(node.target) if isinstance(sub, ast.Name)))
+                continue
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    if item.optional_vars is not None:
+                        otherwise.update(
+                            (sub.id for sub in ast.walk(item.optional_vars) if isinstance(sub, ast.Name))
+                        )
+                continue
+            elif isinstance(node, ast.ExceptHandler):
+                if node.name is not None:
+                    otherwise.add(node.name)
+                continue
+            elif isinstance(node, (ast.MatchAs, ast.MatchStar)):
+                if node.name is not None:
+                    otherwise.add(node.name)
+                continue
+            elif isinstance(node, ast.MatchMapping):
+                if node.rest is not None:
+                    otherwise.add(node.rest)
+                continue
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                otherwise.update(((alias.asname or alias.name).split(".")[0] for alias in node.names))
+                continue
+            elif isinstance(node, (ast.Global, ast.Nonlocal)):
+                otherwise.update(node.names)
+                continue
+            if len(targets) == 1 and isinstance(targets[0], ast.Name) and (value is not None):
+                values.setdefault(targets[0].id, []).append(value)
+                continue
+            for target in targets:
+                otherwise.update((sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name)))
+        return (values, frozenset(otherwise))
+
+    @staticmethod
+    def _body_domain_kind(kind_table: KindTable, scope: Scope, node: ast.expr) -> tuple[str, str] | None:
+        if not isinstance(node, ast.Call):
+            return None
+        symbol = Module._body_symbol_of(scope, node.func)
+        if symbol is None:
+            return None
+        block = kind_table.block_of(symbol)
+        if block is None or str(block) not in DOMAIN_BLOCKS:
+            return None
+        return (str(symbol.module()), str(symbol.name()))
+
+    @staticmethod
+    def _body_answers_an_outcome(
+        domain_names: dict[str, tuple[str, str]],
+        kind_table: KindTable,
+        registry: Registry,
+        scope: Scope,
+        node: ast.expr,
+    ) -> bool:
+        if isinstance(node, ast.Await):
+            node = node.value
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            return False
+        receiver = node.func.value
+        owner: tuple[str, str] | None = None
+        if isinstance(receiver, ast.Name):
+            owner = domain_names.get(receiver.id)
+        elif isinstance(receiver, ast.Attribute):
+            owner = domain_names.get(ast.unparse(receiver))
+        if owner is None:
+            owner = Module._body_domain_kind(kind_table, scope, receiver)
+        if owner is None:
+            return False
+        return f"{owner[0]}|{owner[1]}|{node.func.attr}" in registry.outcome_methods()
+
+    @staticmethod
+    def _body_outcome_key(kind_table: KindTable, scope: Scope, node: ast.expr) -> bool:
+        if not isinstance(node, ast.Attribute):
+            return False
+        return Module._body_block_of(kind_table, scope, node.value) == OUTCOME_BLOCK
+
+    @staticmethod
+    def _body_is_comparison_call(scope: Scope, func: ast.expr) -> bool:
+        if isinstance(func, ast.Attribute):
+            if func.attr in COMPARISON_CALLS:
+                return True
+            if isinstance(func.value, ast.Name):
+                package = scope.package_of(Text(func.value.id))
+                return (
+                    package is not None
+                    and str(package) == OPERATOR_MODULE
+                    and (func.attr in OPERATOR_COMPARISONS)
+                )
+            return False
+        if isinstance(func, ast.Name):
+            origin = scope.import_of(Text(func.id))
+            return (
+                origin is not None
+                and str(origin.module()) == OPERATOR_MODULE
+                and (str(origin.name()) in OPERATOR_COMPARISONS)
+            )
+        return False
+
+    @staticmethod
+    def _body_is_truth_builtin(scope: Scope, func: ast.expr) -> bool:
+        return isinstance(func, ast.Name) and func.id in TRUTH_BUILTINS and (func.id not in scope.locals())
+
+    @staticmethod
+    def _body_spec(
+        source_node: ast.FunctionDef | ast.AsyncFunctionDef,
+        where: str,
+        path: str,
+        declared_methods: tuple[str, ...],
+        declared_ports: tuple[str, ...],
+        declared_stores: tuple[str, ...],
+        signature_spec: SignatureSpec,
+        scope_spec: ScopeSpec,
+        registry_spec: RegistrySpec,
+    ) -> BodySpec:
+        fn = source_node
+        scope = Scope(scope_spec)
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        class_methods = frozenset(declared_methods)
+        names = scope.functions()
+        held_ports = frozenset(declared_ports)
+        held_stores = frozenset(declared_stores)
+        facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        values, otherwise = Module._body_bindings(fn)
+        store_bound: set[str] = set()
+        for node in Module._body_own_scope(fn):
+            if not isinstance(node, (ast.With, ast.AsyncWith)):
+                continue
+            for item in node.items:
+                opened = item.context_expr
+                if (
+                    isinstance(item.optional_vars, ast.Name)
+                    and isinstance(opened, ast.Call)
+                    and isinstance(opened.func, ast.Attribute)
+                    and (opened.func.attr == STORE_METHOD)
+                    and isinstance(opened.func.value, ast.Attribute)
+                    and isinstance(opened.func.value.value, ast.Name)
+                    and (opened.func.value.value.id == "self")
+                    and (opened.func.value.attr in held_stores)
+                ):
+                    store_bound.add(item.optional_vars.id)
+        domain_names: dict[str, tuple[str, str]] = {}
+        for parameter in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs:
+            if parameter.annotation is None or parameter.arg in values:
+                continue
+            message = Module._body_symbol_of(scope, parameter.annotation)
+            if message is None or str(kind_table.block_of(message)) not in RELAY_DTO_BLOCKS:
+                continue
+            for field in registry.attrs().fields(Text(f"{message.module()}|{message.name()}")):
+                carried = registry.attrs().held(Text(f"{message.module()}|{message.name()}|{field}"))
+                if carried is not None and str(kind_table.block_of(carried)) in DOMAIN_BLOCKS:
+                    domain_names[f"{parameter.arg}.{field}"] = (str(carried.module()), str(carried.name()))
+        for name, bound in values.items():
+            if name in otherwise:
+                continue
+            found_kinds = [
+                Module._body_domain_kind(kind_table, scope, value)
+                or (domain_names.get(ast.unparse(value)) if isinstance(value, ast.Attribute) else None)
+                for value in bound
+            ]
+            first = found_kinds[0]
+            if first is not None and all((kind == first for kind in found_kinds)):
+                domain_names[name] = first
+        outcome_names = frozenset(
+            (
+                name
+                for name, bound in values.items()
+                if name not in otherwise
+                and all(
+                    (
+                        Module._body_answers_an_outcome(domain_names, kind_table, registry, scope, value)
+                        for value in bound
+                    )
+                )
+            )
+        )
+        positional = list(fn.args.args)
+        request_arg = positional[1] if len(positional) >= 2 else None
+        request = request_arg.arg if request_arg is not None else None
+        relayed = (
+            request_arg is not None
+            and request_arg.annotation is not None
+            and (Module._body_block_of(kind_table, scope, request_arg.annotation) in RELAY_DTO_BLOCKS)
+        )
+        for stmt in fn.body:
+            if not isinstance(stmt, ast.Assign):
+                continue
+            if not isinstance(stmt.value, (ast.Name, ast.Attribute)):
+                continue
+            if any((isinstance(node, ast.Call) for node in ast.walk(stmt.value))):
+                continue
+            if (
+                relayed
+                and isinstance(stmt.value, ast.Attribute)
+                and isinstance(stmt.value.value, ast.Name)
+                and (stmt.value.value.id == request)
+            ):
+                continue
+            facts.append((stmt.lineno, "accessor", None, ()))
+        decided: set[int] = set()
+        computed: set[int] = set()
+        matches: list[ast.Match] = []
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call):
+                callee = node.func
+                if (
+                    isinstance(callee, ast.Attribute)
+                    and isinstance(callee.value, ast.Name)
+                    and (callee.value.id == "self")
+                    and (callee.attr in class_methods)
+                ):
+                    facts.append((node.lineno, "delegation", callee.attr, ("self",)))
+                elif isinstance(callee, ast.Name) and callee.id in names:
+                    facts.append((node.lineno, "delegation", callee.id, ("function",)))
+                for value in list(node.args) + [kw.value for kw in node.keywords]:
+                    if (
+                        isinstance(value, ast.Call)
+                        and Module._body_block_of(kind_table, scope, value.func) is None
+                    ):
+                        computed.add(id(value))
+                        facts.append((value.lineno, "computed", None, ()))
+                if id(node) in computed:
+                    pass
+                elif (
+                    isinstance(callee, ast.Name)
+                    and callee.id in BUILTIN_NAMES
+                    and (callee.id not in TRUTH_BUILTINS)
+                    and (callee.id not in scope.locals())
+                ):
+                    facts.append((node.lineno, "operation", callee.id, ()))
+                elif (
+                    isinstance(callee, ast.Attribute)
+                    and callee.attr in MUTATIONS
+                    and isinstance(callee.value, ast.Name)
+                    and (callee.value.id != "self")
+                    and (callee.value.id not in domain_names)
+                ):
+                    facts.append((node.lineno, "operation", f".{callee.attr}", ()))
+                holder: str | None = None
+                if (
+                    isinstance(callee, ast.Attribute)
+                    and isinstance(callee.value, ast.Attribute)
+                    and isinstance(callee.value.value, ast.Name)
+                    and (callee.value.value.id == "self")
+                ):
+                    holder = callee.value.attr
+                    if holder in held_ports:
+                        facts.append((node.lineno, "port_call", holder, ()))
+                elif (
+                    isinstance(callee, ast.Attribute)
+                    and isinstance(callee.value, ast.Name)
+                    and (callee.value.id in store_bound)
+                ):
+                    holder = callee.value.id
+                    facts.append((node.lineno, "port_call", holder, ()))
+                if holder is not None and request is not None:
+                    for passed in list(node.args) + [keyword.value for keyword in node.keywords]:
+                        if isinstance(passed, ast.Name) and passed.id == request:
+                            facts.append((passed.lineno, "request", None, ()))
+                    for inner in ast.walk(node):
+                        if not isinstance(inner, ast.Attribute):
+                            continue
+                        current: ast.expr = inner
+                        while isinstance(current, ast.Attribute):
+                            current = current.value
+                        if isinstance(current, ast.Name) and current.id == request:
+                            facts.append((inner.lineno, "request_field", inner.attr, ()))
+            if isinstance(node, (ast.If, ast.While)) and (
+                not (
+                    isinstance(node, ast.While)
+                    and isinstance(node.test, ast.Constant)
+                    and (node.test.value is True)
+                )
+            ):
+                decided.update((id(sub) for sub in ast.walk(node.test)))
+                facts.append((node.lineno, "branch", "if" if isinstance(node, ast.If) else "while", ()))
+            elif isinstance(node, ast.Match):
+                matches.append(node)
+            elif isinstance(node, ast.BinOp):
+                facts.append((node.lineno, "operation", BINARY_OPERATORS.get(type(node.op).__name__, "?"), ()))
+            elif isinstance(node, ast.IfExp):
+                decided.update((id(sub) for sub in ast.walk(node.test)))
+            elif isinstance(node, ast.comprehension) and node.ifs:
+                decided.update((id(sub) for test in node.ifs for sub in ast.walk(test)))
+        for node in ast.walk(fn):
+            if id(node) in decided:
+                continue
+            if isinstance(node, ast.Compare):
+                facts.append((node.lineno, "decision", "compare", ()))
+            elif isinstance(node, ast.Call) and Module._body_is_comparison_call(scope, node.func):
+                facts.append((node.lineno, "decision", "comparison_call", ()))
+            elif isinstance(node, ast.Call) and Module._body_is_truth_builtin(scope, node.func):
+                facts.append((node.lineno, "decision", "truth", ()))
+            elif isinstance(node, ast.IfExp):
+                facts.append((node.lineno, "decision", "ifexp", ()))
+            elif isinstance(node, ast.BoolOp):
+                facts.append((node.lineno, "decision", "boolop", ()))
+            elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+                facts.append((node.lineno, "decision", "not", ()))
+            elif isinstance(node, ast.comprehension) and node.ifs:
+                facts.append((node.ifs[0].lineno, "decision", "filter", ()))
+        matches = [
+            match for _, _, match in sorted(((match.lineno, index, match) for index, match in enumerate(matches)))
+        ]
+        owner = scope.resolve(Text(where.rsplit(".", 2)[1]))
+        owner_block = kind_table.block_of(owner) if owner is not None else None
+        for node in matches:
+            traits: list[str] = []
+            if owner_block is not None and str(owner_block) == ORCHESTRATOR_BLOCK:
+                traits.append("orchestrator")
+            if any(
+                (
+                    node is inner
+                    for outer in matches
+                    if outer is not node
+                    for case in outer.cases
+                    for stmt in case.body
+                    for inner in ast.walk(stmt)
+                )
+            ):
+                traits.append("nested")
+            if (
+                owner is not None
+                and owner_block is not None
+                and (str(owner_block) == "service")
+                and (node is fn.body[-1])
+                and Module._body_terminal_relay_translation(registry, scope, owner, values, otherwise, node)
+            ):
+                traits.append("translation")
+            subject = node.subject
+            answered = (
+                subject.id in outcome_names
+                if isinstance(subject, ast.Name)
+                else Module._body_answers_an_outcome(domain_names, kind_table, registry, scope, subject)
+            )
+            if answered:
+                traits.append("answers")
+            if any(
+                (
+                    Module._body_outcome_key(kind_table, scope, sub.value)
+                    for case in node.cases
+                    for sub in ast.walk(case.pattern)
+                    if isinstance(sub, ast.MatchValue)
+                )
+            ):
+                traits.append("members")
+            facts.append((node.lineno, "match", None, tuple(traits)))
+        projected_where = where
+        projected_path = path
+        projected_lineno = fn.lineno
+        projected_name = fn.name
+        projected_signature = signature_spec
+        projected_facts = tuple((FactSpec(*item) for item in facts))
+        return BodySpec(
+            where=projected_where,
+            path=projected_path,
+            lineno=projected_lineno,
+            name=projected_name,
+            signature=projected_signature,
+            facts=projected_facts,
+        )
+
+    @staticmethod
+    def _client_class_spec(node: ast.ClassDef, where: str, path: str) -> ClientClassSpec:
+        stmt = node
+        members = [item for item in stmt.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        computed: list[ast.expr] = list(stmt.bases)
+        for item in members:
+            computed.extend(
+                (
+                    arg.annotation
+                    for arg in item.args.posonlyargs + item.args.args + item.args.kwonlyargs
+                    if arg.annotation is not None
+                )
+            )
+            if item.returns is not None:
+                computed.append(item.returns)
+            computed.extend(item.args.defaults)
+            computed.extend((value for value in item.args.kw_defaults if value is not None))
+        runs = (
+            bool(stmt.decorator_list)
+            or bool(stmt.keywords)
+            or any((item.decorator_list for item in members))
+            or any(
+                (
+                    isinstance(inner, (ast.Call, ast.Lambda, ast.Await, ast.NamedExpr))
+                    or isinstance(inner, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+                    for node in computed
+                    for inner in ast.walk(node)
+                )
+            )
+        )
+        rows: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if runs:
+            rows.append((stmt.lineno, "runs", None, ()))
+        for held in stmt.body:
+            if isinstance(held, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Pass)):
+                continue
+            rows.append((held.lineno, "held", None, ()))
+        projected_where = where
+        projected_path = path
+        projected_facts = tuple((FactSpec(*row) for row in rows))
+        return ClientClassSpec(where=projected_where, path=projected_path, facts=projected_facts)
+
+    @staticmethod
+    def _helper_spec(
+        source_node: ast.FunctionDef | ast.AsyncFunctionDef,
+        where: str,
+        path: str,
+        scope_spec: ScopeSpec,
+        registry_spec: RegistrySpec,
+        helpers: tuple[str, ...],
+        assembly: bool = False,
+    ) -> HelperSpec:
+        fn = source_node
+        registry = Registry(registry_spec)
+        kind_table = registry.kinds()
+        constructor_rows = registry.constructors()
+        symbols = registry.enums()
+        scope = Scope(scope_spec)
+        line = fn.lineno
+        rows: list[tuple[int, str, str, tuple[str, ...]]] = []
+        args = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+        positional = fn.args.posonlyargs + fn.args.args
+        defaults: dict[str, ast.expr | None] = {arg.arg: None for arg in args}
+        for arg, default in zip(positional[len(positional) - len(fn.args.defaults) :], fn.args.defaults):
+            defaults[arg.arg] = default
+        for arg, kw_default in zip(fn.args.kwonlyargs, fn.args.kw_defaults):
+            defaults[arg.arg] = kw_default
+        for arg in args:
+            given = defaults[arg.arg]
+            if given is None:
+                rows.append((line, "default", arg.arg, ()))
+                continue
+            pending: list[ast.expr] = [given]
+            composed = True
+            while pending and composed:
+                value = pending.pop()
+                if isinstance(value, ast.Constant) and value.value is not Ellipsis:
+                    continue
+                if (
+                    isinstance(value, ast.UnaryOp)
+                    and isinstance(value.op, ast.USub)
+                    and isinstance(value.operand, ast.Constant)
+                ):
+                    continue
+                if isinstance(value, ast.Tuple):
+                    pending.extend(value.elts)
+                    continue
+                if isinstance(value, ast.Attribute):
+                    member_of = scope.resolve(Text(ast.unparse(value.value)))
+                    composed = (
+                        member_of is not None
+                        and member_of in symbols
+                        and (not value.attr.startswith("__"))
+                        and (not (value.attr.startswith("_") and value.attr.endswith("_")))
+                    )
+                    continue
+                if (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Name)
+                    and (value.func.id in helpers)
+                    and (not value.args)
+                    and all((keyword.arg is not None for keyword in value.keywords))
+                ):
+                    pending.extend((keyword.value for keyword in value.keywords))
+                    continue
+                built = (
+                    scope.resolve(Text(ast.unparse(value.func)))
+                    if isinstance(value, ast.Call) and isinstance(value.func, (ast.Name, ast.Attribute))
+                    else None
+                )
+                built_block = kind_table.block_of(built) if built is not None else None
+                if (
+                    isinstance(value, ast.Call)
+                    and built_block is not None
+                    and (str(built_block) in DEFAULT_BUILT_BLOCKS)
+                    and all((keyword.arg is not None for keyword in value.keywords))
+                ):
+                    pending.extend(value.args)
+                    pending.extend((keyword.value for keyword in value.keywords))
+                    continue
+                composed = False
+            if not composed:
+                rows.append((line, "composed", arg.arg, ()))
+        returned_ref = (
+            Annotation(Module._annotation_spec(fn.returns)).primary() if fn.returns is not None else None
+        )
+        constructed = scope.resolve(returned_ref) if returned_ref is not None else None
+        symbol = constructed
+        block = kind_table.block_of(symbol) if symbol is not None else None
+        if symbol is not None and block is not None and (str(block) == "mapper"):
+            symbol = registry.mapper_target(symbol)
+            block = kind_table.block_of(symbol) if symbol is not None else None
+        if block is None or str(block) not in DATA_BLOCKS:
+            rows.append((line, "data", "", ()))
+        elif str(block) in RELAY_DTO_BLOCKS and (not assembly):
+            rows.append((line, "relay", "", ()))
+        constructor = (
+            constructor_rows.constructor(constructed) if constructed is not None and (not assembly) else None
+        )
+        if (
+            constructed is not None
+            and constructor is None
+            and (not assembly)
+            and (block is not None)
+            and (str(block) in DATA_BLOCKS)
+        ):
+            rows.append((line, "unread", "", (str(constructed.name()),)))
+        if constructed is not None and constructor is not None:
+            target_name = str(constructed.name())
+            for arg in args:
+                wanted = constructor.type_of(Text(arg.arg))
+                if arg.arg not in constructor.params():
+                    rows.append((line, "stray", arg.arg, (target_name,)))
+                elif wanted is None:
+                    continue
+                elif arg.annotation is None:
+                    rows.append((line, "untyped", arg.arg, (target_name, str(wanted))))
+                else:
+                    written = str(TypeForm(TypeFormSpec(ast.unparse(arg.annotation), scope_spec)).text())
+                    if written != str(wanted):
+                        rows.append((line, "typed", arg.arg, (target_name, written, str(wanted))))
+            for name in constructor.params():
+                if name not in defaults:
+                    rows.append((line, "missing", name, (target_name,)))
+            for extra in (fn.args.vararg, fn.args.kwarg):
+                if extra is not None:
+                    rows.append((line, "stray", extra.arg, (target_name,)))
+        passed = False
+        returned = fn.body[0].value if len(fn.body) == 1 and isinstance(fn.body[0], ast.Return) else None
+        if isinstance(returned, ast.Call):
+            callee = scope.resolve(Text(ast.unparse(returned.func)))
+            passed_names = sorted((keyword.arg for keyword in returned.keywords if keyword.arg is not None))
+            passed = (
+                callee is not None
+                and callee == constructed
+                and (not returned.args)
+                and all(
+                    (
+                        isinstance(keyword.value, ast.Name) and keyword.value.id == keyword.arg
+                        for keyword in returned.keywords
+                    )
+                )
+                and (passed_names == sorted(defaults))
+            )
+        if not passed and (not assembly):
+            rows.append((line, "through", "", ()))
+        if isinstance(fn, ast.AsyncFunctionDef):
+            rows.append((line, "async", "", ()))
+        names = registry.module_names()
+        for node in (walked for stmt in fn.body for walked in ast.walk(stmt)):
+            if isinstance(node, (ast.If, ast.Match, ast.For, ast.While, ast.Try)) and (not assembly):
+                rows.append((node.lineno, "control", "", ()))
+            if assembly and isinstance(
+                node,
+                (
+                    ast.If,
+                    ast.Match,
+                    ast.For,
+                    ast.AsyncFor,
+                    ast.While,
+                    ast.Try,
+                    ast.TryStar,
+                    ast.With,
+                    ast.AsyncWith,
+                    ast.Raise,
+                    ast.Assert,
+                    ast.IfExp,
+                    ast.BoolOp,
+                    ast.NamedExpr,
+                    ast.Yield,
+                    ast.YieldFrom,
+                    ast.Await,
+                    ast.ListComp,
+                    ast.SetComp,
+                    ast.DictComp,
+                    ast.GeneratorExp,
+                ),
+            ):
+                rows.append((node.lineno, "assembly_control", "", ()))
+            if assembly and isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute)):
+                called = scope.resolve(Text(ast.unparse(node.func)))
+                called_block = kind_table.block_of(called) if called is not None else None
+                reached: ast.expr = node.func
+                while (
+                    called is None
+                    and isinstance(reached, ast.Attribute)
+                    and isinstance(reached.value, (ast.Attribute, ast.Name))
+                ):
+                    reached = reached.value
+                    owner = scope.resolve(Text(ast.unparse(reached)))
+                    owner_block = kind_table.block_of(owner) if owner is not None else None
+                    if owner is not None and owner_block is not None:
+                        called = owner
+                        called_block = owner_block
+                if (
+                    called is not None
+                    and str(called.module()) in names
+                    and (called_block is None or str(called_block) not in DATA_BLOCKS)
+                ):
+                    rows.append((node.lineno, "assembly_call", ast.unparse(node.func), ()))
+        return HelperSpec(where=where, path=path, rows=tuple(rows))
+
+    @staticmethod
+    def _field_spec(name: str, node: ast.expr, lineno: int) -> FieldSpec:
+        projected_name = name
+        projected_annotation = Module._annotation_spec(node)
+        projected_lineno = lineno
+        return FieldSpec(name=projected_name, annotation=projected_annotation, lineno=projected_lineno)
+
+    @staticmethod
+    def _param_spec(name: str, node: ast.expr | None, lineno: int) -> ParamSpec:
+        projected_name = name
+        projected_annotation = Module._annotation_spec(node) if node is not None else None
+        projected_lineno = lineno
+        return ParamSpec(name=projected_name, annotation=projected_annotation, lineno=projected_lineno)
+
+    @staticmethod
+    def _method_own_returns(root: ast.AST) -> list[ast.Return]:
+        returned: list[ast.Return] = []
+        for child in ast.iter_child_nodes(root):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            if isinstance(child, ast.Return):
+                returned.append(child)
+            returned.extend(Module._method_own_returns(child))
+        return returned
+
+    @staticmethod
+    def _method_spec(node: ast.FunctionDef | ast.AsyncFunctionDef, owner: str) -> MethodSpec:
+        method_facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if node.decorator_list:
+            method_facts.append((node.lineno, "decorated", None, ()))
+        if isinstance(node, ast.AsyncFunctionDef):
+            method_facts.append((node.lineno, "async", None, ()))
+        assignable = frozenset(
+            (
+                arg.arg
+                for arg in node.args.posonlyargs + node.args.args + node.args.kwonlyargs
+                if arg.arg != "self"
+            )
+        )
+        carrier = True
+        for stmt in node.body:
+            if isinstance(stmt, ast.Return) and (
+                stmt.value is None or (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)
+            ):
+                continue
+            target: ast.expr | None = None
+            assigned: ast.expr | None = None
+            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                target, assigned = (stmt.targets[0], stmt.value)
+            elif isinstance(stmt, ast.AnnAssign):
+                target, assigned = (stmt.target, stmt.value)
+            if (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and (target.value.id == "self")
+                and isinstance(assigned, ast.Name)
+                and (assigned.id in assignable)
+            ):
+                continue
+            carrier = False
+            break
+        if carrier:
+            method_facts.append((node.lineno, "carrier", None, ()))
+        for returned in Module._method_own_returns(node):
+            method_facts.append((returned.lineno, "return", None, ()))
+        selves = {"self"}
+        grew = True
+        while grew:
+            grew = False
+            for inner in ast.walk(node):
+                if (
+                    isinstance(inner, (ast.Assign, ast.NamedExpr))
+                    and isinstance(inner.value, ast.Name)
+                    and (inner.value.id in selves)
+                ):
+                    for alias in inner.targets if isinstance(inner, ast.Assign) else [inner.target]:
+                        if isinstance(alias, ast.Name) and alias.id not in selves:
+                            selves.add(alias.id)
+                            grew = True
+        for inner in ast.walk(node):
+            if (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and (inner.func.attr == "__init__")
+                and isinstance(inner.func.value, ast.Call)
+                and isinstance(inner.func.value.func, ast.Name)
+                and (inner.func.value.func.id == "super")
+            ):
+                as_statement = any((isinstance(stmt, ast.Expr) and stmt.value is inner for stmt in node.body))
+                method_facts.append((inner.lineno, "super", None, ("statement",) if as_statement else ()))
+            targets: list[ast.expr] = []
+            if isinstance(inner, ast.Assign):
+                targets = list(inner.targets)
+            elif isinstance(inner, (ast.AugAssign, ast.AnnAssign)):
+                targets = [inner.target]
+            elif isinstance(inner, (ast.For, ast.AsyncFor)):
+                targets = [inner.target]
+            elif isinstance(inner, (ast.With, ast.AsyncWith)):
+                targets = [item.optional_vars for item in inner.items if item.optional_vars is not None]
+            elif isinstance(inner, ast.NamedExpr):
+                targets = [inner.target]
+            elif isinstance(inner, ast.Delete):
+                targets = list(inner.targets)
+            stored: ast.expr | None = None
+            pending = list(targets)
+            while pending and stored is None:
+                leaf = pending.pop(0)
+                if isinstance(leaf, (ast.Tuple, ast.List)):
+                    pending = list(leaf.elts) + pending
+                    continue
+                if isinstance(leaf, ast.Starred):
+                    pending.insert(0, leaf.value)
+                    continue
+                if not isinstance(leaf, (ast.Attribute, ast.Subscript)):
+                    continue
+                root: ast.expr = leaf
+                while isinstance(root, (ast.Attribute, ast.Subscript)):
+                    root = root.value
+                if isinstance(root, ast.Name) and root.id in selves:
+                    stored = leaf
+            if stored is None and (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and (inner.func.attr == "__setattr__")
+            ):
+                stored = inner
+            if stored is None and (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Name)
+                and (inner.func.id in ("setattr", "vars", "delattr"))
+                and inner.args
+                and isinstance(inner.args[0], ast.Name)
+                and (inner.args[0].id in selves)
+            ):
+                stored = inner
+            if stored is None and (
+                isinstance(inner, ast.Attribute)
+                and inner.attr == "__dict__"
+                and isinstance(inner.value, ast.Name)
+                and (inner.value.id in selves)
+            ):
+                stored = inner
+            if stored is None and (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and isinstance(inner.func.value, ast.Attribute)
+                and isinstance(inner.func.value.value, ast.Name)
+                and (inner.func.value.value.id in selves)
+            ):
+                stored = inner.func.value
+            if stored is not None:
+                named: ast.expr = stored
+                while isinstance(named, ast.Subscript):
+                    named = named.value
+                stored_field = (
+                    named.attr
+                    if isinstance(named, ast.Attribute)
+                    else named.func.id
+                    if isinstance(named, ast.Call) and isinstance(named.func, ast.Name)
+                    else "__setattr__"
+                    if isinstance(named, ast.Call)
+                    else "__dict__"
+                )
+                method_facts.append((stored.lineno, "store", stored_field, ()))
+        projected_facts = tuple((FactSpec(*item) for item in method_facts))
+        shape_only = all(
+            (
+                isinstance(stmt, ast.Pass)
+                or (
+                    isinstance(stmt, ast.Expr)
+                    and isinstance(stmt.value, ast.Constant)
+                    and (stmt.value.value is Ellipsis)
+                )
+                for stmt in node.body
+            )
+        )
+        projected_form = ("shape",) if shape_only else ()
+        projected_identity = f"{owner}.{node.name}"
+        projected_name = node.name
+        projected_lineno = node.lineno
+        decorators: set[str] = set()
+        for decorator in node.decorator_list:
+            target = decorator.func if isinstance(decorator, ast.Call) else decorator
+            if isinstance(target, ast.Name):
+                decorators.add(target.id)
+        projected_decorators = tuple(decorators)
+        projected_returns = Module._annotation_spec(node.returns) if node.returns is not None else None
+        positional = list(node.args.posonlyargs) + list(node.args.args)
+        leading: ast.arg | None = None
+        if positional and (
+            positional[0].arg == "self" or (positional[0].arg == "cls" and "classmethod" in decorators)
+        ):
+            leading = positional[0]
+            positional = positional[1:]
+        projected_leading = (
+            Module._param_spec(leading.arg, leading.annotation, leading.lineno) if leading is not None else None
+        )
+        projected_params = tuple(
+            (
+                Module._param_spec(arg.arg, arg.annotation, arg.lineno)
+                for arg in positional + list(node.args.kwonlyargs)
+            )
+        )
+        opened: list[str] = []
+        if node.args.vararg is not None:
+            opened.append("*args")
+        if node.args.kwarg is not None:
+            opened.append("**kwargs")
+        projected_open = tuple(opened)
+        bare = node.body[0].value if len(node.body) == 1 and isinstance(node.body[0], ast.Return) else None
+        bare_self_attr: str | None = None
+        delegated: str | None = None
+        if isinstance(bare, ast.Attribute) and isinstance(bare.value, ast.Name) and (bare.value.id == "self"):
+            bare_self_attr = bare.attr
+        if isinstance(bare, ast.Call) and len(bare.args) == 1:
+            delegated = (
+                bare.func.id
+                if isinstance(bare.func, ast.Name)
+                else bare.func.attr
+                if isinstance(bare.func, ast.Attribute)
+                else None
+            )
+            if not (
+                isinstance(bare.args[0], ast.Attribute)
+                and isinstance(bare.args[0].value, ast.Name)
+                and (bare.args[0].value.id == "self")
+            ):
+                delegated = None
+        projected_bare_self_attr = bare_self_attr if bare_self_attr else None
+        projected_delegated = delegated if delegated else None
+        projected_constructs = tuple(
+            (
+                call.func.id
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and (call.func.id in ("cls", owner))
+            )
+        )
+        return MethodSpec(
+            identity=projected_identity,
+            name=projected_name,
+            lineno=projected_lineno,
+            decorators=projected_decorators,
+            returns=projected_returns,
+            leading=projected_leading,
+            params=projected_params,
+            open=projected_open,
+            bare_self_attr=projected_bare_self_attr,
+            delegated=projected_delegated,
+            constructs=projected_constructs,
+            form=projected_form,
+            facts=projected_facts,
+        )
+
+    @staticmethod
+    def _class_decl_slot(
+        kind_table: KindTable, scope: Scope, name: str, annotation: Annotation | None
+    ) -> tuple[str, str | None, tuple[str, ...], tuple[str, str] | None]:
+        if annotation is None:
+            return (name, None, (), None)
+        primary = annotation.primary()
+        resolved = scope.resolve(primary) if primary is not None else None
+        named_block = kind_table.block_of(resolved) if resolved is not None else None
+        block = str(named_block) if named_block is not None else None
+        touched: list[str] = []
+        for symbol in scope.symbols(annotation):
+            found_block = kind_table.block_of(symbol)
+            if found_block is not None:
+                touched.append(str(found_block))
+        return (
+            name,
+            block,
+            tuple(touched),
+            (str(resolved.module()), str(resolved.name())) if resolved is not None else None,
+        )
+
+    @staticmethod
+    def _class_decl_slot_spec(row: tuple[str, str | None, tuple[str, ...], tuple[str, str] | None]) -> SlotSpec:
+        symbol = row[3]
+        return SlotSpec(row[0], row[1], row[2], SymbolSpec(symbol[0], symbol[1]) if symbol is not None else None)
+
+    @staticmethod
+    def _class_decl_signature_spec(
+        row: tuple[
+            str,
+            str,
+            int,
+            str,
+            tuple[str, ...],
+            tuple[tuple[str, str | None, tuple[str, ...], tuple[str, str] | None], ...],
+            tuple[str, str | None, tuple[str, ...], tuple[str, str] | None] | None,
+            tuple[str, str | None, tuple[str, ...], tuple[str, str] | None] | None,
+        ],
+    ) -> SignatureSpec:
+        return SignatureSpec(
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            tuple((Module._class_decl_slot_spec(item) for item in row[5])),
+            Module._class_decl_slot_spec(row[6]) if row[6] is not None else None,
+            Module._class_decl_slot_spec(row[7]) if row[7] is not None else None,
+        )
+
+    @staticmethod
+    def _class_decl_held(
+        init_node: ast.FunctionDef | ast.AsyncFunctionDef | None, kind_table: KindTable, scope: Scope, kind: str
+    ) -> tuple[str, ...]:
+        if init_node is None:
+            return ()
+        named: set[str] = set()
+        for arg in init_node.args.posonlyargs + init_node.args.args + init_node.args.kwonlyargs:
+            if arg.arg == "self" or arg.annotation is None:
+                continue
+            primary = Annotation(Module._annotation_spec(arg.annotation)).primary()
+            resolved = scope.resolve(primary) if primary is not None else None
+            block = kind_table.block_of(resolved) if resolved is not None else None
+            if block is not None and str(block) == kind:
+                named.add(arg.arg)
+        kept: set[str] = set()
+        for inner in ast.walk(init_node):
+            if isinstance(inner, ast.AnnAssign):
+                targets: list[ast.expr] = [inner.target]
+                value: ast.expr | None = inner.value
+            elif isinstance(inner, ast.Assign):
+                targets = list(inner.targets)
+                value = inner.value
+            else:
+                continue
+            if not (isinstance(value, ast.Name) and value.id in named):
+                continue
+            for target in targets:
+                if (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and (target.value.id == "self")
+                ):
+                    kept.add(target.attr)
+        return tuple(sorted(kept))
+
+    @staticmethod
+    def _class_decl_is_enum_auto(scope: Scope, value: ast.expr) -> bool:
+        if not isinstance(value, ast.Call) or value.args or value.keywords:
+            return False
+        if isinstance(value.func, ast.Attribute) and isinstance(value.func.value, ast.Name):
+            package = scope.package_of(Text(value.func.value.id))
+            return package is not None and str(package) == ENUM_MODULE and (value.func.attr == "auto")
+        if isinstance(value.func, ast.Name):
+            origin = scope.import_of(Text(value.func.id))
+            return origin is not None and str(origin.module()) == ENUM_MODULE and (str(origin.name()) == "auto")
+        return False
+
+    @staticmethod
+    def _class_decl_empty_test(test: ast.expr) -> bool:
+        if isinstance(test, ast.Name):
+            return True
+        if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+            return isinstance(test.operand, ast.Name)
+        if isinstance(test, ast.Compare) and len(test.ops) == 1:
+            return (
+                isinstance(test.ops[0], (ast.Is, ast.IsNot))
+                and isinstance(test.left, ast.Name)
+                and isinstance(test.comparators[0], ast.Constant)
+                and (test.comparators[0].value is None)
+            )
+        return False
+
+    @staticmethod
+    def _class_decl_named_block(scope: Scope, kind_table: KindTable, text: str) -> str | None:
+        resolved = scope.resolve(Text(text))
+        found = kind_table.block_of(resolved) if resolved is not None else None
+        return str(found) if found is not None else None
+
+    @staticmethod
+    def _class_decl_snapshot_enum(registry: Registry, scope: Scope, node: ast.expr) -> bool:
+        symbol = scope.resolve(Text(ast.unparse(node)))
+        return (
+            symbol is not None
+            and symbol in registry.enums()
+            and any((f".{package}." in str(symbol.module()) for package in (RELAYS_IMPORT, PORTS_IMPORT_PATH)))
+        )
+
+    @staticmethod
+    def _class_decl_snapshot_wire_raise(scope: Scope, node: ast.Raise) -> bool:
+        call = node.exc
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and (call.func.id == "ValueError")
+            and (call.func.id not in scope.locals())
+            and (len(call.args) == 1)
+            and (not call.keywords)
+        ):
+            return False
+        message = call.args[0]
+        return (
+            isinstance(message, ast.Constant)
+            and isinstance(message.value, str)
+            or (
+                isinstance(message, ast.Attribute)
+                and message.attr == "message"
+                and isinstance(message.value, ast.Name)
+                and isinstance(node.cause, ast.Name)
+                and (message.value.id == node.cause.id)
+            )
+        )
+
+    @staticmethod
+    def _class_decl_snapshot_translation(
+        registry: Registry, scope: Scope, kind_table: KindTable, node: ast.Try
+    ) -> bool:
+        if node.orelse or node.finalbody or len(node.handlers) != 1 or (len(node.body) != 1):
+            return False
+        handler = node.handlers[0]
+        if handler.type is None or handler.name is None or len(handler.body) != 1:
+            return False
+        raised = handler.body[0]
+        if not (
+            isinstance(raised, ast.Raise)
+            and Module._class_decl_snapshot_wire_raise(scope, raised)
+            and isinstance(raised.cause, ast.Name)
+            and (raised.cause.id == handler.name)
+        ):
+            return False
+        protected = node.body[0]
+        value: ast.expr | None
+        if (
+            isinstance(protected, ast.Assign)
+            and len(protected.targets) == 1
+            and isinstance(protected.targets[0], ast.Name)
+        ):
+            value = protected.value
+        elif isinstance(protected, ast.Return):
+            value = protected.value
+        else:
+            return False
+        if not isinstance(value, ast.Call):
+            return False
+        if (
+            isinstance(handler.type, ast.Name)
+            and handler.type.id == "ValueError"
+            and (handler.type.id not in scope.locals())
+        ):
+            return Module._class_decl_snapshot_enum(registry, scope, value.func)
+        caught = scope.resolve(Text(ast.unparse(handler.type)))
+        return (
+            caught is not None
+            and (str(caught.module()), str(caught.name())) == ("tesser.errors", "DomainError")
+            and isinstance(protected, ast.Return)
+            and (Module._class_decl_named_block(scope, kind_table, ast.unparse(value.func)) in DOMAIN_BLOCKS)
+        )
+
+    @staticmethod
+    def _class_decl_snapshot_cardinality(
+        scope: Scope, method: ast.FunctionDef | ast.AsyncFunctionDef, guard: ast.If
+    ) -> set[int]:
+        if "len" in scope.locals() or "len" in scope.classes() or "len" in scope.functions():
+            return set()
+        if any(
+            isinstance(inner, ast.arg)
+            and inner.arg == "len"
+            or isinstance(inner, ast.Name)
+            and isinstance(inner.ctx, ast.Store)
+            and inner.id == "len"
+            for inner in ast.walk(method)
+        ):
+            return set()
+        loaded: set[str] = set()
+        for statement in method.body:
+            if statement is guard:
+                break
+            if not (
+                isinstance(statement, ast.Assign)
+                and len(statement.targets) == 1
+                and isinstance(statement.targets[0], ast.Name)
+                and isinstance(statement.value, ast.Call)
+            ):
+                continue
+            source = scope.resolve(Text(ast.unparse(statement.value.func)))
+            if source is None or (str(source.module()), str(source.name())) != (JSON_MODULE, "loads"):
+                continue
+            name = statement.targets[0].id
+            if (
+                sum(
+                    isinstance(inner, ast.Name)
+                    and isinstance(inner.ctx, (ast.Store, ast.Del))
+                    and inner.id == name
+                    for inner in ast.walk(method)
+                )
+                == 1
+            ):
+                loaded.add(name)
+        allowed: set[int] = set()
+        for comparison in ast.walk(guard.test):
+            if not isinstance(comparison, ast.Compare) or len(comparison.ops) != 1:
+                continue
+            call = comparison.left
+            limit = comparison.comparators[0]
+            if not (
+                isinstance(comparison.ops[0], (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE))
+                and isinstance(limit, ast.Constant)
+                and type(limit.value) is int
+                and limit.value >= 0
+                and isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "len"
+                and len(call.args) == 1
+                and not call.keywords
+            ):
+                continue
+            value = call.args[0]
+            while (
+                isinstance(value, ast.Subscript)
+                and isinstance(value.slice, ast.Constant)
+                and isinstance(value.slice.value, str)
+            ):
+                value = value.value
+            if isinstance(value, ast.Name) and value.id in loaded:
+                allowed.add(id(call))
+        return allowed
+
+    @staticmethod
+    def _class_decl_snapshot_call_ok(scope: Scope, kind_table: KindTable, call: ast.Call) -> bool:
+        func = call.func
+        if isinstance(func, ast.Name):
+            if func.id in SNAPSHOT_BUILTINS:
+                return True
+            block = Module._class_decl_named_block(scope, kind_table, func.id)
+            return block is not None and block in SNAPSHOT_CONSTRUCTED
+        if not isinstance(func, ast.Attribute):
+            return False
+        if func.attr in SNAPSHOT_READS and (not call.args) and (not call.keywords):
+            return True
+        if func.attr == "get" and len(call.args) == 1 and (not call.keywords):
+            return True
+        if isinstance(func.value, ast.Name):
+            package = scope.package_of(Text(func.value.id))
+            if package is not None and str(package) == JSON_MODULE and (func.attr in JSON_CALLS):
+                return True
+            resolved = scope.resolve(Text(f"{func.value.id}.{func.attr}"))
+            if resolved is not None and (str(resolved.module()), str(resolved.name())) == ERRORS_INVALID:
+                return True
+            block = Module._class_decl_named_block(scope, kind_table, f"{func.value.id}.{func.attr}")
+            return block is not None and block in SNAPSHOT_CONSTRUCTED
+        if func.attr in SERDE_METHODS and isinstance(func.value, ast.Call):
+            return Module._class_decl_snapshot_call_ok(scope, kind_table, func.value)
+        return False
+
+    @staticmethod
+    def _class_decl_spec(
+        node: ast.ClassDef, module: str, path: str, scope_spec: ScopeSpec, registry_spec: RegistrySpec
+    ) -> ClassDeclSpec:
+        projected_identity = f"{module}.{node.name}"
+        projected_module = module
+        projected_path = path
+        projected_name = node.name
+        projected_lineno = node.lineno
+        scope = Scope(scope_spec)
+        projected_scope = scope_spec
+        registry = Registry(registry_spec)
+        projected_registry = registry_spec
+        projected_parameter_policy = AnnotationPolicySpec(
+            tuple(DOMAIN_METHOD_PARAMETER_BLOCKS), tuple(DOMAIN_METHOD_PRIMITIVES), (), scope_spec, registry_spec
+        )
+        field_specs = tuple(
+            Module._field_spec(stmt.target.id, stmt.annotation, stmt.lineno)
+            for stmt in node.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        )
+        method_specs = tuple(
+            Module._method_spec(stmt, node.name)
+            for stmt in node.body
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+        )
+        fields = [Field(field_spec) for field_spec in field_specs]
+        methods = [Method(method_spec) for method_spec in method_specs]
+        projected_fields = field_specs
+        projected_methods = method_specs
+        kind_table = registry.kinds()
+        SlotRow = tuple[str, str | None, tuple[str, ...], tuple[str, str] | None]
+        SignatureRow = tuple[
+            str, str, int, str, tuple[str, ...], tuple[SlotRow, ...], SlotRow | None, SlotRow | None
+        ]
+        signature_rows: list[SignatureRow] = []
+        for method in methods:
+            first = method.leading()
+            signature_rows.append(
+                (
+                    f"{module}.{node.name}.{method.name()}",
+                    path,
+                    int(method.lineno()),
+                    str(method.name()),
+                    tuple(method.open()),
+                    tuple(
+                        (
+                            Module._class_decl_slot(kind_table, scope, str(param.name()), param.annotation())
+                            for param in method.params()
+                        )
+                    ),
+                    Module._class_decl_slot(kind_table, scope, "return", method.returns())
+                    if method.returns() is not None
+                    else None,
+                    Module._class_decl_slot(kind_table, scope, str(first.name()), first.annotation())
+                    if first is not None
+                    else None,
+                )
+            )
+        projected_signatures = tuple((Module._class_decl_signature_spec(row) for row in signature_rows))
+        own_block = kind_table.block_of(Symbol(SymbolSpec(module, node.name)))
+        init_node = next(
+            (
+                item
+                for item in node.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"
+            ),
+            None,
+        )
+        held_ports = Module._class_decl_held(init_node, kind_table, scope, "port")
+        held_stores = Module._class_decl_held(init_node, kind_table, scope, "store")
+        held_relays = Module._class_decl_held(init_node, kind_table, scope, RELAY_BLOCK)
+        projected_held_ports = held_ports
+        projected_held_relays = held_relays
+        idle_handlers: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if own_block is not None and str(own_block) == "handler":
+            held_clients = frozenset(Module._class_decl_held(init_node, kind_table, scope, "client"))
+            for item in node.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if item.name.startswith("_") and item.name != "__call__":
+                    continue
+                client_aliases: set[str] = set()
+                calls_client = False
+                pending: list[ast.AST] = list(item.body)
+                while pending:
+                    inner = pending.pop(0)
+                    if isinstance(
+                        inner, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef, ast.GeneratorExp)
+                    ):
+                        continue
+                    pending.extend(ast.iter_child_nodes(inner))
+                    if (
+                        isinstance(inner, ast.Assign)
+                        and len(inner.targets) == 1
+                        and isinstance(inner.targets[0], ast.Name)
+                    ):
+                        aliased = inner.value
+                        if isinstance(aliased, ast.Attribute) and isinstance(aliased.value, ast.Attribute):
+                            if not aliased.attr.startswith("_"):
+                                aliased = aliased.value
+                        if (
+                            isinstance(aliased, ast.Attribute)
+                            and isinstance(aliased.value, ast.Name)
+                            and (aliased.value.id == "self")
+                            and (aliased.attr in held_clients)
+                        ):
+                            client_aliases.add(inner.targets[0].id)
+                    if not isinstance(inner, ast.Call):
+                        continue
+                    callee = inner.func
+                    if isinstance(callee, ast.Name) and callee.id in client_aliases:
+                        calls_client = True
+                    if not isinstance(callee, ast.Attribute):
+                        continue
+                    if (
+                        isinstance(callee.value, ast.Name)
+                        and callee.value.id == "self"
+                        and (callee.attr in held_clients)
+                    ):
+                        calls_client = True
+                    if callee.attr.startswith("_"):
+                        continue
+                    receiver = callee.value
+                    if isinstance(receiver, ast.Name) and receiver.id in client_aliases:
+                        calls_client = True
+                    if (
+                        isinstance(receiver, ast.Attribute)
+                        and isinstance(receiver.value, ast.Name)
+                        and (receiver.value.id == "self")
+                        and (receiver.attr in held_clients)
+                    ):
+                        calls_client = True
+                if not calls_client:
+                    idle_handlers.append((item.lineno, "idle_handler", item.name, ()))
+        projected_idle_handlers = tuple((FactSpec(*row) for row in idle_handlers))
+        stores: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.AnnAssign):
+                store_targets: list[ast.expr] = [inner.target]
+            elif isinstance(inner, ast.Assign):
+                store_targets = list(inner.targets)
+            elif isinstance(inner, ast.AugAssign):
+                store_targets = [inner.target]
+            else:
+                continue
+            for target in store_targets:
+                if (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and (target.value.id == "self")
+                ):
+                    stores.append((inner.lineno, "store", target.attr, ()))
+        projected_stores = tuple((FactSpec(*item) for item in stores))
+        projected_self_annotations = tuple(
+            Module._field_spec(inner.target.attr, inner.annotation, inner.lineno)
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.AnnAssign)
+            and isinstance(inner.target, ast.Attribute)
+            and isinstance(inner.target.value, ast.Name)
+            and inner.target.value.id == "self"
+        )
+        engine_containers: set[str] = set()
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Assign) and len(inner.targets) == 1:
+                container_target: ast.expr = inner.targets[0]
+            elif isinstance(inner, ast.AnnAssign):
+                container_target = inner.target
+            else:
+                continue
+            maker = inner.value.func if isinstance(inner.value, ast.Call) else None
+            made = (
+                maker.attr
+                if isinstance(maker, ast.Attribute)
+                else maker.id
+                if isinstance(maker, ast.Name)
+                else ""
+            )
+            if (
+                made in ENGINE_REGISTRATIONS
+                and isinstance(container_target, ast.Attribute)
+                and isinstance(container_target.value, ast.Name)
+                and (container_target.value.id == "self")
+            ):
+                engine_containers.add(container_target.attr)
+        registered_containers: set[str] = set()
+        for inner in ast.walk(node) if engine_containers else ():
+            if not isinstance(inner, ast.Call):
+                continue
+            called = scope.resolve(Text(ast.unparse(inner.func)))
+            called_block = kind_table.block_of(called) if called is not None else None
+            if called_block is None or str(called_block) not in REGISTRATION_BLOCKS:
+                continue
+            for argument in list(inner.args) + [keyword.value for keyword in inner.keywords]:
+                if (
+                    isinstance(argument, ast.Attribute)
+                    and isinstance(argument.value, ast.Name)
+                    and (argument.value.id == "self")
+                    and (argument.attr in engine_containers)
+                    and (argument.attr != "client")
+                ):
+                    registered_containers.add(argument.attr)
+        projected_registered_containers = tuple(sorted(registered_containers))
+        bases: list[str] = []
+        for base in node.bases:
+            base_ref = Annotation(Module._annotation_spec(base)).primary()
+            base_symbol = scope.resolve(base_ref) if base_ref is not None else None
+            bases.append(f"{base_symbol.module()}|{base_symbol.name()}" if base_symbol is not None else "?")
+        projected_bases = tuple((f"{index}:{item}" for index, item in enumerate(bases)))
+        decoration: list[str] = []
+        if node.decorator_list:
+            decoration.append("decorated")
+        if node.keywords:
+            decoration.append("keyworded")
+        projected_decoration = tuple(decoration)
+        extras: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        for item in node.body:
+            if isinstance(item, ast.Pass):
+                continue
+            member_target: ast.expr | None = None
+            member_value: ast.expr | None = None
+            if isinstance(item, ast.AnnAssign):
+                member_target, member_value = (item.target, item.value)
+            elif isinstance(item, ast.Assign) and len(item.targets) == 1:
+                member_target, member_value = (item.targets[0], item.value)
+            is_member = (
+                isinstance(member_target, ast.Name)
+                and (not member_target.id.startswith("_"))
+                and (not (isinstance(item, ast.AnnAssign) and (not isinstance(item.annotation, ast.Name))))
+                and (
+                    isinstance(member_value, ast.Constant)
+                    or (
+                        isinstance(member_value, ast.UnaryOp)
+                        and isinstance(member_value.operand, ast.Constant)
+                        and isinstance(member_value.operand.value, (int, float))
+                    )
+                    or (member_value is not None and Module._class_decl_is_enum_auto(scope, member_value))
+                )
+            )
+            if not is_member:
+                extras.append((item.lineno, "extra", None, ()))
+            valued = (
+                isinstance(item, ast.Assign)
+                and len(item.targets) == 1
+                and (not Module._class_decl_is_enum_auto(scope, item.value))
+                or (
+                    isinstance(item, ast.AnnAssign)
+                    and item.value is not None
+                    and (not Module._class_decl_is_enum_auto(scope, item.value))
+                )
+            )
+            if valued:
+                extras.append((item.lineno, "valued", None, ()))
+        projected_extras = tuple((FactSpec(*item) for item in extras))
+        projected_block = str(own_block) if own_block is not None else None
+        serde_facts: list[tuple[int, str, str | None, tuple[str, ...]]] = []
+        if own_block is not None and str(own_block) in (SERDE_BLOCK, SNAPSHOT_BLOCK):
+            named_types = len(node.type_params)
+            if named_types == 0:
+                subscripted = [base for base in node.bases if isinstance(base, ast.Subscript)]
+                if len(subscripted) == 1 and (not isinstance(subscripted[0].slice, ast.Tuple)):
+                    named_types = 1
+            serde_facts.append((node.lineno, "type_params", str(named_types), ()))
+            serde_methods = [
+                item for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
+            held_types: set[str] = set()
+            for item in serde_methods:
+                if item.name != "__init__":
+                    continue
+                for arg in list(item.args.posonlyargs) + list(item.args.args) + list(item.args.kwonlyargs):
+                    if arg.arg == "self":
+                        continue
+                    param_head = (
+                        Annotation(Module._annotation_spec(arg.annotation)).head()
+                        if arg.annotation is not None
+                        else None
+                    )
+                    if param_head is not None and str(param_head) in SERDE_HELD:
+                        held_types.add(arg.arg)
+                        continue
+                    serde_facts.append((arg.lineno, "init_param", arg.arg, ()))
+            for item in serde_methods:
+                for inner in ast.walk(item):
+                    targets: list[ast.expr] = []
+                    if isinstance(inner, ast.Assign):
+                        targets = list(inner.targets)
+                    elif isinstance(inner, (ast.AnnAssign, ast.AugAssign)):
+                        targets = [inner.target]
+                    for stored_leaf in targets:
+                        if not isinstance(stored_leaf, ast.Attribute):
+                            continue
+                        if not (isinstance(stored_leaf.value, ast.Name) and stored_leaf.value.id == "self"):
+                            continue
+                        if (
+                            item.name == "__init__"
+                            and isinstance(inner, ast.Assign)
+                            and isinstance(inner.value, ast.Name)
+                            and (inner.value.id in held_types)
+                        ):
+                            continue
+                        serde_facts.append((stored_leaf.lineno, "store", stored_leaf.attr, ()))
+            for item in serde_methods:
+                if item.name not in SERDE_METHODS:
+                    continue
+                allowed: set[int] = set()
+                for inner in ast.walk(item):
+                    if isinstance(inner, ast.If) and Module._class_decl_empty_test(inner.test):
+                        allowed.update((id(sub) for sub in ast.walk(inner.test)))
+                        allowed.add(id(inner))
+                for inner in ast.walk(item):
+                    if id(inner) in allowed or not isinstance(inner, SERDE_DECISIONS):
+                        continue
+                    serde_facts.append((inner.lineno, "decision", item.name, ()))
+        if own_block is not None and str(own_block) == SNAPSHOT_BLOCK:
+            for item in node.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if item.name not in SERDE_METHODS:
+                    continue
+                guards = [inner for inner in ast.walk(item) if isinstance(inner, ast.If)]
+                tested = {id(sub) for sub in ast.walk(guards[0].test)} if guards else set()
+                translations = {
+                    id(inner)
+                    for inner in item.body
+                    if item.name == "deserialize"
+                    and isinstance(inner, ast.Try)
+                    and Module._class_decl_snapshot_translation(registry, scope, kind_table, inner)
+                }
+                wire_errors = {
+                    id(inner.exc)
+                    for inner in ast.walk(item)
+                    if item.name == "deserialize"
+                    and isinstance(inner, ast.Raise)
+                    and Module._class_decl_snapshot_wire_raise(scope, inner)
+                }
+                serialized: set[int] = set()
+                if item.name == "serialize" and len(item.body) == 1 and isinstance(item.body[0], ast.Return):
+                    encoded = item.body[0].value
+                    if (
+                        isinstance(encoded, ast.Call)
+                        and isinstance(encoded.func, ast.Attribute)
+                        and (encoded.func.attr == "encode")
+                        and isinstance(encoded.func.value, ast.Call)
+                        and isinstance(encoded.func.value.func, ast.Attribute)
+                        and (encoded.func.value.func.attr == "dumps")
+                        and encoded.func.value.args
+                        and isinstance(encoded.func.value.args[0], ast.Dict)
+                    ):
+                        serialized = {id(sub) for sub in ast.walk(encoded.func.value.args[0])}
+                deserialized: set[int] = set()
+                terminal = item.body[-1] if item.body else None
+                if isinstance(terminal, ast.Try) and id(terminal) in translations:
+                    terminal = terminal.body[-1]
+                if item.name == "deserialize" and isinstance(terminal, ast.Return):
+                    constructed = terminal.value
+                    if (
+                        isinstance(constructed, ast.Call)
+                        and Module._class_decl_named_block(scope, kind_table, ast.unparse(constructed.func))
+                        in SNAPSHOT_CONSTRUCTED
+                    ):
+                        deserialized = {id(sub) for sub in ast.walk(constructed)}
+                collection_calls: set[int] = (
+                    Module._class_decl_snapshot_cardinality(scope, item, guards[0])
+                    if item.name == "deserialize" and guards
+                    else set()
+                )
+                collection_loops: set[int] = set()
+                shape_loops: set[int] = set()
+                for inner in ast.walk(item):
+                    if not isinstance(inner, ast.Call) or not isinstance(inner.func, ast.Name):
+                        continue
+                    if len(inner.args) != 1 or inner.keywords:
+                        continue
+                    value = inner.args[0]
+                    if (
+                        item.name == "serialize"
+                        and inner.func.id == "list"
+                        and (id(inner) in serialized)
+                        and isinstance(value, ast.Attribute)
+                        and isinstance(value.value, ast.Name)
+                        and (len(item.args.args) > 1)
+                        and (value.value.id == item.args.args[1].arg)
+                    ):
+                        collection_calls.add(id(inner))
+                    elif (
+                        item.name == "deserialize"
+                        and inner.func.id == "tuple"
+                        and (id(inner) in deserialized)
+                        and isinstance(value, ast.Subscript)
+                        and isinstance(value.value, ast.Name)
+                        and isinstance(value.slice, ast.Constant)
+                        and isinstance(value.slice.value, str)
+                    ):
+                        collection_calls.add(id(inner))
+                    elif (
+                        item.name == "deserialize"
+                        and inner.func.id in ("tuple", "all")
+                        and (inner.func.id != "all" or id(inner) in tested)
+                        and (inner.func.id != "tuple" or id(inner) in deserialized)
+                        and isinstance(value, ast.GeneratorExp)
+                    ):
+                        if inner.func.id == "all":
+                            predicate = tuple(ast.walk(value.elt))
+                            if (
+                                not any(
+                                    (
+                                        isinstance(sub, ast.Call)
+                                        and isinstance(sub.func, ast.Name)
+                                        and (sub.func.id == "isinstance")
+                                        for sub in predicate
+                                    )
+                                )
+                                or any(
+                                    (
+                                        isinstance(sub, ast.Call)
+                                        and (
+                                            not (
+                                                isinstance(sub.func, ast.Name)
+                                                and sub.func.id in ("isinstance", "all")
+                                                or (
+                                                    isinstance(sub.func, ast.Attribute) and sub.func.attr == "get"
+                                                )
+                                            )
+                                        )
+                                        for sub in predicate
+                                    )
+                                )
+                                or any(
+                                    (isinstance(sub, ast.Attribute) and sub.attr != "get" for sub in predicate)
+                                )
+                            ):
+                                continue
+                        collection_calls.add(id(inner))
+                        collection_loops.add(id(value))
+                        if inner.func.id == "all":
+                            shape_loops.add(id(value))
+                for inner in ast.walk(item):
+                    if not isinstance(inner, ast.ListComp):
+                        continue
+                    if id(inner) in serialized:
+                        collection_loops.add(id(inner))
+                for inner in ast.walk(item):
+                    if id(inner) not in collection_loops:
+                        continue
+                    if not isinstance(inner, (ast.ListComp, ast.GeneratorExp)):
+                        continue
+                    if (
+                        len(inner.generators) != 1
+                        or inner.generators[0].ifs
+                        or inner.generators[0].is_async
+                        or (not isinstance(inner.generators[0].target, ast.Name))
+                        or (
+                            isinstance(inner, ast.ListComp)
+                            and (
+                                not isinstance(inner.generators[0].iter, ast.Attribute)
+                                or not isinstance(inner.generators[0].iter.value, ast.Name)
+                                or (
+                                    not (
+                                        isinstance(inner.elt, ast.Dict)
+                                        or (
+                                            isinstance(inner.elt, ast.Call)
+                                            and isinstance(inner.elt.func, ast.Attribute)
+                                            and (inner.elt.func.attr == "loads")
+                                            and (len(inner.elt.args) == 1)
+                                            and isinstance(inner.elt.args[0], ast.Call)
+                                            and isinstance(inner.elt.args[0].func, ast.Attribute)
+                                            and (inner.elt.args[0].func.attr == "serialize")
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                        or (
+                            isinstance(inner, ast.GeneratorExp)
+                            and (
+                                not isinstance(inner.generators[0].iter, ast.Subscript)
+                                or not isinstance(inner.generators[0].iter.value, ast.Name)
+                                or (not isinstance(inner.generators[0].iter.slice, ast.Constant))
+                                or (not isinstance(inner.generators[0].iter.slice.value, str))
+                                or (id(inner) not in shape_loops and (not isinstance(inner.elt, ast.Call)))
+                            )
+                        )
+                    ):
+                        collection_loops.remove(id(inner))
+                for inner in ast.walk(item):
+                    if (
+                        isinstance(inner, ast.Call)
+                        and id(inner) not in collection_calls | wire_errors
+                        and (
+                            not (
+                                Module._class_decl_snapshot_call_ok(scope, kind_table, inner)
+                                or (
+                                    item.name == "deserialize"
+                                    and Module._class_decl_snapshot_enum(registry, scope, inner.func)
+                                )
+                            )
+                        )
+                    ):
+                        serde_facts.append((inner.lineno, "snapshot_call", item.name, ()))
+                banned = [
+                    inner
+                    for inner in ast.walk(item)
+                    if isinstance(inner, SNAPSHOT_LOOPS) and id(inner) not in collection_loops | translations
+                ]
+                if item.name == "serialize":
+                    for inner in guards + banned:
+                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                    for inner in ast.walk(item):
+                        if isinstance(inner, (ast.BoolOp, ast.Compare)):
+                            serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                    if len(item.body) != 1 or not isinstance(item.body[0], ast.Return):
+                        serde_facts.append((item.lineno, "snapshot_serialize_shape", item.name, ()))
+                    continue
+                for inner in banned:
+                    serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                if len(guards) > 1:
+                    for inner in guards[1:]:
+                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                for inner in ast.walk(item):
+                    if not isinstance(inner, ast.Compare):
+                        continue
+                    if id(inner) not in tested or not all(
+                        isinstance(other, ast.Constant)
+                        or isinstance(operation, (ast.In, ast.NotIn))
+                        and isinstance(other, ast.Tuple)
+                        and all(isinstance(member, ast.Constant) for member in other.elts)
+                        for operation, other in zip(inner.ops, inner.comparators)
+                    ):
+                        serde_facts.append((inner.lineno, "snapshot_decides", item.name, ()))
+                for guard in guards[:1]:
+                    if guard.orelse or len(guard.body) != 1 or (not isinstance(guard.body[0], ast.Raise)):
+                        serde_facts.append((guard.lineno, "snapshot_guard_shape", item.name, ()))
+                returns = [inner for inner in ast.walk(item) if isinstance(inner, ast.Return)]
+                if not isinstance(terminal, ast.Return) or len(returns) != 1:
+                    serde_facts.append((item.lineno, "snapshot_return_shape", item.name, ()))
+        projected_serde_facts = tuple((FactSpec(*item) for item in serde_facts))
+        projected_statements = tuple(
+            (
+                FactSpec(item.lineno, "statement", None, ("pass",) if isinstance(item, ast.Pass) else ())
+                for item in node.body
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+        )
+        spec_reader_spec = SpecReaderSpec(scope_spec, registry_spec)
+        projected_constructor_policy = AnnotationPolicySpec(
+            (), tuple(sorted(PRIMITIVES)), (), scope_spec, registry_spec
+        )
+        projected_spec_policy = AnnotationPolicySpec(
+            ("spec",), tuple(sorted(PRIMITIVES)), (), scope_spec, registry_spec
+        )
+        projected_port_dto_policy = AnnotationPolicySpec(
+            ("port_request", "port_response"),
+            tuple(sorted(PORT_DTO_PRIMITIVES)),
+            tuple(scope.enums()),
+            scope_spec,
+            registry_spec,
+            "none",
+        )
+        projected_client_dto_policy = AnnotationPolicySpec(
+            ("request", "response"), tuple(sorted(PRIMITIVES)), (), scope_spec, registry_spec, "none"
+        )
+        projected_relay_dto_policy = AnnotationPolicySpec(
+            tuple(sorted(RELAY_DTO_BLOCKS | DOMAIN_BLOCKS)),
+            tuple(sorted(PORT_DTO_PRIMITIVES)),
+            tuple(scope.enums()),
+            scope_spec,
+            registry_spec,
+        )
+        projected_bodies: tuple[BodySpec, ...] = ()
+        if own_block is not None and str(own_block) in BODY_BLOCKS:
+            class_methods = tuple((str(method.name()) for method in methods))
+            projected_bodies = tuple(
+                Module._body_spec(
+                    item,
+                    row[0],
+                    path,
+                    class_methods,
+                    held_ports,
+                    held_stores,
+                    Module._class_decl_signature_spec(row),
+                    scope_spec,
+                    registry_spec,
+                )
+                for item, row in zip(
+                    (stmt for stmt in node.body if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))),
+                    signature_rows,
+                )
+            )
+        stored = [field for field in fields if str(field.annotation().head()) != "ClassVar"]
+        leaf: str | None = None
+        if len(stored) == 1:
+            head = str(stored[0].annotation().head())
+            if head in WRAPPABLE_SCALARS or head in NON_WRAPPABLE_SCALARS:
+                leaf = head
+        projected_leaf = leaf if leaf else None
+        return ClassDeclSpec(
+            identity=projected_identity,
+            module=projected_module,
+            path=projected_path,
+            name=projected_name,
+            lineno=projected_lineno,
+            scope=projected_scope,
+            registry=projected_registry,
+            parameter_policy=projected_parameter_policy,
+            fields=projected_fields,
+            methods=projected_methods,
+            signatures=projected_signatures,
+            bodies=projected_bodies,
+            held_ports=projected_held_ports,
+            held_relays=projected_held_relays,
+            idle_handlers=projected_idle_handlers,
+            stores=projected_stores,
+            self_annotations=projected_self_annotations,
+            registered_containers=projected_registered_containers,
+            bases=projected_bases,
+            decoration=projected_decoration,
+            extras=projected_extras,
+            block=projected_block,
+            statements=projected_statements,
+            serde_facts=projected_serde_facts,
+            spec_reader=spec_reader_spec,
+            constructor_policy=projected_constructor_policy,
+            spec_policy=projected_spec_policy,
+            port_dto_policy=projected_port_dto_policy,
+            client_dto_policy=projected_client_dto_policy,
+            relay_dto_policy=projected_relay_dto_policy,
+            leaf=projected_leaf,
+        )
 
 
 KERNEL_TESSER_IMPORTS: typing.Final[TesserImportPolicy] = TesserImportPolicy(TesserImportPolicySpec(
@@ -15042,7 +16388,6 @@ CONTEXT_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPol
 CONTEXT_TESTS_INIT: typing.Final[PackageInitPolicy] = PackageInitPolicy(PackageInitPolicySpec("a context tests"))
 
 
-
 ROLE_TESSER_IMPORTS: typing.Final[dict[str, TesserImportPolicy]] = {
     "domain": DOMAIN_TESSER_IMPORTS,
     "application": APPLICATION_TESSER_IMPORTS,
@@ -15150,33 +16495,47 @@ class HookRunSpec(ts.Spec):
         self.findings = findings
 
 
-class HookRun(ts.ValueObject):
+class GovernanceStatus(ts.ValueObject):
 
-    _conf: HookConf
-    _governance: Text
-    _findings: Count
+    _value: str
 
-    def __init__(self, spec: HookRunSpec) -> None:
-        if spec.governance not in (
+    def __init__(self, value: str) -> None:
+        if value not in (
             GOVERNANCE_GOVERNED,
             GOVERNANCE_SKIPPED,
             GOVERNANCE_OUTSIDE,
             GOVERNANCE_UNDECLARED,
         ):
-            raise ValueError(f"unknown governance {spec.governance!r}")
+            raise ValueError(f"unknown governance {value!r}")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class HookRun(ts.ValueObject):
+
+    _conf: HookConf
+    _governance_status: GovernanceStatus
+    _findings: Count
+
+    def __init__(self, spec: HookRunSpec) -> None:
         object.__setattr__(self, "_conf", HookConf(spec.conf))
-        object.__setattr__(self, "_governance", Text(spec.governance))
+        object.__setattr__(self, "_governance_status", GovernanceStatus(spec.governance))
         object.__setattr__(self, "_findings", Count(spec.findings))
 
     def conf(self) -> HookConf:
         return self._conf
 
+    def governance_status(self) -> GovernanceStatus:
+        return self._governance_status
+
     def action(self) -> HookAction:
         if str(self._conf) == HOOK_DISABLED:
             return HookAction.DISABLED
-        if str(self._governance) == GOVERNANCE_UNDECLARED:
+        if str(self._governance_status) == GOVERNANCE_UNDECLARED:
             return HookAction.ADVISE
-        if str(self._governance) != GOVERNANCE_GOVERNED:
+        if str(self._governance_status) != GOVERNANCE_GOVERNED:
             return HookAction.SILENT
         if int(self._findings) == 0:
             return HookAction.SILENT
@@ -15385,8 +16744,8 @@ class Codebase(ts.AggregateRoot):
                     for item in cls.body
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
                     and item.returns is not None
-                    and "[" not in str(Annotation(item.returns).source())
-                    and (returned_outcome := Annotation(item.returns).primary()) is not None
+                    and "[" not in str(Annotation(Module._annotation_spec(item.returns)).source())
+                    and (returned_outcome := Annotation(Module._annotation_spec(item.returns)).primary()) is not None
                     and (returned_symbol := module.scope().resolve(returned_outcome)) is not None
                     and blocks.get((str(returned_symbol.module()), str(returned_symbol.name()))) == OUTCOME_BLOCK
                 }
@@ -15591,9 +16950,6 @@ class Codebase(ts.AggregateRoot):
             relay_constants=relay_constant_rows,
         )
 
-        def constructed(policy: SignaturePolicy, decl: ClassDecl) -> tuple[Violation, ...]:  # tesser:debt TB023
-            init = decl.constructor()
-            return policy.missing_constructor_violations(decl) if init is None else policy.violations(init)
 
         self._spec_makers = {}
         checked = [
@@ -15606,7 +16962,7 @@ class Codebase(ts.AggregateRoot):
         for module in checked:
             for fn in module.body():
                 if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and fn.returns is not None:
-                    made = readers[module.name()].ref(Annotation(fn.returns))
+                    made = readers[module.name()].ref(Annotation(Module._annotation_spec(fn.returns)))
                     if made is not None:
                         self._spec_makers[(module.name(), fn.name)] = made
         returning: dict[str, SpecRef | None] = {}
@@ -15627,12 +16983,12 @@ class Codebase(ts.AggregateRoot):
                         if arg.arg != "self"
                     ]
                     if item.name != "__init__":
-                        made = reader.ref(Annotation(item.returns)) if item.returns is not None else None
+                        made = reader.ref(Annotation(Module._annotation_spec(item.returns))) if item.returns is not None else None
                         returning[item.name] = (
                             made if item.name not in returning or returning[item.name] == made else None
                         )
                     elif block in SPEC_READER_BLOCKS and len(params) == 1:
-                        taken = reader.ref(Annotation(params[0].annotation)) if params[0].annotation is not None else None
+                        taken = reader.ref(Annotation(Module._annotation_spec(params[0].annotation))) if params[0].annotation is not None else None
                         if taken is not None and taken.shape() == SPEC_ONE:
                             first = self._spec_owner.setdefault(taken.symbol(), (module.name(), cls.name))
                             self._spec_takers.setdefault(taken.symbol(), set()).add((module.name(), cls.name))
@@ -15645,10 +17001,14 @@ class Codebase(ts.AggregateRoot):
                             arg.arg: field
                             for arg in params
                             if arg.annotation is not None
-                            and (field := reader.ref(Annotation(arg.annotation))) is not None
+                            and (field := reader.ref(Annotation(Module._annotation_spec(arg.annotation)))) is not None
                         }
         self._spec_methods = {name: made for name, made in returning.items() if made is not None}
-        self._spec_shared.sort(key=lambda entry: entry[:3])  # tesser:debt TB023
+        self._spec_shared = [
+            entry for _, _, entry in sorted(
+                (entry[:3], index, entry) for index, entry in enumerate(self._spec_shared)
+            )
+        ]
         registry = RegistrySpec(
             kind_rows,
             domain_enum_rows,
@@ -15716,7 +17076,7 @@ class Codebase(ts.AggregateRoot):
             found.extend(module.double_violations())
             found.extend(module.shadowing_violations())
             found.extend(module.string_equality_violations())
-            found.extend(module.sibling_reference_violations())
+            found.extend(module.sibling_reference_violations(registry))
             found.extend(module.dynamic_import_violations())
             found.extend(module.role_package_import_violations(registry))
             found.extend(module.package_read_violations())
@@ -15925,15 +17285,15 @@ class Codebase(ts.AggregateRoot):
                             continue
                         found.extend(body.adapter_delegation_violations())
                 if block == "aggregate":
-                    found.extend(constructed(AGGREGATE_CONSTRUCTOR, decl))
+                    found.extend(self._violations_constructed(AGGREGATE_CONSTRUCTOR, decl))
                 elif block == "entity":
-                    found.extend(constructed(ENTITY_CONSTRUCTOR, decl))
+                    found.extend(self._violations_constructed(ENTITY_CONSTRUCTOR, decl))
                 elif block == "component":
                     found.extend(decl.component_violations())
                 elif block == "component_config":
-                    found.extend(constructed(COMPONENT_CONFIG_CONSTRUCTOR, decl))
+                    found.extend(self._violations_constructed(COMPONENT_CONFIG_CONSTRUCTOR, decl))
                 elif block == "app_config":
-                    found.extend(constructed(APP_CONFIG_CONSTRUCTOR, decl))
+                    found.extend(self._violations_constructed(APP_CONFIG_CONSTRUCTOR, decl))
                 elif block == "valueobject":
                     found.extend(decl.valueobject_violations())
                     found.extend(decl.vo_field_violations())
@@ -16106,3 +17466,15 @@ class Codebase(ts.AggregateRoot):
                         ))
                     )
         return tuple(kept)
+
+    def _violations_constructed(
+        self,
+        signature_policy: SignaturePolicy,
+        class_decl: ClassDecl,
+    ) -> tuple[Violation, ...]:
+        init = class_decl.constructor()
+        return (
+            signature_policy.missing_constructor_violations(class_decl)
+            if init is None
+            else signature_policy.violations(init)
+        )

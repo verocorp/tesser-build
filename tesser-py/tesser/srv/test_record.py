@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import collections.abc as collections_abc
 import typing
 
 import pytest
 
 import tesser.srv
+import tesser.srv.record as record
 
 
 class Ask(tesser.srv.Request):
@@ -40,6 +43,19 @@ class _WriteOnceAsk(_WriteOnce):
     path: str
 
 
+@pytest.mark.parametrize("annotation", [int, "int", str, "str"])
+def test_value_annotations_declare_record_fields(annotation: object) -> None:
+    assert record._is_field(annotation)
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [typing.ClassVar[str], "typing.ClassVar[str]", typing.Final[int], "typing.Final[int]"],
+)
+def test_class_metadata_annotations_do_not_declare_record_fields(annotation: object) -> None:
+    assert not record._is_field(annotation)
+
+
 def test_a_record_blocks_rebinding_after_construction() -> None:
     ask = Ask(path="/campaigns")
     with pytest.raises(AttributeError):
@@ -66,11 +82,11 @@ def test_construction_is_one_shot_even_through_init_itself() -> None:
 
 
 def test_write_once_lost_because_it_leaves_the_smuggling_channel_open() -> None:
-    ask = _WriteOnceAsk("/campaigns")  # tesser:debt TB085
+    write_once_ask = _WriteOnceAsk("/campaigns")
     with pytest.raises(AttributeError):
-        ask.path = "/admin"
-    setattr(ask, "verdict", "allowed")
-    assert vars(ask)["verdict"] == "allowed"
+        write_once_ask.path = "/admin"
+    setattr(write_once_ask, "verdict", "allowed")
+    assert vars(write_once_ask)["verdict"] == "allowed"
 
 
 def test_records_compare_by_value() -> None:
@@ -243,13 +259,13 @@ def test_a_string_annotation_is_read_as_a_field_and_may_not_carry_a_default() ->
     ):
 
         class _Quoted(tesser.srv.Response):
-            status: "int" = 200  # tesser:debt TB021
+            status: int = 200
 
 
 def test_a_string_annotated_classvar_is_not_a_field_and_keeps_its_class_level_value() -> None:
     class QuotedTagged(tesser.srv.Response):
 
-        KIND: "typing.ClassVar[str]" = "reply"  # tesser:debt TB021
+        KIND: typing.ClassVar[str] = "reply"
 
         def __init__(self, status: int) -> None:
             super().__init__(status=status)
@@ -258,6 +274,7 @@ def test_a_string_annotated_classvar_is_not_a_field_and_keeps_its_class_level_va
 
     with pytest.raises(TypeError, match=r"^QuotedTagged declares no field 'KIND'$"):
         tesser.srv.Record.__init__(QuotedTagged.__new__(QuotedTagged), KIND="pwned")
+    assert QuotedTagged.__annotations__["KIND"] == "typing.ClassVar[str]"
     assert QuotedTagged(200).KIND == "reply"
 
 

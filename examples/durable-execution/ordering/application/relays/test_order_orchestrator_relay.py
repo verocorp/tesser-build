@@ -28,6 +28,29 @@ class TestConfirmOrderRequestSnapshot:
 
 class TestConfirmOrderResponseSnapshot:
 
+    def test_a_confirmation_cannot_contradict_its_total(self) -> None:
+        for raw in (
+            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [], "reasons": []}',
+            b'{"outcome": "confirmed", "order_id": "o1", "confirmed_orders": [{"total_cents": 750}, {"total_cents": 800}], "reasons": []}',
+            b'{"outcome": "product_price_not_found", "order_id": "o1", "confirmed_orders": [{"total_cents": 750}], "reasons": ["missing"]}',
+            b'{"outcome": "already_started", "order_id": "o1", "confirmed_orders": [{"total_cents": 750}], "reasons": []}',
+        ):
+            with pytest.raises(ValueError):
+                relays.ConfirmOrderResponseSnapshot().deserialize(raw)
+
+    def test_a_previously_started_confirmation_carries_no_payable_order(self) -> None:
+        confirm_order_response = relays.ConfirmOrderResponseSnapshot().deserialize(
+            b'{"outcome": "already_started", "order_id": "o1", "confirmed_orders": [], "reasons": []}'
+        )
+        assert confirm_order_response.outcome is relays.ConfirmOrderOutcome.ALREADY_STARTED
+        assert confirm_order_response.confirmed_orders == ()
+
+    def test_an_unknown_confirmation_status_is_refused(self) -> None:
+        with pytest.raises(ValueError):
+            relays.ConfirmOrderResponseSnapshot().deserialize(
+                b'{"outcome": "unknown", "order_id": "o1", "confirmed_orders": [], "reasons": []}'
+            )
+
     def test_a_confirmed_response_is_its_outcome_the_order_id_and_the_total(self) -> None:
         confirm_order_response = relays.ConfirmOrderResponse(
             outcome=relays.ConfirmOrderOutcome.CONFIRMED,

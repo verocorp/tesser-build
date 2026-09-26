@@ -83,7 +83,7 @@ run_python_app() {
   step "import-linter (import direction)"
   PYTHONPATH=. lint-imports || return 1
   step "mypy --strict"
-  MYPYPATH=.:../../tesser-py mypy --strict protocol kernel campaign linkpolicy reports app srv tests conftest.py || return 1
+  MYPYPATH=.:../../tesser-py:../../tessercheck-py mypy --strict protocol kernel campaign linkpolicy reports app srv tests conftest.py || return 1
   step "pytest"
   # The app reads its own environment through the config repository, so the
   # runner supplies one — the same job a deploy does. Tests never inject it.
@@ -352,9 +352,9 @@ run_voice() {
   local port="${VOICE_DEPLOYMENT_PORT:-9080}"
   local callback_host="${VOICE_CALLBACK_HOST:-host.docker.internal}"
   local deployment="${VOICE_DEPLOYMENT:-http://$callback_host:$port}"
-  export LIVEKIT_URL="${LIVEKIT_URL:-ws://livekit.invalid}"
-  export LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-unused}"
-  export LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-unused}"
+  export LIVEKIT_URL="${LIVEKIT_URL:-ws://localhost:7880}"
+  export LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-devkey}"
+  export LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-secret}"
   export LIVEKIT_AGENT_NAME="${LIVEKIT_AGENT_NAME:-caller}"
   export LIVEKIT_SIP_TRUNK_ID="${LIVEKIT_SIP_TRUNK_ID:-unused}"
   step "serve the Restate endpoint on :$port and register it at $admin"
@@ -383,7 +383,7 @@ run_voice() {
       python3 -m srv.livekit.agent_server &
     worker=$!
   fi
-  step "pytest (against Postgres at CALLS_STORAGE and Restate at RESTATE_URL)"
+  step "pytest (against Postgres at CALLS_STORAGE, Restate at RESTATE_URL, and LiveKit at LIVEKIT_URL)"
   CALLS_STORAGE="$storage" RESTATE_URL="$restate_url" RESTATE_ADMIN="$admin" \
     VOICE_CALLBACK_HOST="$callback_host" pytest -q
   local status=$?

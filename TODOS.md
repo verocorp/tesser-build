@@ -844,13 +844,11 @@ What is still open:
   determinism, not from the store; the identity seed is configuration the
   running app draws fresh per start.
 
-- [ ] **3 `TB023` markers** in `examples/durable-execution/` — the nested `def`s
-  in the FastAPI route registrations in `srv/http/main.py`. The Restate handler
-  registrations no longer carry one (2026-09-16: TB023 stopped reading
-  `adapters/`), and the runners' fake-ingress tests lost theirs when
-  `FakeRestateIngress` replaced them. Whether `srv/` deserves the same
-  treatment as `adapters/` is unruled — the host's server loop is its own entry
-  on the exception list below.
+- [x] **The durable HTTP host has named private route callbacks.** The three
+  nested functions became private implementation methods registered directly
+  with FastAPI. Explicit route names preserve the public OpenAPI operationIds,
+  which the real host test asserts. No `srv/` exemption or external-call
+  inference is needed; `run` remains the host's Python-facing operation.
 
 ## Keeping the sequence of port calls out of the domain (2026-09-08, Chris)
 
@@ -1185,23 +1183,23 @@ domain modules out before removing them.
   whether dead code is the analyzer's business at all before building any of
   them — a false positive here tells someone to delete working code.
 
-- [ ] **The rulebook is a separate service, not a domain module.** It reads the
-  *source text* of `checks.py` and renders `RULES.md` — that is IO, which
-  domain never does, and it is a second concern besides checking a tree. The
-  shape it wants: a file-reader gateway reads `checks.py`'s source, an
-  application service hands the text to a `Rulebook` aggregate that derives the
-  rows, and the service writes `RULES.md` back through a writer gateway. Today
-  `tessercheck/domain/rulebook.py` sits in `domain`, imports its sibling
-  `tessercheck.domain.checks` for `Text`/`Code`/`Line`, and does IO by
-  proxy — the text arrives through `ports.RulebookSources`, but the module that
-  parses it is a domain module reading another module's source. The sibling
-  import carries `# tesser:debt TB060` at its site, which is the whole of the
-  ledger entry for this. Merging the two modules was tried on 2026-09-05 to
-  satisfy the sibling ban and **ruled the wrong fix** (Chris): it hides two
-  concerns in one file rather than separating them. Undone; the debt marker
-  stands until the service exists.
+- [x] **The rulebook owns its vocabulary independently of the checker.**
+  Resolved in the debt-retirement pass without merging the two modules.
+  `RuleText`, `RuleCode`, and `SourceLine` belong to the rulebook, so its
+  domain parser no longer imports checker internals. The existing source
+  port reads files, the application render operation passes text to the
+  pure parser, and the CLI owns output. The earlier description of parsing
+  supplied text as "IO by proxy" was incorrect: no filesystem operation
+  occurs in the domain. A second context would not remove the deliberate
+  knowledge of the checker's normative syntax and is not needed to retire
+  the sibling dependency.
 
-- [ ] **TB085 cannot read a constructor of a class that has no `ts.*` base.**
+- [x] **TB085 reads known plain-class constructors without inventing a role.**
+  Resolved by adding each class to the declared-return table as returning
+  itself. Naming enforcement still follows the declared governed kinds;
+  plain structural implementations remain readable, and an undeclared fake
+  still produces TB072. Regression tests also retain the finding for a
+  genuinely unreadable method return. The original diagnosis follows:
   The naming rule says a local is read "through the annotation of the parameter,
   the constructor, or the field, parameter, or module function a call is made
   on", but the constructor path only fires for a class the kind table knows —
@@ -1215,7 +1213,7 @@ domain modules out before removing them.
   is a different shape: the decorator returns its argument, so no class name
   exists to derive from at all.
 
-  Two candidate fixes, neither taken because both are rulings:
+  The alternatives recorded before implementation were:
   (a) `_declared_returns` emits a row per class def — `("", ClassName, module,
   ClassName)` — so a bare constructor call reads as its own class. Three lines,
   and it matches the rule's own words. But `DerivedName("_Structural")` is
@@ -1224,7 +1222,9 @@ domain modules out before removing them.
   (b) A class with no `ts.*` base is outside the naming rule's reach, and the
   call stays unread without being a finding — which quietly widens the "a name
   the analyzer cannot check" hole the clause exists to close. Decide (a)+underscore
-  handling or (b) before the markers are cleared.
+  handling or (b) were the original choices. The implemented return-row
+  fix does not require either: the existing kind check already leaves plain
+  class names free once the return is known.
 
 - [x] **A mapper's local restates the mapper, and every tree says so.** CLOSED
   2026-09-06 (Chris ruling), v0.0.100.0. This was the one finding all seven
@@ -3146,20 +3146,15 @@ wait for a ruling:
 - [x] **conftest governance — RESOLVED v0.0.29.0 (import-totality wave,
   2026-08-12).** A tree-root conftest is a TB065 leaf; a conftest inside a
   tests location carries that location's TB070 row. `tests.discovery` /
-  `tests.support` keep their TB041 debt-file markers but now answer for their
-  imports under the root-tests tier. (`tests.test_shape`'s `tesser.context`
+  `tests.support` initially kept TB041 debt-file markers while answering for
+  their imports under the root-tests tier. (`tests.test_shape`'s `tesser.context`
   pin is gone as of 2026-08-30 — see the residue entry above.)
-  **Why the two TB041 debt-file markers cannot be retired without a ruling**
-  (checked 2026-08-30): there is no legal placement in the tree for a shared
-  test-support module. `tests/` admits only test modules and conftest
-  (TB041); a conftest is a leaf that imports nothing from its tree (TB065),
-  which `tests/support.py` does; a top-level module belongs to no governed
-  package (TB040); and inside a test module the only non-test forms are
-  `@ts.helper` — defaulted primitives only, builds a spec or a DTO, no
-  control flow (TB073) — and `@ts.fake` (TB071/TB072). The AST/filesystem
-  detectors satisfy none of those. Retiring the markers therefore means
-  deleting the detector tests, which is the wave-sized "Relocate the
-  architecture detectors out of `tests/`" item below, not a cleanup.
+  The debt-retirement work follows the architecture-detector ownership item
+  below: parsing and classification belong to the governed toolkit; the
+  example retains its acceptance assertions. Parameterizing those algorithms
+  inside test bodies would preserve their results but not fix their ownership.
+  Construction data and actual protocol fakes can live beside their consumers
+  without adding a general test-support exemption.
 - [ ] **Test-module annotation.** When tests declare themselves, flip
   "a test module imports tesser.testing at most once, as ts" to exactly-once.
 - [ ] **Wire vocabulary — what the srv-matrix build wave left open**
@@ -4196,7 +4191,16 @@ change; each waits for a real need.
     tree — a scoping question this check does not answer today. Wants a ruling
     before code.
 
-- [ ] **Relocate the architecture detectors out of `tests/`**
+- [x] **Relocate the architecture detectors out of `tests/`**
+  - **Resolved by the governed inspection API.** `ModuleInspection` and
+    `TreeInspection` own source classification and host/client access facts in
+    the analyzer domain, with primitive construction data and sibling tests
+    for the synthetic counterexamples. The existing namespaced component
+    exposes `TessercheckClient.inspect_tree`; python-app's tests consume that
+    report and retain their acceptance assertions and import-contract set
+    comparisons. Read/parse failures are explicit. These are queried facts,
+    not new universal findings for the example's policies. The historical
+    rationale and migration sequence below are retained for provenance.
   - **What:** the ~15 AST-analysis functions in
     `examples/python-app/tests/{test_enforcement.py,discovery.py,test_direction.py}`
     are real logic, not test scaffolding. Move them into a module outside the

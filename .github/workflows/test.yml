@@ -258,7 +258,7 @@ jobs:
     # call to Postgres; the service containers are the database CALLS_STORAGE
     # points at and the Restate server, which dials the endpoint the verify
     # arm serves on the runner through host.docker.internal.
-    name: voice example (tessercheck + mypy --strict + pytest against Postgres and Restate)
+    name: voice example (tessercheck + mypy --strict + pytest against Postgres, Restate, and LiveKit)
     runs-on: ubuntu-latest
     services:
       restate:
@@ -288,14 +288,25 @@ jobs:
           python-version: '3.12'
       - name: Install dev tooling
         run: pip install -r examples/voice/requirements-dev.txt
+      - name: Start local LiveKit
+        run: |
+          docker run -d --name livekit --network host livekit/livekit-server:v1.9.11 --dev --bind 127.0.0.1
+          for attempt in $(seq 1 50); do
+            if curl --fail --silent http://127.0.0.1:7880 >/dev/null; then
+              exit 0
+            fi
+            sleep 0.2
+          done
+          docker logs livekit
+          exit 1
       - name: examples/voice — tessercheck + mypy --strict + pytest
         env:
           CALLS_STORAGE: postgres://tesser@localhost:5432/tesser
           RESTATE_URL: http://localhost:8080
           RESTATE_ADMIN: http://localhost:9070
-          LIVEKIT_URL: ws://livekit.invalid
-          LIVEKIT_API_KEY: unused
-          LIVEKIT_API_SECRET: unused
+          LIVEKIT_URL: ws://127.0.0.1:7880
+          LIVEKIT_API_KEY: devkey
+          LIVEKIT_API_SECRET: secret
           LIVEKIT_AGENT_NAME: caller
           LIVEKIT_SIP_TRUNK_ID: unused
         run: scripts/verify voice

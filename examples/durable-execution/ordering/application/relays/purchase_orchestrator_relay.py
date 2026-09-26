@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum  # tesser:debt TB062
+import enum
 import json
 import typing
 
@@ -37,14 +37,14 @@ class PayForOrderRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("payment_method"), str)
             and snapshot["payment_method"]
         ):
-            raise ValueError("a pay for order request is an order and a payment method")  # tesser:debt TB082
+            raise ValueError("a pay for order request is an order and a payment method")
         return PayForOrderRequest(
             order=snapshots.OrderSnapshot().deserialize(json.dumps(snapshot["order"]).encode()),
             payment_method=domain.PaymentMethod(snapshot["payment_method"]),
         )
 
 
-class PayForOrderOutcome(enum.Enum):  # tesser:debt TB052
+class PayForOrderOutcome(enum.Enum):
     PAID = "paid"
     ORDER_NOT_CONFIRMED = "order_not_confirmed"
     PAYMENT_DECLINED = "payment_declined"
@@ -110,14 +110,14 @@ class PayForOrderResponseSnapshot(ts.Serde):
                 for purchase in snapshot["purchases"]
             )
         ):
-            raise ValueError(  # tesser:debt TB082
+            raise ValueError(
                 "a pay for order response is an outcome, an order_id, "
                 "the purchases it paid for, and its reasons"
             )
-        try:  # tesser:debt TB082
-            pay_for_order_outcome = PayForOrderOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
+        try:
+            pay_for_order_outcome = PayForOrderOutcome(snapshot.get("outcome"))
         except ValueError as value_error:
-            raise ValueError("a pay for order response names a paying outcome") from value_error  # tesser:debt TB082
+            raise ValueError("a pay for order response names a paying outcome") from value_error
         return PayForOrderResponse(
             outcome=pay_for_order_outcome,
             order_id=snapshot["order_id"],

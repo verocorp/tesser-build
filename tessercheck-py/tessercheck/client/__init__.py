@@ -13,3 +13,7 @@ from tessercheck.client.client import ApplyRenamesResponse as ApplyRenamesRespon
 from tessercheck.client.client import RenderRulebookRequest as RenderRulebookRequest
 from tessercheck.client.client import RenderRulebookResponse as RenderRulebookResponse
 from tessercheck.client.client import TessercheckClient as TessercheckClient
+from tessercheck.client.client import InspectTreeRequest as InspectTreeRequest
+from tessercheck.client.client import InspectTreeResponse as InspectTreeResponse
+from tessercheck.client.client import InspectedSource as InspectedSource
+from tessercheck.client.client import TreeNotInspected as TreeNotInspected

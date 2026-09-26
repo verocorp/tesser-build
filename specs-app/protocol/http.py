@@ -81,6 +81,10 @@ class HttpResponse(ts.Response):
 
     @classmethod
     def json(cls, status_code: int, body: dict[str, object], headers: collections_abc.Mapping[str, str] | None = None) -> HttpResponse:
+        return cls._json_response(status_code, body, headers)
+
+    @classmethod
+    def _json_response(cls, status_code: int, body: dict[str, object], headers: collections_abc.Mapping[str, str] | None) -> HttpResponse:
         payload = json.dumps(body).encode("utf-8")
         declared = dict(headers or {})
         if not any(name.lower() == "content-type" for name in declared):
@@ -93,7 +97,7 @@ class HttpResponse(ts.Response):
 
     @classmethod
     def problem(cls, status_code: int, code: str, detail: str) -> HttpResponse:
-        return cls.json(status_code, {"type": f"/problems/{code}", "detail": detail})  # tesser:debt TB051
+        return cls._json_response(status_code, {"type": f"/problems/{code}", "detail": detail}, None)
 
     def json_body(self) -> dict[str, object]:
         raw = self.body

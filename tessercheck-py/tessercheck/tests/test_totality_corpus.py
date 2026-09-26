@@ -1,3 +1,4 @@
+import inspect
 import pathlib
 
 import tessercheck.domain as domain
@@ -94,8 +95,8 @@ def test_no_module_shape_is_silent(tmp_path: pathlib.Path) -> None:
         for rel, _ in corpus
         if not rel.endswith("__init__.py")
     )
-    returned = conftest.returned_tokens(conftest.function_tree(domain.Placement.__init__))
-    assert returned, "no placement tokens extracted from Placement.__init__; the totality below would pass on an empty set"
+    returned = conftest.returned_tokens(conftest.function_tree(inspect.getsource(domain.Placement._locate)))
+    assert returned, "no placement tokens extracted from Placement._locate; the totality below would pass on an empty set"
     package_only = frozenset(
         {
             "shell-init",

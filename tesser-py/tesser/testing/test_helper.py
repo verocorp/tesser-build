@@ -1,24 +1,37 @@
 import tesser.testing as testing
 
 
-def test_helper_returns_the_same_object_it_decorates() -> None:
-    def build() -> str:  # tesser:debt TB023
-        return "spec"
+class Scaled:
 
-    assert testing.helper(build) is build
-    assert testing.helper(build)() == "spec"
+    def __init__(self, factor: int) -> None:
+        self.factor = factor
+
+    def __call__(self, value: int) -> int:
+        return self.factor * value
+
+
+def test_helper_returns_the_same_object_it_decorates() -> None:
+    assert testing.helper(str.lower) is str.lower
+    assert testing.helper(str.lower)("SPEC") == "spec"
 
 
 def test_helper_is_a_marker_the_walk_reads_not_behavior() -> None:
-    def target(value: int) -> int:  # tesser:debt TB023
-        return value * 2
-
-    decorated = testing.helper(target)  # tesser:debt TB085
-
-    assert decorated(3) == 6
-    assert decorated.__name__ == "target"
+    assert testing.helper(testing.assembly) is testing.assembly
+    assert testing.helper(testing.assembly)(str.upper)("spec") == "SPEC"
+    assert testing.helper(testing.assembly).__name__ == "assembly"
 
 
 def test_assembly_returns_the_same_object_it_decorates() -> None:
     assert testing.assembly(str.upper) is str.upper
     assert testing.assembly(str.upper)("spec") == "SPEC"
+
+
+def test_markers_preserve_a_callable_objects_type_and_attributes() -> None:
+    scaled = Scaled(3)
+
+    assert testing.helper(scaled) is scaled
+    assert testing.helper(scaled).factor == 3
+    assert testing.helper(scaled)(4) == 12
+    assert testing.assembly(scaled) is scaled
+    assert testing.assembly(scaled).factor == 3
+    assert testing.assembly(scaled)(4) == 12

@@ -23,56 +23,56 @@ _JSON: typing.Final[str] = "application/json"
 
 class HttpHost(ts.Host):
 
+    async def _submit_order(self, request: fastapi.Request) -> fastapi.Response:
+        try:
+            http_response = await self._handler.submit_order(
+                protocol.HttpRequest(body=await request.body())
+            )
+        except protocol.BadRequest as e:
+            http_response = protocol.HttpResponse.problem(400, str(e))
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            http_response = protocol.HttpResponse.problem(500, "unexpected error")
+        return fastapi.Response(
+            http_response.body, http_response.status_code, media_type=_JSON
+        )
+
+    async def _place_order(self, request: fastapi.Request) -> fastapi.Response:
+        try:
+            http_response = await self._handler.place_order(
+                protocol.HttpRequest(body=await request.body())
+            )
+        except protocol.BadRequest as e:
+            http_response = protocol.HttpResponse.problem(400, str(e))
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            http_response = protocol.HttpResponse.problem(500, "unexpected error")
+        return fastapi.Response(
+            http_response.body, http_response.status_code, media_type=_JSON
+        )
+
+    async def _make_order_payment(self, request: fastapi.Request) -> fastapi.Response:
+        try:
+            http_response = await self._handler.make_order_payment(
+                protocol.HttpRequest(body=await request.body())
+            )
+        except protocol.BadRequest as e:
+            http_response = protocol.HttpResponse.problem(400, str(e))
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            http_response = protocol.HttpResponse.problem(500, "unexpected error")
+        return fastapi.Response(
+            http_response.body, http_response.status_code, media_type=_JSON
+        )
+
     def run(self, argv: list[str]) -> int:
         durable_execution_app = app.load()
         try:
-            handler = ordering_handlers.Handler(durable_execution_app.ordering.client)
+            self._handler = ordering_handlers.Handler(durable_execution_app.ordering.client)
             router = fastapi.APIRouter()
-
-            @router.post("/submissions")
-            async def submit_order(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
-                try:
-                    http_response = await handler.submit_order(
-                        protocol.HttpRequest(body=await request.body())
-                    )
-                except protocol.BadRequest as e:
-                    http_response = protocol.HttpResponse.problem(400, str(e))
-                except Exception:
-                    traceback.print_exc(file=sys.stderr)
-                    http_response = protocol.HttpResponse.problem(500, "unexpected error")
-                return fastapi.Response(
-                    http_response.body, http_response.status_code, media_type=_JSON
-                )
-
-            @router.post("/orders")
-            async def place_order(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
-                try:
-                    http_response = await handler.place_order(
-                        protocol.HttpRequest(body=await request.body())
-                    )
-                except protocol.BadRequest as e:
-                    http_response = protocol.HttpResponse.problem(400, str(e))
-                except Exception:
-                    traceback.print_exc(file=sys.stderr)
-                    http_response = protocol.HttpResponse.problem(500, "unexpected error")
-                return fastapi.Response(
-                    http_response.body, http_response.status_code, media_type=_JSON
-                )
-
-            @router.post("/purchases")
-            async def make_order_payment(request: fastapi.Request) -> fastapi.Response:  # tesser:debt TB023
-                try:
-                    http_response = await handler.make_order_payment(
-                        protocol.HttpRequest(body=await request.body())
-                    )
-                except protocol.BadRequest as e:
-                    http_response = protocol.HttpResponse.problem(400, str(e))
-                except Exception:
-                    traceback.print_exc(file=sys.stderr)
-                    http_response = protocol.HttpResponse.problem(500, "unexpected error")
-                return fastapi.Response(
-                    http_response.body, http_response.status_code, media_type=_JSON
-                )
+            router.add_api_route("/submissions", self._submit_order, methods=["POST"], name="submit_order")
+            router.add_api_route("/orders", self._place_order, methods=["POST"], name="place_order")
+            router.add_api_route("/purchases", self._make_order_payment, methods=["POST"], name="make_order_payment")
 
             api = fastapi.FastAPI()
             api.include_router(router)

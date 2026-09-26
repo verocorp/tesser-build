@@ -159,7 +159,7 @@ class HttpHost(ts.Host):
                 self.end_headers()
                 self.wfile.write(http_response.body)
 
-            def log_message(self, format: str, *args: typing.Any) -> None:  # tesser:debt TB022
+            def log_message(self, format: str, *args: object) -> None:
                 return
 
         self._server = http_server.ThreadingHTTPServer(addr, _RequestHandler)

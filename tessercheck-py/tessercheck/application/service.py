@@ -8,6 +8,47 @@ import tessercheck.client as client
 import tessercheck.domain as domain
 
 
+class MapToTreeInspectionSpec(ts.Mapper, domain.TreeInspectionSpec):
+
+    def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
+        super().__init__(
+            sources=tuple(
+                (source.path, source.text if source.state is ports.SourceState.READ else None)
+                for source in read_sources_response.sources
+            ),
+            directories=read_sources_response.directories,
+            unreadable_directories=read_sources_response.unreadable_directories,
+            declared=(
+                read_sources_response.outcome is ports.ReadSourcesOutcome.APP
+                and not read_sources_response.nested
+                and not read_sources_response.symlinked
+            ),
+        )
+
+
+class MapToInspectedSource(ts.Mapper, client.InspectedSource):
+
+    def __init__(self, module_inspection: domain.ModuleInspection) -> None:
+        super().__init__(
+            path=str(module_inspection.path()),
+            reached_contexts=tuple(module_inspection.reached()),
+            client_calls=tuple(module_inspection.calls()),
+            top_level_calls=tuple(module_inspection.top_level_calls()),
+            exported_names=tuple(module_inspection.exports()),
+        )
+
+
+class MapToInspectTreeResponse(ts.Mapper, client.InspectTreeResponse):
+
+    def __init__(self, tree_inspection: domain.TreeInspection) -> None:
+        super().__init__(
+            contexts=tuple(tree_inspection.contexts()),
+            unclassified=tuple(tree_inspection.unclassified()),
+            directories=tuple(tree_inspection.directories()),
+            sources=tuple(MapToInspectedSource(module_inspection) for module_inspection in tree_inspection.modules()),
+        )
+
+
 class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
 
     def __init__(
@@ -59,34 +100,23 @@ class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
 
 class MapToCheckTreeResponse(ts.Mapper, client.CheckTreeResponse):
 
-    def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
-        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+    def __init__(self, violations: tuple[domain.Violation, ...]) -> None:
         super().__init__(
             findings=tuple(
                 f"{violation.path()}:{int(violation.line())}: "
                 f"{violation.code()} {violation.text()}"
-                for violation in codebase.violations()
+                for violation in violations
             )
         )
 
 
 class MapToCheckFileResponse(ts.Mapper, client.CheckFileResponse):
 
-    def __init__(self, codebase: domain.Codebase, path: domain.Path) -> None:
-        match codebase.governance(path):
-            case domain.Governance.GOVERNED:
-                governance = domain.GOVERNANCE_GOVERNED
-            case domain.Governance.SKIPPED:
-                governance = domain.GOVERNANCE_SKIPPED
-            case domain.Governance.OUTSIDE:
-                governance = domain.GOVERNANCE_OUTSIDE
-            case domain.Governance.UNDECLARED:
-                governance = domain.GOVERNANCE_UNDECLARED
-            case _ as never:
-                typing.assert_never(never)
-        violations = codebase.violations()
+    def __init__(
+        self, governance_status: domain.GovernanceStatus, violations: tuple[domain.Violation, ...]
+    ) -> None:
         super().__init__(
-            governance=governance,
+            governance=str(governance_status),
             findings=tuple(
                 f"{violation.path()}:{int(violation.line())}: "
                 f"{violation.code()} {violation.text()}"
@@ -96,24 +126,28 @@ class MapToCheckFileResponse(ts.Mapper, client.CheckFileResponse):
         )
 
 
+class MapToHookRunSpec(ts.Mapper, domain.HookRunSpec):
+
+    def __init__(
+        self,
+        check_write_request: client.CheckWriteRequest,
+        governance_status: domain.GovernanceStatus,
+        violations: tuple[domain.Violation, ...],
+    ) -> None:
+        super().__init__(
+            conf=check_write_request.conf,
+            governance=str(governance_status),
+            findings=len(violations),
+        )
+
+
 class MapToCheckWriteResponse(ts.Mapper, client.CheckWriteResponse):
 
-    def __init__(self, codebase: domain.Codebase, check_write_request: client.CheckWriteRequest) -> None:
-        match codebase.governance(domain.Path(check_write_request.path)):
-            case domain.Governance.GOVERNED:
-                governance = domain.GOVERNANCE_GOVERNED
-            case domain.Governance.SKIPPED:
-                governance = domain.GOVERNANCE_SKIPPED
-            case domain.Governance.OUTSIDE:
-                governance = domain.GOVERNANCE_OUTSIDE
-            case domain.Governance.UNDECLARED:
-                governance = domain.GOVERNANCE_UNDECLARED
-            case _ as never:
-                typing.assert_never(never)
-        violations = codebase.violations()
-        hook_run = domain.HookRun(domain.HookRunSpec(
-            conf=check_write_request.conf, governance=governance, findings=len(violations)
-        ))
+    def __init__(
+        self,
+        violations: tuple[domain.Violation, ...],
+        hook_run: domain.HookRun,
+    ) -> None:
         match hook_run.action():
             case domain.HookAction.DISABLED:
                 action = "disabled"
@@ -126,7 +160,7 @@ class MapToCheckWriteResponse(ts.Mapper, client.CheckWriteResponse):
             case _ as never_action:
                 typing.assert_never(never_action)
         super().__init__(
-            governance=governance,
+            governance=str(hook_run.governance_status()),
             mode=str(hook_run.conf()),
             action=action,
             findings=tuple(
@@ -143,10 +177,10 @@ class MapToMarkingSpec(ts.Mapper, domain.MarkingSpec):
     def __init__(
         self,
         read_sources_response: ports.ReadSourcesResponse,
-        codebase: domain.Codebase,
+        violations: tuple[domain.Violation, ...],
     ) -> None:
         marks: list[tuple[str, int, str]] = []
-        for violation in codebase.violations():
+        for violation in violations:
             mark = violation.mark()
             if mark is None:
                 continue
@@ -168,15 +202,14 @@ class MapToMarkDebtResponse(ts.Mapper, client.MarkDebtResponse):
     def __init__(
         self,
         write_sources_response: ports.WriteSourcesResponse,
-        read_sources_response: ports.ReadSourcesResponse,
+        violations: tuple[domain.Violation, ...],
     ) -> None:
-        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         super().__init__(
             files=write_sources_response.written,
             remaining=tuple(
                 f"{violation.path()}:{int(violation.line())}: "
                 f"{violation.code()} {violation.text()}"
-                for violation in codebase.violations()
+                for violation in violations
             ),
         )
 
@@ -186,10 +219,10 @@ class MapToRenamingSpec(ts.Mapper, domain.RenamingSpec):
     def __init__(
         self,
         read_sources_response: ports.ReadSourcesResponse,
-        codebase: domain.Codebase,
+        violations: tuple[domain.Violation, ...],
     ) -> None:
         renames: list[tuple[str, int, str, str]] = []
-        for violation in codebase.violations():
+        for violation in violations:
             rename = violation.rename()
             if rename is None:
                 continue
@@ -262,15 +295,14 @@ class MapToApplyRenamesResponse(ts.Mapper, client.ApplyRenamesResponse):
     def __init__(
         self,
         write_sources_response: ports.WriteSourcesResponse,
-        read_sources_response: ports.ReadSourcesResponse,
+        violations: tuple[domain.Violation, ...],
     ) -> None:
-        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
         super().__init__(
             files=write_sources_response.written,
             remaining=tuple(
                 f"{violation.path()}:{int(violation.line())}: "
                 f"{violation.code()} {violation.text()}"
-                for violation in codebase.violations()
+                for violation in violations
             ),
         )
 
@@ -287,11 +319,23 @@ class TessercheckService(ts.ApplicationService):
         self._source_writer = source_writer
         self._rulebook_sources = rulebook_sources
 
+    def inspect_tree(self, inspect_tree_request: client.InspectTreeRequest) -> client.InspectTreeResponse:
+        tree_root = domain.TreeRoot(inspect_tree_request.tree)
+        read_sources_request = MapToReadSourcesRequest(tree_root)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
+        try:
+            tree_inspection = domain.TreeInspection(MapToTreeInspectionSpec(read_sources_response))
+        except errors.DomainError as domain_error:
+            raise client.TreeNotInspected(domain_error.code, domain_error.message) from domain_error
+        return MapToInspectTreeResponse(tree_inspection)
+
     def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
         tree_root = domain.TreeRoot(check_tree_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        return MapToCheckTreeResponse(read_sources_response)
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+        violations = codebase.violations()
+        return MapToCheckTreeResponse(violations)
 
     def check_file(self, check_file_request: client.CheckFileRequest) -> client.CheckFileResponse:
         tree_root = domain.TreeRoot(check_file_request.tree)
@@ -299,7 +343,19 @@ class TessercheckService(ts.ApplicationService):
         read_sources_response = self._source_reader.read_sources(read_sources_request)
         path = domain.Path(check_file_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
-        return MapToCheckFileResponse(codebase, path)
+        violations = codebase.violations()
+        match codebase.governance(path):
+            case domain.Governance.GOVERNED:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_GOVERNED)
+            case domain.Governance.SKIPPED:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_SKIPPED)
+            case domain.Governance.OUTSIDE:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_OUTSIDE)
+            case domain.Governance.UNDECLARED:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_UNDECLARED)
+            case _ as never:
+                typing.assert_never(never)
+        return MapToCheckFileResponse(governance_status, violations)
 
     def check_write(self, check_write_request: client.CheckWriteRequest) -> client.CheckWriteResponse:
         tree_root = domain.TreeRoot(check_write_request.tree)
@@ -307,31 +363,50 @@ class TessercheckService(ts.ApplicationService):
         read_sources_response = self._source_reader.read_sources(read_sources_request)
         path = domain.Path(check_write_request.path)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response, path))
-        return MapToCheckWriteResponse(codebase, check_write_request)
+        violations = codebase.violations()
+        match codebase.governance(path):
+            case domain.Governance.GOVERNED:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_GOVERNED)
+            case domain.Governance.SKIPPED:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_SKIPPED)
+            case domain.Governance.OUTSIDE:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_OUTSIDE)
+            case domain.Governance.UNDECLARED:
+                governance_status = domain.GovernanceStatus(domain.GOVERNANCE_UNDECLARED)
+            case _ as never:
+                typing.assert_never(never)
+        hook_run = domain.HookRun(MapToHookRunSpec(check_write_request, governance_status, violations))
+        return MapToCheckWriteResponse(violations, hook_run)
 
     def mark_debt(self, mark_debt_request: client.MarkDebtRequest) -> client.MarkDebtResponse:
         tree_root = domain.TreeRoot(mark_debt_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
-        marking = domain.Marking(MapToMarkingSpec(read_sources_response, codebase))
+        violations = codebase.violations()
+        marking = domain.Marking(MapToMarkingSpec(read_sources_response, violations))
         rewritten_modules = marking.rewritten()
         write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
         write_sources_response = self._source_writer.write_sources(write_sources_request)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        return MapToMarkDebtResponse(write_sources_response, read_sources_response)
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+        violations = codebase.violations()
+        return MapToMarkDebtResponse(write_sources_response, violations)
 
     def apply_renames(self, apply_renames_request: client.ApplyRenamesRequest) -> client.ApplyRenamesResponse:
         tree_root = domain.TreeRoot(apply_renames_request.tree)
         read_sources_request = MapToReadSourcesRequest(tree_root)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
         codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
-        renaming = domain.Renaming(MapToRenamingSpec(read_sources_response, codebase))
+        violations = codebase.violations()
+        renaming = domain.Renaming(MapToRenamingSpec(read_sources_response, violations))
         rewritten_modules = renaming.rewritten()
         write_sources_request = MapToWriteSourcesRequest(tree_root, rewritten_modules)
         write_sources_response = self._source_writer.write_sources(write_sources_request)
         read_sources_response = self._source_reader.read_sources(read_sources_request)
-        return MapToApplyRenamesResponse(write_sources_response, read_sources_response)
+        codebase = domain.Codebase(MapToCodebaseSpec(read_sources_response))
+        violations = codebase.violations()
+        return MapToApplyRenamesResponse(write_sources_response, violations)
 
     def render_rulebook(self, render_rulebook_request: client.RenderRulebookRequest) -> client.RenderRulebookResponse:
         tree_root = domain.TreeRoot(render_rulebook_request.tree)

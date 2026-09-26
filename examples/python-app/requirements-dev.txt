@@ -1,10 +1,11 @@
-# Tooling for the wiring worked example — the type checker, the test runner, and
-# the two linters that own the architecture rules this app is gated on
-# (ruff.toml, .importlinter). Everything the app itself imports is the Python
-# standard library (dataclasses, typing.Protocol, enum, http.server, json);
-# these four are dev-only. The analyzer in tessercheck-py stays zero-dependency
-# — these gate the example, not the toolkit.
+# Install from the repository root, as CI and scripts/install-dev do.
+# The editable distributions supply the checkout's tesser runtime and the
+# namespaced tessercheck inspection client used by architecture tests. That
+# build-time API owns source analysis; ruff and import-linter own the other
+# architecture gates. No published analyzer version is assumed to carry it.
 mypy>=1.8
 pytest>=8.0
 ruff>=0.16
 import-linter>=2.13
+-e ./tesser-py
+-e ./tessercheck-py

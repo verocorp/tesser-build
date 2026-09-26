@@ -1,6 +1,7 @@
 from tessercheck.domain.checks import APP_KINDS as APP_KINDS
 from tessercheck.domain.checks import APP_TIER as APP_TIER
 from tessercheck.domain.checks import Annotation as Annotation
+from tessercheck.domain.checks import AnnotationSpec as AnnotationSpec
 from tessercheck.domain.checks import Codebase as Codebase
 from tessercheck.domain.checks import CodebaseSpec as CodebaseSpec
 from tessercheck.domain.checks import DECLARED_APP as DECLARED_APP
@@ -14,6 +15,7 @@ from tessercheck.domain.checks import GOVERNANCE_OUTSIDE as GOVERNANCE_OUTSIDE
 from tessercheck.domain.checks import GOVERNANCE_SKIPPED as GOVERNANCE_SKIPPED
 from tessercheck.domain.checks import GOVERNANCE_UNDECLARED as GOVERNANCE_UNDECLARED
 from tessercheck.domain.checks import Governance as Governance
+from tessercheck.domain.checks import GovernanceStatus as GovernanceStatus
 from tessercheck.domain.checks import HookAction as HookAction
 from tessercheck.domain.checks import HookRun as HookRun
 from tessercheck.domain.checks import HookRunSpec as HookRunSpec
@@ -54,6 +56,7 @@ from tessercheck.domain.checks import Symbol as Symbol
 from tessercheck.domain.checks import SymbolSpec as SymbolSpec
 from tessercheck.domain.checks import TESSER as TESSER
 from tessercheck.domain.checks import UNMARKABLE as UNMARKABLE
+from tessercheck.domain.checks import Violation as Violation
 from tessercheck.domain.checks import TESSER_BASE_BLOCKS as TESSER_BASE_BLOCKS
 from tessercheck.domain.checks import TESSER_DECORATORS as TESSER_DECORATORS
 from tessercheck.domain.checks import TESSER_NAMESPACES as TESSER_NAMESPACES
@@ -66,3 +69,6 @@ from tessercheck.domain.checks import TesserImportSpec as TesserImportSpec
 from tessercheck.domain.checks import TreeRoot as TreeRoot
 from tessercheck.domain.rulebook import Rulebook as Rulebook
 from tessercheck.domain.rulebook import RulebookSpec as RulebookSpec
+from tessercheck.domain.inspection import ModuleInspection as ModuleInspection
+from tessercheck.domain.inspection import TreeInspection as TreeInspection
+from tessercheck.domain.inspection import TreeInspectionSpec as TreeInspectionSpec

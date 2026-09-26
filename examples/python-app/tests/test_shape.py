@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import pathlib
+
+import tessercheck.client as tessercheck_client
+import tessercheck.component as tessercheck_component
+
 import campaign.client as campaign_client
 import linkpolicy.client as linkpolicy_client
 import reports.client as reports_client
-import tests.discovery as discovery
-import tests.support as support
 
 
 def test_required_roles_present_per_context() -> None:
-    for ctx in discovery.discovered_contexts():
+    root = pathlib.Path(__file__).resolve().parent.parent
+    inspect_tree_response = tessercheck_component.Tessercheck(
+        tessercheck_component.Config(tessercheck_component.Spec())
+    ).client.inspect_tree(tessercheck_client.InspectTreeRequest(tree=str(root)))
+    for context in inspect_tree_response.contexts:
         for role in ("domain", "application", "component"):
-            assert (support.ROOT / ctx / role).is_dir(), f"{ctx}/{role} missing"
+            assert f"{context}/{role}" in inspect_tree_response.directories, f"{context}/{role} missing"
 
 
 def test_public_interface_is_client_plus_dtos_in_the_client_package() -> None:
@@ -20,7 +27,11 @@ def test_public_interface_is_client_plus_dtos_in_the_client_package() -> None:
 
 
 def test_config_lives_in_the_component_not_on_the_public_top_level() -> None:
-    for ctx in discovery.discovered_contexts():
-        exported = (support.ROOT / ctx / "component" / "__init__.py").read_text(encoding="utf-8")
-        assert "Config as Config" in exported, f"{ctx}/component does not export its Config"
-        assert not (support.ROOT / ctx / "config.py").exists(), f"{ctx} config leaked to the public top level"
+    root = pathlib.Path(__file__).resolve().parent.parent
+    inspect_tree_response = tessercheck_component.Tessercheck(
+        tessercheck_component.Config(tessercheck_component.Spec())
+    ).client.inspect_tree(tessercheck_client.InspectTreeRequest(tree=str(root)))
+    sources = {source.path: source for source in inspect_tree_response.sources}
+    for context in inspect_tree_response.contexts:
+        assert "Config" in sources[f"{context}/component/__init__.py"].exported_names, f"{context}/component does not export its Config"
+        assert f"{context}/config.py" not in sources, f"{context} config leaked to the public top level"

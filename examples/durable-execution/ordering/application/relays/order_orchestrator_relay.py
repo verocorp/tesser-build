@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum  # tesser:debt TB062
+import enum
 import json
 import typing
 
@@ -25,7 +25,7 @@ class ConfirmOrderRequestSnapshot(ts.Serde):
         return ConfirmOrderRequest(order=snapshots.OrderSnapshot().deserialize(buf))
 
 
-class StartConfirmOrderOutcome(enum.Enum):  # tesser:debt TB052
+class StartConfirmOrderOutcome(enum.Enum):
     STARTED = "started"
 
 
@@ -36,7 +36,7 @@ class StartConfirmOrderResponse(ts.Response):
         self.order_id = order_id
 
 
-class ConfirmOrderOutcome(enum.Enum):  # tesser:debt TB052
+class ConfirmOrderOutcome(enum.Enum):
     CONFIRMED = "confirmed"
     PRODUCT_PRICE_NOT_FOUND = "product_price_not_found"
     ALREADY_STARTED = "already_started"
@@ -94,15 +94,23 @@ class ConfirmOrderResponseSnapshot(ts.Serde):
                 and confirmed_order["total_cents"] >= 0
                 for confirmed_order in snapshot["confirmed_orders"]
             )
+            and (
+                snapshot.get("outcome") != "confirmed"
+                or len(snapshot["confirmed_orders"]) == 1
+            )
+            and (
+                snapshot.get("outcome") not in ("product_price_not_found", "already_started")
+                or not snapshot["confirmed_orders"]
+            )
         ):
-            raise ValueError(  # tesser:debt TB082
+            raise ValueError(
                 "a confirm order response is an outcome, an order_id, "
                 "the orders it confirmed, and its reasons"
             )
-        try:  # tesser:debt TB082
-            confirm_order_outcome = ConfirmOrderOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
+        try:
+            confirm_order_outcome = ConfirmOrderOutcome(snapshot.get("outcome"))
         except ValueError as value_error:
-            raise ValueError("a confirm order response names a confirming outcome") from value_error  # tesser:debt TB082
+            raise ValueError("a confirm order response names a confirming outcome") from value_error
         return ConfirmOrderResponse(
             outcome=confirm_order_outcome,
             order_id=snapshot["order_id"],

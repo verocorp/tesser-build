@@ -3,8 +3,6 @@ from __future__ import annotations
 import typing
 
 import tesser.component as ts
-import livekit.api as livekit_api
-import livekit.rtc as livekit_rtc
 import restate
 
 import calls.adapters.activities as activities
@@ -102,7 +100,6 @@ class Calls(ts.Component):
         )
         dialing_actions = application.DialingActions(
             gateways.LivekitDialing(
-                livekit_api.LiveKitAPI,
                 config.livekit_url,
                 config.livekit_api_key,
                 config.livekit_api_secret,
@@ -119,7 +116,6 @@ class Calls(ts.Component):
             application.SpeechActions(
                 gateways.LivekitSpeech(
                     gateways.LivekitAgentRpc(
-                        livekit_rtc.Room,
                         config.livekit_url,
                         config.livekit_api_key,
                         config.livekit_api_secret,

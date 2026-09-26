@@ -1,18 +1,30 @@
 import tesser.do_not_use_declared as do_not_use_declared
+import tesser.testing as testing
+
+
+class Scaled:
+
+    def __init__(self, factor: int) -> None:
+        self.factor = factor
+
+    def __call__(self, value: int) -> int:
+        return self.factor * value
 
 
 def test_load_returns_the_same_object_it_decorates() -> None:
-    def target() -> int:  # tesser:debt TB023
-        return 7
-
-    assert do_not_use_declared.load(target) is target
-    assert do_not_use_declared.load(target)() == 7
+    assert do_not_use_declared.load(abs) is abs
+    assert do_not_use_declared.load(abs)(-7) == 7
 
 
 def test_the_declaration_is_a_marker_the_walk_reads_not_behavior() -> None:
-    def target(value: int) -> int:  # tesser:debt TB023
-        return value * 2
+    assert do_not_use_declared.load(testing.helper) is testing.helper
+    assert do_not_use_declared.load(testing.helper)(str.upper)("spec") == "SPEC"
+    assert do_not_use_declared.load(testing.helper).__name__ == "helper"
 
-    decorated = do_not_use_declared.load(target)
-    assert decorated(3) == 6
-    assert decorated.__name__ == "target"
+
+def test_the_declaration_preserves_a_callable_objects_type_and_attributes() -> None:
+    scaled = Scaled(3)
+
+    assert do_not_use_declared.load(scaled) is scaled
+    assert do_not_use_declared.load(scaled).factor == 3
+    assert do_not_use_declared.load(scaled)(4) == 12

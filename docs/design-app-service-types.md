@@ -252,6 +252,9 @@ faces outsiders and a `ts.Port` faces a foreign system, so those stay
 primitives-only; a relay has us on both ends, so
 `RecordCallRequest(call: domain.Call)` is legal and the call comes back whole.
 A bare bool and a union are findings on a relay message too.
+Plain member-only `enum.Enum` discriminants may be declared beside relay
+messages, as they are beside port DTOs. They carry protocol results, not
+domain `ts.Outcome` values, which remain return-and-match only.
 
 **Who may invoke a relay.** A service, through a dispatcher over HTTP, and an
 orchestrator, through a dispatcher inside the invocation. Never an action — an
@@ -260,6 +263,14 @@ engine calling the engine. Never a handler, never a component. An actions
 class depends only on ports and the stores that yield them; a service and an
 orchestrator may depend on ports, relays, and stores; nothing else may hold a
 relay.
+
+An orchestrator may match sequential domain transitions, but never nested
+decisions or a raw relay status to select later work. A service retains one
+match; it may use that match only for terminal relay-result translation
+instead of a domain decision. The response must be provenance-resolved to a
+relay, the enum match exhaustive, and each arm must immediately return the
+public response or raise its public rejection without a work call. A pass
+arm that continues into later operations is not terminal translation.
 
 **A snapshot decides once, on shape.** A snapshot (`ts.Serde` from
 `tesser.application`, in `application/relays/` beside its messages, or in
@@ -273,14 +284,21 @@ record to a literal dict or through a child snapshot. `deserialize` reads
 `json.loads`, carries at most one
 guard — built only from `isinstance`, truthiness, and comparison to constants
 over the loaded value, including `all(isinstance(...) ... for item in
-snapshot["values"])` for element shape — that raises `errors.invalid`, and ends
+snapshot["values"])` for element shape — that raises `errors.invalid` or
+`ValueError`, and ends
 in one constructor call. A collection enters through `tuple(snapshot["values"])`
 or one unfiltered generator mapping each record to its constructor or child
 snapshot. The only calls a snapshot may name are `json.dumps`,
-`json.loads`, `isinstance`, `str`, `int`, `errors.invalid`, `.encode`/`.decode`,
+`json.loads`, `isinstance`, `str`, `int`, `errors.invalid`, `ValueError`, `.encode`/`.decode`,
 `.get` with one argument, the message and spec constructors, and another
 snapshot's `serialize`/`deserialize`, plus structural `list`/`tuple`/`all`
-conversions. A second branch, a filtered or computed loop,
+conversions. Plain relay protocol enums may be decoded from the loaded value.
+The shape guard may check a loaded collection's `len` and literal-tuple
+discriminant membership to reject contradictory outcome/payload cardinality.
+Reconstruction may have a narrow `try` wrapper that only translates
+`DomainError` or enum `ValueError` into a chained `ValueError`: no recovery,
+fallback, `else`, or `finally`. Its terminal constructor return remains one
+reconstruction path. A second branch, a filtered or computed loop,
 `.get` with a fallback, arithmetic, and any domain method are findings. The
 engine-side serde (`tesser.adapters.Serde`, in the module of the activity,
 workflow, or signal that binds it) keeps its narrower form: one guard on the

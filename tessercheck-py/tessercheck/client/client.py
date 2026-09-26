@@ -15,6 +15,44 @@ class CheckTreeResponse(ts.Response):
         self.findings = findings
 
 
+class InspectTreeRequest(ts.Request):
+
+    def __init__(self, tree: str) -> None:
+        self.tree = tree
+
+
+class InspectedSource(ts.Response):
+
+    def __init__(
+        self,
+        path: str,
+        reached_contexts: tuple[str, ...],
+        client_calls: tuple[int, ...],
+        top_level_calls: tuple[int, ...],
+        exported_names: tuple[str, ...],
+    ) -> None:
+        self.path = path
+        self.reached_contexts = reached_contexts
+        self.client_calls = client_calls
+        self.top_level_calls = top_level_calls
+        self.exported_names = exported_names
+
+
+class InspectTreeResponse(ts.Response):
+
+    def __init__(
+        self,
+        contexts: tuple[str, ...],
+        unclassified: tuple[str, ...],
+        directories: tuple[str, ...],
+        sources: tuple[InspectedSource, ...],
+    ) -> None:
+        self.contexts = contexts
+        self.unclassified = unclassified
+        self.directories = directories
+        self.sources = sources
+
+
 class CheckFileRequest(ts.Request):
 
     def __init__(self, tree: str, path: str) -> None:
@@ -103,10 +141,22 @@ class RulebookNotRendered(ts.Error):
         self.message = message
 
 
-ERRORS: typing.Final[tuple[type[RulebookNotRendered]]] = (RulebookNotRendered,)
+class TreeNotInspected(ts.Error):
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+ERRORS: typing.Final[tuple[type[RulebookNotRendered] | type[TreeNotInspected], ...]] = (
+    RulebookNotRendered, TreeNotInspected,
+)
 
 
 class TessercheckClient(ts.Client, typing.Protocol):
+
+    def inspect_tree(self, inspect_tree_request: InspectTreeRequest) -> InspectTreeResponse: ...
 
     def check_tree(self, check_tree_request: CheckTreeRequest) -> CheckTreeResponse: ...
 

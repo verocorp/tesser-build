@@ -8,6 +8,32 @@ carries the analyzer package's own version — separate streams.)
 ## Unreleased
 
 ### Changed
+- **Retire the remaining active checker suppressions through design changes.**
+  Analyzer syntax owners project primitive facts into construction specs;
+  named private algorithms replace parsing closures, and the rulebook owns
+  its vocabulary independently. Public-operation reuse remains restricted,
+  while private implementation methods and unimplemented property contracts
+  are no longer confused with that reuse. Callable identity decorators retain
+  exact typing, and Outcome slot checks follow receiver types rather than
+  attribute spelling.
+- **Durable coordination keeps business decisions in domain lifecycles.**
+  Order confirmation and purchase settlement own their state and invariants;
+  command snapshots remain complete. Orchestrators may match sequential
+  domain transitions, and services may terminally translate proven relay
+  results. Relay protocol enums, structural cardinality guards, and chained
+  reconstruction-error translation have bounded positive/negative coverage.
+- **Integration tests use real LiveKit, not handwritten SDK doubles.**
+  A constrained, typed `@ts.peer` callable records and answers the other end
+  of the real connection without replacing the SDK or erasing its signature.
+  Layout fixture setup is explicit construction data; host callbacks have
+  named owners. These convention changes are taught in skill version 92.
+- **Architectural inspection belongs to the toolkit.** The namespaced
+  `TessercheckClient.inspect_tree` query reports context inventory, exports,
+  client accesses, and top-level expression-call sites through the existing
+  filesystem/application boundary. Python-app keeps its acceptance assertions
+  while the parsing algorithms and their synthetic counterexamples are
+  governed analyzer code. These reports do not add universal findings for
+  example-specific policies.
 - **TB082 snapshots can carry collections without debt markers.** Primitive
   tuples use structural `list`/`tuple` conversions; an unfiltered mapping
   carries nested records, and the single deserialize guard may check element

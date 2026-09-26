@@ -1,5 +1,4 @@
 import enum
-import collections.abc as collections_abc
 import typing
 
 
@@ -87,11 +86,16 @@ def wrap(err: DomainError, message: str, *, field: str | None = None) -> DomainE
     )
 
 
-def collect(**fields: collections_abc.Callable[[], object]) -> None:  # tesser:debt TB022
+class Validation(typing.Protocol):
+
+    def __call__(self) -> object: ...
+
+
+def collect(**fields: Validation) -> None:
     problems: list[NeedsDesignFieldProblem] = []
-    for name, thunk in fields.items():
+    for name, validation in fields.items():
         try:
-            thunk()
+            validation()
         except DomainError as e:
             if e.kind is not Kind.VALIDATION:
                 raise

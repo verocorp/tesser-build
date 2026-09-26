@@ -21,6 +21,9 @@ packages = [
     "tessercheck.component",
 ]
 
+[tool.setuptools.package-data]
+tessercheck = ["py.typed"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["app", "protocol", "tessercheck", "srv"]

@@ -125,14 +125,14 @@ class HttpEdge(ts.Host):
         self._host = HttpHost((self._app.http.host, self._app.http.port), self._app)
         self._stop = threading.Event()
 
-    def stop(self, signum: int, frame: typing.Optional[types.FrameType]) -> None:
+    def _stop_on_signal(self, signum: int, frame: typing.Optional[types.FrameType]) -> None:
         self._stop.set()
 
     def run(self, argv: list[str]) -> int:
         specs_app = self._app
         print(f"specs app listening on {specs_app.http.host or '0.0.0.0'}:{self._host.port}")  # noqa: T201
-        signal.signal(signal.SIGINT, self.stop)  # tesser:debt TB051
-        signal.signal(signal.SIGTERM, self.stop)  # tesser:debt TB051
+        signal.signal(signal.SIGINT, self._stop_on_signal)
+        signal.signal(signal.SIGTERM, self._stop_on_signal)
         try:
             self._host.run(self._stop)
         finally:

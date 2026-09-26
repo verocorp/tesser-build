@@ -5,11 +5,10 @@ import shutil
 import subprocess
 import sys
 
-import tests.support as support
-
 
 def test_ruff_config_flags_env_reads_and_exits_below_the_edge(tmp_path: pathlib.Path) -> None:
-    shutil.copy(support.ROOT / "ruff.toml", tmp_path / "ruff.toml")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    shutil.copy(root / "ruff.toml", tmp_path / "ruff.toml")
     offender = tmp_path / "campaign" / "component" / "component.py"
     offender.parent.mkdir(parents=True)
     offender.write_text(
@@ -40,7 +39,8 @@ def test_ruff_config_flags_env_reads_and_exits_below_the_edge(tmp_path: pathlib.
 
 
 def test_ruff_config_lifts_the_bans_only_at_the_host_edge(tmp_path: pathlib.Path) -> None:
-    shutil.copy(support.ROOT / "ruff.toml", tmp_path / "ruff.toml")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    shutil.copy(root / "ruff.toml", tmp_path / "ruff.toml")
     edge = "import os\nimport sys\n\n\ndef main() -> None:\n    os.getenv('X')\n    sys.exit(0)\n"
     (tmp_path / "srv" / "http").mkdir(parents=True)
     (tmp_path / "srv" / "http" / "main.py").write_text(edge, encoding="utf-8")
@@ -58,7 +58,8 @@ def test_ruff_config_lifts_the_bans_only_at_the_host_edge(tmp_path: pathlib.Path
 
 
 def test_ruff_config_lifts_the_env_ban_only_at_the_app_module(tmp_path: pathlib.Path) -> None:
-    shutil.copy(support.ROOT / "ruff.toml", tmp_path / "ruff.toml")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    shutil.copy(root / "ruff.toml", tmp_path / "ruff.toml")
     read = "import os\n\n\ndef get() -> None:\n    os.environ['X']\n"
     (tmp_path / "app").mkdir(parents=True)
     (tmp_path / "app" / "loader.py").write_text(read, encoding="utf-8")
@@ -77,7 +78,8 @@ def test_ruff_config_lifts_the_env_ban_only_at_the_app_module(tmp_path: pathlib.
 
 
 def test_ruff_config_never_lifts_the_bare_exit_ban(tmp_path: pathlib.Path) -> None:
-    shutil.copy(support.ROOT / "ruff.toml", tmp_path / "ruff.toml")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    shutil.copy(root / "ruff.toml", tmp_path / "ruff.toml")
     (tmp_path / "srv" / "http").mkdir(parents=True)
     (tmp_path / "srv" / "http" / "main.py").write_text(
         "def main() -> None:\n    exit(1)\n    quit(1)\n", encoding="utf-8"
@@ -94,7 +96,8 @@ def test_ruff_config_never_lifts_the_bare_exit_ban(tmp_path: pathlib.Path) -> No
 
 
 def test_import_contracts_break_on_a_host_reaching_past_handlers(tmp_path: pathlib.Path) -> None:
-    shutil.copy(support.ROOT / ".importlinter", tmp_path / ".importlinter")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    shutil.copy(root / ".importlinter", tmp_path / ".importlinter")
     for rel in (
         "campaign/__init__.py",
         "campaign/adapters/__init__.py",
@@ -151,7 +154,8 @@ def test_import_contracts_break_on_a_host_reaching_past_handlers(tmp_path: pathl
 def test_import_contracts_allow_a_host_reaching_a_context_through_the_app(
     tmp_path: pathlib.Path,
 ) -> None:
-    shutil.copy(support.ROOT / ".importlinter", tmp_path / ".importlinter")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    shutil.copy(root / ".importlinter", tmp_path / ".importlinter")
     for rel in (
         "campaign/__init__.py",
         "campaign/adapters/__init__.py",

@@ -14,7 +14,7 @@ The chain, top to bottom, with where each link lives:
 | the invocation dispatcher calls the action durably | `ordering/adapters/workflows/restate_workflows.py` | `RestateInvocationOrderActionsRelay.run_price_product` → `restate_workflow_context.service_call(self._restate_price_product.handler, price_product_request)` |
 | Restate's server calls back into the activity | `ordering/adapters/activities/restate_activities.py` | `RestatePriceProduct` (`ts.Activity`) registered its handler `price_product` on the ingress-private `restate.Service("OrderActions")`, relaying to the application client |
 | the action, a class of actions with one repository lookup | `ordering/application/order_actions.py` | `OrderActions.price_product` → `ProductCatalogRepository.get_product_price` → `adapters/repositories/memory_product_catalog_repository.py` |
-| the price comes back up the same chain | | `PriceProductResponse.prices[0].cents` → `Order.total(PriceSpec)` → `ConfirmOrderResponse.confirmed_orders[0].total_cents` ends the workflow |
+| the price comes back up the same chain | | `PriceProductResponse` → `OrderConfirmation.confirm(PriceQuoteSpec)` → `ConfirmOrderResponse.confirmed_orders[0].total_cents` ends the workflow |
 
 `POST /submissions` answers `202` with the order id as soon as the workflow is
 accepted — the send is fire-and-forget, so the total is read back from
@@ -136,16 +136,14 @@ class PurchaseOrchestrator(ts.Orchestrator):
 
     async def pay_for_order(self, pay_for_order_request):
         order = pay_for_order_request.order
+        purchase = domain.Purchase(MapToPurchaseSpec(order))
         confirm_order_response = await self._order_orchestrator_relay.run_confirm_order(
             relays.ConfirmOrderRequest(order=order)
         )
-        match confirm_order_response.outcome:
-            case relays.ConfirmOrderOutcome.CONFIRMED:
-                purchase = domain.Purchase(MapToPurchaseSpec(order, confirm_order_response))
-            case (
-                relays.ConfirmOrderOutcome.PRODUCT_PRICE_NOT_FOUND
-                | relays.ConfirmOrderOutcome.ALREADY_STARTED
-            ):
+        match purchase.confirm(MapToPurchaseConfirmationSpec(confirm_order_response)):
+            case domain.PurchaseConfirmationOutcome.CONFIRMED:
+                pass
+            case domain.PurchaseConfirmationOutcome.ORDER_NOT_CONFIRMED:
                 return MapToPayForOrderResponseFromConfirmOrderResponse(
                     order, confirm_order_response
                 )
@@ -154,28 +152,27 @@ class PurchaseOrchestrator(ts.Orchestrator):
         take_payment_response = await self._purchase_actions_relay.run_take_payment(
             MapToTakePaymentRequest(purchase, pay_for_order_request.payment_method)
         )
-        match take_payment_response.outcome:
-            case relays.TakePaymentOutcome.TAKEN:
-                payment = purchase.paid(MapToPaymentSpec(take_payment_response))
-            case relays.TakePaymentOutcome.DECLINED:
+        match purchase.settle(MapToPaymentResultSpec(take_payment_response)):
+            case domain.PurchaseSettlementOutcome.PAID:
+                return MapToPayForOrderResponseFromPurchase(purchase)
+            case domain.PurchaseSettlementOutcome.DECLINED:
                 return MapToPayForOrderResponseFromTakePaymentResponse(
                     purchase, take_payment_response
                 )
             case _ as never_taken:
                 typing.assert_never(never_taken)
-        return MapToPayForOrderResponseFromPayment(purchase, payment)
 ```
 
 The parent's method is the operation, `pay_for_order`, never `run`: `run` says
 nothing about what the act is, and it is already the caller's calling-mode
-word on the relay. The two `match`es are the two relays it depends on, and
-each names its own step in the parent's own words — a child that could not be
+word on the relay. The two `match`es consume domain transition outcomes, not
+relay enum fields. A child that could not be
 confirmed, for any reason the child had, is `ORDER_NOT_CONFIRMED` here, and
 the child's reason rides along as data so the caller can still be told.
 
-A `Purchase` is keyed by the order it pays for and holds the total the child
-answered, and it carries three rules, each a `CONFLICT`: a pricing that names
-another order cannot build the purchase (`priced_another_order`, so a child
+A `Purchase` starts with the order it pays for, accepts a confirmed total,
+then records the matching payment. A pricing that names
+another order cannot confirm the purchase (`priced_another_order`, so a child
 that answered for a different key is refused before any payment); a payment
 settles the purchase only if it names this order
 (`payment_for_another_order`) and only if the amount charged equals the total
@@ -187,6 +184,20 @@ the purchase does not check is the total itself: the parent holds an `Order`
 and no catalog, so the child's total is the child's word, and
 `payment_mismatch` catches a processor that charged something other than
 what it was asked, never a wrong price.
+
+The purchase cannot expose a payable total before confirmation, replace an
+agreed total, settle before confirmation, or settle twice. Failed transitions
+leave the previously accepted state intact. Its confirmation evidence carries
+the order id and zero or one total, never an engine status; the invocation
+dispatcher attaches the readable reason when the engine refuses an already-run
+child, and the failure response mapper copies that reason unchanged.
+
+`Order` remains the complete submitted input that its snapshot encodes.
+`OrderConfirmation` is the separate pricing lifecycle created inside the child
+invocation: it accepts a quote, computes and records the total for the order's
+quantity, and refuses repricing. Its result becomes the existing confirmation
+response, so confirming an order never adds hidden state that the input
+snapshot would silently discard. Both journal JSON shapes remain unchanged.
 `PurchaseActions.take_payment` is the class of actions over the
 `PaymentProcessor` port, and the port's operation is
 `charge_payment_method`: a bare `charge` said what to do and never what to
@@ -208,7 +219,7 @@ already charged answers its receipt whatever method asks again, so a
 replay can never report a paid order as declined. The method is a plain
 string the engine journals in clear, so a real integration puts an opaque
 processor token there, never card data. A repeat for
-another amount gets the original receipt too, and it is `Purchase.paid` that
+another amount gets the original receipt too, and it is `Purchase.settle` that
 refuses it as `payment_mismatch`, because whether a receipt settles a
 purchase is the domain's rule and not the processor's. An earlier version of
 this stand-in raised its own `CONFLICT` on that repeat, a decision made in
@@ -222,16 +233,16 @@ one. This stand-in keys on the order, which is enough only because the
 shared key namespace already refuses a second purchase of one order; a real
 processor takes an idempotency key on the request.
 
-`Order` and `Purchase` are two aggregate roots, and they live in two domain
-modules — `domain/order.py` and `domain/purchase.py` — because a domain module
+`Order`, `OrderConfirmation`, and `Purchase` are three aggregate roots, in
+`domain/order.py`, `domain/confirmation.py`, and `domain/purchase.py`, because a domain module
 declares at most one root, and a second root in one module is two consistency
-boundaries sharing a file. Neither module imports the other: a purchase names
-its order by `OrderId`. What both roots need lives in `domain/kernel/`, the
+boundaries sharing a file. These modules do not import one another: a confirmation
+or purchase names its order by `OrderId`. Their shared types live in `domain/kernel/`, the
 context kernel — `OrderId` in `order_id.py`, and `Quantity`, `PriceSpec` and
 `Price` in `price.py`. A context kernel is an exporting package, so its
 modules do not import each other either, which is why `Quantity` sits beside
 `Price` rather than in a module of its own: `Price.times` takes a `Quantity`.
-Both roots write `import ordering.domain.kernel as kernel` and name
+All three roots write `import ordering.domain.kernel as kernel` and name
 `kernel.OrderId`.
 
 Two value objects gained bounds in this change, because both were measured
@@ -557,57 +568,41 @@ The reason: here the context is its own caller, and the names are an
 agreement between the activities and workflows that register handlers and
 the dispatchers that call them, both ours.
 
-## What this shape costs, in rules
+## How the rules hold this shape
 
 **A serde is an application kind now.** `tesser/application/serde.py` is its
 home, and `tesser.adapters` re-exports it the same direction `Relay` already
 travels. That follows from where the encodings live: a snapshot belongs beside
 the message it serves, and the messages belong to the relay.
 
-**The analyzer carries the placement rows this shape needs, and not yet the
-outcome rows.** `application/relays/` and `application/snapshots/` are
+**Placement names the boundaries.** `application/relays/` and `application/snapshots/` are
 application packages, `ts.Relay` is a kind, a relay message may carry a domain
 object, `ts.Serde` is an application kind and a snapshot's body is checked,
 `adapters/activities/`, `adapters/workflows/` and `adapters/dispatchers/` are
 adapter kind packages holding `ts.Activity`, `ts.Workflow` and `ts.Dispatcher`,
 and a component publishes its client and the engine containers it hands an
-activity or a workflow. What the outcome-on-response shape costs on top of
-that is 71 `# tesser:debt` markers, every one written mechanically by
-`tessercheck-mark`, and that list is the analyzer's work list:
+activity or a workflow.
 
-- **`TB082`, 52.** Forty-three are in the four relay modules, and they are
-  one ask: widen the snapshot's call allowlist. A response snapshot reads an
-  outcome (`<Outcome>(snapshot.get("outcome"))`), checks each element of a
-  collection (`all(...)` over a comprehension), and rebuilds the collections
-  (`tuple(...)`, `list(...)`) — none of which the snapshot rule admits, and
-  all of which are shape, not decision. Six are the `match` on a response's
-  outcome field in a service or an orchestrator, which the analyzer reads as
-  "not a call on a domain object" because a class named `*Outcome` activates
-  nothing. Three are in `OrderSnapshot`, which raises and catches to refuse a
-  body. The eight engine serdes carried one each for a `try` around the
-  snapshot; they went with the old runtime module, because an engine serde now turns only
-  the empty body into a terminal 400 and delegates everything else.
-- **`TB085`, 4** — on `<Outcome>(snapshot.get("outcome"))`, a call the
-  analyzer cannot read a class off.
-- **`TB073`, 2.** A test helper that answers a canned wire body rather than a
-  spec or a DTO. Moving the same data to a module-level constant trades them
-  for `TB071`s, so there is no legal placement in a test module for data that
-  is not construction data.
-- **`TB023`, 3** — the routes `main` declares; `srv/` is still read.
-  **`TB052`, 5** — a plain `enum.Enum` outcome in a relay module, which
-  placement rejects today. **`TB062`, 4** — `import enum` in a relay module,
-  outside its stdlib allowlist. **`TB081`, 1** —
-  `OrderSnapshot.deserialize` answers a domain object.
+**Protocol results are not domain decisions.** Relay enums describe the
+messages crossing the engine. Snapshots reconstruct them, validate collection
+shape and cardinality, and translate decoding failures without inventing a
+fallback result. An application service may exhaustively translate a completed
+relay result into its public response or rejection. An orchestrator instead
+maps evidence into the domain: `OrderConfirmation.confirm`, `Purchase.confirm`,
+and `Purchase.settle` own the decisions and accepted state. The purchase's
+confirmation evidence contains no engine status.
+
+**Tests and transport have explicit placement.** The HTTP tests assemble
+`HttpRequest` records rather than hide canned bytes in constructor helpers.
+`HttpHost` registers private transport methods with explicit route names,
+preserving the public URLs and OpenAPI operation ids without nested functions.
 
 The activities, workflows and dispatchers carry none: every name a
 dispatcher reaches is read off a registered object, so there is nothing for
 TB085 to check against a string, and the adapter tests drive the real engine
 instead of a hand-written double of it.
 
-Two families went away with `application/ports/engine.py`: six `TB060`, where
-an adapter imported `ports` for its engine errors, and eleven `TB070`, where a
-test module imported `ports` to name one. Nothing is hidden: the tree is at
-zero findings because every finding is named, not because any is absent.
+No active debt suppressions remain in the example's Python sources.
 
 The remaining rule cost of putting an encoding in the application is `json`
 and now `enum`: the application stdlib allowlist is `{__future__, typing}`,
@@ -662,13 +657,24 @@ class OrderSnapshot(ts.Serde):
 
     def deserialize(self, buf: bytes) -> domain.Order:
         snapshot = json.loads(buf)
-        return domain.Order(
-            domain.OrderSpec(
-                order_id=snapshot["order_id"],
-                sku=snapshot["sku"],
-                quantity=snapshot["quantity"],
+        if not (
+            isinstance(snapshot, dict)
+            and isinstance(snapshot.get("order_id"), str)
+            and isinstance(snapshot.get("sku"), str)
+            and isinstance(snapshot.get("quantity"), int)
+            and not isinstance(snapshot.get("quantity"), bool)
+        ):
+            raise ValueError("an order snapshot is order_id, sku, and quantity")
+        try:
+            return domain.Order(
+                domain.OrderSpec(
+                    order_id=snapshot["order_id"],
+                    sku=snapshot["sku"],
+                    quantity=snapshot["quantity"],
+                )
             )
-        )
+        except errors.DomainError as domain_error:
+            raise ValueError(domain_error.message) from domain_error
 ```
 
 So the wire carries the aggregate's **public** vocabulary — `order_id`, `sku`,
@@ -689,16 +695,16 @@ body `POST /OrderOrchestrator/o1/confirm_order/send` carries is:
 **A snapshot decides once, and only about shape.** A field only some members
 can fill is a tuple of zero or one — `prices`, `confirmed_orders`, `payments`,
 `purchases` — and the snapshot checks the shape of the collection and of every
-element in it, and stops there. Its one unfiltered collection mapping is
+element in it. Its one unfiltered collection mapping is
 structural, not a second business decision; primitive tuples use `list(...)`
 and `tuple(...)`, and the one guard may use `all(isinstance(...) ...)` to
-check element shape. It does **not** check that a `PRICED` response
-carries exactly one price: whether the count agrees with the outcome is
-consistency between two fields, not shape, and a snapshot that judged it would
-be deciding twice. A payload where they disagree becomes an `IndexError` in
-the consumer's happy arm, where it reads `xs[0]` — a fault, which is right,
-because both ends of this wire are ours and a disagreement there is a bug in
-us, not a caller's mistake.
+check element shape. The confirmation-response guard also checks the protocol's
+discriminant against its payload: `CONFIRMED` carries exactly one total, while
+`PRODUCT_PRICE_NOT_FOUND` and `ALREADY_STARTED` carry none. The domain then
+receives confirmation evidence without an engine status. Quote and payment
+evidence validate their own record cardinality before the aggregate accepts
+either. Contradictory wire data is a fault, never an instruction to select a
+different business path or a reason to index an unchecked collection.
 
 The SDK cannot serialize a `ts.Request` on its own — `restate.serde.DefaultSerde`
 handles msgspec Structs, Pydantic models, and dataclasses; anything else falls

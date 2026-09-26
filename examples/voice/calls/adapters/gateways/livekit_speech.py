@@ -16,13 +16,11 @@ _SPEECH_IDENTITY: typing.Final[str] = "speech"
 class LivekitAgentRpc(ts.Gateway):
     def __init__(
         self,
-        room_type: type[livekit_rtc.Room],
         url: str,
         api_key: str,
         api_secret: str,
         agent_identity: str,
     ) -> None:
-        self._room_type = room_type
         self._url = url
         self._api_key = api_key
         self._api_secret = api_secret
@@ -43,7 +41,7 @@ class LivekitAgentRpc(ts.Gateway):
             )
             .to_jwt()
         )
-        room = self._room_type()  # tesser:debt TB085
+        room = livekit_rtc.Room()
         try:
             await room.connect(self._url, token)
             return await room.local_participant.perform_rpc(

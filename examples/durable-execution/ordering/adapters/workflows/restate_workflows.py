@@ -12,6 +12,7 @@ import ordering.application.relays as relays
 
 _EMPTY_BODY: typing.Final[str] = "a message crosses the engine with a body"
 _ALREADY_INVOKED: typing.Final[str] = "the workflow method was already invoked"
+_ALREADY_STARTED_REASON: typing.Final[str] = "the order was already started"
 _FOREIGN_ORDER: typing.Final[str] = "a request names the order its workflow is keyed by"
 
 
@@ -162,7 +163,7 @@ class RestateInvocationOrderOrchestratorRelay(ts.Dispatcher):
                     outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
                     order_id=key,
                     confirmed_orders=(),
-                    reasons=(),
+                    reasons=(_ALREADY_STARTED_REASON,),
                 )
             raise
 

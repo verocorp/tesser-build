@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum  # tesser:debt TB062
+import enum
 import json
 import typing
 
@@ -38,7 +38,7 @@ class TakePaymentRequestSnapshot(ts.Serde):
             and isinstance(snapshot.get("payment_method"), str)
             and snapshot["payment_method"]
         ):
-            raise ValueError(  # tesser:debt TB082
+            raise ValueError(
                 "a take payment request is an order_id, an amount in cents, and a payment method"
             )
         return TakePaymentRequest(
@@ -48,7 +48,7 @@ class TakePaymentRequestSnapshot(ts.Serde):
         )
 
 
-class TakePaymentOutcome(enum.Enum):  # tesser:debt TB052
+class TakePaymentOutcome(enum.Enum):
     TAKEN = "taken"
     DECLINED = "declined"
 
@@ -109,14 +109,14 @@ class TakePaymentResponseSnapshot(ts.Serde):
                 for payment in snapshot["payments"]
             )
         ):
-            raise ValueError(  # tesser:debt TB082
+            raise ValueError(
                 "a take payment response is an outcome, an order_id, "
                 "the payments it took, and its reasons"
             )
-        try:  # tesser:debt TB082
-            take_payment_outcome = TakePaymentOutcome(snapshot.get("outcome"))  # tesser:debt TB082 TB085
+        try:
+            take_payment_outcome = TakePaymentOutcome(snapshot.get("outcome"))
         except ValueError as value_error:
-            raise ValueError("a take payment response names a taking outcome") from value_error  # tesser:debt TB082
+            raise ValueError("a take payment response names a taking outcome") from value_error
         return TakePaymentResponse(
             outcome=take_payment_outcome,
             order_id=snapshot["order_id"],
