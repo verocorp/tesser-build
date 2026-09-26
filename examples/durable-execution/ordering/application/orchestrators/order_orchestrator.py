@@ -14,19 +14,28 @@ class MapToPriceProductRequest(ts.Mapper, relays.PriceProductRequest):
         super().__init__(sku=str(order.sku))
 
 
-class MapToPriceSpec(ts.Mapper, domain.PriceSpec):
+class MapToPriceQuoteSpec(ts.Mapper, domain.PriceQuoteSpec):
 
     def __init__(self, price_product_response: relays.PriceProductResponse) -> None:
-        super().__init__(cents=price_product_response.prices[0].cents)
+        super().__init__(
+            outcome=price_product_response.outcome.value,
+            prices=tuple(domain.PriceSpec(cents=price.cents) for price in price_product_response.prices),
+        )
 
 
-class MapToConfirmOrderResponseFromPrice(ts.Mapper, relays.ConfirmOrderResponse):
+class MapToOrderConfirmationSpec(ts.Mapper, domain.OrderConfirmationSpec):
 
-    def __init__(self, order: domain.Order, price: domain.Price) -> None:
+    def __init__(self, order: domain.Order) -> None:
+        super().__init__(order_id=str(order.identity), quantity=int(order.quantity))
+
+
+class MapToConfirmOrderResponseFromOrderConfirmation(ts.Mapper, relays.ConfirmOrderResponse):
+
+    def __init__(self, order_confirmation: domain.OrderConfirmation) -> None:
         super().__init__(
             outcome=relays.ConfirmOrderOutcome.CONFIRMED,
-            order_id=str(order.identity),
-            confirmed_orders=(relays.ConfirmedOrder(total_cents=int(price)),),
+            order_id=str(order_confirmation.identity),
+            confirmed_orders=(relays.ConfirmedOrder(total_cents=int(order_confirmation.total)),),
             reasons=(),
         )
 
@@ -53,14 +62,14 @@ class OrderOrchestrator(ts.Orchestrator):
         self, confirm_order_request: relays.ConfirmOrderRequest
     ) -> relays.ConfirmOrderResponse:
         order = confirm_order_request.order
+        order_confirmation = domain.OrderConfirmation(MapToOrderConfirmationSpec(order))
         price_product_response = await self._order_actions_relay.run_price_product(
             MapToPriceProductRequest(order)
         )
-        match price_product_response.outcome:  # tesser:debt TB082
-            case relays.PriceProductOutcome.PRICED:
-                price = order.total(MapToPriceSpec(price_product_response))
-                return MapToConfirmOrderResponseFromPrice(order, price)
-            case relays.PriceProductOutcome.PRICE_NOT_FOUND:
+        match order_confirmation.confirm(MapToPriceQuoteSpec(price_product_response)):
+            case domain.OrderConfirmationOutcome.CONFIRMED:
+                return MapToConfirmOrderResponseFromOrderConfirmation(order_confirmation)
+            case domain.OrderConfirmationOutcome.PRICE_NOT_FOUND:
                 return MapToConfirmOrderResponseFromPriceProductResponse(
                     order, price_product_response
                 )

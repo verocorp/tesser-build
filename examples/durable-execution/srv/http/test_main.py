@@ -34,6 +34,8 @@ class TestHttpHost:
                     break
                 except OSError:
                     time.sleep(0.1)
+            with urllib_request.urlopen(f"http://127.0.0.1:{port}/openapi.json", timeout=1) as answer:
+                openapi = json.loads(answer.read())
         finally:
             host.send_signal(signal.SIGINT)
             try:
@@ -63,6 +65,14 @@ class TestHttpHost:
         assert isinstance(services, list)
         assert {s["name"] for s in services} == set(declared)
         assert {s["name"]: sorted(h["name"] for h in s["handlers"]) for s in services} == declared
+        assert {
+            path: operations["post"]["operationId"]
+            for path, operations in openapi["paths"].items()
+        } == {
+            "/submissions": "submit_order_submissions_post",
+            "/orders": "place_order_orders_post",
+            "/purchases": "make_order_payment_purchases_post",
+        }
 
     def test_the_submissions_route_answers_by_the_failure_it_meets(self) -> None:
         with socket.socket() as probe:

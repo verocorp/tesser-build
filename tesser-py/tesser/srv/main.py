@@ -1,7 +1,11 @@
 import sys
-import collections.abc as collections_abc
 import typing
 
 
-def main(run: collections_abc.Callable[[list[str]], int]) -> typing.NoReturn:  # tesser:debt TB022
+class Command(typing.Protocol):
+
+    def __call__(self, argv: list[str], /) -> int: ...
+
+
+def main(run: Command) -> typing.NoReturn:
     raise SystemExit(run(sys.argv[1:]))

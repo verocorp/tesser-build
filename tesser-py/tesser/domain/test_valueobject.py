@@ -114,15 +114,12 @@ def test_cooperative_class_kwargs_pass_through() -> None:
 
 
 def test_identity_dunder_overrides_are_rejected() -> None:
-    def boom(*args: object) -> None:  # tesser:debt TB023
-        return None
-
     for name in ("__eq__", "__hash__", "__setattr__", "__delattr__"):
         with pytest.raises(
             TypeError,
             match=f"^Custom must not override {name}: ValueObject owns the identity contract$",
         ):
-            type("Custom", (ts.ValueObject,), {name: boom})
+            type("Custom", (ts.ValueObject,), {name: object.__str__})
 
 
 def test_unhashable_field_value_raises_on_hash() -> None:

@@ -130,7 +130,7 @@ class FakeStartedOrderOrchestratorRelay(relays.OrderOrchestratorRelay):
             outcome=relays.ConfirmOrderOutcome.ALREADY_STARTED,
             order_id=str(confirm_order_request.order.identity),
             confirmed_orders=(),
-            reasons=(),
+            reasons=("the order was already started",),
         )
 
 

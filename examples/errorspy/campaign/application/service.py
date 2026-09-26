@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import typing
 
 import tesser.application as ts
@@ -175,11 +176,14 @@ class CampaignService(ts.ApplicationService):
         return MapToGetCampaignResponse(MapToCampaign(campaign))
 
     def add_link(self, add_link_request: client.AddLinkRequest) -> client.AddLinkResponse:
+        validate_campaign_id = functools.partial(domain.CampaignID, add_link_request.campaign_id)
+        validate_slug = functools.partial(domain.Slug, add_link_request.slug)
+        validate_target_url = functools.partial(domain.TargetURL, add_link_request.target_url)
         try:
             errors.collect(
-                campaign_id=lambda: domain.CampaignID(add_link_request.campaign_id),  # tesser:debt TB023
-                slug=lambda: domain.Slug(add_link_request.slug),  # tesser:debt TB023
-                target_url=lambda: domain.TargetURL(add_link_request.target_url),  # tesser:debt TB023
+                campaign_id=validate_campaign_id,
+                slug=validate_slug,
+                target_url=validate_target_url,
             )
             campaign_id = domain.CampaignID(add_link_request.campaign_id)
         except errors.DomainError as domain_error:

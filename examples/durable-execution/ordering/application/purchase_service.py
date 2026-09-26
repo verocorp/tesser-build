@@ -52,7 +52,7 @@ class PurchaseService(ts.ApplicationService):
         pay_for_order_response = await self._purchase_orchestrator_relay.run_pay_for_order(
             relays.PayForOrderRequest(order=order, payment_method=payment_method)
         )
-        match pay_for_order_response.outcome:  # tesser:debt TB082
+        match pay_for_order_response.outcome:
             case relays.PayForOrderOutcome.PAID:
                 return MapToMakeOrderPaymentResponse(pay_for_order_response)
             case relays.PayForOrderOutcome.ORDER_NOT_CONFIRMED:

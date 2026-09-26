@@ -1,6 +1,7 @@
 from tessercheck.domain.checks import APP_KINDS as APP_KINDS
 from tessercheck.domain.checks import APP_TIER as APP_TIER
 from tessercheck.domain.checks import Annotation as Annotation
+from tessercheck.domain.checks import AnnotationSpec as AnnotationSpec
 from tessercheck.domain.checks import Codebase as Codebase
 from tessercheck.domain.checks import CodebaseSpec as CodebaseSpec
 from tessercheck.domain.checks import DECLARED_APP as DECLARED_APP
@@ -66,3 +67,6 @@ from tessercheck.domain.checks import TesserImportSpec as TesserImportSpec
 from tessercheck.domain.checks import TreeRoot as TreeRoot
 from tessercheck.domain.rulebook import Rulebook as Rulebook
 from tessercheck.domain.rulebook import RulebookSpec as RulebookSpec
+from tessercheck.domain.inspection import ModuleInspection as ModuleInspection
+from tessercheck.domain.inspection import TreeInspection as TreeInspection
+from tessercheck.domain.inspection import TreeInspectionSpec as TreeInspectionSpec

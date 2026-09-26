@@ -1,11 +1,22 @@
 # Building domain code in Python
 
 Two shape rules hold for every class in every module kind (TB051). A module
-holds classes, never functions. And **a method is for outsiders** — no method
-references a sibling method through its receiver, so what a method does is
-visible at its call site; direct recursion is exempt, and so is calling a
-directly recursive sibling (it has no inline expansion). A class that wants
-shared logic composes a collaborating class instead of reaching into itself.
+holds classes, never functions. And **a public method is for outsiders** — a
+method does not reuse a sibling public operation as its implementation.
+Private methods may name the steps of their owner's algorithm; extracting a
+collaborator is appropriate when it owns a separate concept, not merely to
+avoid a helper call. Direct recursion and calls to a directly recursive
+sibling remain legal. An unimplemented property whose only statement raises
+`NotImplementedError` is an extension hook, so the base may read that contract.
+Framework callbacks that only implement a host's registered routes are
+private methods: the caller-facing API is the route, not a Python operation
+on the host. Private names describe that implementation surface, even when a
+framework invokes it. Passing a public sibling to an external function does
+not prove an external caller owns its execution; callable factories and
+immediate invokers can perform the same internal call indirectly.
+Application services, actions, and orchestrators keep their coordination in
+the checked public operation: private helpers and callback indirection must
+not hide decisions or port calls from that operation's shape checks.
 
 Construction mechanics only — the concepts and the rules' whys live in the
 concept files (`value-objects.md`, `entities.md`, `aggregates.md`,
@@ -291,6 +302,26 @@ for `Awaitable`. The async protocols the store contract needs stay legal —
 `typing.AsyncContextManager[...]` is what a `ts.Store.transaction` returns,
 and `typing.AsyncIterator[...]` is what its implementation yields; both name a
 shape the caller can use.
+
+An identity declaration decorator is the narrow generic exception: a
+module-level `F = typing.TypeVar("F", bound=collections_abc.Callable[..., object])`
+may be used only as the parameter and return type of undecorated functions
+whose entire body returns their one positional parameter unchanged. The
+decorator neither invokes nor wraps behavior; `F -> F` preserves the supplied
+callable's exact signature and additional attributes. An unbounded type
+variable would accept noncallables, and returning a protocol would erase the
+subtype. Additional uses of `F`, specialized callable bounds, and executing the
+callback remain findings. This does not legalize anonymous application
+dependencies: callback consumers name their contract, as `Validation` and
+`Command` do in the runtime.
+
+Application code may use the pure `functools` module to bind an existing
+operation to its input. For independent validation attempts,
+`functools.partial(domain.CampaignID, request.campaign_id)` defers the actual
+constructor without inventing another validation body. This is not a way to
+hide a decision or replace a typed SDK callback: `partial` can erase the
+remaining parameter signature at that boundary, where a concrete callable
+object preserves the SDK's type check.
 
 **A function is declared at module level or as a method, outside `adapters/`**
 (TB023, maintainer ruling 2026-09-06; the adapters carve-out, maintainer ruling
@@ -749,8 +780,16 @@ class Widget(ts.AggregateRoot):
   metaclass, and `.value`/`.name` raise on every member; `_ignore_` and
   `_order_` are the exception, because enum strips what they name before the
   base sees the class, and TB084 reports them instead. The analyzer reports
-  the same shapes and flags `_value_`/`_name_`. An outcome is matched, never
+  the same shapes and flags `_value_`/`_name_` on a resolved outcome receiver,
+  including local aliases and declared function or method returns. A plain
+  enum's internals are not an outcome merely because they share those names;
+  the enum machinery that validates the runtime base remains legal. An outcome is matched, never
   read, never serialized.
+  Receiver tracking is bounded nominal propagation: alternative branches,
+  loop iterations, and exception paths retain possible declared types, while
+  definite overwrites replace them. It does not infer arbitrary Python
+  behavior or narrow conditions and exception classes; unknown attribute
+  spelling alone is not evidence of an outcome receiver.
 - **Returned by a transition, read by a `match`.** A member is named in
   exactly two places: the `return` that produces it and the `case` that
   consumes it. `is Taken.HELD` / `== Taken.HELD` anywhere else is TB084, and
@@ -818,6 +857,14 @@ ruling 2026-09-11): a builtin call (`str`, `tuple`, `len`, …), an arithmetic
 operator, or a collection mutation (`.append`, …) in a service, actions, or
 orchestrator method is a finding — a value that took an operation to make
 crosses through a `MapTo` class and never through the method's own hands.
+
+A service may also use its one exhaustive match for **terminal relay-result
+translation**: a proven relay response's protocol enum selects only a public
+response return or a declared public rejection. Every arm ends the operation;
+no arm makes a work call, and no success arm continues the method. That is
+translation of an already-computed result, not permission to select business
+work from a raw transport status. Map business evidence into domain specs
+before a transition decides what may happen next.
 Constructing a domain object from a request field (`domain.Identity(request.id)`)
 is an accessor read, not an operation, and stays in the method.
 
@@ -1115,6 +1162,15 @@ All of them keep the service body rules above (one `ts.Request` in, one
 `ts.Response` out, `match` only, mappers for every translation) — what differs
 is scope, reach, and what each may depend on.
 
+An orchestrator may match multiple **sequential domain outcomes**, because a
+workflow owns the ordering of separately failing steps. Nested matches remain
+findings, and a raw relay or port discriminant still cannot select later work.
+The durable-execution example maps pricing and payment evidence into domain
+transitions. Its input `Order` remains completely represented by its snapshot;
+the invocation's `OrderConfirmation` owns pricing state, while `Purchase`
+owns confirmation and settlement. Engine invocation collisions stay in the
+adapter's relay-result translation, not in domain status names.
+
 **The application side** names no engine.
 
 - **A relay** (`ts.Relay`, in `application/relays/`, one per module) is a
@@ -1125,6 +1181,9 @@ is scope, reach, and what each may depend on.
   implemented over HTTP from outside the engine, and a relay held by an
   orchestrator is implemented inside an invocation, and the code holding
   either cannot tell which it has.
+  Its closed protocol discriminants may be plain member-only `enum.Enum`
+  classes declared beside those messages, just as port messages use local
+  enums. They are wire vocabulary, never serialized `ts.Outcome` values.
   **It is named for its far side and carries any number of operations**
   (TB085): the far side is the class of actions, the orchestrator, or the
   workflow its dispatchers reach through a handler (below), so
@@ -1479,16 +1538,23 @@ class Calls(ts.Component):
   `deserialize` reads `json.loads`, carries **at most one guard** — built only
   from `isinstance`, truthiness, and comparison to constants over the loaded
   value, including `all(isinstance(...) ... for item in snapshot["values"])`
-  for element shape — that raises `errors.invalid`, and ends in one constructor
+  for element shape — that raises `errors.invalid` or `ValueError`, and ends in one constructor
   call. A tuple field enters as `tuple(snapshot["values"])` or one unfiltered
   `tuple(Record(...) for record in snapshot["records"])`; a child snapshot
   can reconstruct a nested record through
   `RecordSnapshot().deserialize(json.dumps(record).encode())`. The
   only calls a snapshot may name are `json.dumps`, `json.loads`, `isinstance`,
-  `str`, `int`, `errors.invalid`, `.encode`/`.decode`, `.get` with one
+  `str`, `int`, `errors.invalid`, `ValueError`, `.encode`/`.decode`, `.get` with one
   argument, the message and spec constructors, and another snapshot's
   `serialize`/`deserialize`, plus these structural `list`/`tuple`/`all`
-  conversions. A second branch, a filtered or computed loop, `.get` with
+  conversions. A relay's plain protocol enum may be reconstructed from its
+  loaded value. The one shape guard may use `len` on a loaded collection and
+  literal discriminant membership to reject inconsistent outcome/payload
+  cardinalities. A `try` may enclose reconstruction solely to translate its
+  `DomainError` or enum `ValueError` into a chained `ValueError`; each handler
+  only raises, with no recovery, fallback, `else`, or `finally`. The one
+  terminal reconstruction return may be inside that wrapper. A second branch,
+  a filtered or computed loop, `.get` with
   a fallback, arithmetic, and any domain method are findings — checking shape
   before the constructor sees it is what a snapshot is for; deciding anything
   else is a decision no domain object owns. A snapshot several relays share —
@@ -2038,3 +2104,8 @@ def test_campaign_links_are_defensive() -> None:
   mocking library (TB030); a builder is a `@ts.helper` that mirrors the
   constructor of the spec or DTO it returns, defaults every parameter, and
   passes each one straight through (TB073).
+  A real integration endpoint may use a constrained `@ts.peer` callable
+  class in an adapter test, with a concrete SDK-facing signature and direct
+  SDK registration (`testing.md` rule 10). It observes requests and returns
+  configured response data; it does not replace the SDK or become a fake
+  application dependency.

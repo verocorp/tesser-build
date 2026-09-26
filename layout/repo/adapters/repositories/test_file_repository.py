@@ -3,32 +3,31 @@ from __future__ import annotations
 import os
 import pathlib
 
-import tesser.testing as ts
-
 import repo.adapters.repositories as repositories
 import repo.application.ports as ports
 
 
-@ts.helper
-def _repo(root: pathlib.Path) -> pathlib.Path:  # tesser:debt TB073
-    (root / "manifest.json").write_text('{"appone": "app"}')
-    (root / "scripts").mkdir()
-    (root / "scripts" / "verify").write_text("run_appone() {\n}\n")
-    (root / ".github" / "workflows").mkdir(parents=True)
-    (root / ".github" / "workflows" / "test.yml").write_text("jobs:\n")
-    (root / "appone").mkdir()
-    (root / "appone" / ".tesser-root").write_text("app\n")
-    (root / "appone" / "requirements-dev.txt").write_text("pytest\n")
-    (root / "appone" / "pyproject.toml").write_text(
-        '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'
-    )
-    (root / "appone" / "ruff.toml").write_text('target-version = "py312"\n')
-    return root
-
-
 def test_a_repo_reads_whole(tmp_path: pathlib.Path) -> None:
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     filesystem_repo_reader = repositories.FilesystemRepoReader()
-    read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
+    read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
     assert read_repo_response.manifest.state is ports.ManifestState.READ
     assert [(row.key, row.kind) for row in read_repo_response.manifest.rows] == [("appone", "app")]
     assert read_repo_response.verify.state is ports.FileState.READ
@@ -38,7 +37,24 @@ def test_a_repo_reads_whole(tmp_path: pathlib.Path) -> None:
 
 
 def test_a_missing_manifest_reports_missing(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "manifest.json").unlink()
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -47,7 +63,24 @@ def test_a_missing_manifest_reports_missing(tmp_path: pathlib.Path) -> None:
 
 
 def test_a_malformed_manifest_reports_malformed_with_the_parse_note(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "manifest.json").write_text("{ truncated")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -56,7 +89,24 @@ def test_a_malformed_manifest_reports_malformed_with_the_parse_note(tmp_path: pa
 
 
 def test_a_misshapen_manifest_reports_misshapen(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "manifest.json").write_text('["a", "b"]')
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -64,7 +114,24 @@ def test_a_misshapen_manifest_reports_misshapen(tmp_path: pathlib.Path) -> None:
 
 
 def test_a_missing_verify_file_reports_missing(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "scripts" / "verify").unlink()
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -72,7 +139,24 @@ def test_a_missing_verify_file_reports_missing(tmp_path: pathlib.Path) -> None:
 
 
 def test_entries_mark_directories_and_symlinks(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
     (tmp_path / "vendored").symlink_to(outside)
@@ -84,7 +168,24 @@ def test_entries_mark_directories_and_symlinks(tmp_path: pathlib.Path) -> None:
 
 
 def test_entries_keep_github_and_drop_other_hidden_and_skip_dirs(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".hidden").mkdir()
     filesystem_repo_reader = repositories.FilesystemRepoReader()
@@ -96,8 +197,26 @@ def test_entries_keep_github_and_drop_other_hidden_and_skip_dirs(tmp_path: pathl
 
 
 def test_the_walk_reports_declarations_with_relative_paths(tmp_path: pathlib.Path) -> None:
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     filesystem_repo_reader = repositories.FilesystemRepoReader()
-    read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
+    read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
     assert [(record.path, record.state) for record in read_repo_response.declarations] == [
         ("appone/.tesser-root", ports.FileState.READ)
     ]
@@ -105,7 +224,24 @@ def test_the_walk_reports_declarations_with_relative_paths(tmp_path: pathlib.Pat
 
 
 def test_a_bom_prefixed_declaration_decodes(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / ".tesser-root").write_bytes(b"\xef\xbb\xbfapp\n")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -113,7 +249,24 @@ def test_a_bom_prefixed_declaration_decodes(tmp_path: pathlib.Path) -> None:
 
 
 def test_an_undecodable_declaration_reports_unreadable(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / ".tesser-root").write_bytes(b"\xff\xfe\x00app")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -121,7 +274,24 @@ def test_an_undecodable_declaration_reports_unreadable(tmp_path: pathlib.Path) -
 
 
 def test_a_declaration_that_is_a_directory_is_not_a_declaration(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / ".tesser-root").unlink()
     (tmp_path / "appone" / ".tesser-root").mkdir()
     filesystem_repo_reader = repositories.FilesystemRepoReader()
@@ -130,7 +300,24 @@ def test_a_declaration_that_is_a_directory_is_not_a_declaration(tmp_path: pathli
 
 
 def test_the_walk_finds_requirements_at_depth(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     deep = tmp_path / "docs" / "buried" / "tree"
     deep.mkdir(parents=True)
     (deep / "requirements-dev.txt").write_text("pytest\n")
@@ -140,7 +327,24 @@ def test_the_walk_finds_requirements_at_depth(tmp_path: pathlib.Path) -> None:
 
 
 def test_the_walk_skips_ignored_directories(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     hidden = tmp_path / "appone" / ".venv"
     hidden.mkdir()
     (hidden / ".tesser-root").write_text("app\n")
@@ -152,7 +356,24 @@ def test_the_walk_skips_ignored_directories(tmp_path: pathlib.Path) -> None:
 
 
 def test_the_walk_never_follows_symlinked_directories(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     outside = tmp_path.parent / f"{tmp_path.name}-smuggle"
     outside.mkdir()
     (outside / ".tesser-root").write_text("app\n")
@@ -165,7 +386,24 @@ def test_the_walk_never_follows_symlinked_directories(tmp_path: pathlib.Path) ->
 
 
 def test_a_dangling_symlink_does_not_crash_the_walk(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / "vendored").symlink_to(tmp_path / "no-such-target")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -173,9 +411,26 @@ def test_a_dangling_symlink_does_not_crash_the_walk(tmp_path: pathlib.Path) -> N
 
 
 def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: pathlib.Path) -> None:
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     if os.geteuid() == 0:
         return
-    _repo(tmp_path)
     locked = tmp_path / "appone" / "locked"
     locked.mkdir()
     os.chmod(locked, 0)
@@ -188,7 +443,24 @@ def test_an_unlistable_directory_does_not_crash_the_walk(tmp_path: pathlib.Path)
 
 
 def test_a_top_level_dangling_symlink_is_an_entry_with_symlink_form(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "vendored").symlink_to(tmp_path / "no-such-target")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -197,7 +469,24 @@ def test_a_top_level_dangling_symlink_is_an_entry_with_symlink_form(tmp_path: pa
 
 
 def test_an_undecodable_manifest_reports_unreadable(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "manifest.json").write_bytes(b"\xff\xfe\x00{}")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -206,8 +495,26 @@ def test_an_undecodable_manifest_reports_unreadable(tmp_path: pathlib.Path) -> N
 
 
 def test_the_walk_reads_the_stated_python_floors(tmp_path: pathlib.Path) -> None:
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     filesystem_repo_reader = repositories.FilesystemRepoReader()
-    read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(_repo(tmp_path))))
+    read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
     stated = {(record.path, record.key, record.state, record.value) for record in read_repo_response.floors}
     assert stated == {
         (
@@ -226,7 +533,24 @@ def test_the_walk_reads_the_stated_python_floors(tmp_path: pathlib.Path) -> None
 
 
 def test_a_pyproject_without_a_project_table_states_no_floor(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / "pyproject.toml").write_text(
         "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
     )
@@ -236,7 +560,24 @@ def test_a_pyproject_without_a_project_table_states_no_floor(tmp_path: pathlib.P
 
 
 def test_a_project_table_without_requires_python_reports_undeclared(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / "pyproject.toml").write_text('[project]\nname = "appone"\n')
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -245,7 +586,24 @@ def test_a_project_table_without_requires_python_reports_undeclared(tmp_path: pa
 
 
 def test_a_pyproject_ruff_table_states_the_target_version(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / "ruff.toml").unlink()
     (tmp_path / "appone" / "pyproject.toml").write_text(
         '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'
@@ -258,7 +616,24 @@ def test_a_pyproject_ruff_table_states_the_target_version(tmp_path: pathlib.Path
 
 
 def test_a_malformed_toml_reports_malformed(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / "ruff.toml").write_text("target-version = \n")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))
@@ -267,7 +642,24 @@ def test_a_malformed_toml_reports_malformed(tmp_path: pathlib.Path) -> None:
 
 
 def test_an_undecodable_toml_reports_unreadable(tmp_path: pathlib.Path) -> None:
-    _repo(tmp_path)
+    repo_files: tuple[tuple[str, str | None], ...] = (
+        ('manifest.json', '{"appone": "app"}'),
+        ('scripts', None),
+        ('scripts/verify', 'run_appone() {\n}\n'),
+        ('.github/workflows', None),
+        ('.github/workflows/test.yml', 'jobs:\n'),
+        ('appone', None),
+        ('appone/.tesser-root', 'app\n'),
+        ('appone/requirements-dev.txt', 'pytest\n'),
+        ('appone/pyproject.toml', '[project]\nname = "appone"\nrequires-python = ">=3.12"\n'),
+        ('appone/ruff.toml', 'target-version = "py312"\n'),
+    )
+    for name, text in repo_files:
+        path = tmp_path / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.write_text(text)
     (tmp_path / "appone" / "ruff.toml").write_bytes(b"\xff\xfe\x00x")
     filesystem_repo_reader = repositories.FilesystemRepoReader()
     read_repo_response = filesystem_repo_reader.read_repo(ports.ReadRepoRequest(repo_root=str(tmp_path)))

@@ -1,5 +1,25 @@
 # Voice acceptance tests
 
+## Local integration gate
+
+`scripts/verify voice` exercises the gateways against a real LiveKit server,
+alongside Postgres and Restate. It does not need a cloud account or model APIs.
+Start the Postgres and Restate services described in `scripts/verify`, then
+start LiveKit in development mode:
+
+```sh
+docker run -d --name tesser-voice-livekit --network host \
+  livekit/livekit-server:v1.9.11 --dev --bind 127.0.0.1
+scripts/verify voice
+```
+
+The gate defaults to `ws://localhost:7880` and LiveKit's built-in development
+credentials. Its gateway tests use the real HTTP API and two real SDK room
+participants to verify dispatch, authentication, RPC messages, and cleanup.
+The development server is bound to loopback and must not be used in production.
+
+## Model-backed acceptance
+
 The automated name-taking test loads the application with `app.load()` and
 uses its production clients, gateways, Restate workflow/actions, and Postgres
 repository. Three simulated people join real LiveKit rooms and reply with

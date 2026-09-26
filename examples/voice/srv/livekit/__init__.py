@@ -1,1 +1,1 @@
-from srv.livekit.app import LivekitApp as LivekitApp
+from srv.livekit.agent_server import LivekitApp as LivekitApp

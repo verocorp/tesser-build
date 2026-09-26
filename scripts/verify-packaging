@@ -74,6 +74,31 @@ sys.exit(1 if failed else 0)
 PY
 ) || exit 1
 
+step "installed namespaced client inspects a consumer tree"
+(cd "$VENV" && "$PY" - "$ROOT/examples/python-app" <<'PY'
+import pathlib
+import sys
+
+import tessercheck
+import tessercheck.client as client
+import tessercheck.component as component
+
+assert pathlib.Path(tessercheck.__file__).with_name("py.typed").is_file()
+tree = pathlib.Path(sys.argv[1])
+tessercheck = component.Tessercheck(component.Config(component.Spec()))
+try:
+    report = tessercheck.client.inspect_tree(client.InspectTreeRequest(tree=str(tree)))
+finally:
+    tessercheck.close()
+assert report.contexts == ("campaign", "linkpolicy", "reports"), report.contexts
+assert report.unclassified == (), report.unclassified
+assert "campaign/adapters/handlers" in report.directories
+assert any(source.path == "srv/http/main.py" for source in report.sources)
+assert not any(source.client_calls for source in report.sources if source.path.startswith("srv/"))
+assert not {"app", "srv", "protocol"} & sys.modules.keys()
+PY
+) || exit 1
+
 # From $VENV, not from the repo: the console script has to work with no source
 # tree anywhere near the working directory.
 step "tessercheck-check over a clean tree"

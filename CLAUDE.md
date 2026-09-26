@@ -69,7 +69,8 @@ the Go `comments` analyzer), the annotations norm (`TB021` — an annotation is
 written unquoted, because the resolver treats a quoted one as opaque;
 `TB022` — a type names what the value is, so `Any`, `Callable`, and
 `Awaitable` are findings wherever a module names them, in an annotation or
-anywhere else), the function-placement norm (`TB023` — outside `adapters/`, a
+anywhere else; the narrow exception is a callable-bound type variable used
+only by exact identity declaration decorators), the function-placement norm (`TB023` — outside `adapters/`, a
 function is declared at module level or as a method, so a `lambda` anywhere and
 a `def` inside another function are findings; every rule about a function keys
 on its placement and a nested one has none. An `adapters/` implementation
@@ -86,7 +87,8 @@ carries exactly one sibling test file named for it, and every sibling test
 file names the module beside it; `TB071`/`TB072`/`TB073` — the totality check over
 test modules: every module-level function is a test, a declared `@ts.helper`,
 a declared `@ts.assembly`, or a declared `@ts.fake` (`TB071`), a class is a
-`Test`-prefixed test class holding only test methods or a declared `@ts.fake`
+`Test`-prefixed test class holding only test methods, a declared `@ts.fake`,
+or a constrained adapter-test `@ts.peer` real integration callback
 (`TB072`), and what does not classify is a finding; a helper mirrors the
 constructor it feeds — the same parameters, each defaulted, passed straight
 through — and an assembly puts a test input together from parts without

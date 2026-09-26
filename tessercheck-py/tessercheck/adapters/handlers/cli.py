@@ -68,7 +68,7 @@ class Handler(ts.Handler):
             render_rulebook_response = self._tessercheck_client.render_rulebook(client.RenderRulebookRequest(tree=root))
         except client.ERRORS as error:
             match error:
-                case client.RulebookNotRendered():
+                case client.RulebookNotRendered() | client.TreeNotInspected():
                     return protocol.CliResponse(2, stdout="", stderr=error.message)
                 case _ as never:
                     typing.assert_never(never)

@@ -39,9 +39,9 @@ def test_port_subclass_stays_a_protocol() -> None:
 
 
 def test_structural_implementation_needs_no_marker() -> None:
-    saver: _SaveThings = _StructuralSaver()  # tesser:debt TB085
-    saver.save("x")
-    assert tesser.application.Port not in type(saver).__mro__
+    save_things: _SaveThings = _StructuralSaver()
+    save_things.save("x")
+    assert tesser.application.Port not in type(save_things).__mro__
 
 
 def test_client_subclass_stays_a_protocol() -> None:
@@ -85,13 +85,10 @@ def test_srv_records_are_distinct_kinds_from_the_context_dtos() -> None:
 
 
 def test_declaration_decorators_return_their_target_unchanged() -> None:
-    def build() -> str:  # tesser:debt TB023
-        return "built"
-
     class Double:
         pass
 
-    assert tesser.testing.helper(build) is build
+    assert tesser.testing.helper(str.upper) is str.upper
     assert tesser.testing.fake(Double) is Double
 
 

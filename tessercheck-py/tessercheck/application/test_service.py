@@ -29,6 +29,8 @@ class FakeSourceReader(ports.SourceReader):
             stdlib=(),
             pure_stdlib=(),
             pruned=(),
+            directories=(),
+            unreadable_directories=(),
         )
 
 
@@ -86,6 +88,92 @@ class FakeScriptedReader(ports.SourceReader):
         return self.responses[min(self.reads, len(self.responses)) - 1]
 
 
+def test_inspection_reads_the_requested_tree_and_reports_its_typed_facts() -> None:
+    tessercheck_service = application.TessercheckService(
+        FakePreparedReader(
+            ports.ReadSourcesResponse(
+                outcome=ports.ReadSourcesOutcome.APP,
+                nested=(),
+                symlinked=(),
+                exports=(),
+                imports=(),
+                stdlib=(),
+                pure_stdlib=(),
+                pruned=(),
+                directories=("reports", "reports/component", "srv"),
+                sources=(
+                    ports.SourceFile(
+                        "reports/client.py",
+                        "reports.client",
+                        "class ReportsClient: pass\n",
+                        ports.SourceState.READ,
+                        ports.ModuleForm.MODULE,
+                    ),
+                    ports.SourceFile(
+                        "reports/component/__init__.py",
+                        "reports.component",
+                        "from reports.component.component import Config as Config\n",
+                        ports.SourceState.READ,
+                        ports.ModuleForm.PACKAGE,
+                    ),
+                    ports.SourceFile(
+                        "srv/main.py",
+                        "srv.main",
+                        "app.reports.fetch()\n",
+                        ports.SourceState.READ,
+                        ports.ModuleForm.MODULE,
+                    ),
+                ),
+                unreadable_directories=(),
+            )
+        ),
+        FakeSourceWriter(),
+        FakeRulebookSources(""),
+    )
+    inspect_tree_response = tessercheck_service.inspect_tree(
+        client.InspectTreeRequest(tree="source-tree")
+    )
+    assert inspect_tree_response.contexts == ("reports",)
+    assert inspect_tree_response.unclassified == ()
+    assert inspect_tree_response.directories == ("reports", "reports/component", "srv")
+    assert [
+        (
+            source.path,
+            source.reached_contexts,
+            source.client_calls,
+            source.top_level_calls,
+            source.exported_names,
+        )
+        for source in inspect_tree_response.sources
+    ] == [
+        ("reports/client.py", (), (), (), ()),
+        ("reports/component/__init__.py", (), (), (), ("Config",)),
+        ("srv/main.py", ("reports",), (1,), (1,), ()),
+    ]
+
+
+def test_inspection_passes_the_tree_path_to_the_reader() -> None:
+    fake_source_reader = FakeSourceReader(ports.ReadSourcesOutcome.APP)
+    tessercheck_service = application.TessercheckService(
+        fake_source_reader,
+        FakeSourceWriter(),
+        FakeRulebookSources(""),
+    )
+    tessercheck_service.inspect_tree(client.InspectTreeRequest(tree="source-tree"))
+    assert fake_source_reader.roots == ["source-tree"]
+
+
+def test_an_incomplete_inspection_translates_its_domain_failure() -> None:
+    tessercheck_service = application.TessercheckService(
+        FakeSourceReader(ports.ReadSourcesOutcome.MISSING),
+        FakeSourceWriter(),
+        FakeRulebookSources(""),
+    )
+    with pytest.raises(client.TreeNotInspected) as raised:
+        tessercheck_service.inspect_tree(client.InspectTreeRequest(tree="source-tree"))
+    assert raised.value.code == "inspection_undeclared"
+
+
 @ts.assembly
 def _tree_of(text: str = "import os\n") -> ports.ReadSourcesResponse:
     return ports.ReadSourcesResponse(
@@ -106,6 +194,8 @@ def _tree_of(text: str = "import os\n") -> ports.ReadSourcesResponse:
         stdlib=("os",),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
 
 
@@ -166,6 +256,8 @@ def _renameable_tree() -> ports.ReadSourcesResponse:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
 
 
@@ -221,6 +313,8 @@ def test_what_a_mark_reports_as_remaining_is_what_a_check_would_report_after_it(
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     fake_scripted_reader = FakeScriptedReader(
         _tree_of("import os\n"), read_sources_response
@@ -258,6 +352,8 @@ def test_a_symlinked_directory_is_reported_rather_than_marked() -> None:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     tessercheck_service = application.TessercheckService(
         FakePreparedReader(read_sources_response),
@@ -395,6 +491,8 @@ def test_a_declared_tree_of_conforming_modules_yields_no_findings() -> None:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     assert application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings == ()
 
@@ -418,6 +516,8 @@ def test_an_undeclared_tree_is_the_only_thing_reported() -> None:
         stdlib=("os",),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings
     assert len(found) == 1
@@ -440,6 +540,8 @@ def test_every_root_form_other_than_app_is_reported() -> None:
             stdlib=(),
             pure_stdlib=(),
             pruned=(),
+            directories=(),
+            unreadable_directories=(),
         )
         found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings
         assert len(found) == 1
@@ -457,6 +559,8 @@ def test_a_symlinked_directory_from_the_read_is_reported() -> None:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings
     assert any("TB045" in finding and "app/vendored" in finding for finding in found)
@@ -473,6 +577,8 @@ def test_a_nested_declaration_from_the_read_is_reported() -> None:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings
     assert any("app/.tesser-root" in finding for finding in found)
@@ -497,6 +603,8 @@ def test_a_finding_reads_path_line_code_then_message() -> None:
         stdlib=("os",),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings
     assert found != ()
@@ -524,6 +632,8 @@ def test_an_unreadable_source_is_reported_rather_than_read_as_empty() -> None:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     found = application.TessercheckService(FakePreparedReader(read_sources_response), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings
     assert any("shop/domain/thing.py" in finding for finding in found)
@@ -548,6 +658,8 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     as_module = ports.ReadSourcesResponse(
         outcome=ports.ReadSourcesOutcome.APP,
@@ -567,6 +679,8 @@ def test_the_package_form_of_a_source_changes_the_judgement() -> None:
         stdlib=(),
         pure_stdlib=(),
         pruned=(),
+        directories=(),
+        unreadable_directories=(),
     )
     assert application.TessercheckService(FakePreparedReader(as_package), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings == ()
     assert application.TessercheckService(FakePreparedReader(as_module), FakeSourceWriter(), FakeRulebookSources('')).check_tree(client.CheckTreeRequest(tree='.')).findings != ()
@@ -600,6 +714,8 @@ def _loose_tree(outcome: ports.ReadSourcesOutcome = ports.ReadSourcesOutcome.APP
         stdlib=("os",),
         pure_stdlib=(),
         pruned=("legacy",),
+        directories=(),
+        unreadable_directories=(),
     )
 
 

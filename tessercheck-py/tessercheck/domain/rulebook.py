@@ -8,8 +8,6 @@ import tesser.domain as ts
 import tesser.errors as errors
 import tesser.serialization as serialization
 
-import tessercheck.domain.checks as checks  # tesser:debt TB060
-
 _UNREADABLE: typing.Final[str] = "rulebook_unreadable"
 
 HOLE_NAMES: typing.Final[dict[str, str]] = {
@@ -45,6 +43,7 @@ HOLE_NAMES: typing.Final[dict[str, str]] = {
     "member.name": "⟨method⟩",
     "sibling": "⟨method⟩",
     "inner.name": "⟨class⟩",
+    "nested.name": "⟨class⟩",
     "type(node).__name__": "⟨node⟩",
     "target": "⟨import⟩",
     "original": "⟨name⟩",
@@ -160,7 +159,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.string_equality_violations": "every module",
     "Module.sibling_reference_violations": "every class, in every module",
     "Module.package_read_violations": "every module, in every module kind",
-    "Module.spec_use_violations": "every function that holds a spec, in every module",
+    "Module._spec_scan": "every function that holds a spec, in every module",
     "Module.spec_shared_violations": "domain object `__init__`",
     "Module.record_write_violations": "every module",
     "ClassDecl.vo_field_violations": "value object class",
@@ -201,6 +200,8 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.stray_violations": "context package",
     "Module.dynamic_import_violations": "every module",
     "Module.ports_violations": "ports module",
+    "Module._ports_decoration": "ports module",
+    "Module._ports_unreadable": "ports module",
     "ClassDecl.port_violations": "port protocol method",
     "Module.application_client_violations": "application client module",
     "ClientClass.violations": "application client class",
@@ -221,6 +222,7 @@ APPLIES_TO: typing.Final[dict[str, str]] = {
     "Module.import_violations": "context role module",
     "Module.app_import_violations": "srv / app module",
     "Module.test_violations": "test module",
+    "Module._peer_violations": "integration peer",
     "Module.placement_violations": "test module, by where it is placed",
     "Module.eval_violations": "eval module (`eval_*.py`)",
     "Module.homeless_violations": "top-level module",
@@ -274,6 +276,45 @@ VIOLATION_FIELDS: typing.Final[tuple[str, ...]] = ("path", "line", "code", "mess
 OPTIONAL_VIOLATION_FIELDS: typing.Final[tuple[str, ...]] = ("rename",)
 
 
+class RuleText(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if not value:
+            raise ValueError("rule text must be non-empty")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class RuleCode(ts.ValueObject):
+
+    _value: str
+
+    def __init__(self, value: str) -> None:
+        if re.fullmatch(r"TB[0-9]{3}", value) is None:
+            raise ValueError("rule code must be a TB0xx family code")
+        object.__setattr__(self, "_value", value)
+
+    def __str__(self) -> str:
+        return serialization.canonical_str(self._value)
+
+
+class SourceLine(ts.ValueObject):
+
+    _value: int
+
+    def __init__(self, value: int) -> None:
+        if value < 1:
+            raise ValueError("source line must be positive")
+        object.__setattr__(self, "_value", value)
+
+    def __int__(self) -> int:
+        return serialization.canonical_int(self._value)
+
+
 class RuleRowSpec(ts.Spec):
 
     def __init__(
@@ -293,36 +334,36 @@ class RuleRowSpec(ts.Spec):
 
 class RuleRow(ts.ValueObject):
 
-    _clause: checks.Text
-    _code: checks.Code
-    _applies_to: checks.Text
-    _shapes: tuple[checks.Text, ...]
-    _linenos: tuple[checks.Line, ...]
+    _clause: RuleText
+    _code: RuleCode
+    _applies_to: RuleText
+    _shapes: tuple[RuleText, ...]
+    _linenos: tuple[SourceLine, ...]
 
     def __init__(self, spec: RuleRowSpec) -> None:
-        object.__setattr__(self, "_clause", checks.Text(spec.clause))
-        object.__setattr__(self, "_code", checks.Code(spec.code))
-        object.__setattr__(self, "_applies_to", checks.Text(spec.applies_to))
+        object.__setattr__(self, "_clause", RuleText(spec.clause))
+        object.__setattr__(self, "_code", RuleCode(spec.code))
+        object.__setattr__(self, "_applies_to", RuleText(spec.applies_to))
         object.__setattr__(
-            self, "_shapes", tuple(checks.Text(shape) for shape in spec.shapes)
+            self, "_shapes", tuple(RuleText(shape) for shape in spec.shapes)
         )
         object.__setattr__(
-            self, "_linenos", tuple(checks.Line(line) for line in spec.linenos)
+            self, "_linenos", tuple(SourceLine(line) for line in spec.linenos)
         )
 
-    def clause(self) -> checks.Text:
+    def clause(self) -> RuleText:
         return self._clause
 
-    def code(self) -> checks.Code:
+    def code(self) -> RuleCode:
         return self._code
 
-    def applies_to(self) -> checks.Text:
+    def applies_to(self) -> RuleText:
         return self._applies_to
 
-    def shapes(self) -> tuple[checks.Text, ...]:
+    def shapes(self) -> tuple[RuleText, ...]:
         return self._shapes
 
-    def linenos(self) -> tuple[checks.Line, ...]:
+    def linenos(self) -> tuple[SourceLine, ...]:
         return self._linenos
 
 
@@ -347,31 +388,6 @@ class Rulebook(ts.ValueObject):
 
     def __init__(self, spec: RulebookSpec) -> None:
         subjects: set[str] = set()
-        def spec_fields(call: ast.Call) -> dict[str, ast.expr] | None:  # tesser:debt TB023
-            if call.keywords or len(call.args) != 1:
-                return None
-            violation_spec_call = call.args[0]
-            if not isinstance(violation_spec_call, ast.Call):
-                return None
-            if isinstance(violation_spec_call.func, ast.Name):
-                named = violation_spec_call.func.id
-            elif isinstance(violation_spec_call.func, ast.Attribute):
-                named = violation_spec_call.func.attr
-            else:
-                return None
-            if named != VIOLATION_SPEC or len(violation_spec_call.args) > len(VIOLATION_FIELDS):
-                return None
-            bound = dict(zip(VIOLATION_FIELDS, violation_spec_call.args))
-            for keyword in violation_spec_call.keywords:
-                if keyword.arg is None or keyword.arg in bound:
-                    return None
-                bound[keyword.arg] = keyword.value
-            if set(bound) - set(OPTIONAL_VIOLATION_FIELDS) != set(VIOLATION_FIELDS):
-                return None
-            for optional in OPTIONAL_VIOLATION_FIELDS:
-                bound.pop(optional, None)
-            return bound
-
         tree = ast.parse(spec.checks_text)
         assertions: list[tuple[str, tuple[str, ...]]] = []
         for _, module_text in spec.test_modules:
@@ -490,7 +506,7 @@ class Rulebook(ts.ValueObject):
                             bindings.append(spec_bound)
                 for binding in bindings or [{}]:
                     for call in calls:
-                        fields = spec_fields(call)
+                        fields = self._violation_spec_fields(call)
                         if fields is None:
                             raise errors.invalid(
                                 _UNREADABLE,
@@ -728,3 +744,28 @@ class Rulebook(ts.ValueObject):
 
     def __str__(self) -> str:
         return serialization.canonical_str(self._value)
+
+    def _violation_spec_fields(self, call: ast.Call) -> dict[str, ast.expr] | None:
+        if call.keywords or len(call.args) != 1:
+            return None
+        violation_spec_call = call.args[0]
+        if not isinstance(violation_spec_call, ast.Call):
+            return None
+        if isinstance(violation_spec_call.func, ast.Name):
+            named = violation_spec_call.func.id
+        elif isinstance(violation_spec_call.func, ast.Attribute):
+            named = violation_spec_call.func.attr
+        else:
+            return None
+        if named != VIOLATION_SPEC or len(violation_spec_call.args) > len(VIOLATION_FIELDS):
+            return None
+        bound = dict(zip(VIOLATION_FIELDS, violation_spec_call.args))
+        for keyword in violation_spec_call.keywords:
+            if keyword.arg is None or keyword.arg in bound:
+                return None
+            bound[keyword.arg] = keyword.value
+        if set(bound) - set(OPTIONAL_VIOLATION_FIELDS) != set(VIOLATION_FIELDS):
+            return None
+        for optional in OPTIONAL_VIOLATION_FIELDS:
+            bound.pop(optional, None)
+        return bound

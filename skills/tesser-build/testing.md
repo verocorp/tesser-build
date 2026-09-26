@@ -213,6 +213,27 @@ file says *how*, and it is the cross-cutting layer they assume.
     call shape and stays green when the SDK moves — the mock defect rule 1
     rejects, wearing a hand-written coat. `TB072` is what refuses it.
 
+    **A real integration peer is different from an SDK double.** An adapter
+    test may declare an `@ts.peer` callable class for the remote participant
+    whose handler the real SDK invokes. It declares only a typed `__init__`
+    for observation/response state and a typed async `__call__` for the SDK request
+    and reply. It neither inherits nor replaces the SDK. Its straight-line
+    handler records the incoming message through an `asyncio.Queue` of that
+    exact SDK request type and returns a configured primitive or literal; it does
+    not invoke the application under test or hide setup, assertions, or
+    business decisions. The test constructs it directly at the external
+    registration call and discards that call's result; retaining a returned
+    callback would allow direct invocation behind the registration syntax.
+    The test owns connection setup, cleanup, and assertions.
+
+    `examples/voice` registers a `RecordingRpcPeer` with a real LiveKit room.
+    The concrete `__call__(RpcInvocationData) -> str` keeps the SDK's callback
+    type check intact: an incompatible request or reply is a type error.
+    A `functools.partial` responder loses that remaining-parameter check,
+    while a bound constant string's `format` method hides what the peer does.
+    Neither is the substitute for naming the protocol behavior. This narrow
+    peer role grants no general fake, fixture, helper, or assembly exemption.
+
     An emulator is not a double: it is the same implementation in a different
     deployment, which is why step 2 outranks step 3. And there is no scheduled
     tier — a suite run against a third party on a timer mostly reports that
@@ -294,7 +315,8 @@ file says *how*, and it is the cross-cutting layer they assume.
   matches pytest's default collection glob (`python_classes = Test*`); the
   analyzer assumes that default, so a tree that overrides `python_classes`
   is out of contract. A class that is neither
-  `Test`-prefixed nor a declared `@ts.fake` is a `TB072` finding. The
+  `Test`-prefixed, a declared `@ts.fake`, nor a constrained adapter-test
+  `@ts.peer` (rule 10) is a `TB072` finding. The
   `Test` prefix is load-bearing: it is what pytest collects, so a test
   class named anything else would hold tests that silently never run.
 

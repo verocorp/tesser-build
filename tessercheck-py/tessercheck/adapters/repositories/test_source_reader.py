@@ -18,6 +18,19 @@ def test_a_declared_tree_reads_as_an_app(tmp_path: pathlib.Path) -> None:
     assert "os" in read_sources_response.stdlib
 
 
+def test_directory_facts_include_empty_packages_and_exclude_pruned_and_symlinked_trees(tmp_path: pathlib.Path) -> None:
+    (tmp_path / ".tesser-root").write_text("app\nskip vendor\n", encoding="utf-8")
+    (tmp_path / "empty").mkdir()
+    (tmp_path / "shop" / "client").mkdir(parents=True)
+    (tmp_path / "vendor").mkdir()
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / "linked").symlink_to(tmp_path / "shop", target_is_directory=True)
+    read_sources_response = repositories.FilesystemSourceReader().read_sources(
+        ports.ReadSourcesRequest(tree=str(tmp_path))
+    )
+    assert read_sources_response.directories == ("empty", "shop", "shop/client")
+    assert read_sources_response.symlinked == ("linked",)
+
 def test_a_tree_with_no_declaration_reads_as_missing(tmp_path: pathlib.Path) -> None:
     read_sources_response = repositories.FilesystemSourceReader().read_sources(
         ports.ReadSourcesRequest(tree=str(tmp_path))

@@ -8,6 +8,47 @@ import tessercheck.client as client
 import tessercheck.domain as domain
 
 
+class MapToTreeInspectionSpec(ts.Mapper, domain.TreeInspectionSpec):
+
+    def __init__(self, read_sources_response: ports.ReadSourcesResponse) -> None:
+        super().__init__(
+            sources=tuple(
+                (source.path, source.text if source.state is ports.SourceState.READ else None)
+                for source in read_sources_response.sources
+            ),
+            directories=read_sources_response.directories,
+            unreadable_directories=read_sources_response.unreadable_directories,
+            declared=(
+                read_sources_response.outcome is ports.ReadSourcesOutcome.APP
+                and not read_sources_response.nested
+                and not read_sources_response.symlinked
+            ),
+        )
+
+
+class MapToInspectedSource(ts.Mapper, client.InspectedSource):
+
+    def __init__(self, module_inspection: domain.ModuleInspection) -> None:
+        super().__init__(
+            path=str(module_inspection.path()),
+            reached_contexts=tuple(module_inspection.reached()),
+            client_calls=tuple(module_inspection.calls()),
+            top_level_calls=tuple(module_inspection.top_level_calls()),
+            exported_names=tuple(module_inspection.exports()),
+        )
+
+
+class MapToInspectTreeResponse(ts.Mapper, client.InspectTreeResponse):
+
+    def __init__(self, tree_inspection: domain.TreeInspection) -> None:
+        super().__init__(
+            contexts=tuple(tree_inspection.contexts()),
+            unclassified=tuple(tree_inspection.unclassified()),
+            directories=tuple(tree_inspection.directories()),
+            sources=tuple(MapToInspectedSource(module_inspection) for module_inspection in tree_inspection.modules()),
+        )
+
+
 class MapToCodebaseSpec(ts.Mapper, domain.CodebaseSpec):
 
     def __init__(
@@ -286,6 +327,16 @@ class TessercheckService(ts.ApplicationService):
         self._source_reader = source_reader
         self._source_writer = source_writer
         self._rulebook_sources = rulebook_sources
+
+    def inspect_tree(self, inspect_tree_request: client.InspectTreeRequest) -> client.InspectTreeResponse:
+        tree_root = domain.TreeRoot(inspect_tree_request.tree)
+        read_sources_request = MapToReadSourcesRequest(tree_root)
+        read_sources_response = self._source_reader.read_sources(read_sources_request)
+        try:
+            tree_inspection = domain.TreeInspection(MapToTreeInspectionSpec(read_sources_response))
+        except errors.DomainError as domain_error:
+            raise client.TreeNotInspected(domain_error.code, domain_error.message) from domain_error
+        return MapToInspectTreeResponse(tree_inspection)
 
     def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
         tree_root = domain.TreeRoot(check_tree_request.tree)

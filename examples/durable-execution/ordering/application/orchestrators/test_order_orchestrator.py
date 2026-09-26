@@ -49,6 +49,23 @@ def order_spec(order_id: str = "o1", sku: str = "widget", quantity: int = 3) -> 
 
 class TestOrderOrchestrator:
 
+    def test_confirmation_leaves_the_journaled_order_input_whole(self) -> None:
+        order = domain.Order(order_spec())
+        confirm_order_request = relays.ConfirmOrderRequest(order=order)
+        confirm_order_request_snapshot = relays.ConfirmOrderRequestSnapshot()
+        raw = confirm_order_request_snapshot.serialize(confirm_order_request)
+        confirm_order_response = asyncio.run(
+            orchestrators.OrderOrchestrator(FakeOrderActionsRelay()).confirm_order(
+                confirm_order_request
+            )
+        )
+        assert confirm_order_response.confirmed_orders[0].total_cents == 750
+        assert confirm_order_request_snapshot.serialize(confirm_order_request) == raw
+        restored_order = confirm_order_request_snapshot.deserialize(raw).order
+        assert restored_order.identity == order.identity
+        assert restored_order.sku == order.sku
+        assert restored_order.quantity == order.quantity
+
     def test_confirming_totals_the_product_price_over_the_quantity(self) -> None:
         confirm_order_response = asyncio.run(
             orchestrators.OrderOrchestrator(FakeOrderActionsRelay()).confirm_order(

@@ -14,6 +14,10 @@ class FakeCheckClient(client.TessercheckClient):
         self.findings = findings
         self.roots: list[str] = []
 
+    def inspect_tree(self, inspect_tree_request: client.InspectTreeRequest) -> client.InspectTreeResponse:
+        self.roots.append(inspect_tree_request.tree)
+        return client.InspectTreeResponse(contexts=(), unclassified=(), directories=(), sources=())
+
     def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
         self.roots.append(check_tree_request.tree)
         return client.CheckTreeResponse(findings=self.findings)
@@ -43,6 +47,9 @@ class FakeCheckClient(client.TessercheckClient):
 
 @ts.fake
 class FakeRulebookNotRenderedClient(client.TessercheckClient):
+
+    def inspect_tree(self, inspect_tree_request: client.InspectTreeRequest) -> client.InspectTreeResponse:
+        raise client.TreeNotInspected("inspection_unreadable", "source cannot be read")
 
     def check_tree(self, check_tree_request: client.CheckTreeRequest) -> client.CheckTreeResponse:
         raise client.RulebookNotRendered("rulebook_unreadable", "checks.py cannot be read")

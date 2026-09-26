@@ -71,6 +71,15 @@ myself?* Yes → application service.
    a **workflow** — an orchestrator on a durable-execution engine
    (`python.md#orchestrators-actions-relays`), not a service method.
 
+   **Terminal relay translation is not a business decision.** A service may
+   instead match the enum of a proven relay response only to return its public
+   response or raise a declared public rejection, exhaustively. Every arm
+   terminates; it performs no further port, relay, or domain work. This keeps
+   engine refusals out of the business model without allowing a raw transport
+   status to choose subsequent operations. Business evidence still goes
+   through a domain transition. An orchestrator may match several sequential
+   domain transitions; nested decisions remain forbidden.
+
    What the *arms* do afterwards is not a decision. An arm may drive a
    `-> None` transition that records what it learned as state, and the method
    then persists unconditionally — the exemplars in `examples/minimal` and
@@ -177,8 +186,9 @@ method to take exactly one `ts.Request` and return one `ts.Response` — and a
 public `__call__` is a public method, not a private one; `TB082`
 rejects a delegation chain, any `if` or `while` (a service branches only by
 `match`, on the outcome a transition returned), a **second** `match` in the same
-method, a `match` subject that is not a call on a domain
-object, a comparison, a call on a comparison dunder or into the `operator`
+method, a `match` subject that is neither a call on a domain
+object nor the constrained terminal relay translation above, a comparison,
+a call on a comparison dunder or into the `operator`
 module, a `not`, a conditional expression, a boolean operator, a
 comprehension's `if` clause, a value computed in an argument position, and a
 raw request field crossing into a port. One decision is one finding: a

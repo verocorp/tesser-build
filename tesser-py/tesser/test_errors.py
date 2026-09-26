@@ -1,6 +1,17 @@
 import pytest
 
 import tesser.errors as errors
+import tesser.testing as testing
+
+
+@testing.fake
+class RejectedValidation(errors.Validation):
+
+    def __init__(self, error: errors.DomainError) -> None:
+        self._error = error
+
+    def __call__(self) -> object:
+        raise self._error
 
 
 def test_constructors_carry_kind_code_and_message() -> None:
@@ -38,18 +49,15 @@ def test_wrap_field_override_wins() -> None:
 
 
 def test_collect_passes_when_every_field_is_valid() -> None:
-    errors.collect(name=lambda: "ok", slug=lambda: "ok")  # tesser:debt TB023
+    errors.collect(name=str, slug=str)
 
 
 def test_collect_gathers_validation_problems_into_one_error() -> None:
-    def bad_name() -> str:  # tesser:debt TB023
-        raise errors.invalid("bad_name", "empty")
-
-    def bad_slug() -> str:  # tesser:debt TB023
-        raise errors.invalid("bad_slug", "empty", field="s")
-
     with pytest.raises(errors.DomainError) as caught:
-        errors.collect(name=bad_name, slug=bad_slug)
+        errors.collect(
+            name=RejectedValidation(errors.invalid("bad_name", "empty")),
+            slug=RejectedValidation(errors.invalid("bad_slug", "empty", field="s")),
+        )
     err = caught.value
     assert err.kind is errors.Kind.VALIDATION
     assert err.code == "validation_failed"
@@ -60,11 +68,10 @@ def test_collect_gathers_validation_problems_into_one_error() -> None:
 
 
 def test_collect_reraises_a_non_validation_error_unchanged() -> None:
-    def missing_row() -> str:  # tesser:debt TB023
-        raise errors.not_found("no_row", "missing")
-
+    error = errors.not_found("no_row", "missing")
     with pytest.raises(errors.DomainError) as caught:
-        errors.collect(name=missing_row)
+        errors.collect(name=RejectedValidation(error))
+    assert caught.value is error
     assert caught.value.kind is errors.Kind.NOT_FOUND
     assert caught.value.code == "no_row"
 
