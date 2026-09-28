@@ -1,0 +1,154 @@
+[
+  {
+    "case_id": "D01",
+    "candidate_label": "calibration_01",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {"reference_id":"D01-G1","item_ids":[],"coverage":"missing","rationale":"No items express the organizer's outcome of filling vacancies without calling everyone.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+      {"reference_id":"D01-O1","item_ids":[],"coverage":"missing","rationale":"No items preserve the cancellation-and-waitlist condition or FIFO seat offer.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"reference_id":"D01-O2","item_ids":[],"coverage":"missing","rationale":"No items preserve expiry twelve hours after sending.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"reference_id":"D01-O3","item_ids":[],"coverage":"missing","rationale":"No items preserve exclusive offering of the seat before expiry.","source_quotes":["Until it expires, do not offer that seat to anyone else."]},
+      {"reference_id":"D01-O4","item_ids":[],"coverage":"missing","rationale":"No items distinguish joining the waitlist from a confirmed booking.","source_quotes":["Joining the waitlist must not count as a confirmed booking."]},
+      {"reference_id":"D01-U1","item_ids":[],"coverage":"missing","rationale":"No items preserve the undecided behavior after expiry.","source_quotes":["We have not decided what happens after an offer expires."]},
+      {"reference_id":"D01-U2","item_ids":[],"coverage":"missing","rationale":"The tentative reminder is omitted, which is allowed for this optional reference.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "claim_judgments": [],
+    "ambiguity_judgments": [
+      {"reference_id":"D01-U1","item_ids":[],"status":"lost","rationale":"The empty extraction does not communicate that post-expiry behavior remains undecided; it does not supply an unauthorized resolution either.","source_quotes":["We have not decided what happens after an offer expires."]}
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D01",
+    "candidate_label": "calibration_02",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {"reference_id":"D01-G1","item_ids":[],"coverage":"missing","rationale":"A reminder command does not express the organizer's intended outcome of filling seats without calling everyone.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+      {"reference_id":"D01-O1","item_ids":[],"coverage":"missing","rationale":"Sending reminders is not offering a cancelled attendee's seat to the earliest-joined person under the stated conjunction of conditions.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"reference_id":"D01-O2","item_ids":[],"coverage":"missing","rationale":"An hourly reminder cadence does not specify offer expiry or its timing origin.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"reference_id":"D01-O3","item_ids":[],"coverage":"missing","rationale":"The reminder command says nothing about prohibiting another offer of the same seat before expiry.","source_quotes":["Until it expires, do not offer that seat to anyone else."]},
+      {"reference_id":"D01-O4","item_ids":[],"coverage":"missing","rationale":"The reminder command does not distinguish waitlist membership from a confirmed booking.","source_quotes":["Joining the waitlist must not count as a confirmed booking."]},
+      {"reference_id":"D01-U1","item_ids":[],"coverage":"missing","rationale":"There is no statement or question preserving the undecided behavior after offer expiry.","source_quotes":["We have not decided what happens after an offer expires."]},
+      {"reference_id":"D01-U2","item_ids":[],"coverage":"missing","rationale":"Although x1 mentions a reminder, it promotes it to an obligation and loses both tentative status and the proposed halfway timing; mere topic overlap does not preserve this uncertainty reference.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "claim_judgments": [
+      {"claim_id":"c1","item_id":"x1","candidate_fragment":"Send every waitlisted person an SMS reminder every hour.","verdict":"unsupported","duplicate_of":null,"rationale":"The imperative and obligation kind make sending reminders a commitment. The source explicitly leaves a reminder unagreed for this release. This is an unsupported promotion, not a supported extraction of the optional idea; it is not classified as contradicted because the source does not forbid all future reminders.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]},
+      {"claim_id":"c2","item_id":"x1","candidate_fragment":"every waitlisted person","verdict":"unsupported","duplicate_of":null,"rationale":"The source gives no reminder recipient policy. Extending delivery to every waitlisted person adds a universal recipient requirement rather than merely preserving the tentative idea.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]},
+      {"claim_id":"c3","item_id":"x1","candidate_fragment":"SMS","verdict":"unsupported","duplicate_of":null,"rationale":"No delivery medium is specified anywhere in the request. Requiring SMS adds an implementation requirement not entailed by mentioning a possible reminder.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]},
+      {"claim_id":"c4","item_id":"x1","candidate_fragment":"every hour","verdict":"unsupported","duplicate_of":null,"rationale":"The request suggests only an unagreed halfway reminder and supplies no recurring hourly schedule. An hourly cadence is an additional commitment; the tentative halfway idea is not an approved competing cadence that would make this a comparator contradiction.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "ambiguity_judgments": [
+      {"reference_id":"D01-U1","item_ids":[],"status":"lost","rationale":"The response omits the open decision about what follows expiry. Inventing a reminder does not specifically resolve the post-expiry decision.","source_quotes":["We have not decided what happens after an offer expires."]}
+    ],
+    "item_flags": [
+      {"item_id":"x1","flag":"material_role_error","rationale":"An explicitly unagreed optional reminder is presented as an obligation. Both the imperative text and kind change its status; this flag records the same promotion diagnosed in c1, not an additional unsupported claim.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "disagreements": []
+  },
+  {
+    "case_id": "D01",
+    "candidate_label": "calibration_03",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {"reference_id":"D01-G1","item_ids":["dump"],"coverage":"full","rationale":"The text explicitly preserves the workshop organizer, waitlist goal, filling empty seats, and avoiding calls to everyone. It is also labeled goal.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+      {"reference_id":"D01-O1","item_ids":["dump"],"coverage":"full","rationale":"The text retains both confirmed-attendee cancellation and existing waitlist as the condition, then requires offering that seat to the earliest joiner, not automatically confirming a booking. The unsuitable omnibus classification does not remove these explicit semantics.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"reference_id":"D01-O2","item_ids":["dump"],"coverage":"full","rationale":"The text explicitly states offer expiry twelve hours after sending, preserving the duration and timing origin rather than merely attaching that statement as evidence.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"reference_id":"D01-O3","item_ids":["dump"],"coverage":"full","rationale":"The prohibition explicitly applies to that same seat and anyone else until the current offer expires, with the offer referent supplied immediately before it in the item.","source_quotes":["Until it expires, do not offer that seat to anyone else."]},
+      {"reference_id":"D01-O4","item_ids":["dump"],"coverage":"full","rationale":"The text explicitly prohibits treating waitlist joining as a confirmed booking, preserving the negation and the two distinct statuses.","source_quotes":["Joining the waitlist must not count as a confirmed booking."]},
+      {"reference_id":"D01-U1","item_ids":["dump"],"coverage":"full","rationale":"The text explicitly says the behavior after expiry has not been decided and supplies no automatic promotion, removal, or other resolution. The goal label is recorded separately rather than erasing explicit uncertainty.","source_quotes":["We have not decided what happens after an offer expires."]},
+      {"reference_id":"D01-U2","item_ids":["dump"],"coverage":"full","rationale":"The halfway reminder remains a possibility and is explicitly not agreed for this release, so including it does not turn it into a commitment.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "claim_judgments": [
+      {"claim_id":"c1","item_id":"dump","candidate_fragment":"As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone.","verdict":"supported","duplicate_of":null,"rationale":"This states the organizer's intended waitlist outcome, including avoiding calls to everyone, without adding a metric or promising a particular implementation.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+      {"claim_id":"c2","item_id":"dump","candidate_fragment":"When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first.","verdict":"supported","duplicate_of":null,"rationale":"The seat-offering rule retains the conjunction of triggering conditions, FIFO recipient order, and offer rather than confirmation. Those features are all expressly committed in the source.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"claim_id":"c3","item_id":"dump","candidate_fragment":"The offer expires 12 hours after it is sent.","verdict":"supported","duplicate_of":null,"rationale":"The claim requires expiry at twelve hours measured from sending, exactly the temporal behavior the request commits to.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"claim_id":"c4","item_id":"dump","candidate_fragment":"Until it expires, do not offer that seat to anyone else.","verdict":"supported","duplicate_of":null,"rationale":"The explicit preceding offer supplies the referent for expiry; the claim prohibits another offer of the same seat before then and adds no behavior after expiry or acceptance.","source_quotes":["The offer expires 12 hours after it is sent.","Until it expires, do not offer that seat to anyone else."]},
+      {"claim_id":"c5","item_id":"dump","candidate_fragment":"Joining the waitlist must not count as a confirmed booking.","verdict":"supported","duplicate_of":null,"rationale":"The claim preserves the source's negative status rule: joining alone is not a confirmed booking.","source_quotes":["Joining the waitlist must not count as a confirmed booking."]},
+      {"claim_id":"c6","item_id":"dump","candidate_fragment":"We have not decided what happens after an offer expires.","verdict":"open_question","duplicate_of":null,"rationale":"This explicitly records the unresolved post-expiry behavior without proposing an answer. The declarative wording conveys an open decision despite the item's incorrect umbrella goal label.","source_quotes":["We have not decided what happens after an offer expires."]},
+      {"claim_id":"c7","item_id":"dump","candidate_fragment":"Maybe a reminder halfway through would help, but that is not agreed for this release.","verdict":"explicit_proposal","duplicate_of":null,"rationale":"The possible halfway reminder and its unagreed-for-release qualification form one provisional idea. Neither its utility nor delivery is asserted as an approved requirement, and the explicit qualification is preserved, not stripped off.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "ambiguity_judgments": [
+      {"reference_id":"D01-U1","item_ids":["dump"],"status":"preserved","rationale":"The item explicitly retains the undecided post-expiry behavior. Neither the umbrella label nor unusable packaging silently answers that decision.","source_quotes":["We have not decided what happens after an offer expires."]}
+    ],
+    "item_flags": [
+      {"item_id":"dump","flag":"omnibus","rationale":"One item copies the entire request and packages the organizer's goal, four independently usable commitments, an unresolved decision, and a tentative reminder under one ID. It fails extraction usability despite full semantic coverage.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone.","When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first.","The offer expires 12 hours after it is sent.","Until it expires, do not offer that seat to anyone else.","Joining the waitlist must not count as a confirmed booking.","We have not decided what happens after an offer expires.","Maybe a reminder halfway through would help, but that is not agreed for this release."]},
+      {"item_id":"dump","flag":"nonmaterial_role_mismatch","rationale":"The goal label fits G1 but not the O1–O4 commitments or U1–U2 uncertainty content. Their explicit imperative, negation, and undecided/tentative wording preserve their statuses, so this label mismatch is not a material promotion or demotion. The separate omnibus flag captures the real usability failure.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first.","The offer expires 12 hours after it is sent.","Until it expires, do not offer that seat to anyone else.","Joining the waitlist must not count as a confirmed booking.","We have not decided what happens after an offer expires.","Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "disagreements": []
+  },
+  {
+    "case_id": "D01",
+    "candidate_label": "calibration_04",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {"reference_id":"D01-G1","item_ids":[],"coverage":"missing","rationale":"The rule does not express the organizer's intended outcome or avoiding calls to everyone; offering seats is not an explicit statement of that goal.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+      {"reference_id":"D01-O1","item_ids":["offer"],"coverage":"partial","rationale":"The item preserves an offer and earliest-joined waitlist recipient, but generalizes to every available seat instead of conditioning the behavior on confirmed-attendee cancellation and an existing waitlist. Its evidence cannot supply missing conditions in the claim.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"reference_id":"D01-O2","item_ids":[],"coverage":"missing","rationale":"The item specifies no offer expiry duration or sending-based timing origin.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"reference_id":"D01-O3","item_ids":[],"coverage":"missing","rationale":"The item does not forbid reoffering the same seat before expiry; choosing the earliest joiner does not establish exclusivity over time.","source_quotes":["Until it expires, do not offer that seat to anyone else."]},
+      {"reference_id":"D01-O4","item_ids":[],"coverage":"missing","rationale":"The item does not state that waitlist joining is distinct from a confirmed booking.","source_quotes":["Joining the waitlist must not count as a confirmed booking."]},
+      {"reference_id":"D01-U1","item_ids":[],"coverage":"missing","rationale":"The undecided behavior after expiry is not mentioned. Available is not defined as expired, so this is omission rather than an explicit answer to that decision.","source_quotes":["We have not decided what happens after an offer expires."]},
+      {"reference_id":"D01-U2","item_ids":[],"coverage":"missing","rationale":"The optional tentative reminder is omitted, which is allowed.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "claim_judgments": [
+      {"claim_id":"c1","item_id":"offer","candidate_fragment":"to the earliest-joined waitlisted person","verdict":"supported","duplicate_of":null,"rationale":"The recipient-selection component is FIFO by waitlist joining time and concerns an offer, matching the source's recipient rule. This supports that component only, not the unrestricted scope recorded in c2.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"claim_id":"c2","item_id":"offer","candidate_fragment":"Offer every available seat","verdict":"unsupported","duplicate_of":null,"rationale":"The source commits only when a confirmed attendee cancels and a waitlist exists. Requiring every available seat to be offered removes that triggering conjunction and creates obligations for vacancies from other causes; no source rule supplies this universal scope. Mentioning a waitlisted recipient is not an explicit condition, and quoting the condition as evidence does not repair the broader text.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]}
+    ],
+    "ambiguity_judgments": [
+      {"reference_id":"D01-U1","item_ids":[],"status":"lost","rationale":"No text preserves the need to decide post-expiry behavior. The undefined word available is insufficient evidence of an explicit automatic post-expiry policy, so I do not invent such a resolution.","source_quotes":["We have not decided what happens after an offer expires."]}
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D01",
+    "candidate_label": "calibration_05",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {"reference_id":"D01-G1","item_ids":[],"coverage":"missing","rationale":"The offer rule does not explicitly preserve the organizer's goal or avoiding calls to everyone.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+      {"reference_id":"D01-O1","item_ids":["p1"],"coverage":"full","rationale":"The paraphrase preserves a confirmed attendee's cancellation while people are waitlisted, and the first person by joining order receives an offer, not a confirmed seat. Constraint and obligation are interchangeable here.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"reference_id":"D01-O2","item_ids":[],"coverage":"missing","rationale":"The item specifies no expiry or twelve-hour sending-based timer.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"reference_id":"D01-O3","item_ids":[],"coverage":"missing","rationale":"A FIFO recipient rule does not preserve the separate prohibition on offering the same seat to anyone else before expiry.","source_quotes":["Until it expires, do not offer that seat to anyone else."]},
+      {"reference_id":"D01-O4","item_ids":[],"coverage":"missing","rationale":"Calling the action an offer does not explicitly establish that joining the waitlist is not a confirmed booking.","source_quotes":["Joining the waitlist must not count as a confirmed booking."]},
+      {"reference_id":"D01-U1","item_ids":[],"coverage":"missing","rationale":"The post-expiry decision is omitted.","source_quotes":["We have not decided what happens after an offer expires."]},
+      {"reference_id":"D01-U2","item_ids":[],"coverage":"missing","rationale":"The optional tentative reminder is omitted, which is allowed.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "claim_judgments": [
+      {"claim_id":"c1","item_id":"p1","candidate_fragment":"If a confirmed attendee cancels while people are waitlisted, the first person in waitlist joining order gets the seat offer.","verdict":"supported","duplicate_of":null,"rationale":"The condition retains both cancellation by a confirmed attendee and a nonempty waitlist; the consequent gives the offer to the earliest joiner. Gets the seat offer is not an assertion of automatic confirmation. This is a meaning-preserving paraphrase with an accepted kind.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]}
+    ],
+    "ambiguity_judgments": [
+      {"reference_id":"D01-U1","item_ids":[],"status":"lost","rationale":"No statement or question retains the undecided behavior after expiry, and the candidate proposes no resolution.","source_quotes":["We have not decided what happens after an offer expires."]}
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D01",
+    "candidate_label": "calibration_06",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {"reference_id":"D01-G1","item_ids":[],"coverage":"missing","rationale":"Expiry requirements do not preserve the organizer's goal of filling seats without calling everyone.","source_quotes":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+      {"reference_id":"D01-O1","item_ids":[],"coverage":"missing","rationale":"Neither item gives the conditioned cancellation-triggered FIFO offering rule.","source_quotes":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+      {"reference_id":"D01-O2","item_ids":["p1","p2"],"coverage":"full","rationale":"Each item independently preserves offer expiry twelve hours after sending; ends and expire are equivalent here. The duplicate supplies no second unit of reference credit, and both kinds are accepted.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"reference_id":"D01-O3","item_ids":[],"coverage":"missing","rationale":"An expiry deadline alone does not prohibit another offer of the same seat before the deadline.","source_quotes":["Until it expires, do not offer that seat to anyone else."]},
+      {"reference_id":"D01-O4","item_ids":[],"coverage":"missing","rationale":"Neither item distinguishes joining the waitlist from a confirmed booking.","source_quotes":["Joining the waitlist must not count as a confirmed booking."]},
+      {"reference_id":"D01-U1","item_ids":[],"coverage":"missing","rationale":"Stating when an offer ends does not preserve the undecided behavior after it ends.","source_quotes":["We have not decided what happens after an offer expires."]},
+      {"reference_id":"D01-U2","item_ids":[],"coverage":"missing","rationale":"The optional tentative reminder is omitted, which is allowed.","source_quotes":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+    ],
+    "claim_judgments": [
+      {"claim_id":"c1","item_id":"p1","candidate_fragment":"An offer ends twelve hours after sending.","verdict":"supported","duplicate_of":null,"rationale":"In this seat-offer case, ends states expiry and twelve hours after sending preserves both duration and origin. No different offer type or post-expiry action is asserted.","source_quotes":["The offer expires 12 hours after it is sent."]},
+      {"claim_id":"c2","item_id":"p2","candidate_fragment":"Expire a seat offer 12 hours after it is sent.","verdict":"supported","duplicate_of":"c1","rationale":"This states the same expiry deadline and sending origin as c1. Explicitly saying seat adds no new condition in this case, so it is a complete semantic duplicate, not independent coverage or precision credit.","source_quotes":["The offer expires 12 hours after it is sent."]}
+    ],
+    "ambiguity_judgments": [
+      {"reference_id":"D01-U1","item_ids":[],"status":"lost","rationale":"The response gives the known expiry time but not the unresolved next action; ending an offer does not itself assert automatic promotion or removal.","source_quotes":["We have not decided what happens after an offer expires."]}
+    ],
+    "item_flags": [],
+    "disagreements": []
+  }
+]

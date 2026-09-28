@@ -1,0 +1,5 @@
+{
+  "case_id": "D01",
+  "split": "development",
+  "request": "As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone. When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first. The offer expires 12 hours after it is sent. Until it expires, do not offer that seat to anyone else. Joining the waitlist must not count as a confirmed booking. We have not decided what happens after an offer expires. Maybe a reminder halfway through would help, but that is not agreed for this release."
+}

@@ -1,0 +1,28 @@
+{
+  "version": "obligations-live-pilot-v1",
+  "frozen_at": "2026-09-28T10:03:59.076351+00:00",
+  "candidate_label": "obligations-v1",
+  "gold_version": "obligations-v1",
+  "model_route": "codex/gpt-6-astra",
+  "reasoning_mode": "high",
+  "sampling": "platform defaults; no seed control or backend fingerprint exposed",
+  "runs_per_case": 1,
+  "development_cases": 6,
+  "held_out_cases": 4,
+  "tuning_after_freeze": false,
+  "case_execution": "one separate agent context per case; request and frozen candidate prompt only; no source-reading tools",
+  "semantic_review": "two independent reviews of every output; unresolved disagreement unscorable",
+  "source_status_note": "Original authoring statuses retained in source files. This manifest freezes these exact bytes for the live run.",
+  "sha256": {
+    "CASES.json": "8efa27dc2960b607c8fbac4aacbc7804635a95510f4f8b2aac4dc639286aa37b",
+    "RUBRIC.md": "1a0d13b7683da98a1af044755135cdceaab2637f93dee1bab959eca1176f9dba",
+    "private/GOLD.effective.json": "8ce00cc97b02460cd00da013bbe2fa6cf61b2431b532bb46b9dd2f5ca1eca911",
+    "ADOPTION.md": "adc2dda505c5b75b57e372b8ca0fed73dea5135921ed8587ba119e190ad92187",
+    "CALIBRATION-DECISION.md": "96847226e892786b5cf90ed7e3d16bd1820ec7d4dcaa6bbf8d41b20682168a07",
+    "SCORER-CONTRACT.md": "b2a8ecba8dd2a9a256acc3b6d5da570c59bfeb4c040abae766cef3e404a040c6",
+    "candidate/AGENT.md": "5b2059ca82c26b5357a0e6b4c91da08118b745242b8ed6110f3d07d81d9ef98e",
+    "candidate/AUTHORING.md": "a674481b391c55dfb3d65e3712e94ed55e99b3c926202ab32ff7672aaa3e79c5",
+    "calibration/reviewer-a/judgments.json": "c1f2496835fa7632cc9c81ed46da876a851ce01f4be66d48e92b5b3cd00cf4d7",
+    "calibration/reviewer-b/judgments.json": "31afa869c4abad78a06a5556c174227f4cf26fe687b970b3b844461fd15c1080"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "gold_version": "obligations-v1",
+  "case_id": "D01",
+  "references": [
+    {
+      "id": "D01-G1",
+      "type": "goal",
+      "accepted_kinds": [
+        "goal"
+      ],
+      "text": "Organizers can fill vacant workshop seats without calling everyone.",
+      "evidence": [
+        "As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."
+      ]
+    },
+    {
+      "id": "D01-O1",
+      "type": "commitment",
+      "accepted_kinds": [
+        "obligation",
+        "constraint"
+      ],
+      "text": "When a confirmed attendee cancels and a waitlist exists, offer the seat to the earliest-joined waitlisted person.",
+      "condition": "A confirmed attendee cancels and a waitlist exists.",
+      "evidence": [
+        "When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."
+      ]
+    },
+    {
+      "id": "D01-O2",
+      "type": "commitment",
+      "accepted_kinds": [
+        "obligation",
+        "constraint"
+      ],
+      "text": "A sent seat offer expires 12 hours after sending.",
+      "condition": "A seat offer has been sent.",
+      "evidence": [
+        "The offer expires 12 hours after it is sent."
+      ]
+    },
+    {
+      "id": "D01-O3",
+      "type": "commitment",
+      "accepted_kinds": [
+        "obligation",
+        "constraint"
+      ],
+      "text": "Do not offer the same seat to anyone else before the current offer expires.",
+      "condition": "The current offer has not expired.",
+      "evidence": [
+        "Until it expires, do not offer that seat to anyone else."
+      ]
+    },
+    {
+      "id": "D01-O4",
+      "type": "commitment",
+      "accepted_kinds": [
+        "obligation",
+        "constraint"
+      ],
+      "text": "Joining a waitlist does not establish a confirmed booking.",
+      "condition": null,
+      "evidence": [
+        "Joining the waitlist must not count as a confirmed booking."
+      ]
+    },
+    {
+      "id": "D01-U1",
+      "type": "uncertainty",
+      "accepted_kinds": [
+        "question"
+      ],
+      "text": "Preserve the undecided action after offer expiry; do not assume automatic promotion or removal.",
+      "evidence": [
+        "We have not decided what happens after an offer expires."
+      ]
+    },
+    {
+      "id": "D01-U2",
+      "type": "uncertainty",
+      "accepted_kinds": [
+        "question"
+      ],
+      "text": "If the reminder is extracted, leave it tentative; its omission is allowed.",
+      "required": false,
+      "evidence": [
+        "Maybe a reminder halfway through would help, but that is not agreed for this release."
+      ]
+    }
+  ],
+  "review_notes": [
+    "FIFO applies to the offer, not automatic confirmation. No rule supplies acceptance behavior.",
+    "The literal exclusivity wording does not specify what happens when an offer is accepted before expiry. A question about that is reasonable but not required."
+  ]
+}

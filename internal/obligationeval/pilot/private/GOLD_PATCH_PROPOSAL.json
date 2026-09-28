@@ -1,0 +1,26 @@
+{
+  "status":"requires_parent_decision",
+  "base":"authoring-v1",
+  "reason":"Preserve the initial authored references while proposing corrections found during self-review.",
+  "operations":[
+    {
+      "operation":"replace_reference_with_multiple",
+      "case_id":"D02",
+      "reference_id":"D02-O1",
+      "defect":"The initial reference bundled two independently violable eligibility prerequisites. Keep conjunction semantics across two necessary-condition references, without treating either alone as sufficient.",
+      "replacement":[
+        {"id":"D02-O1a","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"A monthly subscription can qualify only if no credits have been used.","condition":"Assessing monthly-subscription eligibility; this is necessary, not sufficient alone.","evidence":["A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase."]},
+        {"id":"D02-O1b","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"A monthly subscription can qualify only if the request is made no more than 30 days after purchase, inclusive of the boundary.","condition":"Assessing monthly-subscription eligibility; this is necessary, not sufficient alone; the meaning of a day remains unresolved.","evidence":["A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase.","We still need to decide whether a day means a calendar day or 24 elapsed hours."]}
+      ]
+    },
+    {
+      "operation":"replace_reference",
+      "case_id":"H03",
+      "reference_id":"H03-O1",
+      "defect":"The initial condition says '90 days have passed' and could imply immediate deletion after an overdue hold is lifted, despite the explicit unknown schedule. Restrict the condition to the stated deadline with the hold exception, leaving post-hold timing open.",
+      "replacement":{
+        "id":"H03-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Preserve privacy's demand for deletion at 90 days after closure, subject to the agreed legal-hold exception and unresolved against audit retention; do not infer the deletion time after a hold lifts.","condition":"The 90-day-after-closure deadline, except while a legal hold applies; timing after a hold is lifted is unspecified.","evidence":["Privacy requires deletion of every case note 90 days after the case closes.","For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule.","The schedule for deletion after a hold is lifted has not been specified."]
+      }
+    }
+  ]
+}

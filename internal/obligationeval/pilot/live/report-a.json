@@ -1,0 +1,688 @@
+{
+  "schema_version": "obligations-eval-v1",
+  "results": [
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 7,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "D01",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 8,
+        "denominator": 8,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 6,
+          "denominator": 6,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 8,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "D02",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 7,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "D03",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 9,
+        "denominator": 9,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 2,
+          "denominator": 10,
+          "value": 0.2
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "D04",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 6,
+          "denominator": 6,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 7,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "D05",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 8,
+        "denominator": 8,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 6,
+          "denominator": 6,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 8,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 1,
+        "omnibus_items": 0
+      },
+      "case_id": "D06",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 8,
+        "denominator": 8,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 7,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "H01",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 6,
+          "denominator": 6,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 7,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "H02",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 11,
+        "denominator": 11,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 8,
+          "denominator": 8,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 4,
+          "denominator": 14,
+          "value": 0.2857142857142857
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "H03",
+      "candidate_label": "obligations-v1"
+    },
+    {
+      "status": "scored",
+      "pass": true,
+      "reasons": [],
+      "candidate_format_valid": true,
+      "grounding": {
+        "numerator": 8,
+        "denominator": 8,
+        "value": 1,
+        "items_without_valid_quote": 0
+      },
+      "metrics": {
+        "commitment_recall": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "goal_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1,
+          "partial": 0,
+          "missing": 0
+        },
+        "source_assumption_coverage": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null,
+          "partial": 0,
+          "missing": 0
+        },
+        "required_ambiguity_preservation": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1
+        },
+        "assertion_precision": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1
+        },
+        "duplicates": {
+          "numerator": 0,
+          "denominator": 7,
+          "value": 0
+        },
+        "unsupported_claims": 0,
+        "contradicted_claims": 0,
+        "material_role_errors": 0,
+        "nonmaterial_role_mismatches": 0,
+        "omnibus_items": 0
+      },
+      "case_id": "H04",
+      "candidate_label": "obligations-v1"
+    }
+  ],
+  "by_candidate": [
+    {
+      "candidate_label": "obligations-v1",
+      "cases": {
+        "total": 10,
+        "scored": 10,
+        "candidate_failure": 0,
+        "unscorable": 0,
+        "passed": 10,
+        "failed": 0
+      },
+      "scored_only_micro_commitment_recall": {
+        "numerator": 47,
+        "denominator": 47,
+        "value": 1
+      },
+      "scored_only_macro_commitment_recall": {
+        "sum_of_case_recalls": 10,
+        "scored_cases_with_commitments": 10,
+        "value": 1
+      }
+    }
+  ],
+  "by_split": [
+    {
+      "split": "development",
+      "cases": {
+        "total": 6,
+        "scored": 6,
+        "candidate_failure": 0,
+        "unscorable": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "scored_only_micro_commitment_recall": {
+        "numerator": 29,
+        "denominator": 29,
+        "value": 1
+      },
+      "scored_only_macro_commitment_recall": {
+        "sum_of_case_recalls": 6,
+        "scored_cases_with_commitments": 6,
+        "value": 1
+      }
+    },
+    {
+      "split": "held_out",
+      "cases": {
+        "total": 4,
+        "scored": 4,
+        "candidate_failure": 0,
+        "unscorable": 0,
+        "passed": 4,
+        "failed": 0
+      },
+      "scored_only_micro_commitment_recall": {
+        "numerator": 18,
+        "denominator": 18,
+        "value": 1
+      },
+      "scored_only_macro_commitment_recall": {
+        "sum_of_case_recalls": 4,
+        "scored_cases_with_commitments": 4,
+        "value": 1
+      }
+    }
+  ],
+  "by_candidate_split": [
+    {
+      "candidate_label": "obligations-v1",
+      "split": "development",
+      "cases": {
+        "total": 6,
+        "scored": 6,
+        "candidate_failure": 0,
+        "unscorable": 0,
+        "passed": 6,
+        "failed": 0
+      },
+      "scored_only_micro_commitment_recall": {
+        "numerator": 29,
+        "denominator": 29,
+        "value": 1
+      },
+      "scored_only_macro_commitment_recall": {
+        "sum_of_case_recalls": 6,
+        "scored_cases_with_commitments": 6,
+        "value": 1
+      }
+    },
+    {
+      "candidate_label": "obligations-v1",
+      "split": "held_out",
+      "cases": {
+        "total": 4,
+        "scored": 4,
+        "candidate_failure": 0,
+        "unscorable": 0,
+        "passed": 4,
+        "failed": 0
+      },
+      "scored_only_micro_commitment_recall": {
+        "numerator": 18,
+        "denominator": 18,
+        "value": 1
+      },
+      "scored_only_macro_commitment_recall": {
+        "sum_of_case_recalls": 4,
+        "scored_cases_with_commitments": 4,
+        "value": 1
+      }
+    }
+  ]
+}
