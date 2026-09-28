@@ -52,6 +52,15 @@ dividend is bought by the **standard**, not by the pattern. See
 
 ## What's here
 
+### `cmd/tesser-obligations`: a bounded extraction evaluator
+
+The [obligations evaluator](internal/obligationeval/README.md) validates supplied
+candidate and review records and computes a diagnostic vector; it does not
+infer entailment or replace semantic review. Its
+[frozen pilot](internal/obligationeval/pilot/README.md) includes a reusable
+candidate prompt, ten first-returned extractions, two independent reviews and
+replayable arithmetic. The small authored run is not a reliability claim.
+
 ### `cmd/tessercheck`: the Go analyzers
 
 `tessercheck` is a [`go/analysis`](https://pkg.go.dev/golang.org/x/tools/go/analysis)

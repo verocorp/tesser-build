@@ -8,6 +8,12 @@ carries the analyzer package's own version — separate streams.)
 ## Unreleased
 
 ### Added
+- **A bounded obligations-extraction evaluator and frozen candidate pilot.**
+  `tesser-obligations` validates supplied JSON records and computes separate
+  coverage, grounding, invention, ambiguity, duplication and usability metrics;
+  semantic judgments remain independent inputs. The six-development/four-held-out
+  run preserves its prompt, raw outputs, both reviews, gold corrections and
+  arithmetic regressions. It is a diagnostic, not a production-reliability claim.
 - **`tesser-inspect-tests` reports static Python test-dependency candidates.**
   The installed command includes staged, unstaged, untracked, deleted and
   renamed test locations, fixtures, helpers, source readers and collection
