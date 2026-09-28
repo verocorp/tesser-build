@@ -1,0 +1,97 @@
+[
+  {
+    "label": "calibration_01",
+    "candidate": {
+      "case_id": "D01",
+      "items": []
+    }
+  },
+  {
+    "label": "calibration_02",
+    "candidate": {
+      "case_id": "D01",
+      "items": [
+        {
+          "id": "x1",
+          "kind": "obligation",
+          "text": "Send every waitlisted person an SMS reminder every hour.",
+          "evidence": [
+            "Maybe a reminder halfway through would help, but that is not agreed for this release."
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "label": "calibration_03",
+    "candidate": {
+      "case_id": "D01",
+      "items": [
+        {
+          "id": "dump",
+          "kind": "goal",
+          "text": "As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone. When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first. The offer expires 12 hours after it is sent. Until it expires, do not offer that seat to anyone else. Joining the waitlist must not count as a confirmed booking. We have not decided what happens after an offer expires. Maybe a reminder halfway through would help, but that is not agreed for this release.",
+          "evidence": [
+            "As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone. When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first. The offer expires 12 hours after it is sent. Until it expires, do not offer that seat to anyone else. Joining the waitlist must not count as a confirmed booking. We have not decided what happens after an offer expires. Maybe a reminder halfway through would help, but that is not agreed for this release."
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "label": "calibration_04",
+    "candidate": {
+      "case_id": "D01",
+      "items": [
+        {
+          "id": "offer",
+          "kind": "obligation",
+          "text": "Offer every available seat to the earliest-joined waitlisted person.",
+          "evidence": [
+            "When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "label": "calibration_05",
+    "candidate": {
+      "case_id": "D01",
+      "items": [
+        {
+          "id": "p1",
+          "kind": "constraint",
+          "text": "If a confirmed attendee cancels while people are waitlisted, the first person in waitlist joining order gets the seat offer.",
+          "evidence": [
+            "When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "label": "calibration_06",
+    "candidate": {
+      "case_id": "D01",
+      "items": [
+        {
+          "id": "p1",
+          "kind": "obligation",
+          "text": "An offer ends twelve hours after sending.",
+          "evidence": [
+            "The offer expires 12 hours after it is sent."
+          ]
+        },
+        {
+          "id": "p2",
+          "kind": "constraint",
+          "text": "Expire a seat offer 12 hours after it is sent.",
+          "evidence": [
+            "The offer expires 12 hours after it is sent."
+          ]
+        }
+      ]
+    }
+  }
+]
