@@ -54,11 +54,14 @@ step "pip install tesser-py tessercheck-py tessercheck-cli"
 step "every shipped module imports"
 (cd "$VENV" && "$PY" - <<'PY'
 import importlib
+import importlib.util
 import pkgutil
 import sys
 
 failed = []
-for dist in ("tesser", "tessercheck", "tesserinspect", "tessercheck_cli", "app", "protocol", "srv"):
+for forbidden in ("app", "protocol", "srv"):
+    assert importlib.util.find_spec(forbidden) is None, f"forbidden wheel namespace: {forbidden}"
+for dist in ("tesser", "tessercheck", "tesserinspect", "tessercheck_cli"):
     package = importlib.import_module(dist)
     for info in pkgutil.walk_packages(package.__path__, dist + "."):
         leaf = info.name.rsplit(".", 1)[-1]
@@ -75,10 +78,12 @@ PY
 ) || exit 1
 
 step "tesser-inspect-tests from installed wheels over an independent Git repository"
-(cd "$VENV" && "$PY" - <<'PY'
+(cd "$VENV" && "$PY" - "$ROOT" <<'PY'
 import json
+import os
 import pathlib
 import subprocess
+import sys
 
 root = pathlib.Path.cwd()
 repo = root / "inspection-target"
@@ -119,6 +124,7 @@ assert report["schema_version"] == 1 and report["status"] == "ok"
 assert report["baseline"] == commit
 assert set(report["changed_test_files"]) == {"tests/test_staged.py", "tests/test_unstaged.py", "tests/test_deleted.py", "tests/test_old.py", "tests/test_renamed.py", "tests/test_new.py"}
 assert {row["status"] for row in report["changes"] if row["path"] == "tests/test_renamed.py"} == {"R100"}
+assert [(row["path"], row["previous_path"]) for row in report["working_tree_changes"] if row["index_status"] == "R"] == [("tests/test_renamed.py", "tests/test_old.py")]
 assert any(row["index_status"] == "M" for row in report["working_tree_changes"] if row["path"] == "tests/test_staged.py")
 assert any(row["worktree_status"] == "M" for row in report["working_tree_changes"] if row["path"] == "tests/test_unstaged.py")
 assert any(row["kind"] == "source-reader" and row["path"] == "meta/test_contract.py" for row in report["candidates"])
@@ -128,8 +134,19 @@ assert {row["path"] for row in report["candidates"] if row["kind"] == "collectio
 assert report["limitations"]
 assert all(not pathlib.PurePosixPath(row["path"]).is_absolute() for row in report["candidates"])
 assert subprocess.run(command, capture_output=True, text=True, check=True).stdout == result.stdout
+checkout = pathlib.Path(sys.argv[1])
+source_env = dict(os.environ, PYTHONPATH=str(checkout / "tessercheck-py") + os.pathsep + str(checkout / "tesser-py"))
+source_command = [str(root / "venv/bin/python"), "-m", "srv.cli.inspect", *command[1:]]
+assert subprocess.run(source_command, cwd=root, env=source_env, capture_output=True, text=True, check=True).stdout == result.stdout
 assert not (repo / "EXECUTED").exists() and not (root / "EXECUTED").exists()
 print(result.stdout)
+for namespace in ("app", "protocol", "srv"):
+    package = repo / namespace
+    package.mkdir()
+    (package / "__init__.py").write_text("from pathlib import Path\nPath('NAMESPACE_EXECUTED').write_text('imported')\nraise RuntimeError('consumer namespace imported')\n", encoding="utf-8")
+consumer_result = subprocess.run(command, cwd=repo, env=dict(os.environ, PYTHONPATH=str(repo)), capture_output=True, text=True, check=True)
+assert json.loads(consumer_result.stdout)["status"] == "ok"
+assert not (repo / "NAMESPACE_EXECUTED").exists()
 for args in (["--json"], ["--repo", str(root), "--base", "HEAD", "--json"], ["--repo", str(repo), "--base", "missing-ref", "--json"], ["--repo", str(repo), "--base", "--help", "--json"]):
     result = subprocess.run([command[0], *args], capture_output=True, text=True)
     error = json.loads(result.stdout)

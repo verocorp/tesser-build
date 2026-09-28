@@ -11,18 +11,12 @@ dependencies = ["tesser==0.1.0"]
 
 [tool.setuptools]
 packages = [
-    "app",
-    "protocol",
-    "srv",
-    "srv.cli",
-    "tessercheck.adapters.handlers",
     "tesserinspect",
     "tesserinspect.domain",
     "tesserinspect.application",
     "tesserinspect.application.ports",
     "tesserinspect.adapters",
     "tesserinspect.adapters.repositories",
-    "tesserinspect.adapters.handlers",
     "tesserinspect.client",
     "tesserinspect.component",
     "tessercheck",
