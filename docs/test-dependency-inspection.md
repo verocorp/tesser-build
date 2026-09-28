@@ -79,3 +79,9 @@ status and validate the JSON, not treat missing output as success.
 This command neither runs the candidates nor decides that the review is
 adequate. Static inspection improves the evidence available to that decision;
 it does not replace it.
+
+## Git metadata
+
+Git may refresh index stat metadata while inspecting file changes, even with
+optional index writes disabled. This does not change staged file contents;
+the command is not a byte-for-byte read-only operation on Git metadata.
