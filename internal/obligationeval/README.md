@@ -167,3 +167,11 @@ Run bounded behavior checks with
 checks with `go vet ./internal/obligationeval ./cmd/tesser-obligations`.
 The CLI test builds and executes the real command in a temporary directory.
 No generated artifact, new analyzer registration or Python app is involved.
+
+## Frozen candidate pilot
+
+[`pilot/README.md`](pilot/README.md) carries a reusable extraction prompt, the
+six-development/four-held-out run, both independent semantic reviews, adopted
+decisions and replayable results. The tests verify the frozen inputs and both
+reviewers' arithmetic. The cases are public now; later tuning on them is
+regression work, not another held-out evaluation.

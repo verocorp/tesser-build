@@ -1,0 +1,2294 @@
+[
+  {
+    "case_id": "D01",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "D01-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves the organizer, vacant-seat outcome, and avoidance of calling everyone.",
+        "source_quotes": [
+          "As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."
+        ]
+      },
+      {
+        "reference_id": "D01-O1",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "Both trigger conditions remain conjoined; FIFO selects the offer recipient, not a confirmed attendee.",
+        "source_quotes": [
+          "When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."
+        ]
+      },
+      {
+        "reference_id": "D01-O2",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "Expiry remains 12 hours measured from sending.",
+        "source_quotes": [
+          "The offer expires 12 hours after it is sent."
+        ]
+      },
+      {
+        "reference_id": "D01-O3",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "The same seat cannot be offered to another person until expiry.",
+        "source_quotes": [
+          "Until it expires, do not offer that seat to anyone else."
+        ]
+      },
+      {
+        "reference_id": "D01-O4",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Waitlist membership is explicitly not a confirmed booking.",
+        "source_quotes": [
+          "Joining the waitlist must not count as a confirmed booking."
+        ]
+      },
+      {
+        "reference_id": "D01-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Post-expiry behavior remains an unanswered decision.",
+        "source_quotes": [
+          "We have not decided what happens after an offer expires."
+        ]
+      },
+      {
+        "reference_id": "D01-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "The halfway reminder is a question explicitly not agreed for this release.",
+        "source_quotes": [
+          "Maybe a reminder halfway through would help, but that is not agreed for this release."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "The workshop organizer wants a waitlist so empty seats can be filled without calling everyone.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "States the source actor and desired waitlist outcome without adding a success metric.",
+        "source_quotes": [
+          "As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains both cancellation and waitlist-exists conditions, and selects the earliest joiner for an offer rather than automatic confirmation.",
+        "source_quotes": [
+          "When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "The seat offer expires 12 hours after it is sent.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Keeps the exact 12-hour duration and sent-time origin.",
+        "source_quotes": [
+          "The offer expires 12 hours after it is sent."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "Until the offer expires, do not offer that seat to anyone else.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves seat-specific exclusivity until expiry without inventing acceptance behavior.",
+        "source_quotes": [
+          "Until it expires, do not offer that seat to anyone else."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "Joining the waitlist must not count as a confirmed booking.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the negative distinction between joining and confirmed booking.",
+        "source_quotes": [
+          "Joining the waitlist must not count as a confirmed booking."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I6",
+        "candidate_fragment": "What happens after an offer expires?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks the precise unresolved post-expiry behavior without prescribing promotion or removal.",
+        "source_quotes": [
+          "We have not decided what happens after an offer expires."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I6",
+        "candidate_fragment": "This has not been decided.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The request explicitly reports the post-expiry decision as absent.",
+        "source_quotes": [
+          "We have not decided what happens after an offer expires."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I7",
+        "candidate_fragment": "Should a reminder be sent halfway through the offer period?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks whether to adopt the tentative halfway reminder rather than ordering one.",
+        "source_quotes": [
+          "Maybe a reminder halfway through would help, but that is not agreed for this release."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I7",
+        "candidate_fragment": "This is a tentative idea, not agreed for this release.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The source expressly withholds release agreement for the reminder.",
+        "source_quotes": [
+          "Maybe a reminder halfway through would help, but that is not agreed for this release."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "D01-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "status": "preserved",
+        "rationale": "Post-expiry behavior remains an unanswered decision.",
+        "source_quotes": [
+          "We have not decided what happens after an offer expires."
+        ]
+      },
+      {
+        "reference_id": "D01-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "The halfway reminder is a question explicitly not agreed for this release.",
+        "source_quotes": [
+          "Maybe a reminder halfway through would help, but that is not agreed for this release."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D02",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "D02-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves agents resolving refund requests without finance calculating eligibility.",
+        "source_quotes": [
+          "Support agents need to resolve refund requests without asking finance to calculate eligibility."
+        ]
+      },
+      {
+        "reference_id": "D02-O1a",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "Unused credits remain necessary through only-if wording, not sufficient eligibility.",
+        "source_quotes": [
+          "A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase."
+        ]
+      },
+      {
+        "reference_id": "D02-O1b",
+        "item_ids": [
+          "I2",
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "The purchase-relative inclusive 30-day bound remains necessary; I6 explicitly leaves day semantics undecided.",
+        "source_quotes": [
+          "A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase.",
+          "We still need to decide whether a day means a calendar day or 24 elapsed hours."
+        ]
+      },
+      {
+        "reference_id": "D02-O2",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "The full amount paid is displayed only for a qualifying request; no payment is authorized.",
+        "source_quotes": [
+          "For a qualifying request, show the full amount paid as the refundable amount."
+        ]
+      },
+      {
+        "reference_id": "D02-O3",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "Annual subscriptions are excluded only from this feature, not declared universally nonrefundable.",
+        "source_quotes": [
+          "Annual subscriptions are excluded from this feature."
+        ]
+      },
+      {
+        "reference_id": "D02-O4",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Agents receive the rejection reason for an ineligible monthly subscription.",
+        "source_quotes": [
+          "Show agents why an ineligible monthly subscription was rejected."
+        ]
+      },
+      {
+        "reference_id": "D02-O5",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "The feature is explicitly prohibited from sending money.",
+        "source_quotes": [
+          "This feature must not send money; agents will continue using the existing payment process."
+        ]
+      },
+      {
+        "reference_id": "D02-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Calendar days versus elapsed 24-hour periods remains an open choice.",
+        "source_quotes": [
+          "We still need to decide whether a day means a calendar day or 24 elapsed hours."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Support agents need to resolve refund requests without asking finance to calculate eligibility.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains support agents resolving refund requests without asking finance to calculate eligibility.",
+        "source_quotes": [
+          "Support agents need to resolve refund requests without asking finance to calculate eligibility."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "A monthly subscription qualifies only if no credits have been used",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "No used credits remains necessary for monthly eligibility through only-if wording, not sufficient alone or jointly with the other condition.",
+        "source_quotes": [
+          "A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I2",
+        "candidate_fragment": "and the request is made no more than 30 days after purchase.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Under the same only-if operator, the inclusive 30-day purchase-relative request bound is a second conjoined necessary condition. I6 keeps day semantics open; no sufficiency is added.",
+        "source_quotes": [
+          "A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I3",
+        "candidate_fragment": "For a qualifying request, show the full amount paid as the refundable amount.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Display of the full amount paid is explicitly conditional on qualification, not an instruction to transfer funds.",
+        "source_quotes": [
+          "For a qualifying request, show the full amount paid as the refundable amount."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I4",
+        "candidate_fragment": "Annual subscriptions are excluded from this feature.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Excludes annual subscriptions from this feature, with no claim about other refund processes.",
+        "source_quotes": [
+          "Annual subscriptions are excluded from this feature."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I5",
+        "candidate_fragment": "Show agents why an ineligible monthly subscription was rejected.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the monthly-ineligibility condition and agent-facing rejection reason.",
+        "source_quotes": [
+          "Show agents why an ineligible monthly subscription was rejected."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I6",
+        "candidate_fragment": "Does a day mean a calendar day or 24 elapsed hours?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks the two explicitly unresolved interpretations without choosing one.",
+        "source_quotes": [
+          "We still need to decide whether a day means a calendar day or 24 elapsed hours."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I6",
+        "candidate_fragment": "This remains undecided.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The request says that the day definition still needs a decision.",
+        "source_quotes": [
+          "We still need to decide whether a day means a calendar day or 24 elapsed hours."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I7",
+        "candidate_fragment": "This feature must not send money.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the prohibition against this feature sending money.",
+        "source_quotes": [
+          "This feature must not send money; agents will continue using the existing payment process."
+        ]
+      },
+      {
+        "claim_id": "C10",
+        "item_id": "I8",
+        "candidate_fragment": "Agents will continue using the existing payment process.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Continuing the existing payment process is expressly stated by the source, although it has no separate gold reference; the obligation label does not change that continuation into a new payment mechanism.",
+        "source_quotes": [
+          "agents will continue using the existing payment process."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "D02-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "status": "preserved",
+        "rationale": "Calendar days versus elapsed 24-hour periods remains an open choice.",
+        "source_quotes": [
+          "We still need to decide whether a day means a calendar day or 24 elapsed hours."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D03",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "D03-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves the responder outcome of noticing sustained failures without brief-blip pages.",
+        "source_quotes": [
+          "Our on-call responder wants to notice sustained failures without being paged for brief blips."
+        ]
+      },
+      {
+        "reference_id": "D03-O1",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "Only-after and continuous five-minute unhealthiness are retained without inventing immediate delivery.",
+        "source_quotes": [
+          "Notify the responder only after a service has been continuously unhealthy for five minutes."
+        ]
+      },
+      {
+        "reference_id": "D03-O2",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "Repeats retain the same-incident unhealthy condition and 15-minute timing from the first notification.",
+        "source_quotes": [
+          "While that same incident remains unhealthy, send another notification every 15 minutes after the first notification."
+        ]
+      },
+      {
+        "reference_id": "D03-O3",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "Recovery stops repeats for that incident, not all future incidents.",
+        "source_quotes": [
+          "Once it recovers, stop sending repeats for that incident."
+        ]
+      },
+      {
+        "reference_id": "D03-O4",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Overnight suppression is explicitly prohibited.",
+        "source_quotes": [
+          "Do not suppress these notifications overnight."
+        ]
+      },
+      {
+        "reference_id": "D03-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "The delivery channel remains unselected.",
+        "source_quotes": [
+          "We have not selected a delivery channel yet."
+        ]
+      },
+      {
+        "reference_id": "D03-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "A recovery message stays tentative and outside the agreed request.",
+        "source_quotes": [
+          "It might be nice to send a recovery message, but leave that undecided rather than treating it as part of this request."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "The on-call responder wants to notice sustained failures without being paged for brief blips.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains the responder goal and the distinction between sustained failures and brief blips.",
+        "source_quotes": [
+          "Our on-call responder wants to notice sustained failures without being paged for brief blips."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "Notify the responder only after a service has been continuously unhealthy for five minutes.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves continuous unhealthiness for five minutes as a necessary precondition; no zero-latency promise is added.",
+        "source_quotes": [
+          "Notify the responder only after a service has been continuously unhealthy for five minutes."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "While the same incident remains unhealthy, send another notification every 15 minutes after the first notification.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves repeats every 15 minutes from the first notification only while the same incident remains unhealthy.",
+        "source_quotes": [
+          "While that same incident remains unhealthy, send another notification every 15 minutes after the first notification."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "Once the service recovers, stop sending repeat notifications for that incident.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Recovery stops repeat notifications for that incident; it does not prevent notifications for later incidents.",
+        "source_quotes": [
+          "Once it recovers, stop sending repeats for that incident."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "Do not suppress these notifications overnight.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains the explicit prohibition on overnight suppression.",
+        "source_quotes": [
+          "Do not suppress these notifications overnight."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I6",
+        "candidate_fragment": "Which delivery channel should be used?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks the unselected channel without assuming a provider or medium.",
+        "source_quotes": [
+          "We have not selected a delivery channel yet."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I6",
+        "candidate_fragment": "No delivery channel has been selected yet.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Restates the source's explicit absence of a channel decision.",
+        "source_quotes": [
+          "We have not selected a delivery channel yet."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I7",
+        "candidate_fragment": "Whether to send a recovery message remains undecided;",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Explicitly leaves recovery messaging undecided, as the source requests.",
+        "source_quotes": [
+          "It might be nice to send a recovery message, but leave that undecided rather than treating it as part of this request."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I7",
+        "candidate_fragment": "it is a tentative idea, not part of this request.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the source's separation of a nice-to-have recovery message from agreed scope.",
+        "source_quotes": [
+          "It might be nice to send a recovery message, but leave that undecided rather than treating it as part of this request."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "D03-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "status": "preserved",
+        "rationale": "The delivery channel remains unselected.",
+        "source_quotes": [
+          "We have not selected a delivery channel yet."
+        ]
+      },
+      {
+        "reference_id": "D03-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "A recovery message stays tentative and outside the agreed request.",
+        "source_quotes": [
+          "It might be nice to send a recovery message, but leave that undecided rather than treating it as part of this request."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D04",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "D04-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves accounts staff and reliable issued invoices after business renames.",
+        "source_quotes": [
+          "Accounts staff want issued invoices to remain reliable records when customers rename their businesses."
+        ]
+      },
+      {
+        "reference_id": "D04-O1",
+        "item_ids": [
+          "I2",
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "The issued-invoice issue-time legal-name rule is explicit, and I6 identifies it as an unresolved conflict side.",
+        "source_quotes": [
+          "An issued invoice must always display the customer's legal name as it was at issue time."
+        ]
+      },
+      {
+        "reference_id": "D04-O2",
+        "item_ids": [
+          "I3",
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Every invoice, including previously issued ones, must show the current legal name after rename as the other unresolved demand.",
+        "source_quotes": [
+          "Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename."
+        ]
+      },
+      {
+        "reference_id": "D04-O3",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "Draft invoices retain the current legal name and the source should modality.",
+        "source_quotes": [
+          "Draft invoices should display the current legal name."
+        ]
+      },
+      {
+        "reference_id": "D04-O4",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Invoice numbers must not change during a rename.",
+        "source_quotes": [
+          "Do not change invoice numbers during a rename."
+        ]
+      },
+      {
+        "reference_id": "D04-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Both naming rules are stated in a decision question, no exception is agreed, and neither side is silently selected.",
+        "source_quotes": [
+          "Neither team has agreed to an exception.",
+          "Flag the disagreement for a decision; do not silently pick one team's rule."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Accounts staff want issued invoices to remain reliable records when customers rename their businesses.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves accounts staff and reliable records after customer business renames.",
+        "source_quotes": [
+          "Accounts staff want issued invoices to remain reliable records when customers rename their businesses."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "An issued invoice must always display the customer's legal name as it was at issue time.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "States the accounts issue-time naming demand with issued scope and always modality; I6 explicitly prevents treating it as a resolved choice.",
+        "source_quotes": [
+          "An issued invoice must always display the customer's legal name as it was at issue time."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "Customer success requires every invoice, including previously issued invoices, to display the customer's current legal name after a rename.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "States customer success's current-name demand after a rename, including previously issued invoices; I6 preserves the conflict.",
+        "source_quotes": [
+          "Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "Draft invoices should display the customer's current legal name.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains current-name display for drafts and the source should modality.",
+        "source_quotes": [
+          "Draft invoices should display the current legal name."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "Do not change invoice numbers during a customer rename.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves invoice-number immutability during a rename.",
+        "source_quotes": [
+          "Do not change invoice numbers during a rename."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I6",
+        "candidate_fragment": "How should the conflicting requirements for issued invoices be resolved:",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks for resolution of the stated issued-invoice conflict rather than imposing either rule or a compromise.",
+        "source_quotes": [
+          "An issued invoice must always display the customer's legal name as it was at issue time.",
+          "Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename.",
+          "Neither team has agreed to an exception.",
+          "Flag the disagreement for a decision; do not silently pick one team's rule."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I6",
+        "candidate_fragment": "always displaying the legal name at issue time",
+        "verdict": "supported",
+        "duplicate_of": "C2",
+        "rationale": "In the explicit issued-invoice context, repeats the already stated accounts demand as a conflict side.",
+        "source_quotes": [
+          "An issued invoice must always display the customer's legal name as it was at issue time.",
+          "Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename.",
+          "Neither team has agreed to an exception.",
+          "Flag the disagreement for a decision; do not silently pick one team's rule."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I6",
+        "candidate_fragment": "displaying the current legal name after a rename",
+        "verdict": "supported",
+        "duplicate_of": "C3",
+        "rationale": "Repeats the current-name demand for the issued invoices in dispute; it is the same assertion within I3's explicitly inclusive scope.",
+        "source_quotes": [
+          "An issued invoice must always display the customer's legal name as it was at issue time.",
+          "Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename.",
+          "Neither team has agreed to an exception.",
+          "Flag the disagreement for a decision; do not silently pick one team's rule."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I6",
+        "candidate_fragment": "Neither team has agreed to an exception;",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the express lack of an agreed exception.",
+        "source_quotes": [
+          "An issued invoice must always display the customer's legal name as it was at issue time.",
+          "Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename.",
+          "Neither team has agreed to an exception.",
+          "Flag the disagreement for a decision; do not silently pick one team's rule."
+        ]
+      },
+      {
+        "claim_id": "C10",
+        "item_id": "I6",
+        "candidate_fragment": "flag this disagreement for a decision without silently choosing either team's rule.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the source instruction to expose the disagreement and not choose a side; this is the required handling, distinct from the two naming demands.",
+        "source_quotes": [
+          "An issued invoice must always display the customer's legal name as it was at issue time.",
+          "Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename.",
+          "Neither team has agreed to an exception.",
+          "Flag the disagreement for a decision; do not silently pick one team's rule."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "D04-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "status": "preserved",
+        "rationale": "Both naming rules are stated in a decision question, no exception is agreed, and neither side is silently selected.",
+        "source_quotes": [
+          "Neither team has agreed to an exception.",
+          "Flag the disagreement for a decision; do not silently pick one team's rule."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D05",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "D05-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves analysts returning to the same report view through named saved filters.",
+        "source_quotes": [
+          "Analysts want to save named report filters so they can return to the same view."
+        ]
+      },
+      {
+        "reference_id": "D05-O1",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "The bound is at most eight saved filters per analyst, not a shared global limit.",
+        "source_quotes": [
+          "Each analyst may keep at most eight saved filters."
+        ]
+      },
+      {
+        "reference_id": "D05-O2",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "Refusal is conditioned on eight existing filters and a ninth save under a new name.",
+        "source_quotes": [
+          "At the limit, an attempt to save a ninth filter under a new name must be refused with an explanation."
+        ]
+      },
+      {
+        "reference_id": "D05-O3",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "The same refused new-name ninth save must include an explanation.",
+        "source_quotes": [
+          "At the limit, an attempt to save a ninth filter under a new name must be refused with an explanation."
+        ]
+      },
+      {
+        "reference_id": "D05-O4",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "Replacement is of that analyst's existing-name filter and only after their confirmation.",
+        "source_quotes": [
+          "Saving under an existing name replaces that analyst's filter only after they confirm."
+        ]
+      },
+      {
+        "reference_id": "D05-O5",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Sharing with other analysts is explicitly out of scope.",
+        "source_quotes": [
+          "Sharing filters with other analysts is out of scope."
+        ]
+      },
+      {
+        "reference_id": "D05-A1",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Case sensitivity is explicitly a provisional planning assumption requiring product confirmation.",
+        "source_quotes": [
+          "For planning, assume filter names are case-sensitive; this assumption needs product confirmation."
+        ]
+      },
+      {
+        "reference_id": "D05-U1",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "The pending product confirmation is retained in the labeled assumption; a second question is unnecessary.",
+        "source_quotes": [
+          "For planning, assume filter names are case-sensitive; this assumption needs product confirmation."
+        ]
+      },
+      {
+        "reference_id": "D05-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "Later usage ranking remains a tentative question rather than a commitment.",
+        "source_quotes": [
+          "We could add a usage ranking later, but it is not a commitment."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Analysts want to save named report filters so they can return to the same view.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Keeps the analyst goal of returning to the same view through named saved report filters.",
+        "source_quotes": [
+          "Analysts want to save named report filters so they can return to the same view."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "Each analyst may keep at most eight saved filters.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the inclusive maximum of eight separately for each analyst.",
+        "source_quotes": [
+          "Each analyst may keep at most eight saved filters."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "When an analyst has eight saved filters, an attempt to save a ninth filter under a new name must be refused with an explanation.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The ninth new-name save is refused with an explanation only at the eight-filter limit. Refusal and its message form one ordinary handling behavior; the limit resolves the source anaphor.",
+        "source_quotes": [
+          "Each analyst may keep at most eight saved filters.",
+          "At the limit, an attempt to save a ninth filter under a new name must be refused with an explanation."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "Saving under an existing name replaces that analyst's filter only after that analyst confirms.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves existing-name replacement of that analyst's filter and confirmation as necessary beforehand, not blanket authorization after confirmation.",
+        "source_quotes": [
+          "Saving under an existing name replaces that analyst's filter only after they confirm."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "For planning, provisionally assume filter names are case-sensitive; product confirmation is still required.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "States only a provisional planning assumption of case sensitivity and retains the product-confirmation requirement, not a settled naming policy.",
+        "source_quotes": [
+          "For planning, assume filter names are case-sensitive; this assumption needs product confirmation."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I6",
+        "candidate_fragment": "Sharing filters with other analysts is out of scope.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the explicit sharing exclusion.",
+        "source_quotes": [
+          "Sharing filters with other analysts is out of scope."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I7",
+        "candidate_fragment": "Should a usage ranking be added later?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks about the actual later idea without approving it.",
+        "source_quotes": [
+          "We could add a usage ranking later, but it is not a commitment."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I7",
+        "candidate_fragment": "This is a tentative possibility, not a commitment.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Keeps the source's express noncommitment to usage ranking.",
+        "source_quotes": [
+          "We could add a usage ranking later, but it is not a commitment."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "D05-U1",
+        "item_ids": [
+          "I5"
+        ],
+        "status": "preserved",
+        "rationale": "The pending product confirmation is retained in the labeled assumption; a second question is unnecessary.",
+        "source_quotes": [
+          "For planning, assume filter names are case-sensitive; this assumption needs product confirmation."
+        ]
+      },
+      {
+        "reference_id": "D05-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "Later usage ranking remains a tentative question rather than a commitment.",
+        "source_quotes": [
+          "We could add a usage ranking later, but it is not a commitment."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "D06",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "D06-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves workspace administrators, CSV, currently filtered events, and external review.",
+        "source_quotes": [
+          "Workspace administrators need a CSV export of the currently filtered audit events for external review."
+        ]
+      },
+      {
+        "reference_id": "D06-O1",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "Non-administrators are prohibited from exporting these audit events.",
+        "source_quotes": [
+          "Non-administrators must not be able to export them."
+        ]
+      },
+      {
+        "reference_id": "D06-O2",
+        "item_ids": [
+          "I1",
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "I3 explicitly refers to the filtered result and exports every event at an inclusive 10,000 bound; I1 supplies the stated CSV export context.",
+        "source_quotes": [
+          "Workspace administrators need a CSV export of the currently filtered audit events for external review.",
+          "If the result contains at most 10,000 events, export every event in it."
+        ]
+      },
+      {
+        "reference_id": "D06-O3",
+        "item_ids": [
+          "I4",
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "A result above 10,000 is refused and silent truncation is separately prohibited.",
+        "source_quotes": [
+          "If it contains more than 10,000, refuse the export and tell the administrator to narrow the filters; never silently truncate it."
+        ]
+      },
+      {
+        "reference_id": "D06-O4",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "At the same above-10,000 condition, the administrator is told to narrow filters.",
+        "source_quotes": [
+          "If it contains more than 10,000, refuse the export and tell the administrator to narrow the filters; never silently truncate it."
+        ]
+      },
+      {
+        "reference_id": "D06-O5",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Every exported row must include event time.",
+        "source_quotes": [
+          "Include the event time and actor in each exported row."
+        ]
+      },
+      {
+        "reference_id": "D06-O6",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Every exported row must include actor.",
+        "source_quotes": [
+          "Include the event time and actor in each exported row."
+        ]
+      },
+      {
+        "reference_id": "D06-U1",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "The event-time timezone is explicitly unchosen.",
+        "source_quotes": [
+          "We have not chosen the timezone for event times."
+        ]
+      },
+      {
+        "reference_id": "D06-U2",
+        "item_ids": [
+          "I8"
+        ],
+        "coverage": "full",
+        "rationale": "Despite constraint labeling, the text expressly says compression is not required and its future usefulness is tentative.",
+        "source_quotes": [
+          "Compression might be useful someday, but it is not required here."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Workspace administrators need a CSV export of the currently filtered audit events for external review.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the workspace-administrator actor, CSV format, current-filter scope, and external-review outcome.",
+        "source_quotes": [
+          "Workspace administrators need a CSV export of the currently filtered audit events for external review."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "Non-administrators must not be able to export the audit events.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains the prohibition on export by non-administrators.",
+        "source_quotes": [
+          "Non-administrators must not be able to export them."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "When the filtered result contains at most 10,000 events, export every event in that result.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Explicitly exports every event in the filtered result at or below 10,000, preserving scope and the inclusive boundary.",
+        "source_quotes": [
+          "If the result contains at most 10,000 events, export every event in it."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "When the filtered result contains more than 10,000 events, refuse the export and tell the administrator to narrow the filters.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Above 10,000 filtered events, refusal and a message to narrow filters stay coupled to that condition.",
+        "source_quotes": [
+          "If it contains more than 10,000, refuse the export and tell the administrator to narrow the filters; never silently truncate it."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "Never silently truncate the audit-event export.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The source expressly forbids silent truncation, independently of the refusal/message extraction.",
+        "source_quotes": [
+          "never silently truncate it."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I6",
+        "candidate_fragment": "Include the event time",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "With the item's shared in-each-exported-row qualifier, requires the source event-time column.",
+        "source_quotes": [
+          "Include the event time and actor in each exported row."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I6",
+        "candidate_fragment": "and actor in each exported row.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Requires actor in every exported row, independently of the event-time field.",
+        "source_quotes": [
+          "Include the event time and actor in each exported row."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I7",
+        "candidate_fragment": "Which timezone should be used for event times?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks the unchosen timezone without supplying UTC or another value.",
+        "source_quotes": [
+          "We have not chosen the timezone for event times."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I7",
+        "candidate_fragment": "This has not been chosen.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The source explicitly says that the timezone has not been chosen.",
+        "source_quotes": [
+          "We have not chosen the timezone for event times."
+        ]
+      },
+      {
+        "claim_id": "C10",
+        "item_id": "I8",
+        "candidate_fragment": "Compression is not required for this export;",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves not-required status, which neither orders compression nor prohibits optionally including it.",
+        "source_quotes": [
+          "Compression might be useful someday, but it is not required here."
+        ]
+      },
+      {
+        "claim_id": "C11",
+        "item_id": "I8",
+        "candidate_fragment": "its possible future usefulness is tentative.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves might-be-useful-someday modality, without inventing a future commitment.",
+        "source_quotes": [
+          "Compression might be useful someday, but it is not required here."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "D06-U1",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "The event-time timezone is explicitly unchosen.",
+        "source_quotes": [
+          "We have not chosen the timezone for event times."
+        ]
+      },
+      {
+        "reference_id": "D06-U2",
+        "item_ids": [
+          "I8"
+        ],
+        "status": "preserved",
+        "rationale": "Despite constraint labeling, the text expressly says compression is not required and its future usefulness is tentative.",
+        "source_quotes": [
+          "Compression might be useful someday, but it is not required here."
+        ]
+      }
+    ],
+    "item_flags": [
+      {
+        "item_id": "I8",
+        "flag": "nonmaterial_role_mismatch",
+        "rationale": "The optional-idea U2 reference accepts question, while I8 is a constraint. Its text still explicitly says compression is not required and future usefulness is tentative, so the label mismatch neither promotes compression nor prohibits it. This is not a material role error.",
+        "source_quotes": [
+          "Compression might be useful someday, but it is not required here."
+        ]
+      }
+    ],
+    "disagreements": []
+  },
+  {
+    "case_id": "H01",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "H01-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves patient online rescheduling instead of calling the clinic.",
+        "source_quotes": [
+          "Patients need to reschedule appointments online rather than phone the clinic."
+        ]
+      },
+      {
+        "reference_id": "H01-O1",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "Only-when preserves a necessary condition, with an inclusive 24 elapsed hours from request to appointment start; it does not promise unconditional approval above the threshold.",
+        "source_quotes": [
+          "Permit a patient to reschedule only when the appointment starts at least 24 elapsed hours after the reschedule request."
+        ]
+      },
+      {
+        "reference_id": "H01-O2",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "Below 24 elapsed hours, rescheduling must be refused.",
+        "source_quotes": [
+          "If less time remains, refuse and tell the patient to call the clinic."
+        ]
+      },
+      {
+        "reference_id": "H01-O3",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "Under that same short-time condition, the patient must be told to call the clinic.",
+        "source_quotes": [
+          "If less time remains, refuse and tell the patient to call the clinic."
+        ]
+      },
+      {
+        "reference_id": "H01-O4",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "Only a successful reschedule requires release of the original slot.",
+        "source_quotes": [
+          "A successful reschedule must release the original slot."
+        ]
+      },
+      {
+        "reference_id": "H01-O5",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Appointment cancellation remains excluded from this release.",
+        "source_quotes": [
+          "Do not add appointment cancellation in this release."
+        ]
+      },
+      {
+        "reference_id": "H01-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Keeping versus changing the clinician remains undecided.",
+        "source_quotes": [
+          "We have not agreed whether a rescheduled appointment keeps the original clinician or can use another one."
+        ]
+      },
+      {
+        "reference_id": "H01-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "The text reminder is a question expressly identified as only an idea.",
+        "source_quotes": [
+          "A text reminder would be nice, but is only an idea."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Patients need to reschedule appointments online instead of phoning the clinic.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves patient online rescheduling instead of phoning the clinic.",
+        "source_quotes": [
+          "Patients need to reschedule appointments online rather than phone the clinic."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "Permit a patient to reschedule only when the appointment starts at least 24 elapsed hours after the reschedule request.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains only-when, an inclusive 24 elapsed hours, and request-to-appointment timing; no sufficiency or calendar-day interpretation is introduced.",
+        "source_quotes": [
+          "Permit a patient to reschedule only when the appointment starts at least 24 elapsed hours after the reschedule request."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "If less than 24 elapsed hours remain between the reschedule request and the appointment start, refuse the reschedule and tell the patient to call the clinic.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Resolves less time to less than 24 elapsed hours using the explicit previous rule and retains both refusal and the clinic-call message under that condition.",
+        "source_quotes": [
+          "Permit a patient to reschedule only when the appointment starts at least 24 elapsed hours after the reschedule request.",
+          "If less time remains, refuse and tell the patient to call the clinic."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "A successful reschedule must release the original slot.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the successful-reschedule condition for release of the original slot.",
+        "source_quotes": [
+          "A successful reschedule must release the original slot."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "Do not add appointment cancellation in this release.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the release-specific exclusion of appointment cancellation.",
+        "source_quotes": [
+          "Do not add appointment cancellation in this release."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I6",
+        "candidate_fragment": "Does a rescheduled appointment keep the original clinician, or can it use another clinician?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks exactly the unresolved same-versus-another-clinician choice.",
+        "source_quotes": [
+          "We have not agreed whether a rescheduled appointment keeps the original clinician or can use another one."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I6",
+        "candidate_fragment": "This has not been agreed.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The source explicitly says that the clinician choice has not been agreed.",
+        "source_quotes": [
+          "We have not agreed whether a rescheduled appointment keeps the original clinician or can use another one."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I7",
+        "candidate_fragment": "Should a text reminder be included?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks about the tentative reminder without prescribing one.",
+        "source_quotes": [
+          "A text reminder would be nice, but is only an idea."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I7",
+        "candidate_fragment": "It is only a tentative idea, not an agreed requirement.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains the source's only-an-idea status.",
+        "source_quotes": [
+          "A text reminder would be nice, but is only an idea."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "H01-U1",
+        "item_ids": [
+          "I6"
+        ],
+        "status": "preserved",
+        "rationale": "Keeping versus changing the clinician remains undecided.",
+        "source_quotes": [
+          "We have not agreed whether a rescheduled appointment keeps the original clinician or can use another one."
+        ]
+      },
+      {
+        "reference_id": "H01-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "The text reminder is a question expressly identified as only an idea.",
+        "source_quotes": [
+          "A text reminder would be nice, but is only an idea."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "H02",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "H02-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves coordinators enforcing age policy without excluding eligible teenagers.",
+        "source_quotes": [
+          "Volunteer coordinators want signups to respect the event's age policy without excluding eligible teenagers."
+        ]
+      },
+      {
+        "reference_id": "H02-O1",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "Signup refusal applies below age 16, not to 16-year-olds.",
+        "source_quotes": [
+          "Anyone under 16 must be refused a signup."
+        ]
+      },
+      {
+        "reference_id": "H02-O2",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "For ages 16 and 17, recorded guardian consent remains necessary, not a promise of sufficiency.",
+        "source_quotes": [
+          "A volunteer aged 16 or 17 may complete signup only with recorded guardian consent."
+        ]
+      },
+      {
+        "reference_id": "H02-O3",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "At age 18 and above, signup may be completed without guardian consent.",
+        "source_quotes": [
+          "Volunteers aged 18 or older may complete signup without guardian consent."
+        ]
+      },
+      {
+        "reference_id": "H02-O4",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Email is explicitly not mandatory for signup.",
+        "source_quotes": [
+          "Do not require an email address to sign up."
+        ]
+      },
+      {
+        "reference_id": "H02-A1",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Accuracy of supplied age remains a provisional assumption with policy-owner confirmation pending.",
+        "source_quotes": [
+          "For now, assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm that assumption."
+        ]
+      },
+      {
+        "reference_id": "H02-U1",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "Missing-age behavior is an unanswered question, with no invented default.",
+        "source_quotes": [
+          "What should happen if the volunteer does not supply an age?"
+        ]
+      },
+      {
+        "reference_id": "H02-U2",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "The policy owner still needs to confirm the age-accuracy assumption.",
+        "source_quotes": [
+          "For now, assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm that assumption."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Volunteer coordinators want signups to respect the event's age policy without excluding eligible teenagers.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves coordinators' policy goal and inclusion of eligible teenagers without inventing eligibility.",
+        "source_quotes": [
+          "Volunteer coordinators want signups to respect the event's age policy without excluding eligible teenagers."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "Anyone under 16 must be refused a signup.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Retains mandatory refusal below 16, with the same strict boundary.",
+        "source_quotes": [
+          "Anyone under 16 must be refused a signup."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "A volunteer aged 16 or 17 may complete signup only with recorded guardian consent.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves recorded guardian consent as necessary at 16 or 17, without adding a signature, email, or a sufficiency claim.",
+        "source_quotes": [
+          "A volunteer aged 16 or 17 may complete signup only with recorded guardian consent."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "Volunteers aged 18 or older may complete signup without guardian consent.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves permission for those aged 18 and above to complete signup without guardian consent.",
+        "source_quotes": [
+          "Volunteers aged 18 or older may complete signup without guardian consent."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "An email address must not be required to sign up.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "An email address remains nonmandatory for signup.",
+        "source_quotes": [
+          "Do not require an email address to sign up."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I6",
+        "candidate_fragment": "Provisionally assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm this assumption.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The supplied-age accuracy assumption remains provisional and still requires policy-owner confirmation; no verification mechanism is inferred.",
+        "source_quotes": [
+          "For now, assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm that assumption."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I7",
+        "candidate_fragment": "What should happen if the volunteer does not supply an age?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Keeps missing-age handling open rather than inventing rejection or an age default.",
+        "source_quotes": [
+          "What should happen if the volunteer does not supply an age?"
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "H02-U1",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "Missing-age behavior is an unanswered question, with no invented default.",
+        "source_quotes": [
+          "What should happen if the volunteer does not supply an age?"
+        ]
+      },
+      {
+        "reference_id": "H02-U2",
+        "item_ids": [
+          "I6"
+        ],
+        "status": "preserved",
+        "rationale": "The policy owner still needs to confirm the age-accuracy assumption.",
+        "source_quotes": [
+          "For now, assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm that assumption."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "H03",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "H03-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves compliance reviewers and predictable removal of old case notes.",
+        "source_quotes": [
+          "Compliance reviewers need old case notes removed predictably."
+        ]
+      },
+      {
+        "reference_id": "H03-O1",
+        "item_ids": [
+          "I2",
+          "I5",
+          "I6",
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "The 90-day closure-relative deletion demand is expressly subject to the legal hold; I5 flags the conflict, I6 specifies suspension, and I7 leaves post-hold timing unresolved.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule.",
+          "The schedule for deletion after a hold is lifted has not been specified."
+        ]
+      },
+      {
+        "reference_id": "H03-O2",
+        "item_ids": [
+          "I3",
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "All the same notes remain subject to the audit demand for at least one year of accessibility after closure, explicitly in conflict with deletion.",
+        "source_quotes": [
+          "Audit requires all those same notes to remain accessible for at least one year after closure."
+        ]
+      },
+      {
+        "reference_id": "H03-O3",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Deletion is suspended while a legal hold applies, without authorizing immediate deletion once lifted.",
+        "source_quotes": [
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."
+        ]
+      },
+      {
+        "reference_id": "H03-O4",
+        "item_ids": [
+          "I8"
+        ],
+        "coverage": "full",
+        "rationale": "Attached files are excluded from this change.",
+        "source_quotes": [
+          "Do not include attached files in this change."
+        ]
+      },
+      {
+        "reference_id": "H03-U1",
+        "item_ids": [
+          "I4",
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "The two mandatory unwaived demands are identified as a conflict needing resolution; no compromise is asserted.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "Audit requires all those same notes to remain accessible for at least one year after closure.",
+          "Both policies are mandatory and neither has been waived."
+        ]
+      },
+      {
+        "reference_id": "H03-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "Post-hold deletion scheduling remains explicitly unspecified.",
+        "source_quotes": [
+          "The schedule for deletion after a hold is lifted has not been specified."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Compliance reviewers need old case notes removed predictably.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves predictable old-case-note removal for compliance reviewers.",
+        "source_quotes": [
+          "Compliance reviewers need old case notes removed predictably."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "Privacy requires deletion of every case note 90 days after the case closes, subject to the agreed legal-hold exception.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the 90-day-after-closure privacy demand expressly subject to the agreed legal-hold exception. I5 identifies the competing policy and I7 keeps post-hold timing open.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "Audit requires all those same case notes to remain accessible for at least one year after case closure.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves audit's accessibility demand for all the same notes for at least one year after closure, without replacing year with 365 days.",
+        "source_quotes": [
+          "Audit requires all those same notes to remain accessible for at least one year after closure."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I4",
+        "candidate_fragment": "Both the privacy deletion policy and the audit accessibility policy are mandatory, and neither has been waived.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves that both named policies are mandatory and neither waived; that status does not resolve their incompatibility.",
+        "source_quotes": [
+          "Both policies are mandatory and neither has been waived."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I5",
+        "candidate_fragment": "How should the conflict between",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "The remainder of this question names both policies and asks how to resolve their incompatibility, not for authority to choose either unilaterally.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "Audit requires all those same notes to remain accessible for at least one year after closure.",
+          "Both policies are mandatory and neither has been waived.",
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I5",
+        "candidate_fragment": "mandatory deletion 90 days after closure",
+        "verdict": "supported",
+        "duplicate_of": "C2",
+        "rationale": "This question summarizes the privacy side already stated in I2. It is a reference to that named policy, not a new universal deletion command overriding I2's express exception or I6's suspension.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "Audit requires all those same notes to remain accessible for at least one year after closure.",
+          "Both policies are mandatory and neither has been waived.",
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I5",
+        "candidate_fragment": "mandatory accessibility for at least one year after closure",
+        "verdict": "supported",
+        "duplicate_of": "C3",
+        "rationale": "Repeats the audit side from I3 with its mandatory status already stated in I4; it adds no retention duration or new policy.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "Audit requires all those same notes to remain accessible for at least one year after closure.",
+          "Both policies are mandatory and neither has been waived.",
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I5",
+        "candidate_fragment": "given that neither policy has been waived?",
+        "verdict": "supported",
+        "duplicate_of": "C4",
+        "rationale": "Repeats I4's explicit unwaived status as the reason a decision is needed.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "Audit requires all those same notes to remain accessible for at least one year after closure.",
+          "Both policies are mandatory and neither has been waived.",
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I6",
+        "candidate_fragment": "For case notes under a legal hold, suspend deletion until the hold is lifted; this is an agreed exception to the deletion rule.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Specifies how the agreed exception works: deletion is suspended until a legal hold lifts. I2 only named the exception, so this detailed behavior is not a complete duplicate; it creates no post-lift deadline.",
+        "source_quotes": [
+          "For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."
+        ]
+      },
+      {
+        "claim_id": "C10",
+        "item_id": "I7",
+        "candidate_fragment": "What is the deletion schedule after a legal hold is lifted?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks the precise unspecified post-hold scheduling issue without an immediate-deletion presupposition.",
+        "source_quotes": [
+          "The schedule for deletion after a hold is lifted has not been specified."
+        ]
+      },
+      {
+        "claim_id": "C11",
+        "item_id": "I7",
+        "candidate_fragment": "This schedule has not been specified.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The source explicitly says that the post-hold schedule is unspecified.",
+        "source_quotes": [
+          "The schedule for deletion after a hold is lifted has not been specified."
+        ]
+      },
+      {
+        "claim_id": "C12",
+        "item_id": "I8",
+        "candidate_fragment": "Exclude attached files from this change.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves attached files as outside the change.",
+        "source_quotes": [
+          "Do not include attached files in this change."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "H03-U1",
+        "item_ids": [
+          "I4",
+          "I5"
+        ],
+        "status": "preserved",
+        "rationale": "The two mandatory unwaived demands are identified as a conflict needing resolution; no compromise is asserted.",
+        "source_quotes": [
+          "Privacy requires deletion of every case note 90 days after the case closes.",
+          "Audit requires all those same notes to remain accessible for at least one year after closure.",
+          "Both policies are mandatory and neither has been waived."
+        ]
+      },
+      {
+        "reference_id": "H03-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "Post-hold deletion scheduling remains explicitly unspecified.",
+        "source_quotes": [
+          "The schedule for deletion after a hold is lifted has not been specified."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  },
+  {
+    "case_id": "H04",
+    "candidate_label": "obligations-v1",
+    "gold_version": "obligations-v1",
+    "review_status": "complete",
+    "reference_judgments": [
+      {
+        "reference_id": "H04-G1",
+        "item_ids": [
+          "I1"
+        ],
+        "coverage": "full",
+        "rationale": "Preserves customers reading checkout in their preferred language.",
+        "source_quotes": [
+          "Customers should be able to read checkout in their preferred language."
+        ]
+      },
+      {
+        "reference_id": "H04-O1",
+        "item_ids": [
+          "I2"
+        ],
+        "coverage": "full",
+        "rationale": "The selector offers English, Spanish, and French without claiming no other language is possible.",
+        "source_quotes": [
+          "Offer English, Spanish, and French in a language selector."
+        ]
+      },
+      {
+        "reference_id": "H04-O2",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "Browser language is used on the first visit only when it is one of the specified three.",
+        "source_quotes": [
+          "On a visitor's first visit, use the browser's language if it is one of those three; otherwise use English."
+        ]
+      },
+      {
+        "reference_id": "H04-O3",
+        "item_ids": [
+          "I3"
+        ],
+        "coverage": "full",
+        "rationale": "The otherwise branch defaults to English within the same first-visit context.",
+        "source_quotes": [
+          "On a visitor's first visit, use the browser's language if it is one of those three; otherwise use English."
+        ]
+      },
+      {
+        "reference_id": "H04-O4",
+        "item_ids": [
+          "I4"
+        ],
+        "coverage": "full",
+        "rationale": "Selected language is remembered across devices for signed-in customers.",
+        "source_quotes": [
+          "Remember a signed-in customer's selected language across devices."
+        ]
+      },
+      {
+        "reference_id": "H04-O5",
+        "item_ids": [
+          "I6"
+        ],
+        "coverage": "full",
+        "rationale": "Merchant-written product-description translation is explicitly excluded.",
+        "source_quotes": [
+          "Translating merchant-written product descriptions is explicitly excluded."
+        ]
+      },
+      {
+        "reference_id": "H04-U1",
+        "item_ids": [
+          "I5"
+        ],
+        "coverage": "full",
+        "rationale": "Saved preference versus changed browser-language precedence for returning customers is left undecided.",
+        "source_quotes": [
+          "It is undecided whether a returning customer's saved selection or a changed browser language takes precedence."
+        ]
+      },
+      {
+        "reference_id": "H04-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "coverage": "full",
+        "rationale": "Fourth-language automatic translation remains a later suggestion requiring approval, not a commitment.",
+        "source_quotes": [
+          "Automatically translating a fourth language is a suggestion for later, not an approved requirement."
+        ]
+      }
+    ],
+    "claim_judgments": [
+      {
+        "claim_id": "C1",
+        "item_id": "I1",
+        "candidate_fragment": "Customers should be able to read checkout in their preferred language.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves checkout readability in the customer's preferred language without extending translation scope.",
+        "source_quotes": [
+          "Customers should be able to read checkout in their preferred language."
+        ]
+      },
+      {
+        "claim_id": "C2",
+        "item_id": "I2",
+        "candidate_fragment": "Offer English, Spanish, and French in a language selector.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Requires the three named selector choices without converting the list into an exclusive ban on other languages.",
+        "source_quotes": [
+          "Offer English, Spanish, and French in a language selector."
+        ]
+      },
+      {
+        "claim_id": "C3",
+        "item_id": "I3",
+        "candidate_fragment": "On a visitor's first visit, use the browser's language if it is English, Spanish, or French;",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves first-visit scope and resolves those three to the explicit selector languages; this governs default selection, not an additional selector requirement.",
+        "source_quotes": [
+          "Offer English, Spanish, and French in a language selector.",
+          "On a visitor's first visit, use the browser's language if it is one of those three; otherwise use English."
+        ]
+      },
+      {
+        "claim_id": "C4",
+        "item_id": "I3",
+        "candidate_fragment": "otherwise use English.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Within the same first-visit condition, the otherwise branch applies when the browser language is outside those three; no returning-customer precedence is inferred.",
+        "source_quotes": [
+          "Offer English, Spanish, and French in a language selector.",
+          "On a visitor's first visit, use the browser's language if it is one of those three; otherwise use English."
+        ]
+      },
+      {
+        "claim_id": "C5",
+        "item_id": "I4",
+        "candidate_fragment": "Remember a signed-in customer's selected language across devices.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves cross-device remembrance for a signed-in customer, without inventing unsigned-in persistence or precedence.",
+        "source_quotes": [
+          "Remember a signed-in customer's selected language across devices."
+        ]
+      },
+      {
+        "claim_id": "C6",
+        "item_id": "I5",
+        "candidate_fragment": "For a returning customer, should the saved language selection or a changed browser language take precedence?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Keeps both possible precedence choices open for the specified returning-customer situation.",
+        "source_quotes": [
+          "It is undecided whether a returning customer's saved selection or a changed browser language takes precedence."
+        ]
+      },
+      {
+        "claim_id": "C7",
+        "item_id": "I5",
+        "candidate_fragment": "This remains undecided.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "The source explicitly says precedence is undecided.",
+        "source_quotes": [
+          "It is undecided whether a returning customer's saved selection or a changed browser language takes precedence."
+        ]
+      },
+      {
+        "claim_id": "C8",
+        "item_id": "I6",
+        "candidate_fragment": "Translating merchant-written product descriptions is explicitly excluded.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the merchant-written product-description exclusion, not a ban on checkout localization.",
+        "source_quotes": [
+          "Translating merchant-written product descriptions is explicitly excluded."
+        ]
+      },
+      {
+        "claim_id": "C9",
+        "item_id": "I7",
+        "candidate_fragment": "Should automatic translation of a fourth language be approved later?",
+        "verdict": "open_question",
+        "duplicate_of": null,
+        "rationale": "Asks whether to approve the stated later suggestion; it does not assert approval or require exactly three languages forever.",
+        "source_quotes": [
+          "Automatically translating a fourth language is a suggestion for later, not an approved requirement."
+        ]
+      },
+      {
+        "claim_id": "C10",
+        "item_id": "I7",
+        "candidate_fragment": "It is currently only a suggestion for later, not an approved requirement.",
+        "verdict": "supported",
+        "duplicate_of": null,
+        "rationale": "Preserves the express lack of approval and later-only suggestion status.",
+        "source_quotes": [
+          "Automatically translating a fourth language is a suggestion for later, not an approved requirement."
+        ]
+      }
+    ],
+    "ambiguity_judgments": [
+      {
+        "reference_id": "H04-U1",
+        "item_ids": [
+          "I5"
+        ],
+        "status": "preserved",
+        "rationale": "Saved preference versus changed browser-language precedence for returning customers is left undecided.",
+        "source_quotes": [
+          "It is undecided whether a returning customer's saved selection or a changed browser language takes precedence."
+        ]
+      },
+      {
+        "reference_id": "H04-U2",
+        "item_ids": [
+          "I7"
+        ],
+        "status": "preserved",
+        "rationale": "Fourth-language automatic translation remains a later suggestion requiring approval, not a commitment.",
+        "source_quotes": [
+          "Automatically translating a fourth language is a suggestion for later, not an approved requirement."
+        ]
+      }
+    ],
+    "item_flags": [],
+    "disagreements": []
+  }
+]

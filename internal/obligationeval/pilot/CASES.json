@@ -1,0 +1,56 @@
+{
+  "artifact_version": "authoring-v1",
+  "status": "proposed_not_frozen",
+  "cases": [
+    {
+      "case_id": "D01",
+      "split": "development",
+      "request": "As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone. When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first. The offer expires 12 hours after it is sent. Until it expires, do not offer that seat to anyone else. Joining the waitlist must not count as a confirmed booking. We have not decided what happens after an offer expires. Maybe a reminder halfway through would help, but that is not agreed for this release."
+    },
+    {
+      "case_id": "D02",
+      "split": "development",
+      "request": "Support agents need to resolve refund requests without asking finance to calculate eligibility. A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase. For a qualifying request, show the full amount paid as the refundable amount. Annual subscriptions are excluded from this feature. Show agents why an ineligible monthly subscription was rejected. We still need to decide whether a day means a calendar day or 24 elapsed hours. This feature must not send money; agents will continue using the existing payment process."
+    },
+    {
+      "case_id": "D03",
+      "split": "development",
+      "request": "Our on-call responder wants to notice sustained failures without being paged for brief blips. Notify the responder only after a service has been continuously unhealthy for five minutes. While that same incident remains unhealthy, send another notification every 15 minutes after the first notification. Once it recovers, stop sending repeats for that incident. Do not suppress these notifications overnight. We have not selected a delivery channel yet. It might be nice to send a recovery message, but leave that undecided rather than treating it as part of this request."
+    },
+    {
+      "case_id": "D04",
+      "split": "development",
+      "request": "Accounts staff want issued invoices to remain reliable records when customers rename their businesses. An issued invoice must always display the customer's legal name as it was at issue time. Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename. Neither team has agreed to an exception. Draft invoices should display the current legal name. Do not change invoice numbers during a rename. Flag the disagreement for a decision; do not silently pick one team's rule."
+    },
+    {
+      "case_id": "D05",
+      "split": "development",
+      "request": "Analysts want to save named report filters so they can return to the same view. Each analyst may keep at most eight saved filters. At the limit, an attempt to save a ninth filter under a new name must be refused with an explanation. Saving under an existing name replaces that analyst's filter only after they confirm. For planning, assume filter names are case-sensitive; this assumption needs product confirmation. Sharing filters with other analysts is out of scope. We could add a usage ranking later, but it is not a commitment."
+    },
+    {
+      "case_id": "D06",
+      "split": "development",
+      "request": "Workspace administrators need a CSV export of the currently filtered audit events for external review. Non-administrators must not be able to export them. If the result contains at most 10,000 events, export every event in it. If it contains more than 10,000, refuse the export and tell the administrator to narrow the filters; never silently truncate it. Include the event time and actor in each exported row. We have not chosen the timezone for event times. Compression might be useful someday, but it is not required here."
+    },
+    {
+      "case_id": "H01",
+      "split": "held_out",
+      "request": "Patients need to reschedule appointments online rather than phone the clinic. Permit a patient to reschedule only when the appointment starts at least 24 elapsed hours after the reschedule request. If less time remains, refuse and tell the patient to call the clinic. A successful reschedule must release the original slot. Do not add appointment cancellation in this release. We have not agreed whether a rescheduled appointment keeps the original clinician or can use another one. A text reminder would be nice, but is only an idea."
+    },
+    {
+      "case_id": "H02",
+      "split": "held_out",
+      "request": "Volunteer coordinators want signups to respect the event's age policy without excluding eligible teenagers. Anyone under 16 must be refused a signup. A volunteer aged 16 or 17 may complete signup only with recorded guardian consent. Volunteers aged 18 or older may complete signup without guardian consent. Do not require an email address to sign up. For now, assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm that assumption. What should happen if the volunteer does not supply an age?"
+    },
+    {
+      "case_id": "H03",
+      "split": "held_out",
+      "request": "Compliance reviewers need old case notes removed predictably. Privacy requires deletion of every case note 90 days after the case closes. Audit requires all those same notes to remain accessible for at least one year after closure. Both policies are mandatory and neither has been waived. For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule. The schedule for deletion after a hold is lifted has not been specified. Do not include attached files in this change."
+    },
+    {
+      "case_id": "H04",
+      "split": "held_out",
+      "request": "Customers should be able to read checkout in their preferred language. Offer English, Spanish, and French in a language selector. On a visitor's first visit, use the browser's language if it is one of those three; otherwise use English. Remember a signed-in customer's selected language across devices. It is undecided whether a returning customer's saved selection or a changed browser language takes precedence. Translating merchant-written product descriptions is explicitly excluded. Automatically translating a fourth language is a suggestion for later, not an approved requirement."
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "artifact_version": "authoring-v1",
+  "status": "proposed_not_frozen",
+  "interpretation": "References are semantic units, not preferred wording. O IDs identify atomic commitments, including exclusions. G IDs identify actor goals. A IDs identify explicitly provisional source assumptions. U IDs identify material uncertainty or conflict requiring explicit preservation. Every reference includes verbatim grounding but quoting does not establish entailment.",
+  "cases": [
+    {
+      "case_id": "D01",
+      "references": [
+        {"id":"D01-G1","type":"goal","accepted_kinds":["goal"],"text":"Organizers can fill vacant workshop seats without calling everyone.","evidence":["As a workshop organizer, I want a waitlist so empty seats can be filled without calling everyone."]},
+        {"id":"D01-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"When a confirmed attendee cancels and a waitlist exists, offer the seat to the earliest-joined waitlisted person.","condition":"A confirmed attendee cancels and a waitlist exists.","evidence":["When a confirmed attendee cancels and a waitlist exists, offer the seat to the person who joined the waitlist first."]},
+        {"id":"D01-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"A sent seat offer expires 12 hours after sending.","condition":"A seat offer has been sent.","evidence":["The offer expires 12 hours after it is sent."]},
+        {"id":"D01-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Do not offer the same seat to anyone else before the current offer expires.","condition":"The current offer has not expired.","evidence":["Until it expires, do not offer that seat to anyone else."]},
+        {"id":"D01-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Joining a waitlist does not establish a confirmed booking.","condition":null,"evidence":["Joining the waitlist must not count as a confirmed booking."]},
+        {"id":"D01-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Preserve the undecided action after offer expiry; do not assume automatic promotion or removal.","evidence":["We have not decided what happens after an offer expires."]},
+        {"id":"D01-U2","type":"uncertainty","accepted_kinds":["question"],"text":"If the reminder is extracted, leave it tentative; its omission is allowed.","required":false,"evidence":["Maybe a reminder halfway through would help, but that is not agreed for this release."]}
+      ],
+      "review_notes":["FIFO applies to the offer, not automatic confirmation. No rule supplies acceptance behavior.","The literal exclusivity wording does not specify what happens when an offer is accepted before expiry. A question about that is reasonable but not required."]
+    },
+    {
+      "case_id":"D02",
+      "references":[
+        {"id":"D02-G1","type":"goal","accepted_kinds":["goal"],"text":"Support agents can determine refund eligibility without finance calculation.","evidence":["Support agents need to resolve refund requests without asking finance to calculate eligibility."]},
+        {"id":"D02-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"A monthly subscription qualifies only if no credits were used and the request is within 30 days inclusive of purchase.","condition":"Assessing a monthly subscription; both eligibility conditions must hold.","evidence":["A monthly subscription qualifies only if no credits have been used and the request is made no more than 30 days after purchase."]},
+        {"id":"D02-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"For a qualifying request, display the full amount paid as refundable.","condition":"The request qualifies.","evidence":["For a qualifying request, show the full amount paid as the refundable amount."]},
+        {"id":"D02-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Exclude annual subscriptions from this feature.","condition":null,"evidence":["Annual subscriptions are excluded from this feature."]},
+        {"id":"D02-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Explain the rejection reason to agents for ineligible monthly subscriptions.","condition":"A monthly subscription is ineligible.","evidence":["Show agents why an ineligible monthly subscription was rejected."]},
+        {"id":"D02-O5","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"This feature does not transfer money.","condition":null,"evidence":["This feature must not send money; agents will continue using the existing payment process."]},
+        {"id":"D02-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Keep calendar days versus elapsed 24-hour periods unresolved.","evidence":["We still need to decide whether a day means a calendar day or 24 elapsed hours."]}
+      ],
+      "review_notes":["O1 is one eligibility predicate, not an authorization to invent additional eligibility rules. The words 'only if' state necessary conditions, not a formal exhaustive eligibility policy; a question about sufficiency is permitted.","O3 does not claim annual subscriptions are never refundable outside this feature."]
+    },
+    {
+      "case_id":"D03",
+      "references":[
+        {"id":"D03-G1","type":"goal","accepted_kinds":["goal"],"text":"The responder notices sustained failures without brief-blip pages.","evidence":["Our on-call responder wants to notice sustained failures without being paged for brief blips."]},
+        {"id":"D03-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Notify the responder only after five continuous minutes of service unhealthiness.","condition":"The service has been continuously unhealthy for five minutes.","evidence":["Notify the responder only after a service has been continuously unhealthy for five minutes."]},
+        {"id":"D03-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Repeat notifications every 15 minutes after the first while the same incident stays unhealthy.","condition":"The same incident remains unhealthy after the first notification.","evidence":["While that same incident remains unhealthy, send another notification every 15 minutes after the first notification."]},
+        {"id":"D03-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Stop repeats for an incident once it recovers.","condition":"The incident recovers.","evidence":["Once it recovers, stop sending repeats for that incident."]},
+        {"id":"D03-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Do not suppress these notifications overnight.","condition":"The notification would occur overnight.","evidence":["Do not suppress these notifications overnight."]},
+        {"id":"D03-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Ask or explicitly leave open which notification channel to use.","evidence":["We have not selected a delivery channel yet."]},
+        {"id":"D03-U2","type":"uncertainty","accepted_kinds":["question"],"text":"If mentioned, keep a recovery message undecided rather than required; omission is allowed.","required":false,"evidence":["It might be nice to send a recovery message, but leave that undecided rather than treating it as part of this request."]}
+      ],
+      "review_notes":["Do not require a particular paging provider or an incident identifier design.","The request does not specify notification latency after the five-minute threshold. Do not use this gold to demand zero latency."]
+    },
+    {
+      "case_id":"D04",
+      "references":[
+        {"id":"D04-G1","type":"goal","accepted_kinds":["goal"],"text":"Accounts staff can rely on issued invoices after business renames.","evidence":["Accounts staff want issued invoices to remain reliable records when customers rename their businesses."]},
+        {"id":"D04-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Preserve the accounts requirement that issued invoices display the issue-time legal name, as one unresolved side of a conflict.","condition":"The invoice is issued.","evidence":["An issued invoice must always display the customer's legal name as it was at issue time."]},
+        {"id":"D04-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Preserve customer success's requirement to display the current legal name on every invoice after a rename, including issued ones, as the other unresolved side.","condition":"A customer rename occurs; includes previously issued invoices.","evidence":["Customer success also requires every invoice, including previously issued ones, to display the customer's current legal name after a rename."]},
+        {"id":"D04-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Draft invoices display the current legal name.","condition":"The invoice is a draft.","evidence":["Draft invoices should display the current legal name."]},
+        {"id":"D04-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"A rename does not change invoice numbers.","condition":"A customer rename occurs.","evidence":["Do not change invoice numbers during a rename."]},
+        {"id":"D04-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Flag issue-time versus current-name rules as unresolved and ask for a decision, without adopting either or inventing dual display as the agreed answer.","evidence":["Neither team has agreed to an exception.","Flag the disagreement for a decision; do not silently pick one team's rule."]}
+      ],
+      "review_notes":["A single question can carry both conflicting commitments if it explicitly states both rules and their scopes; semantic coverage may then map to O1, O2 and U1 even though its kind is question. Record this exception rather than enforcing label matching.","Displaying both names could be a proposed resolution in a question, never an existing agreement."]
+    },
+    {
+      "case_id":"D05",
+      "references":[
+        {"id":"D05-G1","type":"goal","accepted_kinds":["goal"],"text":"Analysts can return to a report view using named saved filters.","evidence":["Analysts want to save named report filters so they can return to the same view."]},
+        {"id":"D05-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Allow at most eight saved filters per analyst.","condition":null,"evidence":["Each analyst may keep at most eight saved filters."]},
+        {"id":"D05-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Refuse a new-name ninth-filter save when at the limit.","condition":"The analyst already has eight saved filters and saves under a new name.","evidence":["At the limit, an attempt to save a ninth filter under a new name must be refused with an explanation."]},
+        {"id":"D05-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Explain a refused new-name ninth-filter save.","condition":"A new-name ninth-filter save is refused at the limit.","evidence":["At the limit, an attempt to save a ninth filter under a new name must be refused with an explanation."]},
+        {"id":"D05-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"An existing-name save replaces that analyst's filter only after confirmation.","condition":"The analyst saves using an existing filter name and confirms replacement.","evidence":["Saving under an existing name replaces that analyst's filter only after they confirm."]},
+        {"id":"D05-O5","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Exclude sharing filters with other analysts.","condition":null,"evidence":["Sharing filters with other analysts is out of scope."]},
+        {"id":"D05-A1","type":"assumption","accepted_kinds":["assumption"],"text":"Filter names are provisionally assumed case-sensitive, pending product confirmation.","evidence":["For planning, assume filter names are case-sensitive; this assumption needs product confirmation."]},
+        {"id":"D05-U1","type":"uncertainty","accepted_kinds":["question","assumption"],"text":"Keep case sensitivity pending product confirmation; a labeled pending assumption can cover this without a separate question.","evidence":["For planning, assume filter names are case-sensitive; this assumption needs product confirmation."]},
+        {"id":"D05-U2","type":"uncertainty","accepted_kinds":["question"],"text":"If usage ranking is mentioned, keep it uncommitted; omission is allowed.","required":false,"evidence":["We could add a usage ranking later, but it is not a commitment."]}
+      ],
+      "review_notes":["An obligation claiming names are definitively case-sensitive promotes an assumption into a commitment.","O1 and O2 overlap in policy but add distinct assertions: a bound versus explicit handling of a new-name save. Matching both from one sufficiently detailed item is allowed, not duplicate inflation."]
+    },
+    {
+      "case_id":"D06",
+      "references":[
+        {"id":"D06-G1","type":"goal","accepted_kinds":["goal"],"text":"Workspace administrators can export currently filtered audit events as CSV for external review.","evidence":["Workspace administrators need a CSV export of the currently filtered audit events for external review."]},
+        {"id":"D06-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Prevent non-administrators from exporting these audit events.","condition":"The user is not a workspace administrator.","evidence":["Non-administrators must not be able to export them."]},
+        {"id":"D06-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Export all currently filtered audit events as CSV when there are at most 10,000.","condition":"The current filtered result has at most 10,000 events.","evidence":["Workspace administrators need a CSV export of the currently filtered audit events for external review.","If the result contains at most 10,000 events, export every event in it."]},
+        {"id":"D06-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Refuse an export whose result has more than 10,000 events, rather than truncating it.","condition":"The current filtered result has more than 10,000 events.","evidence":["If it contains more than 10,000, refuse the export and tell the administrator to narrow the filters; never silently truncate it."]},
+        {"id":"D06-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Tell the administrator to narrow filters when the result exceeds 10,000.","condition":"The current filtered result has more than 10,000 events.","evidence":["If it contains more than 10,000, refuse the export and tell the administrator to narrow the filters; never silently truncate it."]},
+        {"id":"D06-O5","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Include event time in every exported row.","condition":"A row is exported.","evidence":["Include the event time and actor in each exported row."]},
+        {"id":"D06-O6","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Include actor in every exported row.","condition":"A row is exported.","evidence":["Include the event time and actor in each exported row."]},
+        {"id":"D06-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Leave the event-time timezone undecided or ask which timezone is wanted.","evidence":["We have not chosen the timezone for event times."]},
+        {"id":"D06-U2","type":"uncertainty","accepted_kinds":["question"],"text":"If compression is mentioned, keep it unrequired; omission is allowed.","required":false,"evidence":["Compression might be useful someday, but it is not required here."]}
+      ],
+      "review_notes":["Do not infer a timezone, CSV escaping implementation, background jobs, storage, or a class layout."]
+    },
+    {
+      "case_id":"H01",
+      "references":[
+        {"id":"H01-G1","type":"goal","accepted_kinds":["goal"],"text":"Patients can reschedule online instead of calling the clinic.","evidence":["Patients need to reschedule appointments online rather than phone the clinic."]},
+        {"id":"H01-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Permit patient rescheduling only when at least 24 elapsed hours remain between request and appointment start.","condition":"At least 24 elapsed hours remain; the boundary is inclusive.","evidence":["Permit a patient to reschedule only when the appointment starts at least 24 elapsed hours after the reschedule request."]},
+        {"id":"H01-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Refuse rescheduling when less than 24 elapsed hours remain.","condition":"Less than 24 elapsed hours remain.","evidence":["If less time remains, refuse and tell the patient to call the clinic."]},
+        {"id":"H01-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Tell the patient to call the clinic when refusing for insufficient time.","condition":"Less than 24 elapsed hours remain.","evidence":["If less time remains, refuse and tell the patient to call the clinic."]},
+        {"id":"H01-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Release the original slot after a successful reschedule.","condition":"Rescheduling succeeds.","evidence":["A successful reschedule must release the original slot."]},
+        {"id":"H01-O5","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Do not add appointment cancellation in this release.","condition":null,"evidence":["Do not add appointment cancellation in this release."]},
+        {"id":"H01-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Keep whether a reschedule can change clinicians unresolved.","evidence":["We have not agreed whether a rescheduled appointment keeps the original clinician or can use another one."]},
+        {"id":"H01-U2","type":"uncertainty","accepted_kinds":["question"],"text":"If a text reminder is included, leave it as an idea, not a commitment; omission is allowed.","required":false,"evidence":["A text reminder would be nice, but is only an idea."]}
+      ],
+      "review_notes":["Do not turn the elapsed-hour boundary into the previous calendar day. Available destination slots are a reasonable question, not a supplied commitment."]
+    },
+    {
+      "case_id":"H02",
+      "references":[
+        {"id":"H02-G1","type":"goal","accepted_kinds":["goal"],"text":"Coordinators enforce the age policy without excluding eligible teenagers.","evidence":["Volunteer coordinators want signups to respect the event's age policy without excluding eligible teenagers."]},
+        {"id":"H02-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Refuse signup for volunteers younger than 16.","condition":"The volunteer is under 16.","evidence":["Anyone under 16 must be refused a signup."]},
+        {"id":"H02-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"For ages 16 or 17, require recorded guardian consent to complete signup.","condition":"The volunteer is 16 or 17.","evidence":["A volunteer aged 16 or 17 may complete signup only with recorded guardian consent."]},
+        {"id":"H02-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Allow volunteers at least 18 to complete signup without guardian consent.","condition":"The volunteer is at least 18.","evidence":["Volunteers aged 18 or older may complete signup without guardian consent."]},
+        {"id":"H02-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Do not make an email address mandatory for signup.","condition":null,"evidence":["Do not require an email address to sign up."]},
+        {"id":"H02-A1","type":"assumption","accepted_kinds":["assumption"],"text":"Treat supplied age as accurate only as a provisional assumption pending policy-owner confirmation.","evidence":["For now, assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm that assumption."]},
+        {"id":"H02-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Ask or leave open what happens when age is absent.","evidence":["What should happen if the volunteer does not supply an age?"]},
+        {"id":"H02-U2","type":"uncertainty","accepted_kinds":["question","assumption"],"text":"Preserve the need for policy-owner confirmation of the age-accuracy assumption.","evidence":["For now, assume the age supplied by the volunteer is accurate; the policy owner still needs to confirm that assumption."]}
+      ],
+      "review_notes":["Recorded consent does not prescribe a signature, identity check, storage design, or guardian email.","A proposed missing-age default is allowed only as an explicit unapproved assumption or a genuine question; do not present it as the supplied policy."]
+    },
+    {
+      "case_id":"H03",
+      "references":[
+        {"id":"H03-G1","type":"goal","accepted_kinds":["goal"],"text":"Compliance reviewers get predictable old-case-note removal.","evidence":["Compliance reviewers need old case notes removed predictably."]},
+        {"id":"H03-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Preserve the privacy demand to delete notes 90 days after case closure, except while a legal hold applies, as unresolved against audit retention.","condition":"90 days have passed since case closure and the note is not under legal hold.","evidence":["Privacy requires deletion of every case note 90 days after the case closes.","For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."]},
+        {"id":"H03-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Preserve audit's demand for all the same notes to stay accessible for at least one year after closure, as unresolved against deletion.","condition":"The first year after case closure.","evidence":["Audit requires all those same notes to remain accessible for at least one year after closure."]},
+        {"id":"H03-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Suspend deletion of a note while its legal hold is active.","condition":"The note is under a legal hold that has not been lifted.","evidence":["For notes under a legal hold, suspend deletion until the hold is lifted; that is an agreed exception to the deletion rule."]},
+        {"id":"H03-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Exclude attached files from this change.","condition":null,"evidence":["Do not include attached files in this change."]},
+        {"id":"H03-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Flag the unwaived 90-day deletion versus one-year accessibility conflict; ask for a decision without resolving it by fiat.","evidence":["Privacy requires deletion of every case note 90 days after the case closes.","Audit requires all those same notes to remain accessible for at least one year after closure.","Both policies are mandatory and neither has been waived."]},
+        {"id":"H03-U2","type":"uncertainty","accepted_kinds":["question"],"text":"Preserve the unspecified post-hold deletion schedule.","evidence":["The schedule for deletion after a hold is lifted has not been specified."]}
+      ],
+      "review_notes":["A question stating both conflicting rules may cover O1/O2/U1 regardless of kind, provided it preserves the hold exception when describing O1.","Do not substitute 365 days for one year as a mandatory interpretation. Do not assume immediate deletion when a hold lifts."]
+    },
+    {
+      "case_id":"H04",
+      "references":[
+        {"id":"H04-G1","type":"goal","accepted_kinds":["goal"],"text":"Customers can read checkout in their preferred language.","evidence":["Customers should be able to read checkout in their preferred language."]},
+        {"id":"H04-O1","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Provide a selector offering English, Spanish, and French.","condition":null,"evidence":["Offer English, Spanish, and French in a language selector."]},
+        {"id":"H04-O2","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"On a first visit, use the browser language when it is English, Spanish, or French.","condition":"First visit and the browser language is one of the three specified languages.","evidence":["On a visitor's first visit, use the browser's language if it is one of those three; otherwise use English."]},
+        {"id":"H04-O3","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"On a first visit with another browser language, default to English.","condition":"First visit and the browser language is not one of the three specified languages.","evidence":["On a visitor's first visit, use the browser's language if it is one of those three; otherwise use English."]},
+        {"id":"H04-O4","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Remember selected language across devices for signed-in customers.","condition":"The customer is signed in.","evidence":["Remember a signed-in customer's selected language across devices."]},
+        {"id":"H04-O5","type":"commitment","accepted_kinds":["obligation","constraint"],"text":"Exclude translation of merchant-written product descriptions.","condition":null,"evidence":["Translating merchant-written product descriptions is explicitly excluded."]},
+        {"id":"H04-U1","type":"uncertainty","accepted_kinds":["question"],"text":"Leave saved preference versus changed browser language precedence unresolved for returning customers.","evidence":["It is undecided whether a returning customer's saved selection or a changed browser language takes precedence."]},
+        {"id":"H04-U2","type":"uncertainty","accepted_kinds":["question"],"text":"If automatic fourth-language translation is extracted, leave it unapproved; omission is allowed.","required":false,"evidence":["Automatically translating a fourth language is a suggestion for later, not an approved requirement."]}
+      ],
+      "review_notes":["The selector sentence does not say 'exactly' three languages. Requiring those three is supported; banning every fourth language is not.","Locale variants and unsigned-in persistence may be reasonable additional questions but are not mandatory reference questions."]
+    }
+  ]
+}
