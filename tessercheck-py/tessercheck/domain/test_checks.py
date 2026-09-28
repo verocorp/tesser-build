@@ -22886,3 +22886,61 @@ def test_a_relays_constant_is_assigned_once() -> None:
         "is assigned once, because the analyzer reads one value and Python keeps the last" in f
         for f in findings
     ), findings
+
+
+@pytest.mark.parametrize("scoped", ((), ("shop/client/test_message.py",), ("shop/client/message.py",)))
+def test_record_writes_keep_reexported_aliases_and_diagnostic_order_in_the_selected_scope(
+    scoped: tuple[str, ...],
+) -> None:
+    codebase_spec = domain.CodebaseSpec(
+        sources=(
+            (
+                "shop/client/message.py",
+                "shop.client.message",
+                "import tesser.context as ts\n"
+                "class MessageRequest(ts.Request):\n"
+                "    def __init__(self, text: str) -> None:\n"
+                "        self.text = text\n",
+                False,
+            ),
+            (
+                "shop/client/__init__.py",
+                "shop.client",
+                "from shop.client.message import MessageRequest as MessageRequest\n",
+                True,
+            ),
+            (
+                "shop/client/test_message.py",
+                "shop.client.test_message",
+                "import shop.client as client\n"
+                "def test_message() -> None:\n"
+                "    message_request = client.MessageRequest(text='a')\n"
+                "    alias = message_request\n"
+                "    alias.text = 'b'\n"
+                "    del message_request.text\n"
+                "    setattr(alias, 'text', 'c')\n",
+                False,
+            ),
+        ),
+        declared="app",
+        nested=(),
+        symlinked=(),
+        scoped=scoped,
+    )
+
+    findings = tuple(
+        f"{v.path()}:{int(v.line())}: {v.code()} {v.text()}"
+        for v in domain.Codebase(codebase_spec).violations()
+    )
+
+    if scoped == ("shop/client/message.py",):
+        assert findings == ()
+    else:
+        assert findings == (
+            "shop/client/test_message.py:5: TB083 shop.client.test_message.test_message writes 'text' of the "
+            "record 'alias'; a record is never changed after construction",
+            "shop/client/test_message.py:6: TB083 shop.client.test_message.test_message writes 'text' of the "
+            "record 'message_request'; a record is never changed after construction",
+            "shop/client/test_message.py:7: TB083 shop.client.test_message.test_message writes 'text' of the "
+            "record 'alias'; a record is never changed after construction",
+        )
