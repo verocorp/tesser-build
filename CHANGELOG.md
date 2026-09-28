@@ -18,6 +18,10 @@ carries the analyzer package's own version — separate streams.)
   exact dependency; the toolkit release version is a separate stream.
 
 ### Changed
+- **Record-write analysis has an internal policy owner.** `Module` assembles
+  `RecordWritePolicy` and delegates without changing ordered diagnostics,
+  scopes or debt suppression. The generated rulebook follows the new owner;
+  this does not introduce a public plugin API or change rule identifiers.
 - **TB082 snapshots can carry collections without debt markers.** Primitive
   tuples use structural `list`/`tuple` conversions; an unfiltered mapping
   carries nested records, and the single deserialize guard may check element
