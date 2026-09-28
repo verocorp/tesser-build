@@ -309,3 +309,55 @@ def test_staged_delete_then_untracked_recreation_reads_current_source(
         "?",
         "?",
     ) in read_checkout_response.working_tree_changes
+
+
+@pytest.mark.parametrize("hooks_directory", (".git/hooks", "custom-hooks"))
+def test_stat_only_changes_never_execute_configured_hooks(
+    tmp_path: pathlib.Path, hooks_directory: str,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "test_existing.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "test_existing.py"], check=True)
+    tree = subprocess.run(
+        ["git", "-C", str(tmp_path), "write-tree"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    commit = subprocess.run(
+        ["git", "-C", str(tmp_path), "hash-object", "-t", "commit", "-w", "--stdin"],
+        input=f"tree {tree}\nauthor Synthetic Fixture <fixture@example.invalid> 0 +0000\ncommitter Synthetic Fixture <fixture@example.invalid> 0 +0000\n\nSynthetic test baseline\n",
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(tmp_path), "update-ref", "HEAD", commit], check=True)
+    hooks = tmp_path / hooks_directory
+    hooks.mkdir(exist_ok=True)
+    hook = hooks / "post-index-change"
+    hook.write_text("#!/bin/sh\nprintf invoked >> HOOK_EXECUTED\n", encoding="utf-8")
+    hook.chmod(0o755)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "core.hooksPath", str(hooks)], check=True)
+    previous = source.stat()
+    source.touch()
+    assert source.stat().st_mtime_ns != previous.st_mtime_ns
+    assert source.read_text(encoding="utf-8") == "value = 1\n"
+    source_bytes = source.read_bytes()
+    staged = subprocess.run(
+        ["git", "-C", str(tmp_path), "ls-files", "--stage", "-z"],
+        capture_output=True, check=True,
+    ).stdout
+    (tmp_path / "test_new.py").write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    git_checkout_reader = repositories.GitCheckoutReader()
+
+    read_checkout_response = git_checkout_reader.read_checkout(
+        ports.ReadCheckoutRequest(repo=str(tmp_path), base="HEAD")
+    )
+
+    assert ("test_new.py", "", "?") in read_checkout_response.changes
+    assert not (tmp_path / "HOOK_EXECUTED").exists()
+    assert subprocess.run(
+        ["git", "-C", str(tmp_path), "ls-files", "--stage", "-z"],
+        capture_output=True, check=True,
+    ).stdout == staged
+    assert source.read_bytes() == source_bytes
+    source.touch()
+    subprocess.run(["git", "-C", str(tmp_path), "update-index", "--refresh"], check=True)
+    assert (tmp_path / "HOOK_EXECUTED").read_text(encoding="utf-8") == "invoked"

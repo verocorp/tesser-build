@@ -16,6 +16,9 @@ class GitCheckoutReader(ts.Repository):
         command = [
             "git",
             "--no-pager",
+            "--no-optional-locks",
+            "-c",
+            f"core.hooksPath={os.devnull}",
             "-c",
             "core.fsmonitor=false",
             "-c",

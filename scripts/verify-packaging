@@ -149,6 +149,43 @@ error = json.loads(result.stdout)
 assert result.returncode != 0 and error["status"] == "error" and error["error"]["code"] == "input_error"
 assert not (repo / "EXECUTED").exists() and not (root / "EXECUTED").exists()
 print(error)
+for hooks_directory in (".git/hooks", "custom-hooks"):
+    hook_repo = root / ("default-hook-target" if hooks_directory == ".git/hooks" else "custom-hook-target")
+    hook_repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(hook_repo)], check=True)
+    source = hook_repo / "test_existing.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(hook_repo), "add", "test_existing.py"], check=True)
+    tree = subprocess.run(["git", "-C", str(hook_repo), "write-tree"], capture_output=True, text=True, check=True).stdout.strip()
+    commit = subprocess.run(
+        ["git", "-C", str(hook_repo), "hash-object", "-t", "commit", "-w", "--stdin"],
+        input=f"tree {tree}\nauthor Synthetic Fixture <fixture@example.invalid> 0 +0000\ncommitter Synthetic Fixture <fixture@example.invalid> 0 +0000\n\nSynthetic hook baseline\n",
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(hook_repo), "update-ref", "HEAD", commit], check=True)
+    hooks = hook_repo / hooks_directory
+    hooks.mkdir(exist_ok=True)
+    hook = hooks / "post-index-change"
+    hook.write_text("#!/bin/sh\nprintf invoked >> HOOK_EXECUTED\n", encoding="utf-8")
+    hook.chmod(0o755)
+    subprocess.run(["git", "-C", str(hook_repo), "config", "core.hooksPath", str(hooks)], check=True)
+    previous = source.stat()
+    source.touch()
+    assert source.stat().st_mtime_ns != previous.st_mtime_ns
+    assert source.read_text(encoding="utf-8") == "value = 1\n"
+    source_bytes = source.read_bytes()
+    staged = subprocess.run(["git", "-C", str(hook_repo), "ls-files", "--stage", "-z"], capture_output=True, check=True).stdout
+    (hook_repo / "test_new.py").write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    result = subprocess.run([command[0], "--repo", str(hook_repo), "--base", "HEAD", "--json"], capture_output=True, text=True, check=True)
+    report = json.loads(result.stdout)
+    assert report["status"] == "ok" and report["changed_test_files"] == ["test_new.py"]
+    assert not (hook_repo / "HOOK_EXECUTED").exists()
+    assert subprocess.run(["git", "-C", str(hook_repo), "ls-files", "--stage", "-z"], capture_output=True, check=True).stdout == staged
+    assert source.read_bytes() == source_bytes
+    source.touch()
+    subprocess.run(["git", "-C", str(hook_repo), "update-index", "--refresh"], check=True)
+    assert (hook_repo / "HOOK_EXECUTED").read_text(encoding="utf-8") == "invoked"
+    print(json.dumps({"hooks_directory": hooks_directory, "inspection": "ok", "staged_entries_unchanged": True, "source_bytes_unchanged": True, "hook_during_inspection": False, "explicit_refresh_positive_control": "invoked"}, sort_keys=True))
 PY
 ) || exit 1
 
