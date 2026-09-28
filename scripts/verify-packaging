@@ -54,11 +54,14 @@ step "pip install tesser-py tessercheck-py tessercheck-cli"
 step "every shipped module imports"
 (cd "$VENV" && "$PY" - <<'PY'
 import importlib
+import importlib.util
 import pkgutil
 import sys
 
 failed = []
-for dist in ("tesser", "tessercheck", "tessercheck_cli"):
+for forbidden in ("app", "protocol", "srv"):
+    assert importlib.util.find_spec(forbidden) is None, f"forbidden wheel namespace: {forbidden}"
+for dist in ("tesser", "tessercheck", "tesserinspect", "tessercheck_cli"):
     package = importlib.import_module(dist)
     for info in pkgutil.walk_packages(package.__path__, dist + "."):
         leaf = info.name.rsplit(".", 1)[-1]
@@ -71,6 +74,135 @@ for dist in ("tesser", "tessercheck", "tessercheck_cli"):
 for line in failed:
     print(line, file=sys.stderr)
 sys.exit(1 if failed else 0)
+PY
+) || exit 1
+
+step "tesser-inspect-tests from installed wheels over an independent Git repository"
+(cd "$VENV" && "$PY" - "$ROOT" <<'PY'
+import json
+import os
+import pathlib
+import subprocess
+import sys
+
+root = pathlib.Path.cwd()
+repo = root / "inspection-target"
+repo.mkdir()
+subprocess.run(["git", "init", "-q", str(repo)], check=True)
+(repo / "tests").mkdir()
+(repo / "meta").mkdir()
+(repo / ".gitignore").write_text("ignored/\n", encoding="utf-8")
+(repo / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+(repo / "tests/conftest.py").write_text("from pytest import fixture as provide\n@provide\ndef database():\n    return 1\n", encoding="utf-8")
+(repo / "meta/test_contract.py").write_text("from inspect import getsource as source\nclass TestContract:\n    def test_literal_helper_arguments(self):\n        return source('tests/test_new.py')\n", encoding="utf-8")
+for name in ("staged", "unstaged", "deleted", "old"):
+    (repo / f"tests/test_{name}.py").write_text(f"def test_{name}():\n    pass\n", encoding="utf-8")
+subprocess.run(["git", "-C", str(repo), "add", "--", ".gitignore", "pytest.ini", "tests", "meta"], check=True)
+tree = subprocess.run(["git", "-C", str(repo), "write-tree"], capture_output=True, text=True, check=True).stdout.strip()
+commit = subprocess.run(
+    ["git", "-C", str(repo), "hash-object", "-t", "commit", "-w", "--stdin"],
+    input=f"tree {tree}\nauthor Synthetic Fixture <fixture@example.invalid> 0 +0000\ncommitter Synthetic Fixture <fixture@example.invalid> 0 +0000\n\nSynthetic test baseline\n",
+    capture_output=True, text=True, check=True,
+).stdout.strip()
+subprocess.run(["git", "-C", str(repo), "update-ref", "HEAD", commit], check=True)
+(repo / "tests/test_staged.py").write_text("def test_staged():\n    assert True\n", encoding="utf-8")
+subprocess.run(["git", "-C", str(repo), "add", "tests/test_staged.py"], check=True)
+(repo / "tests/test_unstaged.py").write_text("def test_unstaged():\n    assert True\n", encoding="utf-8")
+(repo / "tests/test_deleted.py").unlink()
+subprocess.run(["git", "-C", str(repo), "mv", "tests/test_old.py", "tests/test_renamed.py"], check=True)
+(repo / "tests/test_new.py").write_text("from pathlib import Path\nPath('EXECUTED').write_text('unsafe')\ndef helper(value=1):\n    return value\nclass TestNew:\n    def test_new(self, database):\n        assert helper() == 1\n", encoding="utf-8")
+(repo / "ignored").mkdir()
+(repo / "ignored/test_invalid.py").write_bytes(b"\xff")
+(repo / ".gitattributes").write_text("*.py filter=trap diff=trap\n", encoding="utf-8")
+for key in ("filter.trap.clean", "filter.trap.process", "diff.trap.command", "diff.trap.textconv", "core.fsmonitor"):
+    subprocess.run(["git", "-C", str(repo), "config", key, "touch EXECUTED; cat"], check=True)
+subprocess.run(["git", "-C", str(repo), "config", "filter.trap.required", "true"], check=True)
+command = [str(root / "venv/bin/tesser-inspect-tests"), "--repo", str(repo), "--base", "HEAD", "--json"]
+result = subprocess.run(command, capture_output=True, text=True, check=True)
+report = json.loads(result.stdout)
+assert report["schema_version"] == 1 and report["status"] == "ok"
+assert report["baseline"] == commit
+assert set(report["changed_test_files"]) == {"tests/test_staged.py", "tests/test_unstaged.py", "tests/test_deleted.py", "tests/test_old.py", "tests/test_renamed.py", "tests/test_new.py"}
+assert {row["status"] for row in report["changes"] if row["path"] == "tests/test_renamed.py"} == {"R100"}
+assert [(row["path"], row["previous_path"]) for row in report["working_tree_changes"] if row["index_status"] == "R"] == [("tests/test_renamed.py", "tests/test_old.py")]
+assert any(row["index_status"] == "M" for row in report["working_tree_changes"] if row["path"] == "tests/test_staged.py")
+assert any(row["worktree_status"] == "M" for row in report["working_tree_changes"] if row["path"] == "tests/test_unstaged.py")
+assert any(row["kind"] == "source-reader" and row["path"] == "meta/test_contract.py" for row in report["candidates"])
+assert any(row["kind"] == "helper" and row["symbol"] == "helper" for row in report["candidates"])
+assert any(row["kind"] == "fixture-reference" and row["symbol"] == "database" for row in report["candidates"])
+assert {row["path"] for row in report["candidates"] if row["kind"] == "collection"} == {"pytest.ini", "tests/conftest.py"}
+assert report["limitations"]
+assert all(not pathlib.PurePosixPath(row["path"]).is_absolute() for row in report["candidates"])
+assert subprocess.run(command, capture_output=True, text=True, check=True).stdout == result.stdout
+checkout = pathlib.Path(sys.argv[1])
+source_env = dict(os.environ, PYTHONPATH=str(checkout / "tessercheck-py") + os.pathsep + str(checkout / "tesser-py"))
+source_command = [str(root / "venv/bin/python"), "-m", "srv.cli.inspect", *command[1:]]
+assert subprocess.run(source_command, cwd=root, env=source_env, capture_output=True, text=True, check=True).stdout == result.stdout
+assert not (repo / "EXECUTED").exists() and not (root / "EXECUTED").exists()
+print(result.stdout)
+for namespace in ("app", "protocol", "srv"):
+    package = repo / namespace
+    package.mkdir()
+    (package / "__init__.py").write_text("from pathlib import Path\nPath('NAMESPACE_EXECUTED').write_text('imported')\nraise RuntimeError('consumer namespace imported')\n", encoding="utf-8")
+consumer_result = subprocess.run(command, cwd=repo, env=dict(os.environ, PYTHONPATH=str(repo)), capture_output=True, text=True, check=True)
+assert json.loads(consumer_result.stdout)["status"] == "ok"
+assert not (repo / "NAMESPACE_EXECUTED").exists()
+for args in (["--json"], ["--repo", str(root), "--base", "HEAD", "--json"], ["--repo", str(repo), "--base", "missing-ref", "--json"], ["--repo", str(repo), "--base", "--help", "--json"]):
+    result = subprocess.run([command[0], *args], capture_output=True, text=True)
+    error = json.loads(result.stdout)
+    assert result.returncode != 0 and error["status"] == "error" and "candidates" not in error
+    print(error)
+for content, code in ((b"def broken(:\n", "python_parse_error"), (b"\xff", "input_error")):
+    (repo / "tests/test_invalid.py").write_bytes(content)
+    result = subprocess.run(command, capture_output=True, text=True)
+    error = json.loads(result.stdout)
+    assert result.returncode != 0 and error["status"] == "error" and error["error"]["code"] == code
+    print(error)
+(repo / "tests/test_invalid.py").unlink()
+(repo / "tests/test_outside.py").symlink_to(root / "outside.py")
+(root / "outside.py").write_text("raise RuntimeError('outside')\n", encoding="utf-8")
+result = subprocess.run(command, capture_output=True, text=True)
+error = json.loads(result.stdout)
+assert result.returncode != 0 and error["status"] == "error" and error["error"]["code"] == "input_error"
+assert not (repo / "EXECUTED").exists() and not (root / "EXECUTED").exists()
+print(error)
+for hooks_directory in (".git/hooks", "custom-hooks"):
+    hook_repo = root / ("default-hook-target" if hooks_directory == ".git/hooks" else "custom-hook-target")
+    hook_repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(hook_repo)], check=True)
+    source = hook_repo / "test_existing.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(hook_repo), "add", "test_existing.py"], check=True)
+    tree = subprocess.run(["git", "-C", str(hook_repo), "write-tree"], capture_output=True, text=True, check=True).stdout.strip()
+    commit = subprocess.run(
+        ["git", "-C", str(hook_repo), "hash-object", "-t", "commit", "-w", "--stdin"],
+        input=f"tree {tree}\nauthor Synthetic Fixture <fixture@example.invalid> 0 +0000\ncommitter Synthetic Fixture <fixture@example.invalid> 0 +0000\n\nSynthetic hook baseline\n",
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(hook_repo), "update-ref", "HEAD", commit], check=True)
+    hooks = hook_repo / hooks_directory
+    hooks.mkdir(exist_ok=True)
+    hook = hooks / "post-index-change"
+    hook.write_text("#!/bin/sh\nprintf invoked >> HOOK_EXECUTED\n", encoding="utf-8")
+    hook.chmod(0o755)
+    subprocess.run(["git", "-C", str(hook_repo), "config", "core.hooksPath", str(hooks)], check=True)
+    previous = source.stat()
+    source.touch()
+    assert source.stat().st_mtime_ns != previous.st_mtime_ns
+    assert source.read_text(encoding="utf-8") == "value = 1\n"
+    source_bytes = source.read_bytes()
+    staged = subprocess.run(["git", "-C", str(hook_repo), "ls-files", "--stage", "-z"], capture_output=True, check=True).stdout
+    (hook_repo / "test_new.py").write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    result = subprocess.run([command[0], "--repo", str(hook_repo), "--base", "HEAD", "--json"], capture_output=True, text=True, check=True)
+    report = json.loads(result.stdout)
+    assert report["status"] == "ok" and report["changed_test_files"] == ["test_new.py"]
+    assert not (hook_repo / "HOOK_EXECUTED").exists()
+    assert subprocess.run(["git", "-C", str(hook_repo), "ls-files", "--stage", "-z"], capture_output=True, check=True).stdout == staged
+    assert source.read_bytes() == source_bytes
+    source.touch()
+    subprocess.run(["git", "-C", str(hook_repo), "update-index", "--refresh"], check=True)
+    assert (hook_repo / "HOOK_EXECUTED").read_text(encoding="utf-8") == "invoked"
+    print(json.dumps({"hooks_directory": hooks_directory, "inspection": "ok", "staged_entries_unchanged": True, "source_bytes_unchanged": True, "hook_during_inspection": False, "explicit_refresh_positive_control": "invoked"}, sort_keys=True))
 PY
 ) || exit 1
 
