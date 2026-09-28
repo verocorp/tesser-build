@@ -7,6 +7,16 @@ carries the analyzer package's own version — separate streams.)
 
 ## Unreleased
 
+### Added
+- **`tesser-inspect-tests` reports static Python test-dependency candidates.**
+  The installed command includes staged, unstaged, untracked, deleted and
+  renamed test locations, fixtures, helpers, source readers and collection
+  configuration. Its versioned JSON is inspection evidence, not test selection
+  or a completeness claim. Target code, Git hooks, filters and diff drivers do
+  not run; invalid input is a nonzero error. Git may refresh index stat metadata.
+  This prepares `tessercheck-py` 0.5.0 and `tessercheck-cli` 0.3.0 with a matching
+  exact dependency; the toolkit release version is a separate stream.
+
 ### Changed
 - **TB082 snapshots can carry collections without debt markers.** Primitive
   tuples use structural `list`/`tuple` conversions; an unfiltered mapping
