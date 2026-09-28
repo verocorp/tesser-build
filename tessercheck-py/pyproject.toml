@@ -11,6 +11,20 @@ dependencies = ["tesser==0.1.0"]
 
 [tool.setuptools]
 packages = [
+    "app",
+    "protocol",
+    "srv",
+    "srv.cli",
+    "tessercheck.adapters.handlers",
+    "tesserinspect",
+    "tesserinspect.domain",
+    "tesserinspect.application",
+    "tesserinspect.application.ports",
+    "tesserinspect.adapters",
+    "tesserinspect.adapters.repositories",
+    "tesserinspect.adapters.handlers",
+    "tesserinspect.client",
+    "tesserinspect.component",
     "tessercheck",
     "tessercheck.domain",
     "tessercheck.application",
@@ -23,8 +37,8 @@ packages = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["app", "protocol", "tessercheck", "srv"]
+testpaths = ["app", "protocol", "tessercheck", "tesserinspect", "srv"]
 
 [tool.mypy]
 strict = true
-files = ["tessercheck", "srv", "app", "protocol"]
+files = ["tessercheck", "tesserinspect", "srv", "app", "protocol"]

@@ -145,3 +145,12 @@ It says which guidance paths had loaded before the write and nothing more.
 A green line is file-local: a write can create findings on other files, which
 the whole-tree run at commit or in CI reports. `scripts/verify-packaging`
 drives the installed hook through every case above.
+# Test-dependency inspection
+
+`tesser-inspect-tests --repo PATH --base REF --json` reports changed Python
+tests, helper/fixture evidence, unchanged source-reading candidates and ancestor
+collection configuration without executing target code. It is inspection-only:
+exit 0 means a versioned report was produced, not that tests passed or a selected
+set of checks is complete. Errors are nonzero and machine-readable.
+
+See [the format and agent workflow](../docs/test-dependency-inspection.md).

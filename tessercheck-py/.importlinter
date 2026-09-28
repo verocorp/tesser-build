@@ -1,6 +1,7 @@
 [importlinter]
 root_packages =
     tessercheck
+    tesserinspect
     tesser
 include_external_packages = False
 unmatched_ignore_imports_alerting = error

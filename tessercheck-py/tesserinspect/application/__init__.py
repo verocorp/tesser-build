@@ -1,0 +1,1 @@
+from tesserinspect.application.service import InspectionService as InspectionService

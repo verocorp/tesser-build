@@ -5,3 +5,4 @@ from app.app import EnvConfigRepository as EnvConfigRepository
 from app.app import Spec as Spec
 from app.app import TessercheckApp as TessercheckApp
 from app.app import load as load
+from app.inspection import InspectionApp as InspectionApp
